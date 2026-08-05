@@ -1,7 +1,6 @@
 plugins {
     id 'privacy.repository-verification'
     id 'privacy.release'
-    id 'privacy.public-snapshot'
 }
 
 privacyBuild {

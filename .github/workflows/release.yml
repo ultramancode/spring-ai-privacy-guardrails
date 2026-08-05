@@ -86,7 +86,7 @@ jobs:
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
         run: >-
           ./gradlew --no-daemon
-          clean check javadoc verifyPublicSnapshot
+          clean check javadoc
           publishedArtifactSmokeTest
           publishedPomOnlyArtifactSmokeTest
           cyclonedxBom

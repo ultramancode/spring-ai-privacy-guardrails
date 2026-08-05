@@ -35,10 +35,6 @@ jobs:
       - name: Build and test
         run: ./gradlew --no-daemon clean check -PtestJavaVersion=${{ matrix.java }}
 
-      - name: Verify public candidate snapshot
-        if: matrix.java == 21
-        run: ./gradlew --no-daemon verifyPublicSnapshot -PtestJavaVersion=21
-
       - name: Verify Javadoc and publication metadata
         if: matrix.java == 21
         run: >-

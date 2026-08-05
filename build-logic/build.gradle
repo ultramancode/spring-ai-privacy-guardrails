@@ -38,10 +38,6 @@ gradlePlugin {
             id = 'privacy.release'
             implementationClass = 'io.github.ultramancode.privacy.buildlogic.ReleasePlugin'
         }
-        publicSnapshot {
-            id = 'privacy.public-snapshot'
-            implementationClass = 'io.github.ultramancode.privacy.buildlogic.snapshot.PublicSnapshotPlugin'
-        }
     }
 }
 

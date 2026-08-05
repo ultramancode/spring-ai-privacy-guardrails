@@ -1,0 +1,6 @@
+description = 'Presidio analyzer adapter for Spring AI Privacy Guardrails.'
+
+dependencies {
+    api project(':spring-ai-privacy-guardrails-core')
+    implementation "tools.jackson.core:jackson-databind:${providers.gradleProperty('jacksonVersion').get()}"
+}

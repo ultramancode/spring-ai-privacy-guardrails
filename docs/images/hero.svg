@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="760" viewBox="0 0 1600 760" role="img" aria-labelledby="title desc">
+  <title id="title">Spring AI Privacy Guardrails</title>
+  <desc id="desc">Sensitive values from user input, memory, RAG, and tools become request-scoped opaque tokens before reaching a model. Each wrapped tool can use only explicitly permitted entity types, and results are retokenized.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0b1d31"/>
+      <stop offset="1" stop-color="#0b2c3c"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38d6d0"/>
+      <stop offset="1" stop-color="#62a7ff"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0L12 6L0 12Z" fill="#38d6d0"/>
+    </marker>
+    <style>
+      .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+      .eyebrow { font-size: 20px; font-weight: 700; letter-spacing: 4px; fill: #38d6d0; }
+      .title { font-size: 62px; font-weight: 800; fill: #f4f7fb; }
+      .subtitle { font-size: 25px; fill: #a7bbcf; }
+      .node-title { font-size: 20px; font-weight: 750; fill: #f4f7fb; }
+      .node-body { font-size: 16px; fill: #91a4ba; }
+      .chip { font-size: 16px; font-weight: 700; fill: #dffcf8; }
+      .tiny { font-size: 14px; font-weight: 650; fill: #91a4ba; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="760" rx="36" fill="url(#background)"/>
+  <circle cx="1450" cy="55" r="260" fill="#113e57" opacity="0.34"/>
+  <circle cx="80" cy="735" r="250" fill="#122e4b" opacity="0.45"/>
+  <path d="M1210 45C1390 145 1425 330 1565 375" fill="none" stroke="#38d6d0" stroke-width="2" opacity="0.13"/>
+
+  <g transform="translate(92 74)">
+    <path d="M44 0L82 16L76 63C72 88 57 105 44 116C31 105 16 88 12 63L6 16Z" fill="url(#shield)" filter="url(#glow)" opacity="0.95"/>
+    <path d="M27 57L39 69L63 41" fill="none" stroke="#07111f" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="224" y="102" class="sans eyebrow">SPRING AI · PRIVACY · EXECUTION BOUNDARY</text>
+  <text x="224" y="166" class="sans title">Privacy Guardrails</text>
+  <text x="224" y="208" class="sans subtitle">Detection evidence becomes enforceable policy across model and tool calls.</text>
+
+  <g transform="translate(92 286)">
+    <rect width="302" height="198" rx="26" fill="#101f33" stroke="#ff718a" stroke-width="2"/>
+    <text x="26" y="42" class="sans node-title">Application sources</text>
+    <text x="26" y="76" class="sans node-body">User · Memory · RAG · Tool result</text>
+    <rect x="24" y="103" width="126" height="38" rx="12" fill="#321b29"/>
+    <text x="87" y="128" text-anchor="middle" class="mono" font-size="15" fill="#ff9aac">010-1234-5678</text>
+    <rect x="158" y="103" width="118" height="38" rx="12" fill="#321b29"/>
+    <text x="217" y="128" text-anchor="middle" class="mono" font-size="15" fill="#ff9aac">CUST-123456</text>
+    <text x="26" y="172" class="sans tiny" fill="#ff9aac">RAW VALUES</text>
+  </g>
+
+  <path d="M409 385H484" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <g transform="translate(500 286)">
+    <rect width="308" height="198" rx="26" fill="#10243a" stroke="#af8cff" stroke-width="2"/>
+    <text x="26" y="42" class="sans node-title">Pluggable evidence</text>
+    <text x="26" y="76" class="sans node-body">Regex · Presidio · Custom</text>
+    <rect x="24" y="103" width="260" height="38" rx="12" fill="#211d3c"/>
+    <text x="154" y="128" text-anchor="middle" class="mono" font-size="15" fill="#c9b6ff">PERSON · PHONE · CUSTOMER_ID</text>
+    <text x="26" y="172" class="sans tiny">DETECTORS ANSWER “WHAT”</text>
+  </g>
+
+  <path d="M823 385H898" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <g transform="translate(914 258)">
+    <rect width="352" height="254" rx="30" fill="#0f2a36" stroke="#38d6d0" stroke-width="3"/>
+    <text x="28" y="48" class="sans node-title" fill="#38d6d0">Guardrail boundary</text>
+    <text x="28" y="83" class="sans node-body">Resolve · Tokenize · Scope disclosure</text>
+    <rect x="26" y="111" width="300" height="46" rx="13" fill="#0a3940"/>
+    <text x="176" y="140" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_PHONE_a2da9429…_1]]</text>
+    <rect x="26" y="172" width="300" height="46" rx="13" fill="#0a3940"/>
+    <text x="176" y="201" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_CUSTOMER_ID_a2da…_1]]</text>
+    <text x="28" y="239" class="sans tiny" fill="#38d6d0">GUARDRAILS ENFORCE “WHERE”</text>
+  </g>
+
+  <path d="M1281 344H1342" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrow)"/>
+  <g transform="translate(1358 286)">
+    <rect width="150" height="104" rx="24" fill="#171d39" stroke="#af8cff" stroke-width="2"/>
+    <text x="75" y="46" text-anchor="middle" class="sans node-title">MODEL</text>
+    <text x="75" y="76" text-anchor="middle" class="sans node-body">tokens only</text>
+  </g>
+  <path d="M1433 404V464C1433 526 1266 554 1186 554H1089" fill="none" stroke="#52e29a" stroke-width="3" marker-end="url(#arrow)"/>
+  <g transform="translate(806 532)">
+    <rect width="268" height="88" rx="22" fill="#102a2a" stroke="#52e29a" stroke-width="2"/>
+    <text x="134" y="37" text-anchor="middle" class="sans node-title">SCOPED TOOL</text>
+    <text x="134" y="65" text-anchor="middle" class="sans node-body">allow types → execute → retokenize</text>
+  </g>
+
+  <g transform="translate(92 664)">
+    <rect width="290" height="54" rx="17" fill="#10263a" stroke="#62a7ff"/>
+    <text x="145" y="34" text-anchor="middle" class="sans chip">Actual ChatClient tool loop</text>
+    <rect x="310" width="210" height="54" rx="17" fill="#10263a" stroke="#52e29a"/>
+    <text x="415" y="34" text-anchor="middle" class="sans chip">Java 21 + 25</text>
+    <rect x="540" width="330" height="54" rx="17" fill="#10263a" stroke="#af8cff"/>
+    <text x="705" y="34" text-anchor="middle" class="sans chip">CycloneDX release SBOM</text>
+    <rect x="890" width="252" height="54" rx="17" fill="#10263a" stroke="#ffc857"/>
+    <text x="1016" y="34" text-anchor="middle" class="sans chip">No cloud API key</text>
+    <rect x="1162" width="346" height="54" rx="17" fill="#10263a" stroke="#38d6d0"/>
+    <text x="1335" y="34" text-anchor="middle" class="sans chip">Request cleanup asserted</text>
+  </g>
+</svg>

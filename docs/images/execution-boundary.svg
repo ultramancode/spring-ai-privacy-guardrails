@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920" role="img" aria-labelledby="title desc">
+  <title id="title">Detector and execution-boundary responsibilities</title>
+  <desc id="desc">Detection providers produce sensitive-span evidence. The privacy core resolves it and maintains request-scoped tokens. Spring AI advisors and tool wrappers enforce protection before models, disclose only permitted entity types to each tool, and protect results and outputs.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#0c2738"/></linearGradient>
+    <marker id="cyanArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0L12 6L0 12Z" fill="#38d6d0"/></marker>
+    <marker id="greenArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0L12 6L0 12Z" fill="#52e29a"/></marker>
+    <style>
+      .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+      .h1 { font-size: 48px; font-weight: 800; fill: #f4f7fb; }
+      .lead { font-size: 22px; fill: #a7bbcf; }
+      .lane { font-size: 18px; font-weight: 800; letter-spacing: 2px; }
+      .card-title { font-size: 22px; font-weight: 750; fill: #f4f7fb; }
+      .body { font-size: 17px; fill: #a7bbcf; }
+      .small { font-size: 15px; fill: #91a4ba; }
+      .step { font-size: 15px; font-weight: 800; fill: #07111f; }
+    </style>
+  </defs>
+  <rect width="1600" height="920" rx="36" fill="url(#bg)"/>
+  <circle cx="1510" cy="50" r="300" fill="#123c55" opacity="0.24"/>
+  <text x="80" y="88" class="sans h1">A detector answers <tspan fill="#af8cff">what</tspan>. Guardrails enforce <tspan fill="#38d6d0">where</tspan>.</text>
+  <text x="80" y="130" class="sans lead">Spring-independent evidence and token core · Spring AI is the first complete execution integration</text>
+
+  <rect x="72" y="184" width="1456" height="174" rx="26" fill="#111c32" stroke="#af8cff" stroke-width="2"/>
+  <text x="100" y="220" class="sans lane" fill="#c9b6ff">01 · DETECTION PROVIDERS — REPLACEABLE</text>
+  <g transform="translate(100 246)">
+    <rect width="250" height="78" rx="18" fill="#1e1a38"/><text x="125" y="34" text-anchor="middle" class="sans card-title">Regex</text><text x="125" y="59" text-anchor="middle" class="sans small">local identifiers</text>
+    <rect x="276" width="250" height="78" rx="18" fill="#1e1a38"/><text x="401" y="34" text-anchor="middle" class="sans card-title">Presidio</text><text x="401" y="59" text-anchor="middle" class="sans small">recommended general PII</text>
+    <rect x="552" width="250" height="78" rx="18" fill="#1e1a38"/><text x="677" y="34" text-anchor="middle" class="sans card-title">Custom analyzer</text><text x="677" y="59" text-anchor="middle" class="sans small">application-owned</text>
+    <rect x="828" width="250" height="78" rx="18" fill="#17172c" stroke="#655d86"/><text x="953" y="34" text-anchor="middle" class="sans card-title">OpenNLP</text><text x="953" y="59" text-anchor="middle" class="sans small">optional · user models</text>
+    <rect x="1104" width="250" height="78" rx="18" fill="#261f2f" stroke="#ff718a"/><text x="1229" y="34" text-anchor="middle" class="sans card-title">Output</text><text x="1229" y="59" text-anchor="middle" class="mono small">type · range · score</text>
+  </g>
+
+  <path d="M1360 342V396H1278" fill="none" stroke="#af8cff" stroke-width="4" marker-end="url(#cyanArrow)"/>
+
+  <rect x="72" y="394" width="1456" height="194" rx="26" fill="#0e2937" stroke="#38d6d0" stroke-width="3"/>
+  <text x="100" y="430" class="sans lane" fill="#70eee5">02 · PRIVACY CORE — SINGLE SOURCE OF TRUTH</text>
+  <g transform="translate(100 458)">
+    <rect width="310" height="94" rx="20" fill="#0b3840"/><circle cx="34" cy="28" r="17" fill="#38d6d0"/><text x="34" y="34" text-anchor="middle" class="sans step">1</text><text x="66" y="35" class="sans card-title">Resolve evidence</text><text x="26" y="72" class="sans small">aliases · thresholds · overlaps · failure policy</text>
+    <rect x="340" width="310" height="94" rx="20" fill="#0b3840"/><circle cx="374" cy="28" r="17" fill="#38d6d0"/><text x="374" y="34" text-anchor="middle" class="sans step">2</text><text x="406" y="35" class="sans card-title">Open one session</text><text x="366" y="72" class="sans small">random namespace · stable request identity</text>
+    <rect x="680" width="310" height="94" rx="20" fill="#0b3840"/><circle cx="714" cy="28" r="17" fill="#38d6d0"/><text x="714" y="34" text-anchor="middle" class="sans step">3</text><text x="746" y="35" class="sans card-title">Tokenize values</text><text x="706" y="72" class="mono small">[[PII_TYPE_nonce_1]]</text>
+    <rect x="1020" width="334" height="94" rx="20" fill="#0b3840"/><circle cx="1054" cy="28" r="17" fill="#38d6d0"/><text x="1054" y="34" text-anchor="middle" class="sans step">4</text><text x="1086" y="35" class="sans card-title">Destroy mappings</text><text x="1046" y="72" class="sans small">success · error · cancel · stream close</text>
+  </g>
+
+  <path d="M800 590V640" stroke="#38d6d0" stroke-width="4" marker-end="url(#cyanArrow)"/>
+
+  <rect x="72" y="638" width="1456" height="218" rx="26" fill="#101f33" stroke="#62a7ff" stroke-width="2"/>
+  <text x="100" y="674" class="sans lane" fill="#8bbcff">03 · SPRING AI EXECUTION INTEGRATION — ENFORCED</text>
+  <g transform="translate(100 704)">
+    <rect width="250" height="110" rx="20" fill="#142945" stroke="#62a7ff"/><text x="125" y="34" text-anchor="middle" class="sans card-title">Final model input</text><text x="125" y="64" text-anchor="middle" class="sans small">user + memory + RAG</text><text x="125" y="89" text-anchor="middle" class="mono small" fill="#70eee5">TOKENS ONLY</text>
+    <path d="M262 55H326" stroke="#38d6d0" stroke-width="3" marker-end="url(#cyanArrow)"/>
+    <rect x="338" width="250" height="110" rx="20" fill="#171d39" stroke="#af8cff"/><text x="463" y="34" text-anchor="middle" class="sans card-title">Model call</text><text x="463" y="64" text-anchor="middle" class="sans small">call · stream · recursion</text><text x="463" y="89" text-anchor="middle" class="mono small" fill="#c9b6ff">[[PII_*]]</text>
+    <path d="M600 55H664" stroke="#38d6d0" stroke-width="3" marker-end="url(#cyanArrow)"/>
+    <rect x="676" width="250" height="110" rx="20" fill="#102a2a" stroke="#52e29a"/><text x="801" y="34" text-anchor="middle" class="sans card-title">Scoped tool</text><text x="801" y="64" text-anchor="middle" class="sans small">default deny · allowed types only</text><text x="801" y="89" text-anchor="middle" class="sans small" fill="#7ff0b5">LEAST PRIVILEGE</text>
+    <path d="M938 55H1002" stroke="#52e29a" stroke-width="3" marker-end="url(#greenArrow)"/>
+    <rect x="1014" width="340" height="110" rx="20" fill="#0d3135" stroke="#38d6d0"/><text x="1184" y="34" text-anchor="middle" class="sans card-title">Retokenize + output policy</text><text x="1184" y="64" text-anchor="middle" class="sans small">tool result · returnDirect · response</text><text x="1184" y="89" text-anchor="middle" class="sans small" fill="#70eee5">TOKENIZE · REDACT · BLOCK</text>
+  </g>
+  <text x="800" y="894" text-anchor="middle" class="sans small">The providers can change. The request lifecycle and Spring AI boundary contract stay the same.</text>
+</svg>

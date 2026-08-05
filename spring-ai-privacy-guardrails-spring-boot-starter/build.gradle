@@ -1,0 +1,14 @@
+description = 'Spring Boot starter for Spring AI Privacy Guardrails.'
+
+dependencies {
+    api platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
+    api project(':spring-ai-privacy-guardrails-core')
+    api project(':spring-ai-privacy-guardrails-spring-ai')
+    api 'org.springframework.boot:spring-boot-starter'
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${providers.gradleProperty('springBootVersion').get()}"
+
+    testImplementation 'org.springframework.boot:spring-boot-test'
+    testImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-chat-client'
+    testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
+}

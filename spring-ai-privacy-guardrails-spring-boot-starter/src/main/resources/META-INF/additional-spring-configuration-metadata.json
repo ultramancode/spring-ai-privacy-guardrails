@@ -1,0 +1,74 @@
+{
+  "properties": [
+    {
+      "name": "spring.ai.privacy.analysis.language",
+      "type": "java.lang.String",
+      "defaultValue": "en"
+    },
+    {
+      "name": "spring.ai.privacy.analysis.minimum-score",
+      "type": "java.lang.Double",
+      "defaultValue": 0.0
+    },
+    {
+      "name": "spring.ai.privacy.analysis.mode",
+      "type": "io.github.ultramancode.springai.privacy.core.PiiResolutionMode",
+      "defaultValue": "UNION"
+    },
+    {
+      "name": "spring.ai.privacy.analysis.failure-policy",
+      "type": "io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailurePolicy",
+      "defaultValue": "REQUIRE_ALL"
+    },
+    {
+      "name": "spring.ai.privacy.analysis.type-conflict-fallback",
+      "type": "java.lang.String",
+      "defaultValue": "PII"
+    },
+    {
+      "name": "spring.ai.privacy.output.action",
+      "type": "io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction",
+      "defaultValue": "TOKENIZE"
+    },
+    {
+      "name": "spring.ai.privacy.output.block-exception-message",
+      "type": "java.lang.String",
+      "description": "Safe exception message used when BLOCK rejects an output; it is not returned as a synthetic model response.",
+      "defaultValue": "Response blocked by privacy guardrail."
+    },
+    {
+      "name": "spring.ai.privacy.response-inspection.max-stream-frames",
+      "type": "java.lang.Integer",
+      "description": "Maximum response frames inspected before streaming privacy processing fails closed.",
+      "defaultValue": 1024
+    },
+    {
+      "name": "spring.ai.privacy.response-inspection.max-characters",
+      "type": "java.lang.Long",
+      "description": "Maximum text and tool-argument characters inspected per response.",
+      "defaultValue": 1000000
+    },
+    {
+      "name": "spring.ai.privacy.response-inspection.max-media-bytes",
+      "type": "java.lang.Long",
+      "description": "Maximum known media bytes inspected per response.",
+      "defaultValue": 16777216
+    },
+    {
+      "name": "spring.ai.privacy.response-inspection.stream-idle-timeout",
+      "type": "java.time.Duration",
+      "description": "Maximum idle interval allowed between response stream frames before privacy processing fails closed.",
+      "defaultValue": "60s"
+    }
+  ],
+  "hints": [
+    {
+      "name": "spring.ai.privacy.output.action",
+      "values": [
+        {"value": "TOKENIZE", "description": "Replace detected output values with request-scoped opaque tokens."},
+        {"value": "REDACT", "description": "Replace detected output values with irreversible typed redaction labels."},
+        {"value": "BLOCK", "description": "Reject the response with a typed privacy exception."}
+      ]
+    }
+  ]
+}

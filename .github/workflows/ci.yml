@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Java ${{ matrix.java }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [21, 25]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Build and test
+        run: ./gradlew --no-daemon clean check -PtestJavaVersion=${{ matrix.java }}
+
+      - name: Verify public candidate snapshot
+        if: matrix.java == 21
+        run: ./gradlew --no-daemon verifyPublicSnapshot -PtestJavaVersion=21
+
+      - name: Verify Javadoc and publication metadata
+        if: matrix.java == 21
+        run: >-
+          ./gradlew --no-daemon
+          javadoc
+          generatePomFileForMavenJavaPublication
+          publishedArtifactSmokeTest
+          publishedPomOnlyArtifactSmokeTest
+          -PtestJavaVersion=21
+
+      - name: Smoke-test repository benchmarks
+        if: matrix.java == 21
+        run: >-
+          ./gradlew --no-daemon
+          :spring-ai-privacy-guardrails-benchmarks:jmhSmoke
+          -PtestJavaVersion=21
+
+      - name: Generate CycloneDX SBOM
+        if: matrix.java == 21
+        run: ./gradlew --no-daemon cyclonedxBom -PtestJavaVersion=21
+
+      - name: Verify CycloneDX SBOM
+        if: matrix.java == 21
+        run: |
+          identity_args=()
+          if [[ "$GITHUB_REPOSITORY" != \
+              "ultramancode/spring-ai-privacy-guardrails" ]]; then
+            identity_args+=(--allow-noncanonical-source)
+          fi
+          ./scripts/verify-release-sbom.sh \
+            0.1.0-SNAPSHOT \
+            build/reports/cyclonedx/bom.json \
+            "${identity_args[@]}"
+
+      - name: Upload CycloneDX SBOM
+        if: matrix.java == 21
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cyclonedx-sbom
+          path: build/reports/cyclonedx/bom.json
+          if-no-files-found: error
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports-java-${{ matrix.java }}
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+  presidio-live:
+    name: Presidio Docker smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Start pinned Presidio Analyzer
+        run: docker compose -f samples/presidio/docker-compose.yml up -d --wait
+
+      - name: Run live adapter and sample-profile tests
+        env:
+          PRESIDIO_LIVE_TEST: 'true'
+        run: |
+          ./gradlew --no-daemon \
+            :spring-ai-privacy-guardrails-presidio:test \
+            :spring-ai-privacy-guardrails-sample-demo:test \
+            --tests '*Presidio*LiveIntegrationTest' \
+            --rerun-tasks
+
+      - name: Show Presidio logs
+        if: failure()
+        run: docker compose -f samples/presidio/docker-compose.yml logs
+
+      - name: Stop Presidio Analyzer
+        if: always()
+        run: docker compose -f samples/presidio/docker-compose.yml down

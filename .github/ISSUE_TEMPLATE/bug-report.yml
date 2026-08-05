@@ -1,0 +1,39 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: Description
+      description: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: Provide the minimal code, configuration, and input needed to reproduce the issue.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Project version
+      description: The project version where the issue occurs.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Environment
+      description: Include Java and, when applicable, Spring Boot, Spring AI, Presidio, and analyzer model versions.
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Analyzer providers (if applicable)
+      multiple: true
+      options:
+        - Not applicable
+        - Regex
+        - Presidio
+        - OpenNLP
+        - Custom analyzer

@@ -1,0 +1,12 @@
+description = 'Spring Boot starter for the OpenNLP privacy analyzer adapter.'
+
+dependencies {
+    api platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
+    api project(':spring-ai-privacy-guardrails-opennlp')
+    api project(':spring-ai-privacy-guardrails-spring-boot-starter')
+
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${providers.gradleProperty('springBootVersion').get()}"
+
+    testImplementation 'org.springframework.boot:spring-boot-test'
+}

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and support
+    url: https://github.com/ultramancode/spring-ai-privacy-guardrails/discussions
+    about: Ask usage and integration questions in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/ultramancode/spring-ai-privacy-guardrails/security/advisories/new
+    about: Report vulnerabilities privately.

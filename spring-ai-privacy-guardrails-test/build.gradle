@@ -1,0 +1,9 @@
+description = 'Test probes and assertions for Spring AI privacy boundaries.'
+
+dependencies {
+    api project(':spring-ai-privacy-guardrails-spring-ai')
+    api "org.assertj:assertj-core:${providers.gradleProperty('assertjVersion').get()}"
+
+    testImplementation 'org.springframework.ai:spring-ai-deepseek'
+    testImplementation "tools.jackson.core:jackson-databind:${providers.gradleProperty('jacksonVersion').get()}"
+}

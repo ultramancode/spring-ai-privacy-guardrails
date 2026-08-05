@@ -1,0 +1,78 @@
+description = 'Runnable Spring Boot demo for Spring AI Privacy Guardrails.'
+
+apply plugin: 'application'
+
+sourceSets {
+    openAiCompatibleLiveTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    openAiCompatibleLiveTestImplementation.extendsFrom testImplementation
+    openAiCompatibleLiveTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    implementation platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
+    implementation project(':spring-ai-privacy-guardrails-spring-boot-starter')
+    runtimeOnly project(':spring-ai-privacy-guardrails-opennlp-spring-boot-starter')
+    runtimeOnly project(':spring-ai-privacy-guardrails-presidio-spring-boot-starter')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.ai:spring-ai-mcp'
+
+    openAiCompatibleLiveTestImplementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    openAiCompatibleLiveTestImplementation project(':spring-ai-privacy-guardrails-test')
+}
+
+application {
+    mainClass = 'io.github.ultramancode.springai.privacy.sample.PrivacyGuardrailsDemoApplication'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('openAiCompatibleLiveTestClasses')
+}
+
+tasks.register('openAiCompatibleLiveTest', Test) {
+    group = 'verification'
+    description = 'Runs opt-in privacy boundary tests against an OpenAI-compatible model endpoint.'
+    testClassesDirs = sourceSets.openAiCompatibleLiveTest.output.classesDirs
+    classpath = sourceSets.openAiCompatibleLiveTest.runtimeClasspath
+    useJUnitPlatform()
+    maxParallelForks = 1
+    shouldRunAfter tasks.named('test')
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf('Live endpoint calls must execute') { true }
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
+    doFirst {
+        File localEnvFile = new File(getWorkingDir(), '.env')
+        Properties localEnvironment = new Properties()
+        if (localEnvFile.isFile()) {
+            localEnvFile.withInputStream { input -> localEnvironment.load(input) }
+        }
+
+        List<String> requiredEnvironmentVariables = List.of(
+                'OPENAI_COMPATIBLE_API_KEY',
+                'OPENAI_COMPATIBLE_BASE_URL',
+                'OPENAI_COMPATIBLE_MODEL'
+        )
+        Map<String, String> processEnvironment = System.getenv()
+        for (String variableName : requiredEnvironmentVariables) {
+            String value = processEnvironment.containsKey(variableName)
+                    ? processEnvironment.get(variableName)
+                    : localEnvironment.getProperty(variableName)
+            if (!value || value.isBlank()) {
+                throw new GradleException(
+                        "Set ${variableName} or add it to samples/spring-ai-demo/.env"
+                )
+            }
+            environment variableName, value
+        }
+    }
+}

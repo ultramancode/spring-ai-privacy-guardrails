@@ -1,0 +1,19 @@
+plugins {
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:${providers.gradleProperty('privacyVersion').get()}"
+}
+
+application {
+    mainClass = 'example.PublishedArtifactConsumer'
+}

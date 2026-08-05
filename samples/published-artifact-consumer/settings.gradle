@@ -1,0 +1,56 @@
+import org.gradle.api.credentials.HttpHeaderCredentials
+import org.gradle.authentication.http.HttpHeaderAuthentication
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    def privacyRepository = providers.gradleProperty('privacyRepository')
+    def authHeaderName = providers.gradleProperty('privacyRepositoryAuthHeaderName')
+    def authHeaderValue = providers.gradleProperty('privacyRepositoryAuthHeaderValue')
+    def pomOnly = providers.gradleProperty('privacyPomOnly')
+            .map(Boolean::parseBoolean)
+            .orElse(false)
+    if (authHeaderName.isPresent() != authHeaderValue.isPresent()) {
+        throw new GradleException(
+                'privacyRepositoryAuthHeaderName and privacyRepositoryAuthHeaderValue must be configured together'
+        )
+    }
+    repositories {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'privacyArtifacts'
+                    url = uri(privacyRepository.get())
+                    if (authHeaderName.isPresent()) {
+                        credentials(HttpHeaderCredentials) {
+                            name = authHeaderName.get()
+                            value = authHeaderValue.get()
+                        }
+                        authentication {
+                            header(HttpHeaderAuthentication)
+                        }
+                    }
+                    if (pomOnly.get()) {
+                        metadataSources {
+                            mavenPom()
+                            artifact()
+                        }
+                    }
+                }
+            }
+            filter {
+                includeGroup('io.github.ultramancode')
+            }
+        }
+        mavenCentral()
+    }
+}
+
+rootProject.name = providers.gradleProperty('privacyConsumerBuildName')
+        .getOrElse('spring-ai-privacy-guardrails-published-consumer')

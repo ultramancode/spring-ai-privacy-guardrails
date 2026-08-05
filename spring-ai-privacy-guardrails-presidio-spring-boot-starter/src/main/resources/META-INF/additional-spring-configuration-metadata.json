@@ -1,0 +1,24 @@
+{
+  "properties": [
+    {
+      "name": "spring.ai.privacy.presidio.timeout",
+      "type": "java.time.Duration",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "spring.ai.privacy.presidio.max-retries",
+      "type": "java.lang.Integer",
+      "defaultValue": 1
+    },
+    {
+      "name": "spring.ai.privacy.presidio.retry-backoff",
+      "type": "java.time.Duration",
+      "defaultValue": "300ms"
+    },
+    {
+      "name": "spring.ai.privacy.presidio.max-response-bytes",
+      "type": "java.lang.Integer",
+      "defaultValue": 8388608
+    }
+  ]
+}

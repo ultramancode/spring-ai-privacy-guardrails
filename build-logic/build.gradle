@@ -1,0 +1,50 @@
+plugins {
+    id 'java-gradle-plugin'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+dependencies {
+    implementation 'org.cyclonedx:cyclonedx-gradle-plugin:3.2.4'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.0.3'
+}
+
+gradlePlugin {
+    plugins {
+        javaConventions {
+            id = 'privacy.java-conventions'
+            implementationClass = 'io.github.ultramancode.privacy.buildlogic.JavaConventionsPlugin'
+        }
+        publishingConventions {
+            id = 'privacy.publishing-conventions'
+            implementationClass = 'io.github.ultramancode.privacy.buildlogic.PublishingConventionsPlugin'
+        }
+        repositoryVerification {
+            id = 'privacy.repository-verification'
+            implementationClass = 'io.github.ultramancode.privacy.buildlogic.RepositoryVerificationPlugin'
+        }
+        releaseConventions {
+            id = 'privacy.release'
+            implementationClass = 'io.github.ultramancode.privacy.buildlogic.ReleasePlugin'
+        }
+        publicSnapshot {
+            id = 'privacy.public-snapshot'
+            implementationClass = 'io.github.ultramancode.privacy.buildlogic.snapshot.PublicSnapshotPlugin'
+        }
+    }
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

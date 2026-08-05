@@ -1,0 +1,42 @@
+description = 'Repository-only JMH evidence for core and Spring AI privacy boundary costs.'
+
+dependencies {
+    implementation project(':spring-ai-privacy-guardrails-core')
+    implementation project(':spring-ai-privacy-guardrails-spring-ai')
+    implementation "org.openjdk.jmh:jmh-core:${providers.gradleProperty('jmhVersion').get()}"
+    annotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:${providers.gradleProperty('jmhVersion').get()}"
+}
+
+def benchmarkReport = layout.buildDirectory.file('reports/jmh/results.json')
+def benchmarkInclude = providers.gradleProperty('jmhInclude')
+        .orElse('io.github.ultramancode.springai.privacy.benchmarks.*')
+
+tasks.register('jmh', JavaExec) {
+    group = 'benchmark'
+    description = 'Runs the reproducible full JMH benchmark profile and writes JSON evidence.'
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+    doFirst {
+        benchmarkReport.get().asFile.parentFile.mkdirs()
+        args = [
+                benchmarkInclude.get(),
+                '-wi', '5',
+                '-i', '5',
+                '-w', '1s',
+                '-r', '1s',
+                '-f', '2',
+                '-rf', 'json',
+                '-rff', benchmarkReport.get().asFile.absolutePath
+        ]
+    }
+}
+
+tasks.register('jmhSmoke', JavaExec) {
+    group = 'verification'
+    description = 'Compiles and briefly executes every JMH benchmark without producing baseline claims.'
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+    args benchmarkInclude.get(), '-wi', '1', '-i', '1', '-w', '100ms', '-r', '100ms', '-f', '1'
+}

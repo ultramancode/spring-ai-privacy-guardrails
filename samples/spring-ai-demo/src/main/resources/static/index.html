@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Boundary Inspector</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: #0d1d2e;
+      --panel-strong: #10283a;
+      --line: #23435a;
+      --text: #f4f7fb;
+      --muted: #9db1c4;
+      --cyan: #45ddd3;
+      --green: #60e6a0;
+      --violet: #b59aff;
+      --red: #ff8095;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 85% 5%, #123f56 0, transparent 28rem),
+        radial-gradient(circle at 5% 95%, #162d4b 0, transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 72px; }
+    header { display: grid; grid-template-columns: 1fr auto; gap: 28px; align-items: end; margin-bottom: 24px; }
+    .eyebrow { color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { margin: 10px 0 8px; font-size: clamp(36px, 6vw, 68px); line-height: .98; letter-spacing: -.04em; }
+    .lead { max-width: 780px; margin: 0; color: var(--muted); font-size: 18px; line-height: 1.55; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .badge {
+      padding: 7px 10px;
+      border: 1px solid #2b5c72;
+      border-radius: 999px;
+      background: #0a2030;
+      color: #b9d7e5;
+      font: 800 11px/1 ui-sans-serif, system-ui, sans-serif;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .badge.primary { border-color: #258e88; background: #0b2c30; color: #7ef3e8; }
+    button {
+      border: 1px solid #58eee2;
+      border-radius: 14px;
+      padding: 13px 20px;
+      background: linear-gradient(135deg, #1fc5ba, #4f8ef7);
+      color: #03131d;
+      font: inherit;
+      font-weight: 850;
+      cursor: pointer;
+      box-shadow: 0 12px 34px #20c7bc33;
+    }
+    button:disabled { cursor: wait; filter: grayscale(.5); opacity: .75; }
+
+    .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .metric, .card {
+      border: 1px solid var(--line);
+      background: linear-gradient(145deg, #102438dd, #091725ee);
+      box-shadow: 0 18px 50px #0004;
+    }
+    .metric { min-height: 112px; padding: 16px; border-radius: 18px; }
+    .metric > span { color: var(--muted); font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+    .metric-result { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 10px; }
+    .metric strong { font-size: 27px; white-space: nowrap; }
+    .metric small { color: var(--muted); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+    .metric.pass strong { color: var(--green); }
+    .metric.pass small { color: var(--green); }
+    .metric.fail { border-color: #7a3340; }
+    .metric.fail strong, .metric.fail small { color: var(--red); }
+
+    .flow {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 10px;
+      overflow-x: auto;
+      border: 1px solid #1c3d52;
+      border-radius: 18px;
+      background: #081725bb;
+    }
+    .flow-stage {
+      position: relative;
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      grid-template-rows: auto auto;
+      column-gap: 8px;
+      flex: 1;
+      min-width: 160px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      color: var(--muted);
+      transition: background .2s ease, color .2s ease;
+    }
+    .flow-stage span { grid-row: 1 / 3; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #183249; color: #9db1c4; font-weight: 900; }
+    .flow-stage b { font-size: 12px; }
+    .flow-stage small { margin-top: 3px; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+    .flow-stage.pass { background: #0c2a2b; color: #d9fff5; }
+    .flow-stage.pass span { background: var(--green); color: #052117; }
+    .flow-stage.pass small { color: var(--green); }
+    .flow-stage.fail { background: #321722; color: #ffd4db; }
+    .flow-stage.fail span { background: var(--red); color: #2b0710; }
+    .flow-stage.fail small { color: var(--red); }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .card { min-width: 0; padding: 24px; border-radius: 22px; }
+    .card.wide { grid-column: 1 / -1; }
+    .step { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .number {
+      display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+      background: var(--cyan); color: #06131c; font-weight: 900;
+    }
+    h2 { margin: 0; font-size: 18px; }
+    .hint { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    pre {
+      margin: 0;
+      min-height: 92px;
+      padding: 16px;
+      overflow: auto;
+      border: 1px solid #1c4157;
+      border-radius: 14px;
+      background: #06121d;
+      color: #dceaf4;
+      font: 13px/1.65 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    #source { border-color: #673143; color: #ffafbd; }
+    #protected, #toolArguments, #finalResponse { border-color: #176c69; color: #8bf5eb; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; min-height: 42px; }
+    .chip { padding: 7px 10px; border: 1px solid #624fa2; border-radius: 999px; background: #211c3a; color: #d7caff; font: 700 12px/1 monospace; }
+    .checks { display: grid; gap: 10px; margin-top: 16px; }
+    .check { display: flex; justify-content: space-between; gap: 12px; padding: 11px 13px; border-radius: 12px; background: #0b1825; color: var(--muted); }
+    .check b { color: var(--green); }
+    .check b.fail { color: var(--red); }
+    .error { display: none; margin-top: 18px; padding: 14px 16px; border: 1px solid #7a3340; border-radius: 14px; background: #321722; color: #ffafbd; }
+
+    @media (max-width: 820px) {
+      header { grid-template-columns: 1fr; align-items: start; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .card.wide { grid-column: auto; }
+    }
+    @media (max-width: 480px) {
+      .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="eyebrow">Spring AI Privacy Guardrails · sample only</div>
+      <h1>Privacy Boundary Inspector</h1>
+      <p class="lead">See one synthetic request cross the actual ChatClient, model, scoped-tool, output, and session-cleanup boundaries. No cloud model or API key is used.</p>
+      <div class="badges" id="runtimeBadges" aria-label="Runtime evidence"></div>
+    </div>
+    <button id="run" type="button">Run protected flow</button>
+  </header>
+
+  <section class="metrics" aria-label="Boundary results">
+    <div class="metric" id="modelRawMetric"><span>Model raw values</span><div class="metric-result"><strong id="modelRawCount">—</strong><small id="modelRawStatus">WAIT</small></div></div>
+    <div class="metric" id="deniedToolMetric"><span>Denied values at CRM</span><div class="metric-result"><strong id="deniedToolCount">—</strong><small id="deniedToolStatus">WAIT</small></div></div>
+    <div class="metric" id="allowedToolMetric"><span>Allowed value at CRM</span><div class="metric-result"><strong id="allowedToolCount">—</strong><small id="allowedToolStatus">WAIT</small></div></div>
+    <div class="metric" id="resultRawMetric"><span>Raw result at model</span><div class="metric-result"><strong id="resultRawCount">—</strong><small id="resultRawStatus">WAIT</small></div></div>
+    <div class="metric" id="activeSessionsMetric"><span>Sessions after call</span><div class="metric-result"><strong id="activeSessions">—</strong><small id="activeSessionsStatus">WAIT</small></div></div>
+  </section>
+
+  <section class="flow" aria-label="Protected execution flow">
+    <div class="flow-stage" id="stageInput"><span>1</span><b>Raw input</b><small>WAITING</small></div>
+    <div class="flow-stage" id="stageModel"><span>2</span><b>Tokenized model</b><small>WAITING</small></div>
+    <div class="flow-stage" id="stageTool"><span>3</span><b>Scoped CRM</b><small>WAITING</small></div>
+    <div class="flow-stage" id="stageResult"><span>4</span><b>Retokenized result</b><small>WAITING</small></div>
+    <div class="flow-stage" id="stageCleanup"><span>5</span><b>Session cleanup</b><small>WAITING</small></div>
+  </section>
+
+  <section class="grid">
+    <article class="card wide">
+      <div class="step"><span class="number">1</span><div><h2>Synthetic application input</h2><p class="hint">User, memory, and RAG text enter the same final model boundary.</p></div></div>
+      <pre id="source"></pre>
+    </article>
+
+    <article class="card">
+      <div class="step"><span class="number">2</span><div><h2>Analyzer evidence</h2><p class="hint">Types, provider IDs, and source offsets only; mappings are never serialized.</p></div></div>
+      <div class="chips" id="spans"></div>
+    </article>
+
+    <article class="card">
+      <div class="step"><span class="number">3</span><div><h2>Final model input</h2><p class="hint">The deterministic local model receives opaque request tokens.</p></div></div>
+      <pre id="protected">Waiting for run…</pre>
+    </article>
+
+    <article class="card">
+      <div class="step"><span class="number">4</span><div><h2>Model-issued tool arguments</h2><p class="hint">The model can preserve identity without seeing originals.</p></div></div>
+      <pre id="toolArguments">Waiting for run…</pre>
+    </article>
+
+    <article class="card">
+      <div class="step"><span class="number">5</span><div><h2>Least-privilege tool boundary</h2><p class="hint">Only CUSTOMER_ID is restored inside the CRM delegate.</p></div></div>
+      <div class="chips" id="allowedOriginalEntityTypes"></div>
+      <div class="checks">
+        <div class="check"><span>Model saw tokens only</span><b id="modelCheck">—</b></div>
+        <div class="check"><span>Tool received only allowed originals</span><b id="toolCheck">—</b></div>
+        <div class="check"><span>Tool result retokenized before model</span><b id="resultCheck">—</b></div>
+      </div>
+    </article>
+
+    <article class="card wide">
+      <div class="step"><span class="number">6</span><div><h2>Protected result and lifecycle cleanup</h2><p class="hint">New tool-result PII is tokenized before the second model call; the request mapping is then cleared and the session is closed.</p></div></div>
+      <pre id="finalResponse">Waiting for run…</pre>
+    </article>
+  </section>
+
+  <div class="error" id="error" role="alert"></div>
+</main>
+
+<script>
+  const element = id => document.getElementById(id);
+
+  function setCheck(id, value) {
+    const target = element(id);
+    target.textContent = value ? "PASS" : "FAIL";
+    target.classList.toggle("fail", !value);
+  }
+
+  function setMetric(id, evidence) {
+    const metric = element(`${id}Metric`);
+    element(`${id}Count`).textContent = `${evidence.observed} / ${evidence.total}`;
+    element(`${id}Status`).textContent = evidence.passed ? "PASS" : "FAIL";
+    metric.classList.toggle("pass", evidence.passed);
+    metric.classList.toggle("fail", !evidence.passed);
+  }
+
+  function setAbsoluteMetric(id, value, passed) {
+    const metric = element(`${id}Metric`);
+    element(id).textContent = value;
+    element(`${id}Status`).textContent = passed ? "PASS" : "FAIL";
+    metric.classList.toggle("pass", passed);
+    metric.classList.toggle("fail", !passed);
+  }
+
+  function setStage(id, passed) {
+    const stage = element(id);
+    stage.classList.toggle("pass", passed);
+    stage.classList.toggle("fail", !passed);
+    stage.querySelector("small").textContent = passed ? "PASS" : "FAIL";
+  }
+
+  function resetEvidence() {
+    ["modelRaw", "deniedTool", "allowedTool", "resultRaw"].forEach(id => {
+      element(`${id}Metric`).classList.remove("pass", "fail");
+      element(`${id}Count`).textContent = "—";
+      element(`${id}Status`).textContent = "WAIT";
+    });
+    element("activeSessionsMetric").classList.remove("pass", "fail");
+    element("activeSessions").textContent = "—";
+    element("activeSessionsStatus").textContent = "WAIT";
+    ["stageInput", "stageModel", "stageTool", "stageResult", "stageCleanup"].forEach(id => {
+      const stage = element(id);
+      stage.classList.remove("pass", "fail");
+      stage.querySelector("small").textContent = "WAITING";
+    });
+  }
+
+  function setRuntimeBadges(providers, tool) {
+    const labels = [
+      {text: "Actual ChatClient", primary: true},
+      ...providers.map(provider => ({text: `${provider} analyzer`, primary: provider === "PRESIDIO"})),
+      {text: "Local deterministic model", primary: false},
+      {text: `${tool.modelCalls} model calls`, primary: false}
+    ];
+    element("runtimeBadges").replaceChildren(...labels.map(label => {
+      const badge = document.createElement("span");
+      badge.className = `badge${label.primary ? " primary" : ""}`;
+      badge.textContent = label.text;
+      return badge;
+    }));
+  }
+
+  function setChips(id, values) {
+    const container = element(id);
+    container.replaceChildren(...values.map(value => {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = value;
+      return chip;
+    }));
+  }
+
+  async function json(path) {
+    const response = await fetch(path, {headers: {Accept: "application/json"}});
+    if (!response.ok) throw new Error(`${path} returned HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function run() {
+    const button = element("run");
+    button.disabled = true;
+    element("error").style.display = "none";
+    resetEvidence();
+    try {
+      const scenario = await json("/demo/scenario");
+      element("source").textContent = scenario.input;
+      const analysis = await json("/demo/protect");
+      setStage("stageInput", true);
+      const tool = await json("/demo/tool-loop");
+
+      element("protected").textContent = tool.protectedModelInput;
+      element("toolArguments").textContent = tool.tokenizedToolArguments;
+      element("finalResponse").textContent = tool.finalResponse;
+      setChips("spans", analysis.detectedSpans.map(span =>
+        `${span.type} · [${span.providers.join(", ")}] · ${span.start}:${span.end} · ${span.reason}`));
+      setChips("allowedOriginalEntityTypes", tool.allowedOriginalEntityTypes);
+      setRuntimeBadges(analysis.successfulProviders, tool);
+
+      const evidence = tool.boundaryEvidence;
+      setMetric("modelRaw", evidence.modelRawValues);
+      setMetric("deniedTool", evidence.deniedToolRawValues);
+      setMetric("allowedTool", evidence.allowedToolRawValues);
+      setMetric("resultRaw", evidence.rawToolResultValuesAtModel);
+      setAbsoluteMetric("activeSessions", tool.activeSessionsAfterCall, tool.activeSessionsAfterCall === 0);
+
+      const modelPassed = tool.modelSawOnlyTokens && evidence.modelRawValues.passed;
+      const toolPassed = tool.toolReceivedOnlyAllowedOriginals
+        && tool.toolLookupSucceededWithRestoredCustomerId
+        && evidence.deniedToolRawValues.passed
+        && evidence.allowedToolRawValues.passed;
+      const resultPassed = tool.toolResultRetokenizedBeforeModel
+        && evidence.rawToolResultValuesAtModel.passed;
+      setCheck("modelCheck", modelPassed);
+      setCheck("toolCheck", toolPassed);
+      setCheck("resultCheck", resultPassed);
+      setStage("stageModel", modelPassed);
+      setStage("stageTool", toolPassed);
+      setStage("stageResult", resultPassed);
+      setStage("stageCleanup", tool.activeSessionsAfterCall === 0);
+    } catch (failure) {
+      element("error").textContent = `Demo failed safely: ${failure.message}`;
+      element("error").style.display = "block";
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  element("run").addEventListener("click", run);
+  run();
+</script>
+</body>
+</html>

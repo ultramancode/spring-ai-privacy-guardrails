@@ -1,0 +1,13 @@
+description = 'Spring AI Advisors and ToolCallback wrappers for privacy guardrails.'
+
+dependencies {
+    api platform("org.springframework.ai:spring-ai-bom:${providers.gradleProperty('springAiVersion').get()}")
+    api project(':spring-ai-privacy-guardrails-core')
+    api 'org.springframework.ai:spring-ai-client-chat'
+    api 'org.springframework.ai:spring-ai-model'
+    compileOnly 'org.springframework.ai:spring-ai-deepseek'
+    implementation "tools.jackson.core:jackson-databind:${providers.gradleProperty('jacksonVersion').get()}"
+
+    testImplementation 'org.springframework.ai:spring-ai-deepseek'
+    testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
+}

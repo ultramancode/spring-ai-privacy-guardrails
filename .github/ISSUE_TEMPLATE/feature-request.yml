@@ -1,0 +1,15 @@
+name: Feature request
+description: Propose a focused privacy-boundary capability
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: Problem
+      description: What problem are you trying to solve, and who does it affect?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Suggestion
+      description: If you have an idea for how the problem could be addressed, describe it here.

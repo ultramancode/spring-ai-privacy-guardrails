@@ -1,0 +1,420 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  checks: read
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: maven-central
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Verify publication repository identity
+        run: |
+          if [[ "$GITHUB_REPOSITORY" != "ultramancode/spring-ai-privacy-guardrails" ]]; then
+            echo "Release publication is allowed only from the canonical public repository" >&2
+            exit 1
+          fi
+
+      - name: Verify release tag and commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$(git cat-file -t "refs/tags/$RELEASE_TAG" 2>/dev/null || true)" != "tag" ]]; then
+            echo "Release tag $RELEASE_TAG must be an annotated tag" >&2
+            exit 1
+          fi
+          release_commit=$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          if ! git merge-base --is-ancestor "$release_commit" refs/remotes/origin/main; then
+            echo "Release commit $release_commit is not reachable from origin/main" >&2
+            exit 1
+          fi
+
+          check_runs=$(gh api \
+            "repos/$GITHUB_REPOSITORY/commits/$release_commit/check-runs?per_page=100")
+          required_checks=("Java 21" "Java 25" "Presidio Docker smoke test")
+          for check_name in "${required_checks[@]}"; do
+            if ! jq -e --arg name "$check_name" \
+              '[.check_runs[] | select(.name == $name and .conclusion == "success")] | length > 0' \
+              <<< "$check_runs" >/dev/null; then
+              echo "Release commit lacks a successful '$check_name' check" >&2
+              exit 1
+            fi
+          done
+          echo "Verified annotated mainline release tag at $release_commit"
+
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Validate release version
+        id: release
+        run: |
+          version="${RELEASE_TAG#v}"
+          ./gradlew --no-daemon validateReleaseVersion -Pversion="$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify and build signed release bundle
+        env:
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: >-
+          ./gradlew --no-daemon
+          clean check javadoc verifyPublicSnapshot
+          publishedArtifactSmokeTest
+          publishedPomOnlyArtifactSmokeTest
+          cyclonedxBom
+          centralPortalBundle
+          -Pversion=${{ steps.release.outputs.version }}
+
+      - name: Verify release evidence
+        id: evidence
+        run: |
+          ./scripts/verify-release-sbom.sh \
+            "${{ steps.release.outputs.version }}" \
+            build/reports/cyclonedx/bom.json
+          bundle=$(find build/distributions -name '*-central-bundle.zip' -type f -print -quit)
+          if [[ -z "$bundle" ]]; then
+            echo "Central Portal bundle is missing" >&2
+            exit 1
+          fi
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+          echo "bundle_name=$(basename "$bundle")" >> "$GITHUB_OUTPUT"
+          echo "bundle_sha256=$(sha256sum "$bundle" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sbom_sha256=$(sha256sum build/reports/cyclonedx/bom.json | cut -d' ' -f1)" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ steps.release.outputs.version }}
+          path: |
+            build/distributions/*-central-bundle.zip
+            build/reports/cyclonedx/bom.json
+          if-no-files-found: error
+
+      - name: Create or reuse draft GitHub release
+        id: draft_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_id=$(gh api \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$RELEASE_TAG\")][0].id // empty")
+          if [[ -z "$release_id" ]]; then
+            gh release create "$RELEASE_TAG" \
+              --draft \
+              --verify-tag \
+              --title "$RELEASE_TAG" \
+              --notes "Release publication is waiting for Maven Central verification."
+            release_id=$(gh api \
+              "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq "[.[] | select(.tag_name == \"$RELEASE_TAG\")][0].id // empty")
+          fi
+          if [[ -z "$release_id" ]]; then
+            echo "Unable to locate the draft GitHub release" >&2
+            exit 1
+          fi
+          if [[ "$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq .draft)" != "true" ]]; then
+            echo "GitHub release $RELEASE_TAG is already public" >&2
+            exit 1
+          fi
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Create or reuse Maven Central deployment
+        id: central
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          release_id="${{ steps.draft_release.outputs.release_id }}"
+          release_body=$(gh api \
+            "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            --jq '.body // ""')
+          deployment_id=$(printf '%s\n' "$release_body" \
+            | sed -nE 's/.*<!-- central-deployment-id: ([0-9a-f-]{36}) -->.*/\1/p')
+          stored_bundle_sha256=$(printf '%s\n' "$release_body" \
+            | sed -nE 's/.*<!-- central-bundle-sha256: ([0-9a-f]{64}) -->.*/\1/p')
+          stored_sbom_sha256=$(printf '%s\n' "$release_body" \
+            | sed -nE 's/.*<!-- release-sbom-sha256: ([0-9a-f]{64}) -->.*/\1/p')
+          current_bundle_sha256="${{ steps.evidence.outputs.bundle_sha256 }}"
+          current_sbom_sha256="${{ steps.evidence.outputs.sbom_sha256 }}"
+          bundle="${{ steps.evidence.outputs.bundle }}"
+          sbom="build/reports/cyclonedx/bom.json"
+          authorization=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')
+          echo "::add-mask::$authorization"
+          if [[ -n "$deployment_id" ]]; then
+            if [[ -z "$stored_bundle_sha256" || -z "$stored_sbom_sha256" ]]; then
+              echo "Stored Central deployment lacks immutable release evidence digests" >&2
+              exit 1
+            fi
+            existing_assets="$RUNNER_TEMP/existing-release-assets"
+            mkdir -p "$existing_assets"
+            gh release download "$RELEASE_TAG" \
+              --pattern "${{ steps.evidence.outputs.bundle_name }}" \
+              --pattern "bom.json" \
+              --dir "$existing_assets"
+            if [[ "$(sha256sum "$existing_assets/${{ steps.evidence.outputs.bundle_name }}" \
+                | cut -d' ' -f1)" != "$stored_bundle_sha256" \
+                || "$(sha256sum "$existing_assets/bom.json" | cut -d' ' -f1)" \
+                != "$stored_sbom_sha256" ]]; then
+              echo "Draft release assets do not match the stored deployment evidence" >&2
+              exit 1
+            fi
+            status_file="$RUNNER_TEMP/central-reuse-status.json"
+            status_code=$(curl --request POST --silent --show-error \
+              --output "$status_file" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $authorization" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")
+            case "$status_code" in
+              200)
+                deployment_state=$(jq -r '.deploymentState // empty' "$status_file")
+                if [[ "$deployment_state" == "FAILED" ]]; then
+                  jq -c '.errors // []' "$status_file" >&2
+                  echo "Inspect and drop failed Central deployment $deployment_id, then rerun this workflow." >&2
+                  exit 1
+                fi
+                echo "Reusing Maven Central deployment $deployment_id in state $deployment_state"
+                echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              404)
+                echo "Stored Central deployment $deployment_id no longer exists; uploading the same tagged bundle again."
+                bundle="$existing_assets/${{ steps.evidence.outputs.bundle_name }}"
+                sbom="$existing_assets/bom.json"
+                current_bundle_sha256="$stored_bundle_sha256"
+                current_sbom_sha256="$stored_sbom_sha256"
+                release_body=$(printf '%s\n' "$release_body" \
+                  | sed -E \
+                    -e '/<!-- central-deployment-id: [0-9a-f-]{36} -->/d' \
+                    -e '/<!-- central-bundle-sha256: [0-9a-f]{64} -->/d' \
+                    -e '/<!-- release-sbom-sha256: [0-9a-f]{64} -->/d')
+                ;;
+              *)
+                echo "Unable to inspect stored Central deployment $deployment_id (HTTP $status_code)" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          # Persist the exact immutable evidence before Central can accept a deployment.
+          # A saved recovery marker must never point to draft assets that do not exist.
+          gh release upload "$RELEASE_TAG" \
+            "$bundle" \
+            "$sbom" \
+            --clobber
+
+          deployment_id=$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $authorization" \
+            --form "bundle=@$bundle" \
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=USER_MANAGED&name=spring-ai-privacy-guardrails-${{ steps.release.outputs.version }}")
+          if [[ ! "$deployment_id" =~ ^[0-9a-f-]{36}$ ]]; then
+            echo "Maven Central returned an unexpected deployment identifier" >&2
+            exit 1
+          fi
+          echo "Maven Central deployment accepted: $deployment_id"
+          recovery_marker="<!-- central-deployment-id: $deployment_id -->"$'\n'
+          recovery_marker+="<!-- central-bundle-sha256: $current_bundle_sha256 -->"$'\n'
+          recovery_marker+="<!-- release-sbom-sha256: $current_sbom_sha256 -->"
+          echo "Central deployment recovery marker: \`$recovery_marker\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Central deployment recovery ID::$deployment_id"
+          updated_body="${release_body}"$'\n\n'"$recovery_marker"
+          jq -n --arg body "$updated_body" '{body: $body}' > "$RUNNER_TEMP/release-update.json"
+          marker_saved=false
+          for attempt in $(seq 1 5); do
+            if gh api --method PATCH \
+              "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+              --input "$RUNNER_TEMP/release-update.json" >/dev/null; then
+              marker_saved=true
+              break
+            fi
+            sleep $((attempt * 2))
+          done
+          if [[ "$marker_saved" != "true" ]]; then
+            echo "Central accepted deployment $deployment_id, but its recovery marker could not be saved." >&2
+            echo "Add $recovery_marker to draft release $RELEASE_TAG before rerunning." >&2
+            exit 1
+          fi
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Maven Central validation
+        id: central_state
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          authorization=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')
+          echo "::add-mask::$authorization"
+          deployment_id="${{ steps.central.outputs.deployment_id }}"
+          state=
+          for _ in $(seq 1 90); do
+            status_json=$(curl --request POST --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $authorization" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")
+            state=$(jq -r '.deploymentState // empty' <<< "$status_json")
+            case "$state" in
+              VALIDATED|PUBLISHING|PUBLISHED)
+                break
+                ;;
+              FAILED)
+                jq -c '.errors // []' <<< "$status_json" >&2
+                exit 1
+                ;;
+              PENDING|VALIDATING)
+                sleep 10
+                ;;
+              *)
+                echo "Unexpected Maven Central deployment state: $state" >&2
+                exit 1
+                ;;
+            esac
+          done
+          if [[ "$state" != "VALIDATED" && "$state" != "PUBLISHING" && "$state" != "PUBLISHED" ]]; then
+            echo "Maven Central validation timed out in state $state" >&2
+            exit 1
+          fi
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+
+      - name: Run consumer against validated Central deployment
+        if: steps.central_state.outputs.state == 'VALIDATED'
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          authorization=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')
+          echo "::add-mask::$authorization"
+          export ORG_GRADLE_PROJECT_privacyRepository="https://central.sonatype.com/api/v1/publisher/deployment/${{ steps.central.outputs.deployment_id }}/download/"
+          export ORG_GRADLE_PROJECT_privacyRepositoryAuthHeaderName="Authorization"
+          export ORG_GRADLE_PROJECT_privacyRepositoryAuthHeaderValue="Bearer $authorization"
+          export ORG_GRADLE_PROJECT_privacyVersion="${{ steps.release.outputs.version }}"
+          ./gradlew --no-daemon --refresh-dependencies \
+            -p samples/published-artifact-consumer clean run
+
+      - name: Publish validated Maven Central deployment
+        if: steps.central_state.outputs.state == 'VALIDATED'
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          authorization=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')
+          echo "::add-mask::$authorization"
+          curl --request POST --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $authorization" \
+            "https://central.sonatype.com/api/v1/publisher/deployment/${{ steps.central.outputs.deployment_id }}"
+
+      - name: Wait for Maven Central publication
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          authorization=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')
+          echo "::add-mask::$authorization"
+          deployment_id="${{ steps.central.outputs.deployment_id }}"
+          state=
+          status_json=
+          for _ in $(seq 1 90); do
+            status_json=$(curl --request POST --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $authorization" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")
+            state=$(jq -r '.deploymentState // empty' <<< "$status_json")
+            case "$state" in
+              PUBLISHED)
+                break
+                ;;
+              FAILED)
+                jq -c '.errors // []' <<< "$status_json" >&2
+                exit 1
+                ;;
+              PENDING|VALIDATING|VALIDATED|PUBLISHING)
+                sleep 10
+                ;;
+              *)
+                echo "Unexpected Maven Central deployment state: $state" >&2
+                exit 1
+                ;;
+            esac
+          done
+          if [[ "$state" != "PUBLISHED" ]]; then
+            echo "Maven Central publication timed out in state $state" >&2
+            exit 1
+          fi
+          modules=(
+            spring-ai-privacy-guardrails-core
+            spring-ai-privacy-guardrails-opennlp
+            spring-ai-privacy-guardrails-opennlp-spring-boot-starter
+            spring-ai-privacy-guardrails-presidio
+            spring-ai-privacy-guardrails-presidio-spring-boot-starter
+            spring-ai-privacy-guardrails-spring-ai
+            spring-ai-privacy-guardrails-spring-boot-starter
+            spring-ai-privacy-guardrails-test
+          )
+          for module in "${modules[@]}"; do
+            expected="pkg:maven/io.github.ultramancode/$module@${{ steps.release.outputs.version }}"
+            if ! jq -e --arg expected "$expected" '.purls | index($expected) != null' \
+              <<< "$status_json" >/dev/null; then
+              echo "Maven Central publication is missing $expected" >&2
+              exit 1
+            fi
+          done
+
+      - name: Run consumer from public Maven Central
+        run: |
+          export ORG_GRADLE_PROJECT_privacyRepository="https://repo1.maven.org/maven2/"
+          export ORG_GRADLE_PROJECT_privacyVersion="${{ steps.release.outputs.version }}"
+          for attempt in $(seq 1 30); do
+            if ./gradlew --no-daemon --refresh-dependencies \
+              -p samples/published-artifact-consumer clean run; then
+              exit 0
+            fi
+            if [[ "$attempt" -eq 30 ]]; then
+              echo "Published artifacts did not become resolvable from Maven Central" >&2
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes_json=$(gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG")
+          release_name=$(jq -r .name <<< "$notes_json")
+          release_body=$(jq -r .body <<< "$notes_json")
+          jq -n \
+            --arg name "$release_name" \
+            --arg body "$release_body" \
+            '{name: $name, body: $body, draft: false, prerelease: false}' \
+            > "$RUNNER_TEMP/publish-release.json"
+          gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/${{ steps.draft_release.outputs.release_id }}" \
+            --input "$RUNNER_TEMP/publish-release.json" >/dev/null

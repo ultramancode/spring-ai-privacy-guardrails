@@ -1,0 +1,63 @@
+# id	expected entity types	expected raw values	input text
+unstructured-person-name	-	-	제 이름은 홍길동입니다.
+customer-name-sentence	-	-	고객명은 이순신이며 담당자는 별도입니다.
+email-basic	EMAIL_ADDRESS	test@example.com	연락 이메일은 test@example.com입니다.
+email-tagged	EMAIL_ADDRESS	privacy+demo@example.co.kr	답장은 privacy+demo@example.co.kr로 보내주세요.
+phone-mobile	PHONE_NUMBER	010-1234-5678	휴대폰은 010-1234-5678입니다.
+phone-older-mobile-prefix	PHONE_NUMBER	011-123-4567	이전 연락처는 011-123-4567입니다.
+korean-rrn	KOREAN_RRN	900101-1234567	합성 주민번호는 900101-1234567입니다.
+employee-id	EMPLOYEE_ID	EMP-1234	사번 EMP-1234가 승인했습니다.
+customer-id	CUSTOMER_ID	CUST-123456	고객번호는 CUST-123456입니다.
+email-and-phone	EMAIL_ADDRESS,PHONE_NUMBER	user@example.org,010-9876-5432	user@example.org 또는 010-9876-5432로 연락하세요.
+employee-and-customer	EMPLOYEE_ID,CUSTOMER_ID	EMP-4321,CUST-654321	직원번호는 EMP-4321이고 고객번호는 CUST-654321입니다.
+all-demo-types	EMPLOYEE_ID,EMAIL_ADDRESS,PHONE_NUMBER,CUSTOMER_ID	EMP-1234,test@example.com,010-1234-5678,CUST-123456	직원번호는 EMP-1234이고 이메일은 test@example.com, 전화번호는 010-1234-5678, 고객번호는 CUST-123456입니다.
+common-noun	-	-	저는 개발자입니다.
+generic-name-label	-	-	이 서비스 이름은 보호막입니다.
+spoken-email	-	-	이메일은 support at example dot com입니다.
+landline-out-of-scope	-	-	대표전화는 02-1234-5678입니다.
+unhyphenated-mobile	-	-	휴대폰 숫자는 01012345678입니다.
+short-employee-id	-	-	사번은 EMP-12입니다.
+invalid-customer-id	-	-	고객번호는 CUST-ABC123입니다.
+ordinary-text	-	-	개인정보 없이 공개 문서만 처리합니다.
+person-name-polite	-	-	제 이름은 박영희예요.
+person-two-syllables	-	-	제 이름은 남궁입니다.
+customer-name-particle	-	-	고객명은 최민수가 맞습니다.
+email-subdomain	EMAIL_ADDRESS	user.name@privacy.example.io	알림 주소는 user.name@privacy.example.io입니다.
+email-short-local	EMAIL_ADDRESS	a@b.co	테스트 메일은 a@b.co입니다.
+email-uppercase	EMAIL_ADDRESS	SECURITY@EXAMPLE.ORG	보안 메일은 SECURITY@EXAMPLE.ORG입니다.
+phone-016	PHONE_NUMBER	016-321-7654	예전 휴대폰은 016-321-7654입니다.
+phone-019	PHONE_NUMBER	019-987-6543	합성 연락처 019-987-6543을 사용합니다.
+phone-three-digit-middle	PHONE_NUMBER	010-123-4567	임시 번호는 010-123-4567입니다.
+rrn-four-prefix	KOREAN_RRN	200101-4123456	합성 외국인 형식은 200101-4123456입니다.
+rrn-second	KOREAN_RRN	850505-2345678	테스트 식별값 850505-2345678을 폐기합니다.
+employee-boundary	EMPLOYEE_ID	EMP-0001	담당 사번은 (EMP-0001)입니다.
+customer-boundary	CUSTOMER_ID	CUST-000001	조회 키 [CUST-000001]을 전달합니다.
+repeated-email	EMAIL_ADDRESS,EMAIL_ADDRESS	repeat@example.com,repeat@example.com	repeat@example.com에서 repeat@example.com으로 전달합니다.
+repeated-customer	CUSTOMER_ID,CUSTOMER_ID	CUST-777777,CUST-777777	CUST-777777을 조회하고 CUST-777777을 다시 확인합니다.
+json-like	EMAIL_ADDRESS,PHONE_NUMBER,CUSTOMER_ID	json@example.com,010-2222-3333,CUST-222222	{"email":"json@example.com","phone":"010-2222-3333","customerId":"CUST-222222"}
+employee-and-rrn	EMPLOYEE_ID,KOREAN_RRN	EMP-9876,910101-1234567	사번 EMP-9876의 합성 식별값은 910101-1234567입니다.
+employee-email-customer	EMPLOYEE_ID,EMAIL_ADDRESS,CUSTOMER_ID	EMP-9090,yoon@example.net,CUST-909090	직원번호는 EMP-9090이고 이메일은 yoon@example.net이며 고객번호는 CUST-909090입니다.
+email-missing-domain	-	-	잘못된 메일은 user@입니다.
+email-double-at	-	-	잘못된 메일은 user@@example.com입니다.
+email-domain-underscore	-	-	허용하지 않는 예시는 user@example_domain입니다.
+email-one-letter-tld	-	-	짧은 도메인은 user@example.c입니다.
+phone-invalid-prefix	-	-	잘못된 휴대폰은 015-1234-5678입니다.
+phone-short-tail	-	-	짧은 번호는 010-1234-567입니다.
+phone-long-tail	-	-	긴 번호는 010-1234-56789입니다.
+phone-dotted	-	-	점 표기는 010.1234.5678입니다.
+rrn-invalid-category	-	-	잘못된 식별값은 900101-5234567입니다.
+rrn-unhyphenated	-	-	붙여 쓴 식별값은 9001011234567입니다.
+rrn-short	-	-	짧은 식별값은 900101-123456입니다.
+rrn-long	-	-	긴 식별값은 900101-12345678입니다.
+employee-lowercase	-	-	소문자 사번은 emp-1234입니다.
+employee-too-long	-	-	긴 사번은 EMP-12345입니다.
+employee-alpha	-	-	문자 사번은 EMP-ABCD입니다.
+customer-lowercase	-	-	소문자 고객번호는 cust-123456입니다.
+customer-too-short	-	-	짧은 고객번호는 CUST-12345입니다.
+customer-too-long	-	-	긴 고객번호는 CUST-1234567입니다.
+customer-separated	-	-	공백 고객번호는 CUST 123456입니다.
+person-five-syllables	-	-	제 이름은 가나다라마입니다.
+person-unrelated-label	-	-	사용자 이름은 홍길동입니다.
+json-ordinary	-	-	{"status":"public","count":1234}
+token-shaped-text	-	-	문서에는 [[PII_PERSON_not-a-token_1]] 예시만 있습니다.
+ordinary-network-and-date	-	-	공개 주소 192.0.2.1과 날짜 2026-07-12를 기록합니다.

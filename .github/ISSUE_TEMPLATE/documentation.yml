@@ -1,0 +1,19 @@
+name: Documentation
+description: Report incorrect, unclear, or missing documentation
+title: "[Docs] "
+labels: [documentation]
+body:
+  - type: input
+    attributes:
+      label: Location
+      description: Which page, file, or section is this about, if applicable?
+  - type: textarea
+    attributes:
+      label: Problem
+      description: What documentation is incorrect, unclear, outdated, or missing?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Suggestion
+      description: If you have an idea for improving it, describe it here.

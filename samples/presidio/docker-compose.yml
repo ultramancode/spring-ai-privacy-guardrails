@@ -1,0 +1,15 @@
+services:
+  presidio-analyzer:
+    image: ghcr.io/data-privacy-stack/presidio-analyzer:2.2.363@sha256:330c78c144eca0c554e4cf12ab7c05a21872dca63fe6f93d67f08741de30b62f
+    ports:
+      - "127.0.0.1:5002:3000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:3000/health', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s

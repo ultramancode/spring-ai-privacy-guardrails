@@ -1,0 +1,14 @@
+description = 'Spring Boot starter for the Presidio privacy analyzer adapter.'
+
+dependencies {
+    api platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
+    api project(':spring-ai-privacy-guardrails-presidio')
+    api project(':spring-ai-privacy-guardrails-spring-boot-starter')
+
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-health'
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${providers.gradleProperty('springBootVersion').get()}"
+
+    testImplementation 'org.springframework.boot:spring-boot-test'
+    testImplementation 'org.springframework.boot:spring-boot-health'
+}

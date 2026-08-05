@@ -1,0 +1,6 @@
+description = 'In-process Apache OpenNLP analyzer adapter for Spring AI Privacy Guardrails.'
+
+dependencies {
+    api project(':spring-ai-privacy-guardrails-core')
+    api "org.apache.opennlp:opennlp-tools:${providers.gradleProperty('openNlpVersion').get()}"
+}

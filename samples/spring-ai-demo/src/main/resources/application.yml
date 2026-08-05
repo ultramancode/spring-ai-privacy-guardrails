@@ -1,0 +1,72 @@
+server:
+  address: 127.0.0.1
+  port: 8080
+
+spring:
+  application:
+    name: spring-ai-privacy-guardrails-demo
+  ai:
+    privacy:
+      enabled: true
+      output:
+        enabled: true
+        action: tokenize
+      analysis:
+        language: ko
+        minimum-score: 0.5
+      tools:
+        disclosures:
+          customerLookup:
+            - CUSTOMER_ID
+      regex:
+        enabled: true
+        rules:
+          - entity-type: EMAIL_ADDRESS
+            pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+            score: 0.95
+          - entity-type: PHONE_NUMBER
+            pattern: '\b01[016789]-\d{3,4}-\d{4}\b'
+            score: 0.95
+          - entity-type: KOREAN_RRN
+            pattern: '\b\d{6}-[1-4]\d{6}\b'
+            score: 0.9
+          - entity-type: EMPLOYEE_ID
+            pattern: '\bEMP-\d{4}\b'
+            score: 0.9
+          - entity-type: CUSTOMER_ID
+            pattern: '\bCUST-\d{6}\b'
+            score: 0.9
+
+---
+spring:
+  config:
+    activate:
+      on-profile: presidio
+  ai:
+    privacy:
+      analysis:
+        language: en
+        provider-minimum-scores:
+          PRESIDIO: 0.8
+        entity-aliases:
+          US_SSN: NATIONAL_ID
+      presidio:
+        enabled: true
+        analyzer-url: http://localhost:5002
+
+---
+spring:
+  config:
+    activate:
+      on-profile: opennlp
+  ai:
+    privacy:
+      analysis:
+        language: en
+        provider-minimum-scores:
+          OPENNLP: 0.8
+      opennlp:
+        enabled: true
+        tokenizer-model: ${OPENNLP_TOKENIZER_MODEL}
+        entity-models:
+          PERSON: ${OPENNLP_PERSON_MODEL}

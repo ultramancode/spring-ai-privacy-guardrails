@@ -1,0 +1,30 @@
+pluginManagement {
+    includeBuild('build-logic')
+
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'spring-ai-privacy-guardrails'
+
+include 'spring-ai-privacy-guardrails-core'
+include 'spring-ai-privacy-guardrails-opennlp'
+include 'spring-ai-privacy-guardrails-opennlp-spring-boot-starter'
+include 'spring-ai-privacy-guardrails-presidio'
+include 'spring-ai-privacy-guardrails-presidio-spring-boot-starter'
+include 'spring-ai-privacy-guardrails-spring-ai'
+include 'spring-ai-privacy-guardrails-spring-boot-starter'
+include 'spring-ai-privacy-guardrails-test'
+include 'spring-ai-privacy-guardrails-benchmarks'
+include 'spring-ai-privacy-guardrails-sample-demo'
+
+project(':spring-ai-privacy-guardrails-sample-demo').projectDir = file('samples/spring-ai-demo')

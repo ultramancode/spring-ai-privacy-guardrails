@@ -201,8 +201,8 @@ failure taxonomy is documented under
 ## Resource and Cancellation Boundary
 
 Privacy-owned text transformation, structured traversal, analyzer result
-retention, and buffered inspection are bounded. Exact configurable limits and
-units live in [Configuration](configuration.md#final-model-output-inspection).
+retention, and buffered inspection are bounded. Exact limits and units are
+documented in [Configuration](configuration.md#final-model-output-inspection).
 
 Reactor cancellation closes the request session, but Java cannot forcibly stop
 arbitrary synchronous analyzer or trusted-tool code. Those collaborators must

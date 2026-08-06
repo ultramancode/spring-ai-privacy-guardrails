@@ -468,21 +468,21 @@ Non-stream privacy processing has these provider-independent hard maxima:
 | Scope | Maximum |
 | --- | ---: |
 | One text or structured payload | 1,000,000 characters |
+| Cumulative direct value-tree string, map-key, and numeric content | 1,000,000 characters |
 | Cumulative canonical analyzer input | 1,000,000 characters |
-| One decoded JSON string or property name | 250,000 characters |
-| One JSON numeric lexeme | 1,000 characters |
+| One decoded JSON string/property name or direct value-tree string/map key | 250,000 characters |
+| One JSON numeric lexeme or direct value-tree numeric representation | 1,000 characters |
 | One exponent-expanded numeric value | 4,096 characters |
-| JSON nodes, including property names | 100,000 |
-| JSON nesting levels | 128 |
-| Analyzer spans per complete analysis | 100,000 |
+| JSON or direct value-tree nodes, including property/map keys | 100,000 |
+| JSON or direct value-tree nesting levels | 128 |
+| Analyzer spans per complete analysis or direct value-tree call | 100,000 |
 | Changed transformation output | 8,000,000 characters |
 
 Character limits use Java `String` UTF-16 code units, not bytes or model
 tokens. A JSON scalar and a plain-text payload are not split, so every analyzer
 must accept inputs up to the applicable maximum or the application must enforce
-a smaller limit. Applications may lower but cannot raise these bounds. A
-violation raises `PAYLOAD_LIMIT_EXCEEDED` before delegate execution or result
-propagation.
+a smaller limit. A violation raises `PAYLOAD_LIMIT_EXCEEDED` before delegate
+execution or result propagation.
 
 Malformed JSON fails closed only where the boundary requires structured JSON.
 Arbitrary tool results and ordinary messages use plain-text protection when they
@@ -510,6 +510,17 @@ try (PrivacySession session = privacyService.openSession()) {
 
 Use the entity-scoped `detokenize` overload when an authorized boundary needs
 originals. APIs requiring mappings reject missing, unknown, or closed handles.
+
+`tokenizeValueTree` and `detokenizeValueTree` operate on JSON-compatible map/list
+trees. Supported scalars are `null`, booleans, strings, and finite values of
+type `Byte`, `Short`, `Integer`, `Long`, `BigInteger`, `BigDecimal`, `Float`, or
+`Double`. Map keys must be strings.
+
+The methods validate and copy the complete input before transformation and
+return new map and list containers. Unsupported values, non-string map keys,
+and reference cycles raise `TRANSFORMATION_CONFLICT`; hard-limit violations
+raise `PAYLOAD_LIMIT_EXCEEDED`. Convert POJOs and serializer-specific tree types
+to the supported map/list form before calling these methods.
 
 ## Test Support
 

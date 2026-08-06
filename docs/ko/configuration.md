@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: ea9f24d31321e160c0981825ae31f38112ca969f493b31493a812d3d0a8447de -->
+<!-- i18n-source-sha256: 8185426e6b41440b948660816ca0216f5e9b488f9ca9a2ffd52b38c89d269366 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 전체
 참고 문서입니다. Base starter는 `core`와 Spring AI 경계를 제공하며, provider
@@ -461,20 +461,20 @@ spring:
 | 범위 | 최대치 |
 | --- | ---: |
 | 텍스트 또는 구조화된 payload 하나 | 1,000,000자 |
+| 직접 값 트리의 문자열·맵 키·숫자 콘텐츠 누계 | 1,000,000자 |
 | 누적 정규 분석기 입력 | 1,000,000자 |
-| 해석된 JSON 문자열 또는 property 이름 하나 | 250,000자 |
-| JSON 숫자 표기 하나 | 1,000자 |
+| 해석된 JSON 문자열/속성 이름 또는 직접 값 트리 문자열/맵 키 하나 | 250,000자 |
+| JSON 숫자 표기 또는 직접 값 트리 숫자 표현 하나 | 1,000자 |
 | 지수를 전개한 숫자 값 하나 | 4,096자 |
-| Property 이름을 포함한 JSON node | 100,000개 |
-| JSON 중첩 단계 | 128 |
-| 한 번의 전체 분석에서 반환할 분석기 span | 100,000개 |
+| 속성/맵 키를 포함한 JSON 또는 직접 값 트리 노드 | 100,000개 |
+| JSON 또는 직접 값 트리 중첩 단계 | 128 |
+| 한 번의 전체 분석 또는 core 직접 값 트리 호출의 분석기 span | 100,000개 |
 | 변환으로 달라진 출력 | 8,000,000자 |
 
 문자 수 상한은 byte나 모델 token이 아니라 Java `String`의 UTF-16 code unit를
 기준으로 합니다. JSON scalar와 평문 payload는 분할하지 않으므로 모든 분석기는
 적용되는 최대 크기를 처리할 수 있어야 합니다. 그렇지 않으면 애플리케이션이 더 작은
-상한을 강제해야 합니다. 애플리케이션은 이 상한을 낮출 수는 있지만 높일 수는
-없습니다. 상한을 넘으면 위임 대상 실행 또는 결과 전달 전에
+상한을 강제해야 합니다. 상한을 넘으면 위임 대상 실행 또는 결과 전달 전에
 `PAYLOAD_LIMIT_EXCEEDED`가 발생합니다.
 
 구조화된 JSON이 필요한 경계에서만 잘못된 JSON을 안전하게 차단합니다. 임의의 도구
@@ -503,6 +503,17 @@ try (PrivacySession session = privacyService.openSession()) {
 허가된 경계에서 원문이 필요할 때는 엔티티 유형 범위를 지정하는 `detokenize`
 overload를 사용하세요. 매핑이 필요한 API는 없거나 알 수 없거나 이미 닫힌 handle을
 거부합니다.
+
+`tokenizeValueTree`와 `detokenizeValueTree`는 JSON 호환 맵/리스트 트리를
+처리합니다. 지원하는 scalar는 `null`, 불리언, 문자열과 유한한 `Byte`, `Short`,
+`Integer`, `Long`, `BigInteger`, `BigDecimal`, `Float`, `Double` 값입니다. 맵 키는
+문자열이어야 합니다.
+
+두 메서드는 변환 전에 전체 입력을 검증하고 복사하며 새로운 맵과 리스트 컨테이너를
+반환합니다. 지원하지 않는 값, 문자열이 아닌 맵 키와 참조 순환에는
+`TRANSFORMATION_CONFLICT`, 절대 상한 위반에는 `PAYLOAD_LIMIT_EXCEEDED`가
+발생합니다. POJO와 직렬화 라이브러리 전용 트리 유형은 호출 전에 지원되는 맵/리스트
+형태로 변환해야 합니다.
 
 ## 테스트 지원
 

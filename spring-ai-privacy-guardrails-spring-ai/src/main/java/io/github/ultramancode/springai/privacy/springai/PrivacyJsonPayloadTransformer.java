@@ -20,10 +20,12 @@ import java.util.function.UnaryOperator;
 final class PrivacyJsonPayloadTransformer {
 
     static final int MAX_PAYLOAD_CHARACTERS = 1_000_000;
-    static final int MAX_STRING_SCALAR_CHARACTERS = 250_000;
-    static final int MAX_NUMBER_LEXEME_CHARACTERS = 1_000;
-    static final int MAX_JSON_NODES = 100_000;
-    static final int MAX_JSON_DEPTH = 128;
+    static final int MAX_STRING_SCALAR_CHARACTERS =
+            PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS;
+    static final int MAX_NUMBER_LEXEME_CHARACTERS =
+            PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS;
+    static final int MAX_JSON_NODES = PrivacyService.MAX_VALUE_TREE_NODES;
+    static final int MAX_JSON_DEPTH = PrivacyService.MAX_VALUE_TREE_DEPTH;
     static final int ANALYSIS_BATCH_TARGET_CHARACTERS = 32_768;
     static final int MAX_ANALYSIS_CHARACTERS = MAX_PAYLOAD_CHARACTERS;
     static final int MAX_EXPANDED_NUMBER_CHARACTERS = 4_096;

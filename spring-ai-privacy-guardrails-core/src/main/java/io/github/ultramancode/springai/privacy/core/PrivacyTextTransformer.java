@@ -18,8 +18,16 @@ final class PrivacyTextTransformer {
 
     PiiTokenizationResult analyzeAndTokenize(String text, PrivacyContext context) {
         PiiAnalysisResult analysis = this.analysisCoordinator.analyzeDetailed(text);
-        String tokenizedText = tokenizePrepared(text, protectionSpans(analysis.spans()), context);
+        String tokenizedText = tokenizeResolved(text, analysis.spans(), context);
         return new PiiTokenizationResult(tokenizedText, analysis);
+    }
+
+    String tokenizeResolved(
+            String text,
+            List<ResolvedPiiSpan> spans,
+            PrivacyContext context
+    ) {
+        return tokenizePrepared(text, protectionSpans(spans), context);
     }
 
     String tokenize(String text, List<PiiSpan> spans, PrivacyContext context) {

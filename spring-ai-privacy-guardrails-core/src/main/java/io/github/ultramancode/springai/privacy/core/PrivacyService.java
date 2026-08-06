@@ -9,6 +9,21 @@ public final class PrivacyService {
     /** Hard maximum for text produced by a privacy transformation that changes content. */
     public static final int MAX_TRANSFORMED_TEXT_CHARACTERS = 8_000_000;
 
+    /** Hard maximum nesting depth accepted by direct value-tree operations. */
+    public static final int MAX_VALUE_TREE_DEPTH = 128;
+
+    /** Hard maximum logical node count accepted by direct value-tree operations. */
+    public static final int MAX_VALUE_TREE_NODES = 100_000;
+
+    /** Hard maximum UTF-16 length of one string value or map key in a value tree. */
+    public static final int MAX_VALUE_TREE_STRING_CHARACTERS = 250_000;
+
+    /** Hard maximum character length of one numeric representation in a value tree. */
+    public static final int MAX_VALUE_TREE_NUMBER_CHARACTERS = 1_000;
+
+    /** Hard maximum aggregate string and numeric character count accepted by a value-tree operation. */
+    public static final int MAX_VALUE_TREE_INPUT_CHARACTERS = 1_000_000;
+
     private final PiiAnalysisCoordinator analysisCoordinator;
     private final PrivacyContextRegistry contextRegistry;
     private final PrivacyTextTransformer textTransformer;
@@ -274,11 +289,17 @@ public final class PrivacyService {
 
     /**
      * Recursively restores all current-session tokens in a JSON-compatible value tree.
+     * Accepted values are {@code null}, booleans, strings, numbers of type
+     * {@code Byte}, {@code Short}, {@code Integer}, {@code Long}, {@code BigInteger},
+     * {@code BigDecimal}, {@code Float}, or {@code Double}, lists, and maps with
+     * string keys. Floating-point values must be finite. Inputs are validated and
+     * copied before transformation; unsupported values, reference cycles, and values
+     * above the published {@code MAX_VALUE_TREE_*} limits are rejected.
      *
      * @param handle active session handle
      * @param valueTree JSON-compatible value tree
      * @return a transformed tree with known tokens restored to their original values and types
-     * @throws PrivacyGuardrailException if the session is not active
+     * @throws PrivacyGuardrailException if the session is not active or the tree is invalid or oversized
      */
     public Object detokenizeValueTree(PrivacyContextHandle handle, Object valueTree) {
         return this.valueTreeTransformer.detokenizeValueTree(
@@ -290,12 +311,14 @@ public final class PrivacyService {
 
     /**
      * Recursively detokenizes only values belonging to explicitly allowed entity types.
+     * The same accepted types, validation, copying, and limits as
+     * {@link #detokenizeValueTree(PrivacyContextHandle, Object)} apply.
      *
      * @param handle active session handle
      * @param valueTree JSON-compatible value tree
      * @param allowedEntityTypes exact canonical entity types permitted for restoration
      * @return a transformed tree with only permitted known tokens restored
-     * @throws PrivacyGuardrailException if the session is not active
+     * @throws PrivacyGuardrailException if the session is not active or the tree is invalid or oversized
      */
     public Object detokenizeValueTree(
             PrivacyContextHandle handle,
@@ -314,11 +337,17 @@ public final class PrivacyService {
      * Recursively tokenizes strings and detected JSON-compatible numeric scalars.
      * A protected number becomes an opaque token and is restored to its original
      * numeric type only by recursive detokenization with sufficient disclosure scope.
+     * Accepted values are {@code null}, booleans, strings, numbers of type
+     * {@code Byte}, {@code Short}, {@code Integer}, {@code Long}, {@code BigInteger},
+     * {@code BigDecimal}, {@code Float}, or {@code Double}, lists, and maps with
+     * string keys. Floating-point values must be finite. Inputs are validated and
+     * copied before analysis; unsupported values, reference cycles, and values above
+     * the published {@code MAX_VALUE_TREE_*} limits are rejected.
      *
      * @param handle active session handle
      * @param valueTree JSON-compatible value tree
      * @return a transformed tree with detected values tokenized
-     * @throws PrivacyGuardrailException if the session is not active
+     * @throws PrivacyGuardrailException if the session is not active or the tree is invalid or oversized
      */
     public Object tokenizeValueTree(PrivacyContextHandle handle, Object valueTree) {
         return this.valueTreeTransformer.tokenizeValueTree(

@@ -36,7 +36,7 @@ when it crosses a supported privacy boundary.
 | Untrusted input or synchronous extensions exhaust resources | Privacy-owned traversal, retained evidence, and buffered inspection are bounded; extension contracts require finite deadlines and interruption cooperation | Set smaller deployment limits where needed and review trusted regex, analyzer, and tool implementations |
 | Unsupported content or custom composition bypasses a boundary | Unknown content-bearing types fail closed where they cannot be preserved safely; managed integration validates the supported path | Keep custom mutations inside a protected boundary or protect them separately |
 
-Exact policy choices and configurable limits are documented in
+Exact policy choices and limits are documented in
 [Configuration](configuration.md).
 
 ## Important Limits

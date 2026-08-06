@@ -13,6 +13,8 @@ import java.util.Set;
 /** Validates and copies values accepted by the direct value-tree API. */
 final class PrivacyValueTreeValidator {
 
+    // Avoid rendering obviously oversized BigInteger and BigDecimal magnitudes;
+    // acceptNumber performs the exact decimal representation check afterward.
     private static final int MAX_NUMBER_BIT_LENGTH = BigInteger.TEN
             .pow(PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS)
             .bitLength();
@@ -106,13 +108,13 @@ final class PrivacyValueTreeValidator {
 
     private void acceptNode() {
         if (++this.nodeCount > PrivacyService.MAX_VALUE_TREE_NODES) {
-            throw limitExceeded("Value tree exceeded the bounded node-count limit");
+            throw limitExceeded("Value tree node limit exceeded");
         }
     }
 
     private void acceptString(String text) {
         if (text.length() > PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS) {
-            throw limitExceeded("Value tree exceeded the bounded string-value limit");
+            throw limitExceeded("Value tree string length limit exceeded");
         }
         acceptInputCharacters(text.length());
     }
@@ -121,11 +123,11 @@ final class PrivacyValueTreeValidator {
         if ((number instanceof BigInteger integer && integer.bitLength() > MAX_NUMBER_BIT_LENGTH)
                 || (number instanceof BigDecimal decimal
                     && decimal.unscaledValue().bitLength() > MAX_NUMBER_BIT_LENGTH)) {
-            throw limitExceeded("Value tree exceeded the bounded number-representation limit");
+            throw limitExceeded("Value tree numeric representation limit exceeded");
         }
         String representation = number.toString();
         if (representation.length() > PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS) {
-            throw limitExceeded("Value tree exceeded the bounded number-representation limit");
+            throw limitExceeded("Value tree numeric representation limit exceeded");
         }
         acceptInputCharacters(representation.length());
     }
@@ -133,13 +135,13 @@ final class PrivacyValueTreeValidator {
     private void acceptInputCharacters(int additionalCharacters) {
         this.inputCharacters += additionalCharacters;
         if (this.inputCharacters > PrivacyService.MAX_VALUE_TREE_INPUT_CHARACTERS) {
-            throw limitExceeded("Value tree exceeded the bounded input-content limit");
+            throw limitExceeded("Value tree input content limit exceeded");
         }
     }
 
     private void requireDepth(int depth) {
         if (depth > PrivacyService.MAX_VALUE_TREE_DEPTH) {
-            throw limitExceeded("Value tree exceeded the bounded nesting-depth limit");
+            throw limitExceeded("Value tree nesting depth limit exceeded");
         }
     }
 

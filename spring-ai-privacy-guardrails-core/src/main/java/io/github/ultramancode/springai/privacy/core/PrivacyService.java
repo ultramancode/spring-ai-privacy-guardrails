@@ -9,10 +9,10 @@ public final class PrivacyService {
     /** Hard maximum for text produced by a privacy transformation that changes content. */
     public static final int MAX_TRANSFORMED_TEXT_CHARACTERS = 8_000_000;
 
-    /** Hard maximum nesting depth accepted by direct value-tree operations. */
+    /** Hard maximum container nesting depth accepted by direct value-tree operations. */
     public static final int MAX_VALUE_TREE_DEPTH = 128;
 
-    /** Hard maximum logical node count accepted by direct value-tree operations. */
+    /** Hard maximum node count, including map keys, accepted by direct value-tree operations. */
     public static final int MAX_VALUE_TREE_NODES = 100_000;
 
     /** Hard maximum UTF-16 length of one string value or map key in a value tree. */
@@ -21,7 +21,10 @@ public final class PrivacyService {
     /** Hard maximum character length of one numeric representation in a value tree. */
     public static final int MAX_VALUE_TREE_NUMBER_CHARACTERS = 1_000;
 
-    /** Hard maximum aggregate string and numeric character count accepted by a value-tree operation. */
+    /**
+     * Hard maximum aggregate character count of strings, map keys, and numeric
+     * representations accepted by one direct value-tree operation.
+     */
     public static final int MAX_VALUE_TREE_INPUT_CHARACTERS = 1_000_000;
 
     private final PiiAnalysisCoordinator analysisCoordinator;

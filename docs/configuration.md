@@ -468,22 +468,21 @@ Non-stream privacy processing has these provider-independent hard maxima:
 | Scope | Maximum |
 | --- | ---: |
 | One text or structured payload | 1,000,000 characters |
-| Cumulative direct value-tree string and numeric content | 1,000,000 characters |
+| Cumulative direct value-tree string, map-key, and numeric content | 1,000,000 characters |
 | Cumulative canonical analyzer input | 1,000,000 characters |
-| One decoded JSON/direct value-tree string or property name | 250,000 characters |
-| One JSON/direct value-tree numeric representation | 1,000 characters |
+| One decoded JSON string/property name or direct value-tree string/map key | 250,000 characters |
+| One JSON numeric lexeme or direct value-tree numeric representation | 1,000 characters |
 | One exponent-expanded numeric value | 4,096 characters |
-| JSON/direct value-tree nodes, including property names | 100,000 |
-| JSON/direct value-tree nesting levels | 128 |
+| JSON or direct value-tree nodes, including property/map keys | 100,000 |
+| JSON or direct value-tree nesting levels | 128 |
 | Analyzer spans per complete analysis or direct value-tree call | 100,000 |
 | Changed transformation output | 8,000,000 characters |
 
 Character limits use Java `String` UTF-16 code units, not bytes or model
 tokens. A JSON scalar and a plain-text payload are not split, so every analyzer
 must accept inputs up to the applicable maximum or the application must enforce
-a smaller limit. These hard maxima are not configurable; applications can
-enforce smaller limits before invoking the library. A violation raises
-`PAYLOAD_LIMIT_EXCEEDED` before delegate execution or result propagation.
+a smaller limit. A violation raises `PAYLOAD_LIMIT_EXCEEDED` before delegate
+execution or result propagation.
 
 Malformed JSON fails closed only where the boundary requires structured JSON.
 Arbitrary tool results and ordinary messages use plain-text protection when they
@@ -512,19 +511,16 @@ try (PrivacySession session = privacyService.openSession()) {
 Use the entity-scoped `detokenize` overload when an authorized boundary needs
 originals. APIs requiring mappings reject missing, unknown, or closed handles.
 
-`tokenizeValueTree` and `detokenizeValueTree` accept `null`, booleans, strings,
-finite `Byte`, `Short`, `Integer`, `Long`, `BigInteger`, `BigDecimal`, `Float`,
-and `Double` values, lists, and maps with string keys. They reject arbitrary
-objects, arrays, other collections, non-string map keys, non-finite numbers,
-reference cycles, and inputs above the hard limits listed above. Shared
-containers are allowed when they do not form a cycle. The methods copy a valid
-input tree before transforming it and return new map and list containers.
-Unsupported shapes and cycles raise `TRANSFORMATION_CONFLICT`; limit violations
-raise `PAYLOAD_LIMIT_EXCEEDED`. Their messages do not include rejected values
-or object contents.
-Applications should use their own serializer configuration to convert POJOs or
-serializer-owned tree types into the supported map/list form. The core module
-does not use reflection or depend on a serializer for this conversion.
+`tokenizeValueTree` and `detokenizeValueTree` operate on JSON-compatible map/list
+trees. Supported scalars are `null`, booleans, strings, and finite values of
+type `Byte`, `Short`, `Integer`, `Long`, `BigInteger`, `BigDecimal`, `Float`, or
+`Double`. Map keys must be strings.
+
+The methods validate and copy the complete input before transformation and
+return new map and list containers. Unsupported values, non-string map keys,
+and reference cycles raise `TRANSFORMATION_CONFLICT`; hard-limit violations
+raise `PAYLOAD_LIMIT_EXCEEDED`. Convert POJOs and serializer-specific tree types
+to the supported map/list form before calling these methods.
 
 ## Test Support
 

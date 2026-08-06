@@ -3,7 +3,7 @@
 [English](../architecture.md) | [한국어](architecture.md)
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 2a053f6d88aaca83080d6a31454e8afb0fc7a3dea0f13338e6ebe7970aaa5cd7 -->
+<!-- i18n-source-sha256: f84f5331409ee15dc91b993081445eeab20e1acbc27625ddc08c4139797b407b -->
 
 ## 책임 경계
 
@@ -194,7 +194,7 @@ provider, code, phase와 시도 횟수 메타데이터로 `core` 경계를 통�
 ## 자원과 취소 경계
 
 라이브러리가 소유한 텍스트 변환, 구조 탐색, 분석기 결과 보존과 버퍼링 검사에는
-상한이 있습니다. 설정 가능한 정확한 상한과 단위는
+상한이 있습니다. 정확한 상한과 단위는
 [설정](configuration.md#최종-모델-출력-검사)에서 확인할 수 있습니다.
 
 Reactor의 취소는 요청 세션을 닫지만, Java는 임의의 동기식 분석기나 신뢰 도구

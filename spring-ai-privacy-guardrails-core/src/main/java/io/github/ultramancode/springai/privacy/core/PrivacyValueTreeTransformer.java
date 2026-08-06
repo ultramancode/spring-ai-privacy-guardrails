@@ -239,7 +239,7 @@ final class PrivacyValueTreeTransformer {
         private void acceptAnalysis(PiiAnalysisResult analysis) {
             long updatedCount = (long) this.resolvedSpanCount + analysis.spans().size();
             if (updatedCount > PiiAnalyzer.MAX_RESULT_SPANS) {
-                throw limitExceeded("Value tree analysis exceeded the bounded result limit");
+                throw limitExceeded("Value tree analyzer span limit exceeded");
             }
             this.resolvedSpanCount = (int) updatedCount;
         }
@@ -250,7 +250,7 @@ final class PrivacyValueTreeTransformer {
             }
             this.outputCharacters += text.length();
             if (this.outputCharacters > PrivacyService.MAX_TRANSFORMED_TEXT_CHARACTERS) {
-                throw limitExceeded("Value tree transformation exceeded the bounded output limit");
+                throw limitExceeded("Value tree transformed output limit exceeded");
             }
         }
 

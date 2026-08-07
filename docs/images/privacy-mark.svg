@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116 116" role="img" aria-labelledby="title">
+  <title id="title">Spring AI Privacy Guardrails</title>
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38d6d0"/>
+      <stop offset="1" stop-color="#62a7ff"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(14 0)">
+    <path d="M44 0L82 16L76 63C72 88 57 105 44 116C31 105 16 88 12 63L6 16Z" fill="url(#shield)"/>
+    <path d="M27 57L39 69L63 41" fill="none" stroke="#07111f" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

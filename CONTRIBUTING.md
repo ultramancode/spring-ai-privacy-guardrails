@@ -29,6 +29,18 @@ For a local snapshot consumed by another build, run
 `./gradlew publishToMavenLocal` and add `mavenLocal()` only in that local
 consumer.
 
+## Developer Certificate of Origin
+
+All commits must include a `Signed-off-by` trailer at the end of the commit
+message to indicate that the contributor agrees to the
+[Developer Certificate of Origin](https://developercertificate.org/).
+
+Use the following command to add the trailer automatically:
+
+```bash
+git commit -s
+```
+
 ## Commit Messages
 
 Use Conventional Commits for commit messages:

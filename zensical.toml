@@ -10,7 +10,7 @@ repo_url = "https://github.com/ultramancode/spring-ai-privacy-guardrails"
 edit_uri = "edit/main/docs/"
 strict = true
 extra_css = ["stylesheets/extra.css"]
-extra_javascript = ["javascripts/clarity.js"]
+extra_javascript = ["javascripts/consent.js"]
 
 nav = [
   { "Home" = "index.md" },
@@ -42,19 +42,19 @@ Optional third-party services help us understand how the documentation is used
 and display repository metadata. You can reject them without affecting access
 to the documentation.
 """
-actions = ["accept", "reject"]
+actions = ["accept", "reject", "manage"]
 
 [project.extra.consent.cookies.analytics]
 name = "Google Analytics"
-checked = false
+checked = true
 
 [project.extra.consent.cookies.clarity]
 name = "Microsoft Clarity"
-checked = false
+checked = true
 
 [project.extra.consent.cookies.github]
 name = "GitHub"
-checked = false
+checked = true
 
 [project.theme]
 language = "en"

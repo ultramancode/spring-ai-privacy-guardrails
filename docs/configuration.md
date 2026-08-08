@@ -94,6 +94,26 @@ cost, concurrency, and side-effect budgets in the application or orchestration
 framework. The remaining output limits bound only the stream content this
 library must inspect or retain to enforce its privacy boundary.
 
+### Configuration property diagnostics
+
+The base starter logs non-blocking warnings for unrecognized names in the fixed
+`spring.ai.privacy` properties defined by this library. Diagnostics run
+independently of `spring.ai.privacy.enabled`, so they can report a likely
+misspelling of the top-level `enabled` property even when privacy
+auto-configuration does not activate.
+
+At the top level, diagnostics check only likely misspellings of `enabled`, leaving
+provider and application extension names untouched. Within the fixed `output`,
+`response-inspection`, `analysis`, `regex`, and `tools` areas, every unrecognized
+property name produces a warning. Dynamic keys below
+`analysis.provider-minimum-scores`, `analysis.entity-aliases`, and
+`tools.disclosures` are accepted. Entries in the `analysis.included-entity-types`
+and `analysis.supplemental-providers` lists are not treated as property names.
+Provider-owned maps such as Presidio `headers` and OpenNLP `entity-models` are also
+outside the diagnostic scope. When there is a single likely supported property,
+the warning suggests it. Diagnostics never log configuration values, credentials,
+or dynamic map keys, and they never prevent application startup.
+
 ## Detection and Resolution
 
 Analyzers return source ranges as evidence. Core applies aliases, allowlists,

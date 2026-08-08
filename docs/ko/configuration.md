@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 64e191d0f7a6220669d056bc331579a357157c27f01653acafceb99f630cce98 -->
+<!-- i18n-source-sha256: e5be5c401cfc37a587d3dea678e1e6693533d9b71dd8bb5bbbdfa36fdc49158d -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 전체
 참고 문서입니다. Base starter는 `core`와 Spring AI 경계를 제공하며, provider
@@ -96,6 +96,24 @@ Starter 의존성만 추가하면 모든 개인정보 보호 자동 설정은 �
 애플리케이션이나 orchestration framework에서 설정하세요. 나머지 출력 상한은
 라이브러리가 개인정보 보호 경계를 집행하기 위해 검사하거나 보존해야 하는
 스트림 콘텐츠만 제한합니다.
+
+### 설정 프로퍼티 진단
+
+Base starter는 이 라이브러리가 정의한 고정 `spring.ai.privacy` 프로퍼티에서 인식할 수
+없는 이름을 발견하면 애플리케이션을 차단하지 않는 경고를 기록합니다. 진단은
+`spring.ai.privacy.enabled`와 독립적으로 실행되므로, 최상위 `enabled`의 오타로 인해
+개인정보 보호 자동 설정이 활성화되지 않은 경우에도 이를 알릴 수 있습니다.
+
+최상위에서는 provider와 애플리케이션 확장 이름에 영향을 주지 않도록 `enabled`의 오타
+가능성이 높은 이름만 검사합니다. 고정 `output`, `response-inspection`, `analysis`,
+`regex`, `tools` 하위 영역에서는 인식할 수 없는 모든 프로퍼티 이름에 경고합니다.
+`analysis.provider-minimum-scores`, `analysis.entity-aliases`, `tools.disclosures` 아래의
+동적 키는 허용합니다. `analysis.included-entity-types`와
+`analysis.supplemental-providers`의 목록 항목도 프로퍼티 이름으로 진단하지 않습니다.
+Presidio의 `headers`와 OpenNLP의 `entity-models`처럼 provider가 소유한 맵도 진단
+범위에서 제외합니다. 지원되는 프로퍼티 중 유력한 후보가 하나뿐이면 경고에 올바른
+이름을 제안합니다. 진단은 설정값, 자격 증명 또는 동적 맵 키를 로그에 남기지 않으며
+애플리케이션 시작을 막지 않습니다.
 
 ## 탐지와 해석
 

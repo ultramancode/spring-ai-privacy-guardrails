@@ -1,1 +1,2 @@
+io.github.ultramancode.springai.privacy.autoconfigure.PrivacyConfigurationDiagnosticsAutoConfiguration
 io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration

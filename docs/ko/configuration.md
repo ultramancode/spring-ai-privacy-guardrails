@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 2287479f14a50f8005a0eed34426a52a4ae8d73cf243e491c7c196763267c07f -->
+<!-- i18n-source-sha256: e5be5c401cfc37a587d3dea678e1e6693533d9b71dd8bb5bbbdfa36fdc49158d -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 전체
 참고 문서입니다. Base starter는 `core`와 Spring AI 경계를 제공하며, provider
@@ -97,25 +97,23 @@ Starter 의존성만 추가하면 모든 개인정보 보호 자동 설정은 �
 라이브러리가 개인정보 보호 경계를 집행하기 위해 검사하거나 보존해야 하는
 스트림 콘텐츠만 제한합니다.
 
-### 설정 오타 진단
+### 설정 프로퍼티 진단
 
-Base starter는 이 라이브러리가 소유한 고정 설정에서 오타 가능성이 높은 이름을
-발견하면 경고를 기록합니다. 진단 자동 설정은 `spring.ai.privacy.enabled`와 독립적으로
-실행되므로, 전역 switch의 오타 때문에 개인정보 보호 자동 설정이 비활성 상태로
-남는 경우도 알릴 수 있습니다. 이 경고는 애플리케이션 시작을 실패시키지 않습니다.
-호스트가 Spring Boot의 전역 lazy initialization을 활성화해도 진단은 시작 시 실행되며,
-dash가 포함된 설정의 완화된 운영체제 환경변수 이름도 인식합니다. 호스트가 제공한
-property source가 property 이름을 안전하게 열거하지 못하면, 그 source의 진단만
-건너뛰고 source나 예외를 로그에 남기지 않은 채 나머지 진단을 계속합니다.
+Base starter는 이 라이브러리가 정의한 고정 `spring.ai.privacy` 프로퍼티에서 인식할 수
+없는 이름을 발견하면 애플리케이션을 차단하지 않는 경고를 기록합니다. 진단은
+`spring.ai.privacy.enabled`와 독립적으로 실행되므로, 최상위 `enabled`의 오타로 인해
+개인정보 보호 자동 설정이 활성화되지 않은 경우에도 이를 알릴 수 있습니다.
 
-진단 범위는 의도적으로 좁습니다. 전역 switch와 `output`, `response-inspection`,
-`analysis`, `regex`, `tools` 아래 고정 필드의 가능성이 높은 오타만 다룹니다.
-Provider 또는 애플리케이션 확장 subtree는 검사하지 않습니다.
-`analysis.provider-minimum-scores`, `analysis.entity-aliases`, `tools.disclosures`
-아래 동적 key는 경고 없이 허용하며, Presidio `headers`와 OpenNLP `entity-models`
-같은 provider 소유 map도 base 진단 범위 밖입니다. 경고 메시지는 고정 property
-경로와 정규 이름 제안만 포함하며 설정값, credential 또는 동적 map key를 포함하지
-않습니다.
+최상위에서는 provider와 애플리케이션 확장 이름에 영향을 주지 않도록 `enabled`의 오타
+가능성이 높은 이름만 검사합니다. 고정 `output`, `response-inspection`, `analysis`,
+`regex`, `tools` 하위 영역에서는 인식할 수 없는 모든 프로퍼티 이름에 경고합니다.
+`analysis.provider-minimum-scores`, `analysis.entity-aliases`, `tools.disclosures` 아래의
+동적 키는 허용합니다. `analysis.included-entity-types`와
+`analysis.supplemental-providers`의 목록 항목도 프로퍼티 이름으로 진단하지 않습니다.
+Presidio의 `headers`와 OpenNLP의 `entity-models`처럼 provider가 소유한 맵도 진단
+범위에서 제외합니다. 지원되는 프로퍼티 중 유력한 후보가 하나뿐이면 경고에 올바른
+이름을 제안합니다. 진단은 설정값, 자격 증명 또는 동적 맵 키를 로그에 남기지 않으며
+애플리케이션 시작을 막지 않습니다.
 
 ## 탐지와 해석
 

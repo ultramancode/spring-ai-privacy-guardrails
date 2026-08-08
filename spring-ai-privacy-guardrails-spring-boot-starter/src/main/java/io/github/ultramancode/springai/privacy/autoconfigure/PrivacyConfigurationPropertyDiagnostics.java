@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Warns about high-confidence typos in the library-owned, fixed property surface. */
+/** Warns about unrecognized names in the library-owned, fixed property surface. */
 final class PrivacyConfigurationPropertyDiagnostics {
 
     private static final Log logger = LogFactory.getLog(PrivacyConfigurationPropertyDiagnostics.class);
@@ -56,7 +56,16 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "entity-aliases",
             "type-conflict-fallback"
     );
+    static final Set<String> ANALYSIS_MAP_PROPERTIES = Set.of(
+            "provider-minimum-scores",
+            "entity-aliases"
+    );
+    static final Set<String> ANALYSIS_INDEXED_SCALAR_PROPERTIES = Set.of(
+            "included-entity-types",
+            "supplemental-providers"
+    );
     static final List<String> REGEX_PROPERTIES = List.of("enabled", "rules");
+    static final Set<String> REGEX_INDEXED_OBJECT_PROPERTIES = Set.of("rules");
     static final List<String> REGEX_RULE_PROPERTIES = List.of(
             "entity-type",
             "pattern",
@@ -64,30 +73,31 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "capture-group"
     );
     static final List<String> TOOLS_PROPERTIES = List.of("disclosures");
+    static final Set<String> TOOLS_MAP_PROPERTIES = Set.of("disclosures");
 
     PrivacyConfigurationPropertyDiagnostics(Environment environment) {
-        findLikelyTypos(environment).forEach(PrivacyConfigurationPropertyDiagnostics::warn);
+        findDiagnostics(environment).forEach(PrivacyConfigurationPropertyDiagnostics::warn);
     }
 
-    static Set<Suggestion> findLikelyTypos(Environment environment) {
-        Set<Suggestion> suggestions = new TreeSet<>();
+    static Set<Diagnostic> findDiagnostics(Environment environment) {
+        Set<Diagnostic> diagnostics = new TreeSet<>();
         for (ConfigurationPropertySource source : ConfigurationPropertySources.get(environment)) {
             if (source instanceof IterableConfigurationPropertySource iterableSource) {
-                collectLikelyTypos(iterableSource, suggestions);
+                collectDiagnostics(iterableSource, diagnostics);
             }
         }
-        return suggestions;
+        return diagnostics;
     }
 
     /**
-     * Collects suggestions on a best-effort basis. If name enumeration fails, the
+     * Collects diagnostics on a best-effort basis. If name enumeration fails, the
      * source contributes no partial results and cannot block host application startup.
      */
-    private static void collectLikelyTypos(
+    private static void collectDiagnostics(
             IterableConfigurationPropertySource source,
-            Set<Suggestion> suggestions
+            Set<Diagnostic> diagnostics
     ) {
-        Set<Suggestion> sourceSuggestions = new TreeSet<>();
+        Set<Diagnostic> sourceDiagnostics = new TreeSet<>();
         Iterator<ConfigurationPropertyName> names;
         try {
             names = source.iterator();
@@ -98,7 +108,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
             ConfigurationPropertyName name;
             try {
                 if (!names.hasNext()) {
-                    suggestions.addAll(sourceSuggestions);
+                    diagnostics.addAll(sourceDiagnostics);
                     return;
                 }
                 name = names.next();
@@ -108,11 +118,11 @@ final class PrivacyConfigurationPropertyDiagnostics {
             if (name == null) {
                 return;
             }
-            diagnosePropertyName(name).ifPresent(sourceSuggestions::add);
+            diagnosePropertyName(name).ifPresent(sourceDiagnostics::add);
         }
     }
 
-    private static Optional<Suggestion> diagnosePropertyName(ConfigurationPropertyName name) {
+    private static Optional<Diagnostic> diagnosePropertyName(ConfigurationPropertyName name) {
         if (!ROOT.isAncestorOf(name)) {
             return Optional.empty();
         }
@@ -140,7 +150,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         }
         String propertyRoot = ROOT + "." + rootMatch.expected();
         return switch (rootMatch.expected()) {
-            case "enabled" -> Optional.empty();
+            case "enabled" -> unrecognizedFixedProperty(propertyRoot);
             case "output" -> diagnoseFixedProperties(
                     name,
                     propertyIndex,
@@ -157,33 +167,73 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     name,
                     propertyIndex,
                     propertyRoot,
-                    ANALYSIS_PROPERTIES
+                    ANALYSIS_PROPERTIES,
+                    ANALYSIS_MAP_PROPERTIES,
+                    ANALYSIS_INDEXED_SCALAR_PROPERTIES
             );
             case "regex" -> diagnoseRegex(name, propertyIndex, propertyRoot);
             case "tools" -> diagnoseFixedProperties(
                     name,
                     propertyIndex,
                     propertyRoot,
-                    TOOLS_PROPERTIES
+                    TOOLS_PROPERTIES,
+                    TOOLS_MAP_PROPERTIES,
+                    Set.of()
             );
             default -> Optional.empty();
         };
     }
 
-    private static Optional<Suggestion> diagnoseFixedProperties(
+    private static Optional<Diagnostic> diagnoseFixedProperties(
             ConfigurationPropertyName name,
             int propertyIndex,
             String propertyRoot,
             List<String> knownProperties
     ) {
-        Optional<SegmentMatch> match = closestSegmentMatch(name, propertyIndex, knownProperties);
-        if (match.isPresent() && !match.get().exact()) {
-            return suggestion(propertyRoot, match.get());
-        }
-        return Optional.empty();
+        return diagnoseFixedProperties(
+                name,
+                propertyIndex,
+                propertyRoot,
+                knownProperties,
+                Set.of(),
+                Set.of()
+        );
     }
 
-    private static Optional<Suggestion> diagnoseRegex(
+    private static Optional<Diagnostic> diagnoseFixedProperties(
+            ConfigurationPropertyName name,
+            int propertyIndex,
+            String propertyRoot,
+            List<String> knownProperties,
+            Set<String> mapProperties,
+            Set<String> indexedScalarProperties
+    ) {
+        Optional<SegmentMatch> matchCandidate = closestSegmentMatch(
+                name,
+                propertyIndex,
+                knownProperties
+        );
+        if (matchCandidate.isEmpty()) {
+            return unrecognizedFixedProperty(propertyRoot);
+        }
+        SegmentMatch match = matchCandidate.get();
+        if (!match.exact()) {
+            return suggestion(propertyRoot, match);
+        }
+        int nextPropertyIndex = propertyIndex + match.consumedElements();
+        if (nextPropertyIndex == name.getNumberOfElements()
+                || mapProperties.contains(match.expected())) {
+            return Optional.empty();
+        }
+        if (indexedScalarProperties.contains(match.expected())
+                && name.isNumericIndex(nextPropertyIndex)
+                && nextPropertyIndex + 1 == name.getNumberOfElements()) {
+            return Optional.empty();
+        }
+        return unrecognizedFixedProperty(propertyRoot + "." + match.expected());
+    }
+
+    private static Optional<Diagnostic> diagnoseRegex(
             ConfigurationPropertyName name,
             int propertyIndex,
             String propertyRoot
@@ -194,18 +244,25 @@ final class PrivacyConfigurationPropertyDiagnostics {
                 REGEX_PROPERTIES
         );
         if (propertyMatchCandidate.isEmpty()) {
-            return Optional.empty();
+            return unrecognizedFixedProperty(propertyRoot);
         }
         SegmentMatch propertyMatch = propertyMatchCandidate.get();
         if (!propertyMatch.exact()) {
             return suggestion(propertyRoot, propertyMatch);
         }
         int ruleIndex = propertyIndex + propertyMatch.consumedElements();
-        if (!propertyMatch.expected().equals("rules") || name.getNumberOfElements() <= ruleIndex) {
+        if (!REGEX_INDEXED_OBJECT_PROPERTIES.contains(propertyMatch.expected())) {
+            return name.getNumberOfElements() <= ruleIndex
+                    ? Optional.empty()
+                    : unrecognizedFixedProperty(
+                            propertyRoot + "." + propertyMatch.expected()
+                    );
+        }
+        if (name.getNumberOfElements() <= ruleIndex) {
             return Optional.empty();
         }
         if (!name.isNumericIndex(ruleIndex)) {
-            return Optional.empty();
+            return unrecognizedFixedProperty(propertyRoot + ".rules");
         }
         int rulePropertyIndex = ruleIndex + 1;
         if (name.getNumberOfElements() <= rulePropertyIndex) {
@@ -220,13 +277,28 @@ final class PrivacyConfigurationPropertyDiagnostics {
         );
     }
 
-    private static Optional<Suggestion> suggestion(
+    private static Optional<Diagnostic> suggestion(
             String propertyRoot,
             SegmentMatch match
     ) {
-        return Optional.of(new Suggestion(
-                propertyRoot + "." + match.actual(),
-                propertyRoot + "." + match.expected()
+        String actualName = propertyRoot + "." + match.actual();
+        String expectedName = propertyRoot + "." + match.expected();
+        return Optional.of(new Diagnostic(
+                "Unrecognized Spring AI Privacy Guardrails configuration property '"
+                        + actualName
+                        + "'. Did you mean '"
+                        + expectedName
+                        + "'? No configuration value was included in this diagnostic."
+        ));
+    }
+
+    private static Optional<Diagnostic> unrecognizedFixedProperty(String propertyRoot) {
+        return Optional.of(new Diagnostic(
+                "Unrecognized Spring AI Privacy Guardrails configuration property detected "
+                        + "below fixed prefix '"
+                        + propertyRoot
+                        + "'. The unrecognized property name and configuration value were "
+                        + "omitted from this diagnostic."
         ));
     }
 
@@ -363,22 +435,15 @@ final class PrivacyConfigurationPropertyDiagnostics {
         return previousCosts[right.length()];
     }
 
-    private static void warn(Suggestion suggestion) {
-        logger.warn("Unrecognized Spring AI Privacy Guardrails configuration property '"
-                + suggestion.actualName()
-                + "'. Did you mean '"
-                + suggestion.expectedName()
-                + "'? No configuration value was included in this diagnostic.");
+    private static void warn(Diagnostic diagnostic) {
+        logger.warn(diagnostic.message());
     }
 
-    record Suggestion(String actualName, String expectedName) implements Comparable<Suggestion> {
+    record Diagnostic(String message) implements Comparable<Diagnostic> {
 
         @Override
-        public int compareTo(Suggestion other) {
-            int actualComparison = this.actualName.compareTo(other.actualName);
-            return actualComparison != 0
-                    ? actualComparison
-                    : this.expectedName.compareTo(other.expectedName);
+        public int compareTo(Diagnostic other) {
+            return this.message.compareTo(other.message);
         }
 
     }

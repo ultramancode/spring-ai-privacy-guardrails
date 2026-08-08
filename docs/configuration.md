@@ -94,27 +94,25 @@ cost, concurrency, and side-effect budgets in the application or orchestration
 framework. The remaining output limits bound only the stream content this
 library must inspect or retain to enforce its privacy boundary.
 
-### Configuration typo diagnostics
+### Configuration property diagnostics
 
-The base starter logs a warning for likely misspellings in the fixed property
-surface owned by this library. This diagnostic auto-configuration is independent
-of `spring.ai.privacy.enabled`, so it can also report a likely misspelling of the
-global switch when the privacy auto-configuration remains inactive. Warnings do
-not fail application startup. The diagnostic remains eager when the host enables
-Spring Boot's global lazy initialization and recognizes relaxed operating-system
-environment variable names for dashed properties. If a host-provided property
-source cannot safely enumerate its property names, diagnostics skip only that
-source and continue without logging the source or its exception.
+The base starter logs non-blocking warnings for unrecognized names in the fixed
+`spring.ai.privacy` properties defined by this library. Diagnostics run
+independently of `spring.ai.privacy.enabled`, so they can report a likely
+misspelling of the top-level `enabled` property even when privacy
+auto-configuration does not activate.
 
-Diagnostics are deliberately narrow. They cover high-confidence typos of the
-global switch and fixed fields below `output`, `response-inspection`, `analysis`,
-`regex`, and `tools`. They do not inspect provider or application extension
-subtrees. Dynamic keys below `analysis.provider-minimum-scores`,
-`analysis.entity-aliases`, and `tools.disclosures` are accepted without warning;
-provider-owned maps such as Presidio `headers` and OpenNLP `entity-models` are
-also outside the base diagnostic scope. Warning messages contain only the fixed
-property path and a canonical suggestion, never a configured value, credential,
-or dynamic map key.
+At the top level, diagnostics check only likely misspellings of `enabled`, leaving
+provider and application extension names untouched. Within the fixed `output`,
+`response-inspection`, `analysis`, `regex`, and `tools` areas, every unrecognized
+property name produces a warning. Dynamic keys below
+`analysis.provider-minimum-scores`, `analysis.entity-aliases`, and
+`tools.disclosures` are accepted. Entries in the `analysis.included-entity-types`
+and `analysis.supplemental-providers` lists are not treated as property names.
+Provider-owned maps such as Presidio `headers` and OpenNLP `entity-models` are also
+outside the diagnostic scope. When there is a single likely supported property,
+the warning suggests it. Diagnostics never log configuration values, credentials,
+or dynamic map keys, and they never prevent application startup.
 
 ## Detection and Resolution
 

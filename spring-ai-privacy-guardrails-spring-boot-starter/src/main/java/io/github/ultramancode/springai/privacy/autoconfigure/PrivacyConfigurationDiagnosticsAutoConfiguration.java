@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 
-/** Auto-configures non-blocking diagnostics for likely privacy property typos. */
+/** Auto-configures non-blocking diagnostics for fixed privacy configuration properties. */
 @AutoConfiguration(before = PrivacyGuardrailsAutoConfiguration.class)
 public class PrivacyConfigurationDiagnosticsAutoConfiguration {
 

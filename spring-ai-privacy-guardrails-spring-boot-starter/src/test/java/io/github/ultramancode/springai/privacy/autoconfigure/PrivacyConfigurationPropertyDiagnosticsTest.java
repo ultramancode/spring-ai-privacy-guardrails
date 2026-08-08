@@ -16,12 +16,16 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 import java.beans.PropertyDescriptor;
 import java.io.InputStream;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -76,10 +80,34 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 PrivacyGuardrailsProperties.Tools.class,
                 PrivacyConfigurationPropertyDiagnostics.TOOLS_PROPERTIES
         );
+        assertNoMapOrCollectionProperties(PrivacyGuardrailsProperties.class);
+        assertNoMapOrCollectionProperties(PrivacyGuardrailsProperties.Output.class);
+        assertNoMapOrCollectionProperties(
+                PrivacyGuardrailsProperties.ResponseInspection.class
+        );
+        assertContainerPropertiesMatch(
+                PrivacyGuardrailsProperties.Analysis.class,
+                PrivacyConfigurationPropertyDiagnostics.ANALYSIS_MAP_PROPERTIES,
+                PrivacyConfigurationPropertyDiagnostics.ANALYSIS_INDEXED_SCALAR_PROPERTIES,
+                Set.of()
+        );
+        assertContainerPropertiesMatch(
+                PrivacyGuardrailsProperties.Regex.class,
+                Set.of(),
+                Set.of(),
+                PrivacyConfigurationPropertyDiagnostics.REGEX_INDEXED_OBJECT_PROPERTIES
+        );
+        assertNoMapOrCollectionProperties(PrivacyGuardrailsProperties.Regex.Rule.class);
+        assertContainerPropertiesMatch(
+                PrivacyGuardrailsProperties.Tools.class,
+                PrivacyConfigurationPropertyDiagnostics.TOOLS_MAP_PROPERTIES,
+                Set.of(),
+                Set.of()
+        );
     }
 
     @Test
-    void warnsWhenAnUnknownFixedPropertyWouldOtherwiseBeIgnored(CapturedOutput output) {
+    void suggestsTheCanonicalNameForALikelyFixedPropertyTypo(CapturedOutput output) {
         this.diagnosticsRunner
                 .withPropertyValues(
                         "spring.ai.privacy.enabled=true",
@@ -96,6 +124,65 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                     ).contains("Did you mean 'spring.ai.privacy.output.enabled'?")
                             .contains("No configuration value was included in this diagnostic.")
                             .doesNotContain("synthetic-sensitive-value");
+                });
+    }
+
+    @Test
+    void warnsWithoutEchoingDissimilarUnknownNamesInFixedConfigurationAreas(
+            CapturedOutput output
+    ) {
+        this.diagnosticsRunner
+                .withPropertyValues(
+                        "spring.ai.privacy.output.synthetic-credential-name=synthetic-secret-one",
+                        "spring.ai.privacy.response-inspection.synthetic-credential-name="
+                                + "synthetic-secret-two",
+                        "spring.ai.privacy.analysis.synthetic-credential-name=synthetic-secret-three",
+                        "spring.ai.privacy.regex.synthetic-credential-name=synthetic-secret-four",
+                        "spring.ai.privacy.tools.synthetic-credential-name=synthetic-secret-five"
+                )
+                .run(context -> {
+                    assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
+                    assertThat(output)
+                            .contains("below fixed prefix 'spring.ai.privacy.output'")
+                            .contains("below fixed prefix 'spring.ai.privacy.response-inspection'")
+                            .contains("below fixed prefix 'spring.ai.privacy.analysis'")
+                            .contains("below fixed prefix 'spring.ai.privacy.regex'")
+                            .contains("below fixed prefix 'spring.ai.privacy.tools'")
+                            .contains("The unrecognized property name and configuration value were "
+                                    + "omitted from this diagnostic.")
+                            .doesNotContain("synthetic-credential-name")
+                            .doesNotContain("synthetic-secret-one")
+                            .doesNotContain("synthetic-secret-two")
+                            .doesNotContain("synthetic-secret-three")
+                            .doesNotContain("synthetic-secret-four")
+                            .doesNotContain("synthetic-secret-five");
+                });
+    }
+
+    @Test
+    void warnsWithoutEchoingUnexpectedDescendantsOfFixedLeafProperties(
+            CapturedOutput output
+    ) {
+        this.diagnosticsRunner
+                .withPropertyValues(
+                        "spring.ai.privacy.output.enabled.synthetic-credential-name="
+                                + "synthetic-secret-one",
+                        "spring.ai.privacy.analysis.included-entity-types.synthetic-credential-name="
+                                + "synthetic-secret-two",
+                        "spring.ai.privacy.regex.rules[0].score.synthetic-credential-name="
+                                + "synthetic-secret-three"
+                )
+                .run(context -> {
+                    assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
+                    assertThat(output)
+                            .contains("below fixed prefix 'spring.ai.privacy.output.enabled'")
+                            .contains("below fixed prefix "
+                                    + "'spring.ai.privacy.analysis.included-entity-types'")
+                            .contains("below fixed prefix 'spring.ai.privacy.regex.rules[0].score'")
+                            .doesNotContain("synthetic-credential-name")
+                            .doesNotContain("synthetic-secret-one")
+                            .doesNotContain("synthetic-secret-two")
+                            .doesNotContain("synthetic-secret-three");
                 });
     }
 
@@ -137,6 +224,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
         withSystemEnvironment(Map.of(
                 "SPRING_AI_PRIVACY_RESPONSE_INSPECTION_MAX_CHARACTERS", "8",
                 "SPRING_AI_PRIVACY_ANALYSIS_MINIMUM_SCORE", "0.5",
+                "SPRING_AI_PRIVACY_ANALYSIS_INCLUDED_ENTITY_TYPES_0", "CUSTOMER_ID",
+                "SPRING_AI_PRIVACY_ANALYSIS_SUPPLEMENTAL_PROVIDERS_0", "custom-provider",
                 "SPRING_AI_PRIVACY_OUTPUT_BLOCK_EXCEPTION_MESSAGE", "safe-message",
                 "SPRING_AI_PRIVACY_REGEX_RULES_0_ENTITY_TYPE", "CUSTOMER_ID"
         )).run(context -> {
@@ -172,15 +261,18 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
-    void ignoresProviderExtensionAndDynamicMapKeys(CapturedOutput output) {
+    void ignoresProviderExtensionsAndSupportedDynamicSegments(CapturedOutput output) {
         this.diagnosticsRunner
                 .withPropertyValues(
                         "spring.ai.privacy.custom-provider.credentials.client-secret=synthetic-secret-one",
                         "spring.ai.privacy.analysis.provider-minimum-scores.custom-provider=0.75",
                         "spring.ai.privacy.analysis.entity-aliases.external-label=CUSTOMER_ID",
+                        "spring.ai.privacy.analysis.included-entity-types[0]=CUSTOMER_ID",
+                        "spring.ai.privacy.analysis.supplemental-providers[0]=custom-provider",
                         "spring.ai.privacy.tools.disclosures.customer-lookup[0]=CUSTOMER_ID",
                         "spring.ai.privacy.presidio.headers.Authorization=synthetic-secret-two",
-                        "spring.ai.privacy.opennlp.entity-models.CUSTOMER_RECORD=classpath:synthetic-model"
+                        "spring.ai.privacy.opennlp.entity-models.CUSTOMER_RECORD=classpath:synthetic-model",
+                        "spring.ai.privacy.toolz.custom-setting=true"
                 )
                 .run(context -> {
                     assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
@@ -271,6 +363,116 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 .map(PropertyDescriptor::getName)
                 .filter(name -> !name.equals("class"))
                 .collect(Collectors.toSet());
+    }
+
+    private static void assertNoMapOrCollectionProperties(Class<?> propertiesType) {
+        assertContainerPropertiesMatch(
+                propertiesType,
+                Set.of(),
+                Set.of(),
+                Set.of()
+        );
+    }
+
+    private static void assertContainerPropertiesMatch(
+            Class<?> propertiesType,
+            Set<String> mapProperties,
+            Set<String> indexedScalarProperties,
+            Set<String> indexedObjectProperties
+    ) {
+        assertPropertiesOfTypeMatch(propertiesType, Map.class, mapProperties);
+        Set<String> indexedProperties = Stream.concat(
+                indexedScalarProperties.stream(),
+                indexedObjectProperties.stream()
+        ).collect(Collectors.toSet());
+        assertPropertiesOfTypeMatch(propertiesType, Collection.class, indexedProperties);
+        assertCollectionElementKindMatches(
+                propertiesType,
+                true,
+                indexedScalarProperties
+        );
+        assertCollectionElementKindMatches(
+                propertiesType,
+                false,
+                indexedObjectProperties
+        );
+    }
+
+    private static void assertCollectionElementKindMatches(
+            Class<?> propertiesType,
+            boolean simpleElementType,
+            Set<String> diagnosticProperties
+    ) {
+        String elementKind = simpleElementType ? "simple" : "object";
+        String description = elementKind
+                + " indexed properties in the diagnostic schema for "
+                + propertiesType.getSimpleName();
+        Set<String> actualProperties = Arrays.stream(
+                        BeanUtils.getPropertyDescriptors(propertiesType)
+                )
+                .filter(descriptor -> Collection.class.isAssignableFrom(
+                        descriptor.getPropertyType()
+                ))
+                .filter(descriptor -> BeanUtils.isSimpleValueType(
+                        collectionElementType(descriptor)
+                ) == simpleElementType)
+                .map(PropertyDescriptor::getName)
+                .collect(Collectors.toSet());
+        assertThat(diagnosticProperties.stream()
+                .map(PrivacyConfigurationPropertyDiagnosticsTest::toJavaBeanPropertyName)
+                .collect(Collectors.toSet()))
+                .as(description)
+                .containsExactlyInAnyOrderElementsOf(actualProperties);
+    }
+
+    private static Class<?> collectionElementType(PropertyDescriptor descriptor) {
+        if (descriptor.getReadMethod() == null) {
+            throw new AssertionError("No read method for " + descriptor.getName());
+        }
+        Type returnType = descriptor.getReadMethod().getGenericReturnType();
+        if (!(returnType instanceof ParameterizedType parameterizedType)) {
+            throw new AssertionError("No generic element type for " + descriptor.getName());
+        }
+        Type[] typeArguments = parameterizedType.getActualTypeArguments();
+        if (typeArguments.length != 1) {
+            throw new AssertionError("Expected one generic element type for "
+                    + descriptor.getName());
+        }
+        Type elementType = typeArguments[0];
+        if (elementType instanceof Class<?> elementClass) {
+            return elementClass;
+        }
+        if (elementType instanceof ParameterizedType nestedType
+                && nestedType.getRawType() instanceof Class<?> rawClass) {
+            return rawClass;
+        }
+        throw new AssertionError("Unsupported generic element type for "
+                + descriptor.getName()
+                + ": "
+                + elementType.getTypeName());
+    }
+
+    private static void assertPropertiesOfTypeMatch(
+            Class<?> propertiesType,
+            Class<?> propertyType,
+            Set<String> diagnosticProperties
+    ) {
+        String description = propertyType.getSimpleName()
+                + " properties in the diagnostic schema for "
+                + propertiesType.getSimpleName();
+        Set<String> actualProperties = Arrays.stream(
+                        BeanUtils.getPropertyDescriptors(propertiesType)
+                )
+                .filter(descriptor -> propertyType.isAssignableFrom(
+                        descriptor.getPropertyType()
+                ))
+                .map(PropertyDescriptor::getName)
+                .collect(Collectors.toSet());
+        assertThat(diagnosticProperties.stream()
+                .map(PrivacyConfigurationPropertyDiagnosticsTest::toJavaBeanPropertyName)
+                .collect(Collectors.toSet()))
+                .as(description)
+                .containsExactlyInAnyOrderElementsOf(actualProperties);
     }
 
     private static String toJavaBeanPropertyName(String dashedName) {

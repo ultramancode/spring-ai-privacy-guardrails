@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 8185426e6b41440b948660816ca0216f5e9b488f9ca9a2ffd52b38c89d269366 -->
+<!-- i18n-source-sha256: 64e191d0f7a6220669d056bc331579a357157c27f01653acafceb99f630cce98 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 전체
 참고 문서입니다. Base starter는 `core`와 Spring AI 경계를 제공하며, provider
@@ -249,7 +249,7 @@ Spring Boot Health가 있으면 provider가 필요할 때 생성되는
 `presidioHealthIndicator`를 제공합니다. 이 indicator는 상태와 안정적인 실패 유형만
 보고하며 URL, header, 응답 본문 또는 전송 예외를 노출하지 않습니다.
 
-로컬 Docker 구성은 [samples/presidio](../../samples/presidio/README.md)에
+로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/main/samples/presidio)에
 있습니다.
 
 ## 선택형 JVM 전용 OpenNLP provider
@@ -283,7 +283,7 @@ resource 위치는 미설정으로 간주하지 않고 잘못된 설정으로 �
 전적으로 모델에 달려 있으므로 애플리케이션이 직접 보정해야 합니다. 이 기능은
 선택형 배포 구성이며 범용 개인정보 탐지에 권장하는 기본값이 아닙니다.
 
-[실행 가능한 샘플 가이드](../../samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)는
+[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)는
 모델 다운로드, checksum 확인, 구성 실행과 명시적으로 활성화하는 실제 연동 테스트
 절차를 설명합니다.
 

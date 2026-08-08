@@ -249,7 +249,7 @@ When Spring Boot Health is present, the provider contributes a lazy
 `presidioHealthIndicator`. It reports only status and a stable failure category,
 never URL, headers, response body, or transport exception.
 
-The local Docker profile is in [samples/presidio](../samples/presidio/README.md).
+The local Docker profile is in [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/main/samples/presidio).
 
 ## Optional JVM-Only OpenNLP Provider
 
@@ -284,7 +284,7 @@ used to train the NER models. Detection quality is entirely model-dependent and
 must be calibrated by the application; this is an optional deployment profile,
 not the recommended general-PII default.
 
-The [runnable sample guide](../samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)
+The [runnable sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)
 provides model download, checksum, profile startup, and opt-in live-test steps.
 
 ## ChatClient Boundary

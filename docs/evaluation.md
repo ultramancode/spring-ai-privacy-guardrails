@@ -1,70 +1,57 @@
-# Reproducible Evaluation and Benchmarks
+# Evaluation and Benchmarks
 
 [English](evaluation.md) | [한국어](ko/evaluation.md)
 
-The project separates two kinds of evidence:
+This repository includes a regression test for the demo analyzer,
+privacy-boundary tests, and JMH benchmarks. The regression test checks detection
+results, the boundary tests check policy enforcement, and the JMH benchmarks
+measure local processing time. These results are not interchangeable and do
+not guarantee accuracy or latency in a production environment.
 
-- analyzer evaluation measures whether a configured detector returns the
-  expected source spans;
-- boundary tests verify that raw values do not cross model, tool, output, or
-  session-lifecycle boundaries without authorization.
+## Demo Analyzer Regression Test
 
-## Demo Analyzer Evaluation
+The demo's Regex analyzer uses the same configuration as the runnable sample and
+is tested against a synthetic dataset. The test checks that the expected entity
+types and raw values are detected, those raw values are absent from the
+tokenized output, and request sessions are cleaned up.
 
-The runnable demo includes a versioned synthetic corpus evaluated through the same
-auto-configured `PrivacyService` and regex rules used by the sample application.
-Expected spans are stored with the cases, so metrics are calculated on every run.
-
-The corpus exercises declared demo entity types, repeated values, multiple
-entities, structured-looking text, punctuation boundaries, malformed identifiers,
-and negative cases. General-language detection is outside the regex sample's scope.
-
-Run the sample evaluation with:
+To run only the regression test with the default demo configuration:
 
 ```bash
-./gradlew :spring-ai-privacy-guardrails-sample-demo:test
+./gradlew :spring-ai-privacy-guardrails-sample-demo:test --tests io.github.ultramancode.springai.privacy.sample.DemoRegexEvaluationTest
 ```
 
-The evaluation also checks that expected raw values are absent from protected
-results and that request sessions are closed after each case.
+This test is intended to detect changes in the demo rules. These results do not
+represent general PII-detection accuracy or detection performance across
+languages and domains. Validate analyzers intended for production separately
+with data representative of the target environment.
 
-## Interpretation Limits
+## Privacy Boundary Tests
 
-The synthetic corpus is a deterministic regression baseline for the documented
-demo configuration. It is not evidence of general PII-detection accuracy and is
-not representative of every language, domain, format, or adversarial input.
-
-Remote detector quality depends on its recognizers, language pipeline, thresholds,
-and deployment. An in-process adapter depends on the application-supplied model.
-Calibrate every provider against representative, legally usable application data.
-
-The Spring AI integration suite separately verifies enforcement at model, tool,
-output, and request-lifecycle boundaries.
-
-## Repository Benchmarks
-
-The repository-only benchmark module measures costs owned by this project. Its
-workloads cover analysis, request-scoped tokenization, tool-boundary protection,
-and growing request mappings. It is not a published user-facing artifact.
-
-Use the smoke profile to confirm that all benchmarks compile and execute:
+Boundary tests do not measure detection accuracy. They verify configured policy
+enforcement at the model, tool, output, and request-lifecycle boundaries. Run
+all repository checks with:
 
 ```bash
-./gradlew :spring-ai-privacy-guardrails-benchmarks:jmhSmoke
+./gradlew --no-daemon clean check
 ```
 
-Run the reproducible measurement profile with:
+By default, the test suite uses test models and local components. Tests that use
+live remote models or analyzer services are opt-in.
+
+## JMH Benchmarks
+
+The repository's JMH benchmarks measure execution time for key local processing
+paths, including Regex analysis, request-scoped tokenization, tool-boundary
+processing, and detokenization. In the same environment, the results can be
+used to compare scaling behavior and version-to-version performance changes.
+
+Run the full benchmark suite with:
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-benchmarks:jmh
 ```
 
-## Reporting and Comparison
-
-Benchmark results describe only the exact workload, commit, JVM, and machine
-used. They are not production latency targets or detector-accuracy claims.
-When publishing a result, record the JDK, operating system, CPU, repository
-commit, command, and any changed benchmark parameters.
-
-Profile network detectors and application-model inference separately from core
-overhead; comparisons require their deployment and model details.
+Results are written to
+`spring-ai-privacy-guardrails-benchmarks/build/reports/jmh/results.json`. Use the
+same JVM and execution environment when comparing results.

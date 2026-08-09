@@ -1,68 +1,98 @@
 # Spring AI Privacy Guardrails
 
-[English](README.md) | [한국어](README.ko.md)
+[English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <p align="center">
-  <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails execution boundary" width="100%">
+  <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails execution boundaries" width="100%">
 </p>
 
-Keep detected PII out of the model. Reveal only what each trusted tool needs.
-Protect every tool result before it leaves the tool boundary.
+**Detect PII with built-in and pluggable analyzers. Control where original
+values may travel.**
 
-Spring AI Privacy Guardrails combines a Spring-independent privacy core with a
-production-oriented Spring AI integration for chat, RAG, memory, tool calling,
-and output boundaries. Pluggable analyzers find sensitive spans; this project
-turns that evidence into request-scoped enforcement.
+When protection is applied to a `ChatClient`, PII detected by analyzers is
+replaced with request-scoped tokens before the input is sent to the model.
+Immediately before a protected tool runs, original values are restored only for
+the entity types allowed by policy, and the tool result is protected again.
+Final-response inspection can be enabled when needed.
+
+Spring AI Privacy Guardrails combines a Spring-independent privacy `core` with
+Spring AI integration to enforce privacy policies across chat, RAG, memory,
+tool-call, and output boundaries.
+
+> **Project status:** This project has not yet been publicly released and is not
+> available from Maven Central. Until `0.1.0` is released, APIs and
+> configuration may change without a migration path. Use the included sample
+> to verify the current behavior.
 
 ## Why It Exists
 
-A detector answers **what text is sensitive**. A Spring AI application still
-has to decide **where the original value may travel**.
+Detection is the first step. This library turns findings from built-in and
+pluggable analyzers into request-scoped policy at the model, tool, and output
+boundaries.
 
-This project provides the missing execution boundary:
-
-```text
-user + memory + RAG
-        ↓
-detect → resolve → request-scoped opaque tokens → model
-                                            ↓
-                         allow listed entity types per tool
-                                            ↓
-                         retokenize result → model/output
-                                            ↓
-                                   remove request mapping
+```mermaid
+flowchart LR
+    A["Input · Memory · RAG"] --> B["PII detection"]
+    B --> C["core policy<br/>validation · normalization · tokenization"]
+    C --> D["Model boundary"]
+    D -. "Tool call" .-> E["Tool boundary<br/>restore only allowed originals"]
+    E -. "Re-protected result" .-> D
+    D --> F["Output boundary"]
+    F --> G["Application"]
 ```
 
-## Choose a Starter
+## Run the Sample
 
-Most applications declare one primary starter:
+The sample includes a deterministic local `ChatModel`, so no cloud credentials
+are required. With JDK 21 installed, run the following command from the
+repository root:
 
-| Use case | Declare |
+```bash
+./gradlew :spring-ai-privacy-guardrails-sample-demo:run
+```
+
+Open `http://127.0.0.1:8080` to use the sample's **Privacy Boundary
+Inspector**. It shows analyzer findings and the tokenized input sent to the
+model. It also demonstrates that the original `CUSTOMER_ID` is restored only
+when the permitted tool runs, that the result is protected again, and that the
+active session count returns to zero after the call.
+
+<p align="center">
+  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing zero raw PII values sent to the model, one scoped tool disclosure, and zero active sessions after the call" width="960">
+</p>
+
+Text not matched by the demo's detection rules may be returned unchanged by the
+local model, and the Inspector does not expose token mappings. The
+[Sample Guide](samples/spring-ai-demo/README.md) covers optional Presidio and
+OpenNLP configurations, MCP round-trip tests, and real-model integration.
+The default repository checks do not call remote models.
+
+## Add Protection to an Application
+
+The following example adds privacy boundaries to a Spring AI application that
+already provides a `ChatModel` and `ChatClient.Builder`.
+
+### Choose a Starter
+
+Choose the starter that matches the analyzer you plan to use.
+
+| Use case | Starter |
 | --- | --- |
-| General PII with Presidio (recommended) | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
-| Regex rules or custom analyzers only | `spring-ai-privacy-guardrails-spring-boot-starter` |
-| Existing compatible OpenNLP models in a JVM-only deployment | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
+| General PII detection with Presidio | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
+| Regex rules or custom analyzers | `spring-ai-privacy-guardrails-spring-boot-starter` |
+| JVM-only environment with compatible OpenNLP models | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 
-The Presidio and OpenNLP starters already include the base starter, core,
-Spring AI integration, and Spring Boot baseline. Do not declare the base
-starter alongside either provider starter. The base starter intentionally
-includes no Presidio or OpenNLP provider.
+The Presidio starter requires an external Presidio Analyzer service. The
+Presidio and OpenNLP starters already include the base Privacy Guardrails
+starter, so do not add it separately. Adding a starter dependency alone enables
+neither privacy protection nor an analyzer.
 
-Adding only a provider starter dependency does not activate the privacy
-infrastructure or its Presidio or OpenNLP analyzer. Explicitly enable the
-global privacy switch and the analyzer you intend to use in `application.yml`,
-then configure it as shown in
-[Configuration](docs/configuration.md#artifacts).
+### Dependency and Basic Configuration
 
-## Quick Start
-
-> **Pre-release:** Version `0.1.0` is not yet available from Maven Central.
-> Until the first release, clone this repository and use the checked-in sample
-> or build from source. The dependency coordinate below is the planned
-> first-release coordinate and will not resolve before it is published.
-
-For a no-service first run, use the base starter with a small regex rule for an
-application-specific identifier:
+The dependency coordinates below will become available with the public
+`0.1.0` release. They cannot be downloaded from Maven Central before that
+release. To start without an external analyzer service, use the base starter
+with an application-specific regex rule.
 
 ```gradle
 dependencies {
@@ -86,8 +116,18 @@ spring:
             score: 0.90
 ```
 
-Select the `ChatClient` that needs protection by applying the starter-managed
-boundary explicitly:
+The `output` section is optional. When omitted, final-response inspection is
+disabled.
+
+This example rule is application-specific and detects only values in the
+`EMP-1234` format. It does not establish general PII-detection performance.
+Validate analyzers for production using data representative of your
+environment.
+
+### Protect a ChatClient
+
+Apply the starter-provided configuration to each `ChatClient.Builder` that you
+want to protect.
 
 ```java
 @Bean
@@ -99,33 +139,31 @@ ChatClient privacyChatClient(
 }
 ```
 
-The configurer installs the mandatory advisor bundle once and leaves other
-`ChatClient` instances unchanged. A protected builder's `clone()` and a
-protected client's `mutate()` already copy that bundle; configuring the copy
-again creates duplicate lifecycle boundaries and fails before model execution.
+Only `ChatClient` instances configured with `PrivacyChatClientConfigurer` are
+protected. Enabling privacy protection requires at least one analyzer;
+otherwise, application startup fails. Direct calls to a `ChatModel` are outside
+the automatic protection boundary. See [Configuration](docs/configuration.md)
+for derived clients, analyzer combinations, and failure policies.
 
-Enabling privacy without a `PiiAnalyzer` fails startup. Analyzers compose under
-the default `UNION` mode, while `REQUIRE_ALL` fails closed with a sanitized
-exception if any configured analyzer fails. These advisors protect configured
-`ChatClient` calls only; direct `ChatModel` calls require separate application
-protection. See [Configuration](docs/configuration.md) for advanced profiles,
-policies, direct builders, scoped tools, and test support.
+## Per-Tool Original Disclosure
 
-## Capability-Scoped Tools
-
-Wrapped tools are default-deny. Configure only the canonical entity types that
-one exact, case-sensitive tool name needs:
+Registering a tool does not grant access to original PII values. Disclosure is
+deny-by-default. Original values are restored immediately before execution only
+when the policy lists both the exact, case-sensitive tool name and the required
+canonical entity types.
 
 ```yaml
 spring:
   ai:
     privacy:
-      enabled: true
       tools:
         disclosures:
           customerLookup:
             - CUSTOMER_ID
 ```
+
+Wrap tools with `PrivacyToolCallbackFactory` and register them with a protected
+`ChatClient`.
 
 ```java
 @Bean
@@ -137,147 +175,57 @@ ToolCallback customerLookup(
 }
 ```
 
-For MCP or another `ToolCallbackProvider`, wrap the provider on the explicitly
-selected client instead of freezing its callbacks into an array:
+In the standard tool-execution path of a protected `ChatClient`, unwrapped
+callbacks are rejected before execution. Tool results are protected again
+before they are returned to the model or application.
 
-```java
-@Bean
-ChatClient privacyMcpChatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer,
-        PrivacyToolCallbackFactory toolCallbackFactory,
-        ToolCallbackProvider mcpTools
-) {
-    return privacyConfigurer.configure(builder)
-            .defaultTools(toolCallbackFactory.wrapProvider(mcpTools))
-            .build();
-}
-```
+For a `ToolCallbackProvider` whose tool list changes at runtime, such as an MCP
+provider, use `wrapProvider(...)`. Combine multiple `ToolCallbackProvider`
+instances with `wrapProviders(...)`. The application must protect any separate
+execution paths that use a custom `ToolCallingManager` or
+`ToolCallbackResolver`. See
+[Per-Tool Original Disclosure](docs/configuration.md#per-tool-original-disclosure)
+for the complete rules.
 
-When one client has several dynamic sources, combine them before registration:
-
-```java
-toolCallbackFactory.wrapProviders(mcpTools, localToolProvider)
-```
-
-Each source must return raw callbacks. The combined provider refreshes once per
-request, preserves source order, and rejects duplicate names. Registration
-remains default-deny: only configured entity types for the exact final tool name
-are restored, and new PII in tool results is retokenized before the next model
-call. See [Configuration](docs/configuration.md#tool-disclosure) for provider
-refresh, metadata, failure, and MCP prefix contracts.
-
-Unwrapped callbacks and providers are explicitly outside this contract.
-Register a wrapped callback or provider only with a `ChatClient` configured by
-the same privacy starter. An ordinary, unprotected client must use the original
-callback or provider; invoking a wrapper without an active privacy session
-fails before the delegate runs.
-
-## Detection vs. Enforcement
+## Core Protection Behavior
 
 <p align="center">
-  <img src="docs/images/execution-boundary.svg" alt="Detection providers, the privacy core, and the Spring AI execution integration" width="100%">
+  <img src="docs/images/execution-boundary.svg" alt="Analyzers, the privacy core, and Spring AI execution integration" width="100%">
 </p>
 
-| Layer | Responsibility | Spring dependency |
-| --- | --- | --- |
-| Analyzer providers | Return type, source offsets, and confidence | No |
-| Privacy core | Canonicalize, filter, resolve overlaps, own token sessions | No |
-| Spring AI integration | Enforce model, tool, output, and lifecycle boundaries | Spring AI |
+- Each protected request uses an isolated `PrivacySession`. Detected PII in
+  supported model input, including memory and RAG content, is tokenized before
+  the model call.
+- Protected tools receive only original values allowed by policy. Structured
+  tool input remains least-privilege, and tool results are protected again
+  before they reach the model or application, including `returnDirect`.
+- When enabled, output protection applies `TOKENIZE`, `REDACT`, or `BLOCK` to
+  completed responses. Streaming responses are buffered for inspection, and
+  managed session mappings are cleared on completion, failure, or cancellation.
 
-See [Architecture](docs/architecture.md) for provider and module trade-offs.
+See [Configuration](docs/configuration.md) for detailed behavior and
+[Architecture](docs/architecture.md) for request flow and module
+responsibilities.
 
-## What Is Enforced
+## Published Modules
 
-- One opaque `PrivacySession` per ChatClient request.
-- Final model-bound protection after memory and RAG advisors.
-- Stable identity inside a request and a random namespace across requests.
-- Privacy-first overlap resolution with explicit provider failure policies.
-- Exact-tool, entity-type-scoped disclosure with no wildcard capability.
-- Lossless JSON tool argument protection, including
-  exponent-form numeric PII with original numeric-type restoration only inside
-  authorized tools.
-- Retokenize ordinary tool results before they return to the model, and protect
-  developer-enabled `returnDirect` results before application return.
-- When output protection is enabled, support stream APIs but buffer and validate
-  the complete logical response before replay instead of delivering protected
-  text token by token.
-- Cleanup on success, error, cancellation, and stream termination.
-- Sanitized analyzer and privacy-boundary failures, while authorized delegate
-  tool exceptions propagate unchanged so retry, fallback, and diagnostics remain
-  under host-application control.
+Analyzer-specific starters bring in their runtime modules as transitive
+dependencies. Add test support separately in the application's test scope.
 
-`returnDirect` controls the tool loop, and the library preserves each delegate's
-setting. Mixed registration is allowed: Spring AI returns immediately only when
-all callbacks selected in that response are direct; otherwise tokenized results
-continue through the model loop. Every tool result is retokenized first, so a
-direct result remains `TOKENIZE`-protected even when output protection is off.
-
-`output.enabled` controls only final model-output inspection and defaults to
-`false`. When disabled, input, model, and tool protections remain active and
-streaming stays incremental, but final model output is outside this library's
-inspection boundary. When enabled, each logical response is buffered and
-`TOKENIZE`, `REDACT`, or `BLOCK` is applied before replay.
-
-The normal build runs focused unit and integration tests across model, tool,
-output, and lifecycle boundaries.
-
-## Runnable Inspector
-
-The sample includes a deterministic local `ChatModel`; no cloud credentials are
-required.
-
-```bash
-./gradlew :spring-ai-privacy-guardrails-sample-demo:run
-```
-
-Open `http://127.0.0.1:8080` to run the sample-only **Privacy Boundary
-Inspector**. It shows analyzer evidence, the actual tokenized model input,
-model-issued tool arguments, the single entity type disclosed inside the CRM
-tool, result retokenization, and `activeSessionsAfterCall = 0`.
-
-<p align="center">
-  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing zero raw PII at the model, one scoped tool disclosure, and zero active sessions after the call" width="960">
-</p>
-
-Text outside the demo's configured detector rules can be returned unchanged by
-its deterministic model. The inspector does not expose token mappings. API
-examples and the optional Docker Presidio and JVM-only OpenNLP profiles, plus
-the local Streamable HTTP MCP round-trip test, are documented in the
-[sample guide](samples/spring-ai-demo/README.md).
-The same guide includes an opt-in OpenAI-compatible live harness for verifying
-blocking, streaming, tool-loop, and `returnDirect` boundaries against an actual
-model endpoint. Normal repository checks compile that harness but never make a
-cloud request.
-
-## Artifacts and Modules
-
-The table lists four non-starter runtime building blocks plus the separate test
-support publication. Provider starters listed above resolve matching runtime
-modules transitively; test support is added separately to an application's test
-scope:
-
-| Artifact | Purpose |
+| Module | Purpose |
 | --- | --- |
-| `spring-ai-privacy-guardrails-core` | Analyzer SPI, resolution, sessions, regex, and tokenization |
-| `spring-ai-privacy-guardrails-spring-ai` | Advisors and scoped tool wrappers |
+| `spring-ai-privacy-guardrails-core` | Analyzer SPI, detection resolution, sessions, regex analysis, and tokenization |
+| `spring-ai-privacy-guardrails-spring-ai` | Advisors and per-tool original-disclosure boundaries |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |
-| `spring-ai-privacy-guardrails-test` | Optional model/tool probes and AssertJ assertions; add with `testImplementation` |
+| `spring-ai-privacy-guardrails-test` | Optional model and tool probes with AssertJ assertions |
 
-These are publication boundaries, not parallel policy implementations. Core
-owns evidence resolution and token identity; the Spring AI module owns model
-and tool execution boundaries. The build verifies the same dependency graph in
-source modules and published metadata.
-
-The repository-only benchmark module is never published as a library artifact.
-Its reproducible JMH profiles and interpretation rules are documented in
-[Evaluation](docs/evaluation.md#repository-benchmarks).
+See [Architecture](docs/architecture.md) for module responsibilities and the
+dependency structure. The repository-only JMH benchmark module is not
+published as a library. Its workloads and execution instructions are described
+in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 
 ## Compatibility and Status
-
-No public version has been released. Until the first public release, APIs and
-configuration may change without compatibility shims or migration paths.
 
 | Component | Verified version |
 | --- | --- |
@@ -287,21 +235,38 @@ configuration may change without compatibility shims or migration paths.
 | Spring Boot | 4.1.0 |
 | Gradle wrapper | 9.6.1 |
 
-CI runs the complete suite on Java 21 and 25.
+CI runs the default verification on Java 21 and 25. On Java 21, it separately
+runs live integration tests against a Presidio service and the JMH smoke tests.
+
+## Documentation
+
+- [Configuration](docs/configuration.md): starters, analyzers, tool policies,
+  and output policies
+- [Architecture](docs/architecture.md): modules and model, tool, and session
+  execution flow
+- [Threat Model](docs/threat-model.md): protected assets, trust boundaries,
+  controls, limitations, and separately managed areas
+- [Evaluation and Benchmarks](docs/evaluation.md): verification coverage and
+  interpretation limits
+- [Sample Guide](samples/spring-ai-demo/README.md): API, MCP, and real-model
+  integration examples
 
 ## Security Boundary
 
-This library reduces accidental PII disclosure in Spring AI execution paths;
-it is not a complete DLP system or a legal-compliance guarantee.
+This library reduces the risk of accidental PII disclosure on supported Spring
+AI execution paths, but it is not a complete DLP system or a guarantee of legal
+compliance.
 
-Applications remain responsible for authentication, authorization, transport
-security, log redaction, persistent ChatMemory/vector/database protection,
-retention, detector calibration, and unsupported provider/application metadata
-or non-text media. Analyzer
-services belong inside an authenticated and encrypted network boundary.
+The library does not manage application authentication or authorization,
+logging policies, data-retention policies, or access controls for stored
+`ChatMemory`, vector stores, and databases. Analyzer quality must also be
+validated and tuned for the production environment. Aside from explicitly
+supported reasoning text, the library does not automatically protect response
+metadata or non-text media. Apply authentication and transport encryption to
+remote analyzers.
 
-Read [Security](SECURITY.md), the [Threat Model](docs/threat-model.md), and
-[Architecture](docs/architecture.md) before production use.
+Before using the library in production, review [Security](SECURITY.md) and the
+[Threat Model](docs/threat-model.md).
 
 ## Build and Verify
 
@@ -309,11 +274,11 @@ Read [Security](SECURITY.md), the [Threat Model](docs/threat-model.md), and
 ./gradlew --no-daemon clean check
 ```
 
-This runs the test suite and the repository's module and documentation checks.
-[Evaluation](docs/evaluation.md) documents the synthetic regex baseline and its
-limitations.
+This command runs the repository's tests and verifies its modules and
+documentation. See [Evaluation](docs/evaluation.md) for the demo analyzer
+regression test and JMH benchmarks.
 
 ## Contributing
 
-See [Contributing](CONTRIBUTING.md). Contributions are licensed under Apache
-License 2.0.
+See [Contributing](CONTRIBUTING.md). All contributions are provided under the
+Apache License 2.0.

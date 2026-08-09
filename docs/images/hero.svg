@@ -1,128 +1,147 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="760" viewBox="0 0 1600 760" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="820" viewBox="0 0 1600 820" role="img" aria-labelledby="title desc">
   <title id="title">Spring AI Privacy Guardrails</title>
-  <desc id="desc">Sensitive values from user input, memory, RAG, and tools become request-scoped opaque tokens before reaching a model. Each wrapped tool can use only explicitly permitted entity types, and results are retokenized.</desc>
+  <desc id="desc">PII detection results drive privacy policy enforcement across model and tool calls. Model-bound PII stays tokenized, while each scoped tool receives only explicitly allowed original values and its result is protected again.</desc>
+
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#07111f"/>
       <stop offset="0.55" stop-color="#0b1d31"/>
       <stop offset="1" stop-color="#0b2c3c"/>
     </linearGradient>
-    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+
+    <linearGradient id="heroshieldGradient" gradientUnits="userSpaceOnUse"
+                    x1="169" y1="77" x2="680" y2="677">
+      <stop offset="0" stop-color="#0b3f50"/>
+      <stop offset="1" stop-color="#0d6872"/>
+    </linearGradient>
+    <linearGradient id="herogreenGradient" gradientUnits="userSpaceOnUse"
+                    x1="347.85" y1="227" x2="501.15" y2="467">
+      <stop offset="0" stop-color="#72b743"/>
+      <stop offset="1" stop-color="#63a83d"/>
+    </linearGradient>
+    <linearGradient id="herotealGradient" gradientUnits="userSpaceOnUse"
+                    x1="450.05" y1="347" x2="536.92" y2="545">
+      <stop offset="0" stop-color="#14a39a"/>
+      <stop offset="1" stop-color="#0e8883"/>
+    </linearGradient>
+
+    <marker id="arrowCyan" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
       <path d="M0 0L12 6L0 12Z" fill="#38d6d0"/>
     </marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0L12 6L0 12Z" fill="#52e29a"/>
+    </marker>
+
     <style>
       .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
       .eyebrow { font-size: 20px; font-weight: 700; letter-spacing: 4px; fill: #38d6d0; }
       .title { font-size: 62px; font-weight: 800; fill: #f4f7fb; }
-      .subtitle { font-size: 25px; fill: #a7bbcf; }
+      .subtitle { font-size: 24px; fill: #a7bbcf; }
       .node-title { font-size: 20px; font-weight: 750; fill: #f4f7fb; }
       .node-body { font-size: 16px; fill: #91a4ba; }
-      .chip { font-size: 16px; font-weight: 700; fill: #dffcf8; }
-      .tiny { font-size: 14px; font-weight: 650; fill: #91a4ba; }
+      .tiny { font-size: 15px; font-weight: 650; fill: #91a4ba; }
+      .label { font-size: 12px; font-weight: 800; letter-spacing: 1.2px; }
     </style>
-    <linearGradient id="heroshieldGradient"
-                    gradientUnits="userSpaceOnUse"
-                    x1="169.000" y1="77.000"
-                    x2="680.000" y2="677.000">
-      <stop offset="0" stop-color="#0b3f50"/>
-      <stop offset="1" stop-color="#0d6872"/>
-    </linearGradient>
-    <linearGradient id="herogreenGradient"
-                    gradientUnits="userSpaceOnUse"
-                    x1="347.850" y1="227.000"
-                    x2="501.150" y2="467.000">
-      <stop offset="0" stop-color="#72b743"/>
-      <stop offset="1" stop-color="#63a83d"/>
-    </linearGradient>
-    <linearGradient id="herotealGradient"
-                    gradientUnits="userSpaceOnUse"
-                    x1="450.050" y1="347.000"
-                    x2="536.920" y2="545.000">
-      <stop offset="0" stop-color="#14a39a"/>
-      <stop offset="1" stop-color="#0e8883"/>
-    </linearGradient>
   </defs>
 
-  <rect width="1600" height="760" rx="36" fill="url(#background)"/>
+  <rect width="1600" height="820" rx="36" fill="url(#background)"/>
   <circle cx="1450" cy="55" r="260" fill="#113e57" opacity="0.34"/>
-  <circle cx="80" cy="735" r="250" fill="#122e4b" opacity="0.45"/>
-  <path d="M1210 45C1390 145 1425 330 1565 375" fill="none" stroke="#38d6d0" stroke-width="2" opacity="0.13"/>
+  <circle cx="80" cy="795" r="250" fill="#122e4b" opacity="0.45"/>
+  <path d="M1210 45C1390 145 1425 330 1565 375"
+        fill="none" stroke="#38d6d0" stroke-width="2" opacity="0.13"/>
 
+  <!-- Brand mark -->
   <g transform="translate(92 74)">
-    <g transform="translate(-5.397 0)
-                  scale(0.1933333)
-                  translate(-169.000 -77.000)">
+    <g transform="translate(-5.397 0) scale(0.1933333) translate(-169 -77)">
       <path d="M 422.000 87.000 L 278.000 145.000 L 187.000 179.000 L 181.000 184.000 L 179.000 188.000 L 179.000 339.000 L 187.000 397.000 L 195.000 428.000 L 202.000 448.000 L 222.000 491.000 L 251.000 535.000 L 275.000 564.000 L 307.000 595.000 L 328.000 612.000 L 364.000 637.000 L 384.000 649.000 L 417.000 666.000 L 430.000 667.000 L 456.000 654.000 L 493.000 632.000 L 516.000 616.000 L 551.000 587.000 L 576.000 562.000 L 596.000 538.000 L 617.000 508.000 L 630.000 486.000 L 644.000 456.000 L 655.000 425.000 L 661.000 403.000 L 667.000 370.000 L 670.000 338.000 L 670.000 188.000 L 668.000 184.000 L 660.000 178.000 L 652.000 176.000 L 499.000 115.000 L 486.000 111.000 L 431.000 88.000 Z M 426.000 130.000 L 522.000 169.000 L 629.000 210.000 L 631.000 212.000 L 631.000 332.000 L 628.000 366.000 L 618.000 412.000 L 606.000 445.000 L 585.000 485.000 L 559.000 521.000 L 533.000 549.000 L 494.000 582.000 L 453.000 609.000 L 450.000 608.000 L 450.000 508.000 L 498.000 470.000 L 416.000 470.000 L 416.000 618.000 L 414.000 619.000 L 389.000 605.000 L 363.000 588.000 L 342.000 572.000 L 316.000 549.000 L 297.000 529.000 L 274.000 500.000 L 258.000 475.000 L 246.000 452.000 L 229.000 405.000 L 220.000 358.000 L 218.000 333.000 L 218.000 212.000 Z"
-            fill="url(#heroshieldGradient)"
-            fill-rule="evenodd"
-            clip-rule="evenodd"/>
-      <path d="M 535.000 217.000 L 444.000 267.000 L 371.000 305.000 L 348.000 334.000 L 329.000 367.000 L 329.000 433.000 L 336.000 466.000 L 393.000 512.000 L 395.000 512.000 L 395.000 412.000 L 396.000 409.000 L 401.000 402.000 L 512.000 312.000 L 535.000 295.000 Z" fill="url(#herogreenGradient)"/>
-      <path d="M 535.000 316.000 L 465.000 374.000 L 417.000 417.000 L 416.000 422.000 L 417.000 424.000 L 416.000 428.000 L 417.000 438.000 L 416.000 440.000 L 416.000 468.000 L 417.000 469.000 L 498.000 469.000 L 499.000 470.000 L 523.000 437.000 L 535.000 414.000 Z" fill="url(#herotealGradient)"/>
+            fill="url(#heroshieldGradient)" fill-rule="evenodd" clip-rule="evenodd"/>
+      <path d="M 535.000 217.000 L 444.000 267.000 L 371.000 305.000 L 348.000 334.000 L 329.000 367.000 L 329.000 433.000 L 336.000 466.000 L 393.000 512.000 L 395.000 512.000 L 395.000 412.000 L 396.000 409.000 L 401.000 402.000 L 512.000 312.000 L 535.000 295.000 Z"
+            fill="url(#herogreenGradient)"/>
+      <path d="M 535.000 316.000 L 465.000 374.000 L 417.000 417.000 L 416.000 422.000 L 417.000 424.000 L 416.000 428.000 L 417.000 438.000 L 416.000 440.000 L 416.000 468.000 L 417.000 469.000 L 498.000 469.000 L 499.000 470.000 L 523.000 437.000 L 535.000 414.000 Z"
+            fill="url(#herotealGradient)"/>
     </g>
   </g>
+
   <text x="224" y="102" class="sans eyebrow">SPRING AI · PRIVACY · EXECUTION BOUNDARY</text>
   <text x="224" y="166" class="sans title">Privacy Guardrails</text>
-  <text x="224" y="208" class="sans subtitle">Detection evidence becomes enforceable policy across model and tool calls.</text>
+  <text x="224" y="208" class="sans subtitle">Detect PII. Control where original values may travel across model and tool calls.</text>
 
-  <g transform="translate(92 286)">
-    <rect width="302" height="198" rx="26" fill="#101f33" stroke="#ff718a" stroke-width="2"/>
+  <!-- Application sources -->
+  <g transform="translate(82 294)">
+    <rect width="310" height="206" rx="26" fill="#101f33" stroke="#ff718a" stroke-width="2"/>
     <text x="26" y="42" class="sans node-title">Application sources</text>
     <text x="26" y="76" class="sans node-body">User · Memory · RAG · Tool result</text>
-    <rect x="24" y="103" width="126" height="38" rx="12" fill="#321b29"/>
-    <text x="87" y="128" text-anchor="middle" class="mono" font-size="15" fill="#ff9aac">010-1234-5678</text>
-    <rect x="158" y="103" width="118" height="38" rx="12" fill="#321b29"/>
-    <text x="217" y="128" text-anchor="middle" class="mono" font-size="15" fill="#ff9aac">CUST-123456</text>
-    <text x="26" y="172" class="sans tiny" fill="#ff9aac">RAW VALUES</text>
+    <rect x="24" y="106" width="128" height="40" rx="12" fill="#321b29"/>
+    <text x="88" y="132" text-anchor="middle" class="mono" font-size="15" fill="#ff9aac">010-1234-5678</text>
+    <rect x="160" y="106" width="124" height="40" rx="12" fill="#321b29"/>
+    <text x="222" y="132" text-anchor="middle" class="mono" font-size="15" fill="#ff9aac">CUST-123456</text>
+    <text x="26" y="181" class="sans tiny" font-weight="700" fill="#ff9aac">RAW VALUES</text>
   </g>
 
-  <path d="M409 385H484" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M406 397H480" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrowCyan)"/>
 
-  <g transform="translate(500 286)">
-    <rect width="308" height="198" rx="26" fill="#10243a" stroke="#af8cff" stroke-width="2"/>
-    <text x="26" y="42" class="sans node-title">Pluggable evidence</text>
-    <text x="26" y="76" class="sans node-body">Regex · Presidio · Custom</text>
-    <rect x="24" y="103" width="260" height="38" rx="12" fill="#211d3c"/>
-    <text x="154" y="128" text-anchor="middle" class="mono" font-size="15" fill="#c9b6ff">PERSON · PHONE · CUSTOMER_ID</text>
-    <text x="26" y="172" class="sans tiny">DETECTORS ANSWER “WHAT”</text>
+  <!-- Detection -->
+  <g transform="translate(476 294)">
+    <rect width="372" height="206" rx="26" fill="#10243a" stroke="#af8cff" stroke-width="2"/>
+    <text x="26" y="42" class="sans node-title">PII detection</text>
+    <text x="26" y="76" class="sans node-body">Built-in Regex · Presidio · OpenNLP · Custom</text>
+    <rect x="24" y="106" width="324" height="40" rx="12" fill="#211d3c"/>
+    <text x="186" y="132" text-anchor="middle" class="mono" font-size="15" fill="#c9b6ff">PHONE · CUSTOMER_ID</text>
+    <text x="26" y="181" class="sans tiny" font-weight="700">DETECTORS ANSWER “WHAT”</text>
   </g>
 
-  <path d="M823 385H898" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M854 397H908" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrowCyan)"/>
 
-  <g transform="translate(914 258)">
-    <rect width="352" height="254" rx="30" fill="#0f2a36" stroke="#38d6d0" stroke-width="3"/>
+  <!-- Guardrail boundary -->
+  <g transform="translate(924 264)">
+    <rect width="356" height="292" rx="30" fill="#0f2a36" stroke="#38d6d0" stroke-width="3"/>
     <text x="28" y="48" class="sans node-title" fill="#38d6d0">Guardrail boundary</text>
-    <text x="28" y="83" class="sans node-body">Resolve · Tokenize · Scope disclosure</text>
-    <rect x="26" y="111" width="300" height="46" rx="13" fill="#0a3940"/>
-    <text x="176" y="140" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_PHONE_a2da9429…_1]]</text>
-    <rect x="26" y="172" width="300" height="46" rx="13" fill="#0a3940"/>
-    <text x="176" y="201" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_CUSTOMER_ID_a2da…_1]]</text>
-    <text x="28" y="239" class="sans tiny" fill="#38d6d0">GUARDRAILS ENFORCE “WHERE”</text>
+    <text x="28" y="83" class="sans node-body">Validate · Normalize · Tokenize</text>
+    <text x="28" y="108" class="sans node-body">Scoped disclosure</text>
+
+    <rect x="26" y="132" width="304" height="48" rx="13" fill="#0a3940"/>
+    <text x="178" y="162" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_PHONE_a2da9429…_1]]</text>
+    <rect x="26" y="193" width="304" height="48" rx="13" fill="#0a3940"/>
+    <text x="178" y="223" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_CUSTOMER_ID_a2da…_1]]</text>
+
+    <text x="28" y="274" class="sans tiny" font-weight="700" fill="#38d6d0">GUARDRAILS ENFORCE “WHERE”</text>
   </g>
 
-  <path d="M1281 344H1342" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrow)"/>
-  <g transform="translate(1358 286)">
-    <rect width="150" height="104" rx="24" fill="#171d39" stroke="#af8cff" stroke-width="2"/>
-    <text x="75" y="46" text-anchor="middle" class="sans node-title">MODEL</text>
-    <text x="75" y="76" text-anchor="middle" class="sans node-body">tokens only</text>
-  </g>
-  <path d="M1433 404V464C1433 526 1266 554 1186 554H1089" fill="none" stroke="#52e29a" stroke-width="3" marker-end="url(#arrow)"/>
-  <g transform="translate(806 532)">
-    <rect width="268" height="88" rx="22" fill="#102a2a" stroke="#52e29a" stroke-width="2"/>
-    <text x="134" y="37" text-anchor="middle" class="sans node-title">SCOPED TOOL</text>
-    <text x="134" y="65" text-anchor="middle" class="sans node-body">allow types → execute → retokenize</text>
+  <path d="M1296 348H1352" stroke="#38d6d0" stroke-width="4" marker-end="url(#arrowCyan)"/>
+
+  <!-- Model -->
+  <g transform="translate(1368 294)">
+    <rect width="154" height="108" rx="24" fill="#171d39" stroke="#af8cff" stroke-width="2"/>
+    <text x="77" y="46" text-anchor="middle" class="sans node-title">MODEL</text>
+    <text x="77" y="78" text-anchor="middle" class="sans node-body">PII tokenized</text>
   </g>
 
-  <g transform="translate(92 664)">
-    <rect width="290" height="54" rx="17" fill="#10263a" stroke="#62a7ff"/>
-    <text x="145" y="34" text-anchor="middle" class="sans chip">Actual ChatClient tool loop</text>
-    <rect x="310" width="210" height="54" rx="17" fill="#10263a" stroke="#52e29a"/>
-    <text x="415" y="34" text-anchor="middle" class="sans chip">Java 21 + 25</text>
-    <rect x="540" width="330" height="54" rx="17" fill="#10263a" stroke="#af8cff"/>
-    <text x="705" y="34" text-anchor="middle" class="sans chip">CycloneDX release SBOM</text>
-    <rect x="890" width="252" height="54" rx="17" fill="#10263a" stroke="#ffc857"/>
-    <text x="1016" y="34" text-anchor="middle" class="sans chip">No cloud API key</text>
-    <rect x="1162" width="346" height="54" rx="17" fill="#10263a" stroke="#38d6d0"/>
-    <text x="1335" y="34" text-anchor="middle" class="sans chip">Request cleanup asserted</text>
+  <!-- Model -> scoped tool path -->
+  <path d="M1445 418V500C1445 558 1384 586 1310 600L1298 604"
+        fill="none" stroke="#52e29a" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <!-- Scoped tool access -->
+  <g transform="translate(690 572)">
+    <rect width="610" height="240" rx="26" fill="#102a2a" stroke="#52e29a" stroke-width="2.5"/>
+    <text x="24" y="36" class="sans node-title" fill="#52e29a">SCOPED TOOL ACCESS</text>
+    <text x="24" y="60" class="sans node-body" fill="#8feab9">Only policy-allowed tools receive restored originals</text>
+
+    <rect x="22" y="82" width="566" height="118" rx="12" fill="#0e3734"/>
+    <text x="40" y="104" class="sans tiny" font-weight="700" fill="#8feab9">TOOL INPUT</text>
+
+    <text x="40" y="132" class="mono" font-size="15" fill="#d7fff1">{</text>
+
+    <text x="56" y="158" class="mono" font-size="15" fill="#d7fff1">"customerId": "CUST-123456"</text>
+    <rect x="432" y="142" width="112" height="22" rx="11" fill="#174f3d"/>
+    <text x="488" y="157" text-anchor="middle" class="sans label" fill="#73f0ad">RESTORED</text>
+
+    <text x="56" y="184" class="mono" font-size="15" fill="#d7fff1">"phone": "[[PII_PHONE_...]]"</text>
+    <rect x="432" y="168" width="112" height="22" rx="11" fill="#163f4c"/>
+    <text x="488" y="183" text-anchor="middle" class="sans label" fill="#6be9e0">TOKENIZED</text>
+
+    <text x="40" y="198" class="mono" font-size="15" fill="#d7fff1">}</text>
+
+    <text x="24" y="225" class="sans node-body" fill="#52e29a">Result is re-protected before it leaves the boundary</text>
   </g>
 </svg>

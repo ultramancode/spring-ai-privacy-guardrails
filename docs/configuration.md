@@ -66,6 +66,7 @@ ensembles deliberately.
 | `regex.rules[].pattern` | required per rule | Java regular expression evaluated against source text. |
 | `regex.rules[].score` | `0.85` | Confidence assigned to every match. |
 | `regex.rules[].capture-group` | `0` | Capturing group whose range becomes the detected span. |
+| `regex.rules[].validator-id` | unset | Stable ID of an optional `RegexPiiMatchValidator` bean. |
 | `presidio.enabled` | `false` | Enable the Presidio provider. |
 | `presidio.analyzer-url` | `http://localhost:5002` | Base analyzer URI. |
 | `presidio.timeout` | `5s` | Timeout for each complete HTTP attempt, including response-body completion, and for each health check. |
@@ -221,12 +222,46 @@ spring:
             pattern: "\\bCUST-\\d{6}\\b"
             score: 0.90
             capture-group: 0
+            validator-id: customer-id-check
 ```
 
 Each rule requires `entity-type` and `pattern`; `score` defaults to `0.85` and
-`capture-group` to `0`. Rule validation and Java pattern-compilation failures
-retain their original application-owned exception details. Do not place secrets
-in patterns, and protect startup diagnostics accordingly.
+`capture-group` to `0`. `validator-id` is opt-in and refers to the stable ID
+returned by an application-provided bean, not its Spring bean name:
+
+```java
+@Bean
+RegexPiiMatchValidator customerIdMatchValidator() {
+    return new RegexPiiMatchValidator() {
+        @Override
+        public String id() {
+            return "customer-id-check";
+        }
+
+        @Override
+        public boolean isValid(String candidate) {
+            return CustomerIds.hasValidChecksum(candidate);
+        }
+    };
+}
+```
+
+IDs use lowercase ASCII letters and digits separated by single hyphens.
+Different validator beans must not return the same ID, although multiple rules
+may reference the same validator ID. IDs are resolved once at startup. Blank,
+malformed, unknown, or duplicate validator IDs fail startup. The validator
+receives only the exact candidate selected by `capture-group`; `true` preserves
+the rule's existing span and score, while `false` excludes that candidate.
+Validator exceptions enter the configured analyzer failure-policy flow.
+Candidates may contain PII, so application validators should not include them
+in logs or exception messages or retain them in long-lived state.
+
+Validation can improve precision by rejecting format-valid false positives, but
+an incomplete validator can reduce recall by rejecting valid identifiers. Rules
+without `validator-id` keep their existing behavior. Rule validation and Java
+pattern-compilation failures retain their original application-owned exception
+details. Do not place secrets in patterns, and protect startup diagnostics
+accordingly.
 
 ## Presidio Provider
 

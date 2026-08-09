@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: e5be5c401cfc37a587d3dea678e1e6693533d9b71dd8bb5bbbdfa36fdc49158d -->
+<!-- i18n-source-sha256: 8efa150bb77f164fa2fe8a18cdbf1b3c5a270901c494498bda59a1cf34b4de1e -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 전체
 참고 문서입니다. Base starter는 `core`와 Spring AI 경계를 제공하며, provider
@@ -68,6 +68,7 @@ Presidio와 OpenNLP를 함께 사용할 때는 base starter가 아니라 두 pro
 | `regex.rules[].pattern` | 규칙마다 필수 | 원문 텍스트에 적용할 Java 정규식입니다. |
 | `regex.rules[].score` | `0.85` | 각 일치 결과에 부여할 신뢰도입니다. |
 | `regex.rules[].capture-group` | `0` | 탐지 범위(span)로 사용할 capture group입니다. |
+| `regex.rules[].validator-id` | 설정 안 함 | 선택적인 `RegexPiiMatchValidator` bean의 안정적인 ID입니다. |
 | `presidio.enabled` | `false` | Presidio provider를 활성화합니다. |
 | `presidio.analyzer-url` | `http://localhost:5002` | 분석기의 기본 URI입니다. |
 | `presidio.timeout` | `5s` | 응답 본문 수신 완료를 포함한 각 HTTP 시도와 health check의 제한 시간입니다. |
@@ -222,12 +223,45 @@ spring:
             pattern: "\\bCUST-\\d{6}\\b"
             score: 0.90
             capture-group: 0
+            validator-id: customer-id-check
 ```
 
 각 규칙에는 `entity-type`과 `pattern`이 필요합니다. `score` 기본값은 `0.85`,
-`capture-group` 기본값은 `0`입니다. 규칙 검증과 Java pattern 컴파일 실패는
-애플리케이션 소유의 원래 예외 세부 정보를 유지합니다. Pattern에 비밀값을 넣지
-말고 시작 시 출력되는 진단 정보도 보호하세요.
+`capture-group` 기본값은 `0`입니다. `validator-id`는 opt-in이며 Spring bean
+name이 아니라 애플리케이션이 제공한 bean이 반환하는 안정적인 ID를 참조합니다.
+
+```java
+@Bean
+RegexPiiMatchValidator customerIdMatchValidator() {
+    return new RegexPiiMatchValidator() {
+        @Override
+        public String id() {
+            return "customer-id-check";
+        }
+
+        @Override
+        public boolean isValid(String candidate) {
+            return CustomerIds.hasValidChecksum(candidate);
+        }
+    };
+}
+```
+
+ID는 소문자 ASCII 문자와 숫자를 사용하고 단어를 하나의 하이픈으로 구분합니다.
+서로 다른 validator bean은 같은 ID를 반환하면 안 되지만, 여러 rule이 동일한
+validator ID를 참조할 수 있습니다. ID는 시작 시 한 번 해석됩니다. 빈 값, 잘못된
+형식, 알 수 없는 ID 또는 중복된 validator ID가 있으면 시작에 실패합니다.
+Validator에는 `capture-group`이 선택한 정확한 candidate만 전달됩니다. `true`이면
+기존 span과 score를 유지하고 `false`이면 해당 candidate를 제외합니다. Validator
+예외는 설정된 analyzer failure policy 흐름으로 전달됩니다. Candidate에는 PII가
+포함될 수 있으므로 애플리케이션 validator는 이를 로그나 예외 메시지에 포함하거나
+장기 상태에 보관하지 않아야 합니다.
+
+검증을 추가하면 형식은 맞지만 실제로 유효하지 않은 값을 거부하여 precision을
+높일 수 있지만, validator가 불완전하면 유효한 식별자도 거부하여 recall이 낮아질
+수 있습니다. `validator-id`가 없는 규칙은 기존 동작을 그대로 유지합니다. 규칙
+검증과 Java pattern 컴파일 실패는 애플리케이션 소유의 원래 예외 세부 정보를
+유지합니다. Pattern에 비밀값을 넣지 말고 시작 시 출력되는 진단 정보도 보호하세요.
 
 ## Presidio provider
 

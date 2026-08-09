@@ -70,7 +70,8 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "entity-type",
             "pattern",
             "score",
-            "capture-group"
+            "capture-group",
+            "validator-id"
     );
     static final List<String> TOOLS_PROPERTIES = List.of("disclosures");
     static final Set<String> TOOLS_MAP_PROPERTIES = Set.of("disclosures");

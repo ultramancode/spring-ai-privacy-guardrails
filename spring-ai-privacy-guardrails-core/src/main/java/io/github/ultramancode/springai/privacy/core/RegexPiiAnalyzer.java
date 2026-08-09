@@ -43,6 +43,10 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
         for (CompiledRule rule : this.rules) {
             Matcher matcher = rule.pattern().matcher(text);
             while (matcher.find()) {
+                PiiSpan span = toSpan(rule, matcher);
+                if (span == null) {
+                    continue;
+                }
                 if (spans.size() >= PiiAnalyzer.MAX_RESULT_SPANS) {
                     throw new PrivacyGuardrailException(
                             PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
@@ -50,7 +54,7 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
                             "Regex analyzer result exceeded the safe span limit"
                     );
                 }
-                spans.add(toSpan(rule, matcher));
+                spans.add(span);
             }
         }
         return List.copyOf(spans);
@@ -83,6 +87,22 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
                             + " did not produce a non-empty span for entity type "
                             + rule.rule().entityType()
             );
+        }
+
+        RegexPiiMatchValidator matchValidator = rule.rule().matchValidator();
+        if (matchValidator != null) {
+            String candidate = matcher.group(captureGroup);
+            try {
+                if (!matchValidator.isValid(candidate)) {
+                    return null;
+                }
+            } catch (RuntimeException failure) {
+                throw new IllegalStateException(
+                        "Regex match validator failed for entity type "
+                                + rule.rule().entityType(),
+                        failure
+                );
+            }
         }
 
         return new PiiSpan(

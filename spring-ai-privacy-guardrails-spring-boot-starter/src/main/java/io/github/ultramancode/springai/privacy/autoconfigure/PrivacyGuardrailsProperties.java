@@ -315,7 +315,7 @@ public class PrivacyGuardrailsProperties {
 
         /** Whether the built-in regular-expression analyzer is enabled. */
         private boolean enabled = false;
-        /** Ordered detection rules; each item requires entity type and pattern, with optional score and capture group. */
+        /** Ordered rules requiring entity type and pattern, with optional score, capture group, and validator ID. */
         private List<Rule> rules = new ArrayList<>();
 
         public boolean isEnabled() {
@@ -345,6 +345,8 @@ public class PrivacyGuardrailsProperties {
             private double score = RegexPiiRule.DEFAULT_SCORE;
             /** Capturing group that identifies the entity text. */
             private int captureGroup = 0;
+            /** Optional stable ID of a RegexPiiMatchValidator bean. */
+            private String validatorId;
 
             public String getEntityType() {
                 return this.entityType;
@@ -376,6 +378,14 @@ public class PrivacyGuardrailsProperties {
 
             public void setCaptureGroup(int captureGroup) {
                 this.captureGroup = captureGroup;
+            }
+
+            public String getValidatorId() {
+                return this.validatorId;
+            }
+
+            public void setValidatorId(String validatorId) {
+                this.validatorId = validatorId;
             }
         }
     }

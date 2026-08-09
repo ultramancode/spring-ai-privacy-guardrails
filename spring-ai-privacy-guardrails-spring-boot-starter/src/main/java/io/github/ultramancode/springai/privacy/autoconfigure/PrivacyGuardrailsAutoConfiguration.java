@@ -7,6 +7,7 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
@@ -26,13 +27,21 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Pattern;
 
 /** Auto-configures core privacy services and the fixed Spring AI privacy boundary. */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "spring.ai.privacy", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(PrivacyGuardrailsProperties.class)
 public class PrivacyGuardrailsAutoConfiguration {
+
+    private static final Pattern REGEX_MATCH_VALIDATOR_ID_SYNTAX = Pattern.compile(
+            "[a-z0-9]+(?:-[a-z0-9]+)*"
+    );
 
     @Bean
     @ConditionalOnMissingBean
@@ -62,18 +71,79 @@ public class PrivacyGuardrailsAutoConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "spring.ai.privacy.regex", name = "enabled", havingValue = "true")
     @ConditionalOnMissingBean(RegexPiiAnalyzer.class)
-    RegexPiiAnalyzer regexPiiAnalyzer(PrivacyGuardrailsProperties properties) {
+    RegexPiiAnalyzer regexPiiAnalyzer(
+            PrivacyGuardrailsProperties properties,
+            List<RegexPiiMatchValidator> matchValidators
+    ) {
         List<PrivacyGuardrailsProperties.Regex.Rule> configuredRules = requireConfiguredRegexRules(properties);
+        Map<String, RegexPiiMatchValidator> matchValidatorsById = indexMatchValidators(matchValidators);
         List<RegexPiiRule> rules = new ArrayList<>(configuredRules.size());
-        for (PrivacyGuardrailsProperties.Regex.Rule rule : configuredRules) {
+        for (int index = 0; index < configuredRules.size(); index++) {
+            PrivacyGuardrailsProperties.Regex.Rule rule = configuredRules.get(index);
             rules.add(new RegexPiiRule(
                     rule.getEntityType(),
                     rule.getPattern(),
                     rule.getScore(),
-                    rule.getCaptureGroup()
+                    rule.getCaptureGroup(),
+                    resolveMatchValidator(rule.getValidatorId(), index, matchValidatorsById)
             ));
         }
         return new RegexPiiAnalyzer(rules);
+    }
+
+    private Map<String, RegexPiiMatchValidator> indexMatchValidators(
+            List<RegexPiiMatchValidator> matchValidators
+    ) {
+        Map<String, RegexPiiMatchValidator> validatorsById = new LinkedHashMap<>();
+        for (RegexPiiMatchValidator matchValidator : matchValidators) {
+            RegexPiiMatchValidator validator = Objects.requireNonNull(
+                    matchValidator,
+                    "RegexPiiMatchValidator beans must not be null"
+            );
+            String validatorId = requireValidValidatorId(
+                    validator.id(),
+                    "RegexPiiMatchValidator.id"
+            );
+            if (validatorsById.putIfAbsent(validatorId, validator) != null) {
+                throw new IllegalStateException(
+                        "Multiple RegexPiiMatchValidator beans use validator ID '"
+                                + validatorId + "'"
+                );
+            }
+        }
+        return validatorsById;
+    }
+
+    private RegexPiiMatchValidator resolveMatchValidator(
+            String configuredValidatorId,
+            int ruleIndex,
+            Map<String, RegexPiiMatchValidator> matchValidatorsById
+    ) {
+        if (configuredValidatorId == null) {
+            return null;
+        }
+        String property = "spring.ai.privacy.regex.rules[" + ruleIndex + "].validator-id";
+        String validatorId = requireValidValidatorId(configuredValidatorId, property);
+        RegexPiiMatchValidator matchValidator = matchValidatorsById.get(validatorId);
+        if (matchValidator == null) {
+            throw new IllegalStateException(
+                    property + " references unknown validator ID '" + validatorId + "'"
+            );
+        }
+        return matchValidator;
+    }
+
+    private String requireValidValidatorId(String validatorId, String description) {
+        if (validatorId == null || validatorId.isBlank()) {
+            throw new IllegalStateException(description + " must not be blank");
+        }
+        if (!REGEX_MATCH_VALIDATOR_ID_SYNTAX.matcher(validatorId).matches()) {
+            throw new IllegalStateException(
+                    description + " must use lowercase ASCII letters and digits "
+                            + "separated by single hyphens"
+            );
+        }
+        return validatorId;
     }
 
     private List<PrivacyGuardrailsProperties.Regex.Rule> requireConfiguredRegexRules(

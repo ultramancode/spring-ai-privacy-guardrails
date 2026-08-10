@@ -128,14 +128,23 @@ jobs:
             "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
             --jq "[.[] | select(.tag_name == \"$RELEASE_TAG\")][0].id // empty")
           if [[ -z "$release_id" ]]; then
-            gh release create "$RELEASE_TAG" \
-              --draft \
-              --verify-tag \
-              --title "$RELEASE_TAG" \
-              --notes "Release publication is waiting for Maven Central verification."
-            release_id=$(gh api \
-              "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-              --jq "[.[] | select(.tag_name == \"$RELEASE_TAG\")][0].id // empty")
+            release_id=$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$RELEASE_TAG" \
+              -f name="$RELEASE_TAG" \
+              -f body="Release publication is waiting for Maven Central verification." \
+              -F draft=true \
+              --jq '.id' 2>/dev/null || true)
+            if [[ -z "$release_id" ]]; then
+              for attempt in $(seq 1 5); do
+                release_id=$(gh api \
+                  "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                  --jq "[.[] | select(.tag_name == \"$RELEASE_TAG\")][0].id // empty")
+                if [[ -n "$release_id" ]]; then
+                  break
+                fi
+                sleep 2
+              done
+            fi
           fi
           if [[ -z "$release_id" ]]; then
             echo "Unable to locate the draft GitHub release" >&2
@@ -376,13 +385,25 @@ jobs:
             spring-ai-privacy-guardrails-spring-boot-starter
             spring-ai-privacy-guardrails-test
           )
-          for module in "${modules[@]}"; do
-            expected="pkg:maven/io.github.ultramancode/$module@${{ steps.release.outputs.version }}"
-            if ! jq -e --arg expected "$expected" '.purls | index($expected) != null' \
-              <<< "$status_json" >/dev/null; then
-              echo "Maven Central publication is missing $expected" >&2
+          version="${{ steps.release.outputs.version }}"
+          echo "Verifying module availability on Maven Central..."
+          for attempt in $(seq 1 30); do
+            all_resolved=true
+            for module in "${modules[@]}"; do
+              pom_url="https://repo1.maven.org/maven2/io/github/ultramancode/$module/$version/$module-$version.pom"
+              if ! curl --output /dev/null --silent --show-error --location --fail "$pom_url"; then
+                all_resolved=false
+                break
+              fi
+            done
+            if [[ "$all_resolved" == "true" ]]; then
+              break
+            fi
+            if [[ "$attempt" -eq 30 ]]; then
+              echo "Published artifacts did not become resolvable from Maven Central" >&2
               exit 1
             fi
+            sleep 20
           done
 
       - name: Run consumer from public Maven Central

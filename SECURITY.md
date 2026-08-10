@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Before the first release, security fixes target `main`.
+Security fixes target the latest supported release and `main`.
 
 ## Reporting A Vulnerability
 

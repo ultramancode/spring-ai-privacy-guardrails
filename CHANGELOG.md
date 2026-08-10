@@ -1,5 +1,5 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0]
 
-No public releases yet.
+Initial public release.

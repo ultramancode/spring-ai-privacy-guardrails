@@ -434,8 +434,15 @@ jobs:
           jq -n \
             --arg name "$release_name" \
             --arg body "$release_body" \
-            '{name: $name, body: $body, draft: false, prerelease: false}' \
+            --arg tag_name "$RELEASE_TAG" \
+            '{name: $name, body: $body, tag_name: $tag_name, draft: false, prerelease: false}' \
             > "$RUNNER_TEMP/publish-release.json"
-          gh api --method PATCH \
+          published_json=$(gh api --method PATCH \
             "repos/$GITHUB_REPOSITORY/releases/${{ steps.draft_release.outputs.release_id }}" \
-            --input "$RUNNER_TEMP/publish-release.json" >/dev/null
+            --input "$RUNNER_TEMP/publish-release.json")
+          if ! jq -e --arg tag "$RELEASE_TAG" \
+            '.tag_name == $tag and .draft == false and .prerelease == false' \
+            <<< "$published_json" >/dev/null; then
+            echo "GitHub release publication failed verification" >&2
+            exit 1
+          fi

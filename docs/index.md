@@ -15,7 +15,7 @@ and request-lifecycle boundaries.
 | --- | --- |
 | [Configuration](configuration.md) | Starters, analyzers, output policy, tool disclosure, and processing limits. |
 | [Architecture](architecture.md) | Module boundaries, request sessions, evidence resolution, and execution lifecycle. |
-| [Threat model](threat-model.md) | Trust boundaries, library controls, application responsibilities, and non-goals. |
+| [Threat model](threat-model.md) | Protected assets, trust boundaries, controls, limitations, and separately managed areas. |
 | [Evaluation](evaluation.md) | Boundary tests, the deterministic analyzer baseline, and repository benchmarks. |
 
 ## Run the sample

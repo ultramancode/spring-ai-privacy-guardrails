@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 2fbadbe849dca8c36a19b0ab0e67938fe29602028b373843b490f779f2a20507 -->
+<!-- i18n-source-sha256: edc84be0dc1d4ef191e9a0e526eeee104e10892324c0518970431c18a0bf0161 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
@@ -11,10 +11,6 @@
 해당 분석기 연동을 추가합니다.
 
 ## 스타터 선택
-
-> **첫 릴리즈 전 안내:** 이 절의 `0.1.0` 좌표는 첫 릴리즈 예정 좌표이며 아직
-> Maven Central에서 내려받을 수 없습니다. 그전까지는 이 저장소를 복제해
-> 포함된 샘플을 실행하거나 소스에서 직접 빌드하세요.
 
 사용할 분석기에 맞는 스타터를 선택하세요.
 

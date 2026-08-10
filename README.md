@@ -19,11 +19,6 @@ Spring AI Privacy Guardrails combines a Spring-independent privacy `core` with
 Spring AI integration to enforce privacy policies across chat, RAG, memory,
 tool-call, and output boundaries.
 
-> **Project status:** This project has not yet been publicly released and is not
-> available from Maven Central. Until `0.1.0` is released, APIs and
-> configuration may change without a migration path. Use the included sample
-> to verify the current behavior.
-
 ## Why It Exists
 
 Detection is the first step. This library turns findings from built-in and
@@ -89,10 +84,8 @@ neither privacy protection nor an analyzer.
 
 ### Dependency and Basic Configuration
 
-The dependency coordinates below will become available with the public
-`0.1.0` release. They cannot be downloaded from Maven Central before that
-release. To start without an external analyzer service, use the base starter
-with an application-specific regex rule.
+The examples below use version `0.1.0`. To start without an external analyzer
+service, use the base starter with an application-specific regex rule.
 
 ```gradle
 dependencies {

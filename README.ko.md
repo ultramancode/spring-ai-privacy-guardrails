@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 1e8efc9420fbc241c0dfc5768ecc12609664799a6d571cc3d2d50f7f2f816a49 -->
+<!-- i18n-source-sha256: 44331fbbef1bb2b0688a355797a24461a85583febb119dd1ce206a8e657a431d -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -20,11 +20,6 @@
 Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보호 `core`와 Spring AI
 통합을 결합해 채팅, RAG, 메모리, 도구 호출과 출력 경계에 개인정보 보호 정책을
 적용합니다.
-
-> **프로젝트 상태:** 첫 공개 릴리스 전이며 Maven Central에는 아직 배포되지 않았습니다.
-> `0.1.0` 공개 전까지 API와 설정이 바뀔 수 있으며, 별도의 마이그레이션 경로를 제공하지
-> 않을 수 있습니다.
-> 현재 동작은 저장소에 포함된 샘플로 확인할 수 있습니다.
 
 ## 왜 필요한가
 
@@ -89,9 +84,8 @@ Presidio 스타터에는 외부 Presidio Analyzer 서비스가 필요합니다. 
 
 ### 의존성과 기본 설정
 
-아래 의존성 좌표는 `0.1.0` 공개 후 사용할 수 있습니다. 릴리스 전에는 Maven Central에서
-내려받을 수 없습니다. 외부 분석 서비스 없이 시작하려면 기본 스타터와 애플리케이션 전용
-정규식 규칙을 사용할 수 있습니다.
+아래 예제는 버전 `0.1.0`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
+스타터와 애플리케이션 전용 정규식 규칙을 사용할 수 있습니다.
 
 ```gradle
 dependencies {

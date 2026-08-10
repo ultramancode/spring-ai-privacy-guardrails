@@ -29,9 +29,6 @@ Presidio Analyzer service is up
 
 ## Configure The Application
 
-> **Pre-release:** The coordinate below will not resolve until `0.1.0` is
-> published; clone and build this repository in the meantime.
-
 The Presidio starter includes the core privacy starter transitively:
 
 ```gradle

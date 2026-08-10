@@ -9,10 +9,6 @@ their analyzer integration without defining a separate privacy policy.
 
 ## Starter Selection
 
-> **Pre-release:** The `0.1.0` coordinates in this section are planned for the
-> first release and do not yet resolve from Maven Central. Until then, clone
-> this repository and use the checked-in samples or build from source.
-
 Choose the starter or starters that match the analyzers you plan to use.
 
 | Starter | Dependency | Use |

@@ -1,23 +1,15 @@
 package io.github.ultramancode.springai.privacy.autoconfigure;
 
+import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyConfigurationPropertyCandidateCollector.DiagnosticContext;
+import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyConfigurationPropertyCandidateCollector.PropertyNameCandidate;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.context.properties.source.ConfigurationPropertyName;
 import org.springframework.boot.context.properties.source.ConfigurationPropertyName.Form;
-import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
-import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
-import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource;
-import org.springframework.boot.env.PropertySourceInfo;
-import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.PropertySource;
-import org.springframework.core.env.StandardEnvironment;
-import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -88,226 +80,17 @@ final class PrivacyConfigurationPropertyDiagnostics {
 
     static Set<Diagnostic> findDiagnostics(Environment environment) {
         Set<Diagnostic> diagnostics = new TreeSet<>();
-        collectDiagnostics(environment, diagnostics);
+        for (PropertyNameCandidate candidate :
+                PrivacyConfigurationPropertyCandidateCollector.collect(environment)) {
+            diagnosePropertyName(candidate.name(), candidate.context())
+                    .ifPresent(diagnostics::add);
+        }
         return diagnostics;
-    }
-
-    /**
-     * Collects diagnostics on a best-effort basis. If property-source iteration or
-     * adaptation fails, already collected diagnostics are retained and startup continues.
-     */
-    private static void collectDiagnostics(
-            Environment environment,
-            Set<Diagnostic> diagnostics
-    ) {
-        if (!(environment instanceof ConfigurableEnvironment configurableEnvironment)) {
-            return;
-        }
-        Iterator<PropertySource<?>> sources;
-        try {
-            sources = configurableEnvironment.getPropertySources().iterator();
-        } catch (RuntimeException ignored) {
-            return;
-        }
-        while (true) {
-            PropertySource<?> source;
-            try {
-                if (!sources.hasNext()) {
-                    return;
-                }
-                source = sources.next();
-            } catch (RuntimeException ignored) {
-                return;
-            }
-            collectDiagnostics(source, diagnostics);
-        }
-    }
-
-    /** Adapts each raw property source independently so one bad adapter is isolated. */
-    private static void collectDiagnostics(
-            PropertySource<?> propertySource,
-            Set<Diagnostic> diagnostics
-    ) {
-        Iterator<ConfigurationPropertySource> sources;
-        try {
-            sources = ConfigurationPropertySources.from(List.of(propertySource)).iterator();
-        } catch (RuntimeException ignored) {
-            return;
-        }
-        while (true) {
-            ConfigurationPropertySource source;
-            try {
-                if (!sources.hasNext()) {
-                    return;
-                }
-                source = sources.next();
-            } catch (RuntimeException ignored) {
-                return;
-            }
-            if (source instanceof IterableConfigurationPropertySource iterableSource) {
-                collectDiagnostics(iterableSource, diagnostics);
-            }
-        }
-    }
-
-    /**
-     * Collects diagnostics on a best-effort basis. If name enumeration fails, the
-     * source contributes no partial results and cannot block host application startup.
-     */
-    private static void collectDiagnostics(
-            IterableConfigurationPropertySource source,
-            Set<Diagnostic> diagnostics
-    ) {
-        Optional<List<DiagnosticName>> diagnosticNames = diagnosticNames(source);
-        if (diagnosticNames.isEmpty()) {
-            return;
-        }
-        Set<Diagnostic> sourceDiagnostics = new TreeSet<>();
-        for (DiagnosticName diagnosticName : diagnosticNames.get()) {
-            diagnosePropertyName(diagnosticName.name(), diagnosticName.source())
-                    .ifPresent(sourceDiagnostics::add);
-        }
-        diagnostics.addAll(sourceDiagnostics);
-    }
-
-    private static Optional<List<DiagnosticName>> diagnosticNames(
-            IterableConfigurationPropertySource source
-    ) {
-        try {
-            Object underlyingSource = source.getUnderlyingSource();
-            if (!(underlyingSource instanceof SystemEnvironmentPropertySource propertySource)) {
-                return nonSystemEnvironmentDiagnosticNames(source);
-            }
-            String name = propertySource.getName();
-            String systemEnvironment =
-                    StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME;
-            if (!name.equals(systemEnvironment)
-                    && !name.endsWith("-" + systemEnvironment)) {
-                return nonSystemEnvironmentDiagnosticNames(source);
-            }
-            return systemEnvironmentDiagnosticNames(propertySource);
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
-        }
-    }
-
-    private static Optional<List<DiagnosticName>> nonSystemEnvironmentDiagnosticNames(
-            IterableConfigurationPropertySource source
-    ) {
-        Optional<List<ConfigurationPropertyName>> names = configurationPropertyNames(source);
-        if (names.isEmpty()) {
-            return Optional.empty();
-        }
-        List<DiagnosticName> diagnosticNames = new ArrayList<>(names.get().size());
-        for (ConfigurationPropertyName name : names.get()) {
-            diagnosticNames.add(new DiagnosticName(
-                    name,
-                    new DiagnosticSource(source, false)
-            ));
-        }
-        return Optional.of(List.copyOf(diagnosticNames));
-    }
-
-    private static Optional<List<ConfigurationPropertyName>> configurationPropertyNames(
-            IterableConfigurationPropertySource source
-    ) {
-        List<ConfigurationPropertyName> names = new ArrayList<>();
-        Iterator<ConfigurationPropertyName> iterator;
-        try {
-            iterator = source.iterator();
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
-        }
-        while (true) {
-            try {
-                if (!iterator.hasNext()) {
-                    return Optional.of(List.copyOf(names));
-                }
-                ConfigurationPropertyName name = iterator.next();
-                if (name == null) {
-                    return Optional.empty();
-                }
-                names.add(name);
-            } catch (RuntimeException ignored) {
-                return Optional.empty();
-            }
-        }
-    }
-
-    /**
-     * Gives each raw variable a one-entry resolver. This mirrors Boot's lookup without
-     * reading the real value and prevents one valid alias from hiding another bad name.
-     */
-    private static Optional<List<DiagnosticName>> systemEnvironmentDiagnosticNames(
-            SystemEnvironmentPropertySource propertySource
-    ) {
-        try {
-            if (propertySource instanceof PropertySourceInfo sourceInfo) {
-                String prefix = sourceInfo.getPrefix();
-                if (prefix != null && !prefix.isBlank()) {
-                    // Prefixed system-environment mapping has additional whole-name
-                    // semantics. Skip it rather than risk a false warning.
-                    return Optional.of(List.of());
-                }
-            }
-            List<DiagnosticName> names = new ArrayList<>();
-            for (String propertyName : propertySource.getPropertyNames()) {
-                if (propertyName == null) {
-                    return Optional.empty();
-                }
-                Optional<List<DiagnosticName>> isolatedNames = isolatedDiagnosticNames(
-                        propertySource.getName(),
-                        propertyName
-                );
-                if (isolatedNames.isEmpty()) {
-                    return Optional.empty();
-                }
-                names.addAll(isolatedNames.get());
-            }
-            return Optional.of(List.copyOf(names));
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
-        }
-    }
-
-    private static Optional<List<DiagnosticName>> isolatedDiagnosticNames(
-            String sourceName,
-            String propertyName
-    ) {
-        try {
-            PropertySource<?> isolatedSource = new SystemEnvironmentPropertySource(
-                    sourceName,
-                    Map.of(propertyName, Boolean.TRUE)
-            );
-            Iterator<ConfigurationPropertySource> sources =
-                    ConfigurationPropertySources.from(List.of(isolatedSource)).iterator();
-            List<DiagnosticName> names = new ArrayList<>();
-            while (sources.hasNext()) {
-                ConfigurationPropertySource source = sources.next();
-                if (!(source instanceof IterableConfigurationPropertySource iterableSource)) {
-                    continue;
-                }
-                Optional<List<ConfigurationPropertyName>> mappedNames =
-                        configurationPropertyNames(iterableSource);
-                if (mappedNames.isEmpty()) {
-                    return Optional.empty();
-                }
-                for (ConfigurationPropertyName mappedName : mappedNames.get()) {
-                    names.add(new DiagnosticName(
-                            mappedName,
-                            new DiagnosticSource(iterableSource, true)
-                    ));
-                }
-            }
-            return Optional.of(List.copyOf(names));
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
-        }
     }
 
     private static Optional<Diagnostic> diagnosePropertyName(
             ConfigurationPropertyName name,
-            DiagnosticSource source
+            DiagnosticContext context
     ) {
         if (!ROOT.isAncestorOf(name)) {
             return Optional.empty();
@@ -316,7 +99,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
                 name,
                 ROOT_ELEMENTS,
                 ROOT_PROPERTIES,
-                source.systemEnvironmentMapping()
+                context.systemEnvironmentMapping()
         );
         if (rootMatchCandidate.isEmpty()) {
             return Optional.empty();
@@ -328,14 +111,14 @@ final class PrivacyConfigurationPropertyDiagnostics {
             // other near-root names may belong to provider or host extensions.
             if (propertyIndex == name.getNumberOfElements()
                     && rootMatch.expected().equals("enabled")) {
-                return suggestion(ROOT.toString(), rootMatch);
+                return typoSuggestionDiagnostic(ROOT.toString(), rootMatch);
             }
             return Optional.empty();
         }
         if (propertyIndex == name.getNumberOfElements()) {
             return rootMatch.expected().equals("enabled")
                     ? verifyCanonicalProperty(
-                            source,
+                            context,
                             ROOT.append("enabled"),
                             ROOT.toString(),
                             rootMatch
@@ -344,88 +127,93 @@ final class PrivacyConfigurationPropertyDiagnostics {
         }
         String propertyRoot = ROOT + "." + rootMatch.expected();
         return switch (rootMatch.expected()) {
-            case "enabled" -> unrecognizedFixedProperty(propertyRoot);
-            case "output" -> diagnoseFixedProperties(
+            case "enabled" -> unrecognizedPropertyBelowPrefixDiagnostic(propertyRoot);
+            case "output" -> diagnoseFixedPropertyPath(
                     name,
                     propertyIndex,
                     propertyRoot,
                     OUTPUT_PROPERTIES,
-                    source
+                    context
             );
-            case "response-inspection" -> diagnoseFixedProperties(
+            case "response-inspection" -> diagnoseFixedPropertyPath(
                     name,
                     propertyIndex,
                     propertyRoot,
                     RESPONSE_INSPECTION_PROPERTIES,
-                    source
+                    context
             );
-            case "analysis" -> diagnoseFixedProperties(
+            case "analysis" -> diagnoseFixedPropertyPath(
                     name,
                     propertyIndex,
                     propertyRoot,
                     ANALYSIS_PROPERTIES,
                     ANALYSIS_MAP_PROPERTIES,
                     ANALYSIS_INDEXED_SCALAR_PROPERTIES,
-                    source
+                    context
             );
-            case "regex" -> diagnoseRegex(
+            case "regex" -> diagnoseRegexPropertyPath(
                     name,
                     propertyIndex,
                     propertyRoot,
-                    source
+                    context
             );
-            case "tools" -> diagnoseFixedProperties(
+            case "tools" -> diagnoseFixedPropertyPath(
                     name,
                     propertyIndex,
                     propertyRoot,
                     TOOLS_PROPERTIES,
                     TOOLS_MAP_PROPERTIES,
                     Set.of(),
-                    source
+                    context
             );
             default -> Optional.empty();
         };
     }
 
-    private static Optional<Diagnostic> diagnoseFixedProperties(
+    /** Diagnoses a fixed property path whose known properties have no descendants. */
+    private static Optional<Diagnostic> diagnoseFixedPropertyPath(
             ConfigurationPropertyName name,
             int propertyIndex,
             String propertyRoot,
             List<String> knownProperties,
-            DiagnosticSource source
+            DiagnosticContext context
     ) {
-        return diagnoseFixedProperties(
+        return diagnoseFixedPropertyPath(
                 name,
                 propertyIndex,
                 propertyRoot,
                 knownProperties,
                 Set.of(),
                 Set.of(),
-                source
+                context
         );
     }
 
-    private static Optional<Diagnostic> diagnoseFixedProperties(
+    /**
+     * Diagnoses one fixed property path while treating map descendants as opaque and
+     * accepting one terminal numeric index for indexed scalar properties.
+     */
+    private static Optional<Diagnostic> diagnoseFixedPropertyPath(
             ConfigurationPropertyName name,
             int propertyIndex,
             String propertyRoot,
             List<String> knownProperties,
             Set<String> mapProperties,
             Set<String> indexedScalarProperties,
-            DiagnosticSource source
+            DiagnosticContext context
     ) {
         Optional<SegmentMatch> matchCandidate = closestSegmentMatch(
                 name,
                 propertyIndex,
                 knownProperties,
-                source.systemEnvironmentMapping()
+                context.systemEnvironmentMapping()
         );
         if (matchCandidate.isEmpty()) {
-            return unrecognizedFixedProperty(propertyRoot);
+            return unrecognizedPropertyBelowPrefixDiagnostic(propertyRoot);
         }
         SegmentMatch match = matchCandidate.get();
         if (!match.exact()) {
-            return suggestion(propertyRoot, match);
+            return typoSuggestionDiagnostic(propertyRoot, match);
         }
         int nextPropertyIndex = propertyIndex + match.consumedElements();
         if (mapProperties.contains(match.expected())) {
@@ -438,7 +226,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
                 .append(match.expected());
         if (nextPropertyIndex == name.getNumberOfElements()) {
             return verifyCanonicalProperty(
-                    source,
+                    context,
                     canonicalProperty,
                     propertyRoot,
                     match
@@ -448,45 +236,48 @@ final class PrivacyConfigurationPropertyDiagnostics {
                 && name.isNumericIndex(nextPropertyIndex)
                 && nextPropertyIndex + 1 == name.getNumberOfElements()) {
             return verifyCanonicalProperty(
-                    source,
+                    context,
                     canonicalProperty.append(name.subName(nextPropertyIndex)),
                     propertyRoot,
                     match
             );
         }
-        return unrecognizedFixedProperty(propertyRoot + "." + match.expected());
+        return unrecognizedPropertyBelowPrefixDiagnostic(
+                propertyRoot + "." + match.expected()
+        );
     }
 
-    private static Optional<Diagnostic> diagnoseRegex(
+    /** Diagnoses fixed fields and indexed rule objects below the regex property root. */
+    private static Optional<Diagnostic> diagnoseRegexPropertyPath(
             ConfigurationPropertyName name,
             int propertyIndex,
             String propertyRoot,
-            DiagnosticSource source
+            DiagnosticContext context
     ) {
         Optional<SegmentMatch> propertyMatchCandidate = closestSegmentMatch(
                 name,
                 propertyIndex,
                 REGEX_PROPERTIES,
-                source.systemEnvironmentMapping()
+                context.systemEnvironmentMapping()
         );
         if (propertyMatchCandidate.isEmpty()) {
-            return unrecognizedFixedProperty(propertyRoot);
+            return unrecognizedPropertyBelowPrefixDiagnostic(propertyRoot);
         }
         SegmentMatch propertyMatch = propertyMatchCandidate.get();
         if (!propertyMatch.exact()) {
-            return suggestion(propertyRoot, propertyMatch);
+            return typoSuggestionDiagnostic(propertyRoot, propertyMatch);
         }
         int ruleIndex = propertyIndex + propertyMatch.consumedElements();
         if (!REGEX_INDEXED_OBJECT_PROPERTIES.contains(propertyMatch.expected())) {
             return name.getNumberOfElements() <= ruleIndex
                     ? verifyCanonicalProperty(
-                            source,
+                            context,
                             ConfigurationPropertyName.of(propertyRoot)
                                     .append(propertyMatch.expected()),
                             propertyRoot,
                             propertyMatch
                     )
-                    : unrecognizedFixedProperty(
+                    : unrecognizedPropertyBelowPrefixDiagnostic(
                             propertyRoot + "." + propertyMatch.expected()
                     );
         }
@@ -494,50 +285,50 @@ final class PrivacyConfigurationPropertyDiagnostics {
             return Optional.empty();
         }
         if (!name.isNumericIndex(ruleIndex)) {
-            return unrecognizedFixedProperty(propertyRoot + ".rules");
+            return unrecognizedPropertyBelowPrefixDiagnostic(propertyRoot + ".rules");
         }
         int rulePropertyIndex = ruleIndex + 1;
         if (name.getNumberOfElements() <= rulePropertyIndex) {
             return Optional.empty();
         }
         String rulesRoot = propertyRoot + ".rules[" + dashedElement(name, ruleIndex) + "]";
-        return diagnoseFixedProperties(
+        return diagnoseFixedPropertyPath(
                 name,
                 rulePropertyIndex,
                 rulesRoot,
                 REGEX_RULE_PROPERTIES,
-                source
+                context
         );
     }
 
     private static Optional<Diagnostic> verifyCanonicalProperty(
-            DiagnosticSource source,
+            DiagnosticContext context,
             ConfigurationPropertyName canonicalName,
             String propertyRoot,
             SegmentMatch match
     ) {
-        if (canonicalPropertyResolution(source, canonicalName)
+        if (canonicalPropertyResolution(context, canonicalName)
                 != CanonicalPropertyResolution.UNRESOLVED) {
             return Optional.empty();
         }
         if (match.exact()
                 && match.consumedElements() == 1
                 && match.actual().equals(match.expected())) {
-            return unrecognizedFixedProperty(canonicalName.toString());
+            return unrecognizedPropertyBelowPrefixDiagnostic(canonicalName.toString());
         }
-        return suggestion(propertyRoot, match);
+        return typoSuggestionDiagnostic(propertyRoot, match);
     }
 
     /** Reduces a value-bearing lookup immediately to a presence-only state. */
     private static CanonicalPropertyResolution canonicalPropertyResolution(
-            DiagnosticSource source,
+            DiagnosticContext context,
             ConfigurationPropertyName canonicalName
     ) {
-        if (!source.systemEnvironmentMapping()) {
+        if (!context.systemEnvironmentMapping()) {
             return CanonicalPropertyResolution.RESOLVED;
         }
         try {
-            return source.source().getConfigurationProperty(canonicalName) != null
+            return context.source().getConfigurationProperty(canonicalName) != null
                     ? CanonicalPropertyResolution.RESOLVED
                     : CanonicalPropertyResolution.UNRESOLVED;
         } catch (RuntimeException ignored) {
@@ -545,7 +336,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         }
     }
 
-    private static Optional<Diagnostic> suggestion(
+    private static Optional<Diagnostic> typoSuggestionDiagnostic(
             String propertyRoot,
             SegmentMatch match
     ) {
@@ -571,7 +362,9 @@ final class PrivacyConfigurationPropertyDiagnostics {
         ));
     }
 
-    private static Optional<Diagnostic> unrecognizedFixedProperty(String propertyRoot) {
+    private static Optional<Diagnostic> unrecognizedPropertyBelowPrefixDiagnostic(
+            String propertyRoot
+    ) {
         return Optional.of(new Diagnostic(
                 "Unrecognized Spring AI Privacy Guardrails configuration property detected "
                         + "below fixed prefix '"
@@ -589,7 +382,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         return name.getElement(index, Form.UNIFORM);
     }
 
-    private static String uniform(String candidate) {
+    private static String toUniformForm(String candidate) {
         return ConfigurationPropertyName.of(candidate).getElement(0, Form.UNIFORM);
     }
 
@@ -607,7 +400,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         int closestDistance = Integer.MAX_VALUE;
         boolean tied = false;
         for (String candidate : candidates) {
-            String candidateUniform = uniform(candidate);
+            String candidateUniform = toUniformForm(candidate);
             for (SegmentVariant variant : candidateSegmentVariants(
                     name,
                     propertyIndex,
@@ -648,7 +441,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
             return Optional.empty();
         }
         String thresholdCandidate = closest.consumedElements() == 1
-                ? uniform(closest.expected())
+                ? toUniformForm(closest.expected())
                 : closest.expected();
         if (closestDistance > typoThreshold(thresholdCandidate)) {
             return Optional.empty();
@@ -762,18 +555,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
             return this.message.compareTo(other.message);
         }
 
-    }
-
-    private record DiagnosticSource(
-            IterableConfigurationPropertySource source,
-            boolean systemEnvironmentMapping
-    ) {
-    }
-
-    private record DiagnosticName(
-            ConfigurationPropertyName name,
-            DiagnosticSource source
-    ) {
     }
 
     private record SegmentMatch(

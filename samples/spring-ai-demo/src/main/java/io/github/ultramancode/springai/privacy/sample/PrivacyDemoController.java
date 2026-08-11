@@ -26,17 +26,20 @@ public class PrivacyDemoController {
     private final ChatClient chatClient;
     private final PrivacyDemoRag rag;
     private final PrivacyDemoToolLoop toolLoop;
+    private final PrivacyDemoMcpToolLoop mcpToolLoop;
 
     public PrivacyDemoController(
             PrivacyService privacyService,
             ChatClient chatClient,
             PrivacyDemoRag rag,
-            PrivacyDemoToolLoop toolLoop
+            PrivacyDemoToolLoop toolLoop,
+            PrivacyDemoMcpToolLoop mcpToolLoop
     ) {
         this.privacyService = privacyService;
         this.chatClient = chatClient;
         this.rag = rag;
         this.toolLoop = toolLoop;
+        this.mcpToolLoop = mcpToolLoop;
     }
 
     @GetMapping("/scenario")
@@ -90,8 +93,21 @@ public class PrivacyDemoController {
     @GetMapping("/tool-loop")
     public ToolLoopResponse toolLoop() {
         PrivacyDemoToolLoop.Result toolLoopResult = this.toolLoop.run(SCENARIO.input());
+        return toolLoopResponse("actual-chat-client-tool-loop", toolLoopResult);
+    }
+
+    @GetMapping("/mcp-tool-loop")
+    public ToolLoopResponse mcpToolLoop() {
+        PrivacyDemoToolLoop.Result toolLoopResult = this.mcpToolLoop.run(SCENARIO.input());
+        return toolLoopResponse("actual-streamable-http-mcp-tool-loop", toolLoopResult);
+    }
+
+    private ToolLoopResponse toolLoopResponse(
+            String mode,
+            PrivacyDemoToolLoop.Result toolLoopResult
+    ) {
         return new ToolLoopResponse(
-                "actual-chat-client-tool-loop",
+                mode,
                 toolLoopResult.modelCalls(),
                 toolLoopResult.modelSawOnlyTokens(),
                 toolLoopResult.protectedModelInput(),

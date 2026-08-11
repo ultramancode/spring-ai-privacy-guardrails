@@ -130,10 +130,19 @@ Disclosure scope comes from `spring.ai.privacy.tools.disclosures`; the demo uses
 auto-configured `PrivacyToolCallbackFactory` and explicit privacy configurer
 rather than creating parallel policies.
 
-The interactive endpoint uses an in-process CRM delegate so it stays runnable
-without external MCP infrastructure. The sample integration suite also runs the
-flow through a local Streamable HTTP MCP server and checks scoped disclosure and
-result retokenization. MCP is a test-only dependency of this sample.
+The `/demo/tool-loop` endpoint uses an in-process CRM delegate.
+
+## Streamable HTTP MCP Tool Loop Demo
+
+```bash
+curl "http://127.0.0.1:8080/demo/mcp-tool-loop"
+```
+
+This endpoint runs the same deterministic flow through an actual local
+Streamable HTTP MCP round trip. Its evidence shows raw PII absent at the model,
+only `CUSTOMER_ID` restored at the MCP tool, the MCP result protected before
+model re-entry, and zero active privacy sessions after completion. It requires
+no external MCP infrastructure or model.
 
 ## Opt-In OpenAI-Compatible Live Model Verification
 

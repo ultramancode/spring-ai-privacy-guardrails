@@ -136,16 +136,16 @@ final class PrivacyDemoToolLoop {
             }
         }
 
-        private static EvidenceCount expectedNone(int observed, int total) {
+        static EvidenceCount expectedNone(int observed, int total) {
             return new EvidenceCount(observed, total, observed == 0);
         }
 
-        private static EvidenceCount expectedAll(int observed, int total) {
+        static EvidenceCount expectedAll(int observed, int total) {
             return new EvidenceCount(observed, total, observed == total);
         }
     }
 
-    private static final class DemoToolLoopModel implements ChatModel {
+    static final class DemoToolLoopModel implements ChatModel {
 
         private final ObjectMapper objectMapper;
         private final Set<String> rawValuesSeenByModel = new LinkedHashSet<>();
@@ -155,7 +155,7 @@ final class PrivacyDemoToolLoop {
         private String protectedModelInput;
         private String issuedToolArguments;
 
-        private DemoToolLoopModel(ObjectMapper objectMapper) {
+        DemoToolLoopModel(ObjectMapper objectMapper) {
             this.objectMapper = objectMapper;
         }
 
@@ -247,31 +247,31 @@ final class PrivacyDemoToolLoop {
             return new ChatResponse(List.of(new Generation(message)));
         }
 
-        private int calls() {
+        int calls() {
             return this.calls;
         }
 
-        private boolean rawPiiSeenByModel() {
+        boolean rawPiiSeenByModel() {
             return !this.rawValuesSeenByModel.isEmpty();
         }
 
-        private int rawValueCount() {
+        int rawValueCount() {
             return this.rawValuesSeenByModel.size();
         }
 
-        private boolean protectedToolResultSeenByModel() {
+        boolean protectedToolResultSeenByModel() {
             return this.protectedToolResultSeenByModel;
         }
 
-        private String issuedToolArguments() {
+        String issuedToolArguments() {
             return this.issuedToolArguments;
         }
 
-        private int rawToolResultValueCountAtModel() {
+        int rawToolResultValueCountAtModel() {
             return this.rawToolResultValueCountAtModel;
         }
 
-        private String protectedModelInput() {
+        String protectedModelInput() {
             return this.protectedModelInput;
         }
     }

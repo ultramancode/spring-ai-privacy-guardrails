@@ -21,10 +21,10 @@ dependencies {
     runtimeOnly project(':spring-ai-privacy-guardrails-presidio-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.ai:spring-ai-mcp'
     implementation 'org.springframework.ai:spring-ai-vector-store'
     implementation 'org.springframework.ai:spring-ai-vector-store-advisor'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-    testImplementation 'org.springframework.ai:spring-ai-mcp'
 
     openAiCompatibleLiveTestImplementation 'org.springframework.ai:spring-ai-starter-model-openai'
     openAiCompatibleLiveTestImplementation project(':spring-ai-privacy-guardrails-test')

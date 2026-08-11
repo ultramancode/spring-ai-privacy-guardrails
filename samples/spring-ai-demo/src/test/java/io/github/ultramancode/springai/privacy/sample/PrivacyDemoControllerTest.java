@@ -1,11 +1,14 @@
 package io.github.ultramancode.springai.privacy.sample;
 
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.modelcontextprotocol.client.McpSyncClient;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +27,9 @@ class PrivacyDemoControllerTest {
 
     @Autowired
     private PrivacyService privacyService;
+
+    @Autowired
+    private PrivacyDemoMcpToolLoop mcpToolLoop;
 
     @Test
     void inspectorIsServedAsASampleOnlyBoundaryVisualization() throws Exception {
@@ -230,5 +236,81 @@ class PrivacyDemoControllerTest {
                         Matchers.containsString("tokenMappings"))));
 
         assertThat(this.privacyService.activeSessionCount()).isZero();
+    }
+
+    @Test
+    @Timeout(20)
+    void repeatedMcpToolLoopCallsReuseRuntimeAndPreservePrivacyEvidence() throws Exception {
+        assertMcpToolLoopEvidence();
+        assertThat(this.privacyService.activeSessionCount()).isZero();
+
+        LocalMcpCrmServer firstServer = (LocalMcpCrmServer) ReflectionTestUtils.getField(
+                this.mcpToolLoop,
+                "localMcpServer"
+        );
+        McpSyncClient firstClient = (McpSyncClient) ReflectionTestUtils.getField(
+                this.mcpToolLoop,
+                "mcpClient"
+        );
+        assertThat(firstServer).isNotNull();
+        assertThat(firstClient).isNotNull();
+        assertThat(firstClient.getCurrentInitializationResult()).isNotNull();
+        int callsAfterFirstRequest = firstServer.calls();
+
+        assertMcpToolLoopEvidence();
+        assertThat(this.privacyService.activeSessionCount()).isZero();
+
+        assertThat(ReflectionTestUtils.getField(this.mcpToolLoop, "localMcpServer"))
+                .isSameAs(firstServer);
+        assertThat(ReflectionTestUtils.getField(this.mcpToolLoop, "mcpClient"))
+                .isSameAs(firstClient);
+        assertThat(firstServer.calls()).isEqualTo(callsAfterFirstRequest + 1);
+    }
+
+    private void assertMcpToolLoopEvidence() throws Exception {
+        this.mockMvc.perform(get("/demo/mcp-tool-loop"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("actual-streamable-http-mcp-tool-loop"))
+                .andExpect(jsonPath("$.modelCalls").value(2))
+                .andExpect(jsonPath("$.modelSawOnlyTokens").value(true))
+                .andExpect(jsonPath("$.protectedModelInput").value(Matchers.containsString(
+                        "[[PII_EMPLOYEE_ID_"
+                )))
+                .andExpect(jsonPath("$.tokenizedToolArguments").value(Matchers.containsString(
+                        "[[PII_CUSTOMER_ID_"
+                )))
+                .andExpect(jsonPath("$.allowedOriginalEntityTypes[0]").value("CUSTOMER_ID"))
+                .andExpect(jsonPath("$.toolReceivedOnlyAllowedOriginals").value(true))
+                .andExpect(jsonPath("$.toolLookupSucceededWithRestoredCustomerId").value(true))
+                .andExpect(jsonPath("$.toolResultRetokenizedBeforeModel").value(true))
+                .andExpect(jsonPath("$.boundaryEvidence.modelRawValues.observed").value(0))
+                .andExpect(jsonPath("$.boundaryEvidence.modelRawValues.total").value(4))
+                .andExpect(jsonPath("$.boundaryEvidence.modelRawValues.passed").value(true))
+                .andExpect(jsonPath("$.boundaryEvidence.deniedToolRawValues.observed").value(0))
+                .andExpect(jsonPath("$.boundaryEvidence.deniedToolRawValues.total").value(3))
+                .andExpect(jsonPath("$.boundaryEvidence.deniedToolRawValues.passed").value(true))
+                .andExpect(jsonPath("$.boundaryEvidence.allowedToolRawValues.observed").value(1))
+                .andExpect(jsonPath("$.boundaryEvidence.allowedToolRawValues.total").value(1))
+                .andExpect(jsonPath("$.boundaryEvidence.allowedToolRawValues.passed").value(true))
+                .andExpect(jsonPath("$.boundaryEvidence.rawToolResultValuesAtModel.observed").value(0))
+                .andExpect(jsonPath("$.boundaryEvidence.rawToolResultValuesAtModel.total").value(4))
+                .andExpect(jsonPath("$.boundaryEvidence.rawToolResultValuesAtModel.passed").value(true))
+                .andExpect(jsonPath("$.finalResponse").value(Matchers.containsString(
+                        "[[PII_EMPLOYEE_ID_"
+                )))
+                .andExpect(jsonPath("$.activeSessionsAfterCall").value(0))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("EMP-1234"))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "test@example.com"
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "010-1234-5678"
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "CUST-123456"
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "tokenMappings"
+                ))));
     }
 }

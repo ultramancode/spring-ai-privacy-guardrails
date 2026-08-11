@@ -9,6 +9,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -40,9 +41,14 @@ public abstract class VerifyCentralStagingRepository extends DefaultTask {
 
     private static final List<String> CHECKSUM_SUFFIXES = List.of(
             ".md5",
-            ".sha1",
+            ".sha1"
+    );
+
+    private static final List<String> FORBIDDEN_CHECKSUM_SUFFIXES = List.of(
             ".sha256",
-            ".sha512"
+            ".sha512",
+            ".asc.md5",
+            ".asc.sha1"
     );
 
     @InputDirectory
@@ -84,7 +90,6 @@ public abstract class VerifyCentralStagingRepository extends DefaultTask {
                 require(repository, artifactPath + ".asc", missing);
                 for (String checksum : CHECKSUM_SUFFIXES) {
                     require(repository, artifactPath + checksum, missing);
-                    require(repository, artifactPath + ".asc" + checksum, missing);
                 }
                 if (artifactSuffix.endsWith(".jar")) {
                     verifyJarLicense(repository, artifactPath, expectedLicense, invalid);
@@ -92,6 +97,9 @@ public abstract class VerifyCentralStagingRepository extends DefaultTask {
             }
             verifyPom(repository, basePath + ".pom", moduleName, version, invalid);
         }
+        invalid.addAll(findForbiddenChecksums(repository).stream()
+                .map(path -> path + " must not be included")
+                .toList());
         if (!missing.isEmpty()) {
             throw new GradleException(
                     "Central Portal bundle is incomplete; missing: " + String.join(", ", missing)
@@ -107,6 +115,22 @@ public abstract class VerifyCentralStagingRepository extends DefaultTask {
                 "Verified complete signed Central staging layout for {} publications.",
                 getPublishableProjects().get().size()
         );
+    }
+
+    static List<String> findForbiddenChecksums(File repository) {
+        Path root = repository.toPath();
+        try (var paths = Files.walk(root)) {
+            return paths
+                    .filter(Files::isRegularFile)
+                    .map(root::relativize)
+                    .map(path -> path.toString().replace(File.separatorChar, '/'))
+                    .filter(path -> FORBIDDEN_CHECKSUM_SUFFIXES.stream().anyMatch(path::endsWith))
+                    .sorted()
+                    .toList();
+        }
+        catch (IOException ex) {
+            throw new GradleException("Unable to inspect Central staging checksums", ex);
+        }
     }
 
     private static void require(File repository, String relativePath, List<String> missing) {

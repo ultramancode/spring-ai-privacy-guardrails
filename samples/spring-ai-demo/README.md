@@ -26,10 +26,11 @@ root.
 The demo binds only to `http://127.0.0.1:8080`.
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
-Inspector**. It presents analyzer spans, tokenized model input, scoped tool
-arguments, result retokenization, and request cleanup. The inspector uses a
-fixed synthetic source input. It does not expose token mappings, recognizer
-internals, or model configuration.
+Inspector**. Use the `Local Tool | RAG | MCP` selector to run the existing
+runtime demos from one page, and switch the fixed UI copy with the `EN |
+한국어` toggle. Each view renders only evidence returned by its demo endpoints;
+the inspector does not expose token mappings, recognizer internals, or model
+configuration.
 
 <p align="center">
   <img src="../../docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing protected model and tool boundaries" width="960">

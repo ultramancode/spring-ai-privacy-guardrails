@@ -11,6 +11,12 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,8 +38,8 @@ class PrivacyDemoControllerTest {
     private PrivacyDemoMcpToolLoop mcpToolLoop;
 
     @Test
-    void inspectorIsServedAsASampleOnlyBoundaryVisualization() throws Exception {
-        this.mockMvc.perform(get("/index.html"))
+    void inspectorServesAllRuntimeScenariosWithOneLocalizedStaticPage() throws Exception {
+        byte[] pageBytes = this.mockMvc.perform(get("/index.html"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("text/html"))
                 .andExpect(content().string(Matchers.containsString(
@@ -46,11 +52,74 @@ class PrivacyDemoControllerTest {
                         "Retokenized result"
                 )))
                 .andExpect(content().string(Matchers.containsString(
+                        "id=\"scenarioSelector\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "<option value=\"local-tool\">Local Tool</option>"
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "<option value=\"rag\">RAG</option>"
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "<option value=\"mcp\">MCP</option>"
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "id=\"languageToggle\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "data-language=\"ko\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "const translations ="
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "id=\"retrievedDocument\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "id=\"modelVisibleContext\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "id=\"mcpMode\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "id=\"mcpAllowedOriginalEntityTypes\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "id=\"mcpFinalResponse\""
+                )))
+                .andExpect(content().string(Matchers.containsString(
                         "json(\"/demo/scenario\")"
                 )))
                 .andExpect(content().string(Matchers.not(Matchers.containsString(
-                        "직원번호는 EMP-1234이고"
-                ))));
+                        "User, memory, and RAG text enter the same final model boundary."
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "activeSessionsAfterCall === 0"
+                ))))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        String page = new String(pageBytes, StandardCharsets.UTF_8);
+
+        assertThat(page)
+                .doesNotContain("직원번호는 EMP-1234이고")
+                .contains(
+                        "RAG 흐름 실행",
+                        "\"status.wait\": \"대기\"",
+                        "\"status.value\": \"값\"",
+                        "\"flow.input\": \"입력\"",
+                        "\"error.returnedHttp\": \"반환 HTTP 상태\""
+                );
+        assertScenarioWiring(page, "local-tool", "/demo/tool-loop", "runLocalTool");
+        assertScenarioWiring(page, "rag", "/demo/rag", "runRag");
+        assertScenarioWiring(page, "mcp", "/demo/mcp-tool-loop", "runMcp");
+        assertTranslationCoverage(page);
+    }
+
+    @Test
+    void inspectorDoesNotMaintainASeparateKoreanHtmlResource() throws Exception {
+        this.mockMvc.perform(get("/index-ko.html"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -312,5 +381,86 @@ class PrivacyDemoControllerTest {
                 .andExpect(content().string(Matchers.not(Matchers.containsString(
                         "tokenMappings"
                 ))));
+    }
+
+    private static void assertScenarioWiring(
+            String page,
+            String scenarioKey,
+            String endpoint,
+            String runner
+    ) {
+        String property = scenarioKey.contains("-") ? "\"" + scenarioKey + "\"" : scenarioKey;
+        assertThat(page).containsPattern(Pattern.compile(
+                Pattern.quote(property)
+                        + "\\s*:\\s*\\{[^}]*endpoint:\\s*\""
+                        + Pattern.quote(endpoint)
+                        + "\"[^}]*}"
+        ));
+        assertThat(page).containsPattern(Pattern.compile(
+                "async\\s+function\\s+"
+                        + Pattern.quote(runner)
+                        + "\\(scenario\\)\\s*\\{[^}]*json\\(scenario\\.endpoint\\)"
+        ));
+        if ("mcp".equals(scenarioKey)) {
+            assertThat(page).containsPattern(Pattern.compile(
+                    "else\\s*\\{\\s*await\\s+" + Pattern.quote(runner) + "\\(scenario\\);"
+            ));
+        } else {
+            assertThat(page).containsPattern(Pattern.compile(
+                    "scenarioKey\\s*===\\s*\""
+                            + Pattern.quote(scenarioKey)
+                            + "\"\\)\\s*\\{\\s*await\\s+"
+                            + Pattern.quote(runner)
+                            + "\\(scenario\\);"
+            ));
+        }
+    }
+
+    private static void assertTranslationCoverage(String page) {
+        int translationsStart = page.indexOf("const translations =");
+        int englishStart = page.indexOf("en: {", translationsStart);
+        int koreanStart = page.indexOf("ko: {", englishStart);
+        int translationsEnd = page.indexOf("const scenarios =", koreanStart);
+        assertThat(translationsStart).isGreaterThanOrEqualTo(0);
+        assertThat(englishStart).isGreaterThan(translationsStart);
+        assertThat(koreanStart).isGreaterThan(englishStart);
+        assertThat(translationsEnd).isGreaterThan(koreanStart);
+
+        Set<String> requiredKeys = attributeKeys(page);
+        requiredKeys.addAll(Set.of(
+                "lead.rag",
+                "lead.mcp",
+                "run.rag",
+                "run.mcp",
+                "running",
+                "errorPrefix",
+                "error.returnedHttp"
+        ));
+        Set<String> englishKeys = translationKeys(page.substring(englishStart, koreanStart));
+        Set<String> koreanKeys = translationKeys(page.substring(koreanStart, translationsEnd));
+
+        assertThat(englishKeys).containsAll(requiredKeys);
+        assertThat(koreanKeys).containsAll(requiredKeys);
+        assertThat(koreanKeys).containsExactlyInAnyOrderElementsOf(englishKeys);
+    }
+
+    private static Set<String> attributeKeys(String page) {
+        Set<String> keys = new LinkedHashSet<>();
+        Matcher matcher = Pattern.compile("data-i18n(?:-aria-label)?=\"([^\"]+)\"").matcher(page);
+        while (matcher.find()) {
+            keys.add(matcher.group(1));
+        }
+        return keys;
+    }
+
+    private static Set<String> translationKeys(String translationBlock) {
+        Set<String> keys = new LinkedHashSet<>();
+        Matcher matcher = Pattern.compile(
+                "(?m)^\\s+(?:\"([^\"]+)\"|([A-Za-z][A-Za-z0-9]*))\\s*:"
+        ).matcher(translationBlock);
+        while (matcher.find()) {
+            keys.add(matcher.group(1) == null ? matcher.group(2) : matcher.group(1));
+        }
+        return keys;
     }
 }

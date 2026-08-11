@@ -50,6 +50,18 @@ such as `{"text":"My employee id is EMP-1234"}`. The GET endpoints run the
 checked-in default example; POST requests with missing or blank `text` are
 rejected with HTTP `400` rather than silently substituting that example.
 
+## Local RAG Boundary Demo
+
+```bash
+curl "http://127.0.0.1:8080/demo/rag"
+```
+
+This endpoint retrieves a fixed synthetic document from an in-memory
+`SimpleVectorStore`. The response includes the raw retrieved document and the
+tokenized context actually received by the deterministic local model. This
+confirms that retrieved PII is tokenized before model execution. No external
+vector store, embedding service, or model is used.
+
 ## Regex-Only Protection
 
 ```bash

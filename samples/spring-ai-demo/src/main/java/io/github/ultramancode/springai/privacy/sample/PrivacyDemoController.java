@@ -24,15 +24,18 @@ public class PrivacyDemoController {
 
     private final PrivacyService privacyService;
     private final ChatClient chatClient;
+    private final PrivacyDemoRag rag;
     private final PrivacyDemoToolLoop toolLoop;
 
     public PrivacyDemoController(
             PrivacyService privacyService,
             ChatClient chatClient,
+            PrivacyDemoRag rag,
             PrivacyDemoToolLoop toolLoop
     ) {
         this.privacyService = privacyService;
         this.chatClient = chatClient;
+        this.rag = rag;
         this.toolLoop = toolLoop;
     }
 
@@ -69,6 +72,19 @@ public class PrivacyDemoController {
                     tokenization.analysis().successfulProviders().stream().sorted().toList()
             );
         }
+    }
+
+    @GetMapping("/rag")
+    public RagResponse rag() {
+        PrivacyDemoRag.Result result = this.rag.run();
+        return new RagResponse(
+                result.retrievedDocument(),
+                result.modelVisibleContext(),
+                result.retrievedDocumentContainsRawPii(),
+                result.modelVisibleContextContainsRawPii(),
+                result.modelVisibleContextContainsTokenizedPii(),
+                this.privacyService.activeSessionCount()
+        );
     }
 
     @GetMapping("/tool-loop")
@@ -113,6 +129,16 @@ public class PrivacyDemoController {
             String protectedPrompt,
             List<DetectedSpan> detectedSpans,
             List<String> successfulProviders
+    ) {
+    }
+
+    public record RagResponse(
+            String retrievedDocument,
+            String modelVisibleContext,
+            boolean retrievedDocumentContainsRawPii,
+            boolean modelVisibleContextContainsRawPii,
+            boolean modelVisibleContextContainsTokenizedPii,
+            int activeSessionsAfterCall
     ) {
     }
 

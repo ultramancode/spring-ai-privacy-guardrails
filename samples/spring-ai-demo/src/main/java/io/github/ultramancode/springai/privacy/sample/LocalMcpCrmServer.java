@@ -11,6 +11,7 @@ import io.modelcontextprotocol.spec.McpSchema;
 import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Wrapper;
+import org.apache.catalina.connector.Connector;
 import org.apache.catalina.startup.Tomcat;
 
 import java.nio.file.Path;
@@ -20,6 +21,7 @@ import java.util.Map;
 
 final class LocalMcpCrmServer implements AutoCloseable {
 
+    private static final String LOOPBACK_ADDRESS = "127.0.0.1";
     private static final String MCP_ENDPOINT = "/mcp";
 
     private final Tomcat tomcat;
@@ -59,6 +61,9 @@ final class LocalMcpCrmServer implements AutoCloseable {
         Tomcat tomcat = new Tomcat();
         tomcat.setPort(0);
         tomcat.setBaseDir(baseDirectory.toString());
+        Connector connector = tomcat.getConnector();
+        connector.setProperty("address", LOOPBACK_ADDRESS);
+        connector.setAsyncTimeout(3_000);
         Context context = tomcat.addContext("", baseDirectory.toString());
         Wrapper wrapper = context.createWrapper();
         wrapper.setName("mcpServlet");
@@ -67,26 +72,35 @@ final class LocalMcpCrmServer implements AutoCloseable {
         wrapper.setAsyncSupported(true);
         context.addChild(wrapper);
         context.addServletMappingDecoded("/*", "mcpServlet");
-        tomcat.getConnector().setAsyncTimeout(3_000);
         try {
             tomcat.start();
         }
-        catch (LifecycleException failure) {
-            mcpServer.close();
-            throw new IllegalStateException("Failed to start the local MCP test server", failure);
+        catch (LifecycleException | RuntimeException | Error failure) {
+            IllegalStateException startupFailure = new IllegalStateException(
+                    "Failed to start the local MCP demo server",
+                    failure
+            );
+            try {
+                mcpServer.closeGracefully();
+            }
+            catch (RuntimeException | Error cleanupFailure) {
+                startupFailure.addSuppressed(cleanupFailure);
+            }
+            cleanupTomcat(tomcat, startupFailure);
+            throw startupFailure;
         }
 
         return new LocalMcpCrmServer(
                 tomcat,
                 mcpServer,
                 lookupHandler,
-                tomcat.getConnector().getLocalPort()
+                connector.getLocalPort()
         );
     }
 
     McpSyncClient connect() {
         HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport
-                .builder("http://localhost:" + this.port)
+                .builder("http://" + LOOPBACK_ADDRESS + ":" + this.port)
                 .endpoint(MCP_ENDPOINT)
                 .build();
         return McpClient.sync(transport)
@@ -108,17 +122,54 @@ final class LocalMcpCrmServer implements AutoCloseable {
 
     @Override
     public void close() {
+        Throwable cleanupFailure = null;
         try {
             this.mcpServer.closeGracefully();
         }
-        finally {
-            try {
-                this.tomcat.stop();
-                this.tomcat.destroy();
-            }
-            catch (LifecycleException failure) {
-                throw new IllegalStateException("Failed to stop the local MCP test server", failure);
-            }
+        catch (RuntimeException | Error failure) {
+            cleanupFailure = failure;
+        }
+        cleanupFailure = cleanupTomcat(this.tomcat, cleanupFailure);
+        rethrowFailure(cleanupFailure);
+    }
+
+    private static Throwable cleanupTomcat(Tomcat tomcat, Throwable currentFailure) {
+        try {
+            tomcat.stop();
+        }
+        catch (LifecycleException | RuntimeException | Error failure) {
+            currentFailure = appendFailure(
+                    currentFailure,
+                    new IllegalStateException("Failed to stop the local MCP demo server", failure)
+            );
+        }
+
+        try {
+            tomcat.destroy();
+        }
+        catch (LifecycleException | RuntimeException | Error failure) {
+            currentFailure = appendFailure(
+                    currentFailure,
+                    new IllegalStateException("Failed to destroy the local MCP demo server", failure)
+            );
+        }
+        return currentFailure;
+    }
+
+    private static Throwable appendFailure(Throwable current, Throwable additional) {
+        if (current == null) {
+            return additional;
+        }
+        current.addSuppressed(additional);
+        return current;
+    }
+
+    private static void rethrowFailure(Throwable failure) {
+        if (failure instanceof RuntimeException runtimeFailure) {
+            throw runtimeFailure;
+        }
+        if (failure instanceof Error error) {
+            throw error;
         }
     }
 

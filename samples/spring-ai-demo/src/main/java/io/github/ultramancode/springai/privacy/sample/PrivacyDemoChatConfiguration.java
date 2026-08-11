@@ -55,6 +55,21 @@ class PrivacyDemoChatConfiguration {
         );
     }
 
+    @Bean(destroyMethod = "close")
+    PrivacyDemoMcpToolLoop privacyDemoMcpToolLoop(
+            PrivacyChatClientConfigurer privacyConfigurer,
+            PrivacyToolCallbackFactory toolCallbackFactory,
+            ToolDisclosurePolicy toolDisclosurePolicy,
+            ObjectMapper objectMapper
+    ) {
+        return new PrivacyDemoMcpToolLoop(
+                privacyConfigurer,
+                toolCallbackFactory,
+                toolDisclosurePolicy,
+                objectMapper
+        );
+    }
+
     private static final class LocalEchoChatModel implements ChatModel {
 
         @Override

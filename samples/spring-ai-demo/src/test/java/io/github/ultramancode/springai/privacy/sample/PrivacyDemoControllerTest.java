@@ -108,6 +108,28 @@ class PrivacyDemoControllerTest {
     }
 
     @Test
+    void ragDemoProtectsRetrievedPiiBeforeTheModelBoundary() throws Exception {
+        this.mockMvc.perform(get("/demo/rag"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.retrievedDocument").value(
+                        "Customer account owner email: alice@example.com"
+                ))
+                .andExpect(jsonPath("$.modelVisibleContext").value(Matchers.containsString(
+                        "Customer account owner email: [[PII_EMAIL_ADDRESS_"
+                )))
+                .andExpect(jsonPath("$.modelVisibleContext").value(Matchers.not(
+                        Matchers.containsString("alice@example.com")
+                )))
+                .andExpect(jsonPath("$.retrievedDocumentContainsRawPii").value(true))
+                .andExpect(jsonPath("$.modelVisibleContextContainsRawPii").value(false))
+                .andExpect(jsonPath("$.modelVisibleContextContainsTokenizedPii").value(true))
+                .andExpect(jsonPath("$.activeSessionsAfterCall").value(0))
+                .andExpect(jsonPath("$.tokenMappings").doesNotExist());
+
+        assertThat(this.privacyService.activeSessionCount()).isZero();
+    }
+
+    @Test
     void protectAcceptsDocumentedEnglishTextWithStructuredIdentifiers() throws Exception {
         this.mockMvc.perform(post("/demo/protect")
                         .contentType("application/json")

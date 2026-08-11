@@ -36,6 +36,11 @@ class PrivacyDemoChatConfiguration {
     }
 
     @Bean
+    PrivacyDemoRag privacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
+        return new PrivacyDemoRag(privacyConfigurer);
+    }
+
+    @Bean
     PrivacyDemoToolLoop privacyDemoToolLoop(
             PrivacyChatClientConfigurer privacyConfigurer,
             PrivacyToolCallbackFactory toolCallbackFactory,

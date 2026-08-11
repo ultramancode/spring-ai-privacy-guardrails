@@ -157,6 +157,25 @@ public final class ReleasePlugin implements Plugin<Project> {
                 Delete.class,
                 task -> task.delete(project.getLayout().getBuildDirectory().dir("central-staging-repository"))
         );
+        TaskProvider<Delete> pruneCentralChecksums = project.getTasks().register(
+                "pruneCentralStagingRepositoryChecksums",
+                Delete.class,
+                task -> {
+                    task.setGroup("publishing");
+                    task.setDescription(
+                            "Removes checksums that are intentionally omitted from the Central Portal bundle."
+                    );
+                    task.delete(project.fileTree(
+                            project.getLayout().getBuildDirectory().dir("central-staging-repository"),
+                            files -> files.include(
+                                    "**/*.sha256",
+                                    "**/*.sha512",
+                                    "**/*.asc.md5",
+                                    "**/*.asc.sha1"
+                            )
+                    ));
+                }
+        );
         TaskProvider<VerifyCentralStagingRepository> verifyCentral = project.getTasks().register(
                 "verifyCentralStagingRepository",
                 VerifyCentralStagingRepository.class,
@@ -169,6 +188,7 @@ public final class ReleasePlugin implements Plugin<Project> {
                     task.getRepositoryDirectory().set(
                             project.getLayout().getBuildDirectory().dir("central-staging-repository")
                     );
+                    task.dependsOn(pruneCentralChecksums);
                     task.getGroupPath().set(project.getGroup().toString().replace('.', '/'));
                     task.getReleaseVersion().set(project.getProviders().gradleProperty("version"));
                     task.getPublishableProjects().convention(Set.of());
@@ -232,8 +252,8 @@ public final class ReleasePlugin implements Plugin<Project> {
                     task.mustRunAfter(priorCentral);
                 }
             });
+            pruneCentralChecksums.configure(task -> task.dependsOn(centralPublication));
             verifyCentral.configure(task -> {
-                task.dependsOn(centralPublication);
                 task.getPublishableProjects().add(spec.getName());
             });
 

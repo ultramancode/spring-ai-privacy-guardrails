@@ -39,6 +39,23 @@ all repository checks with:
 By default, the test suite uses test models and local components. Tests that use
 live remote models or analyzer services are opt-in.
 
+### Privacy Boundary Verification Matrix
+
+The matrix records privacy boundaries verified by reproducible automated tests.
+
+| Boundary | Verified behavior | Test |
+| --- | --- | --- |
+| Direct prompt → model | Raw detected PII is replaced with an opaque request-scoped token before the model call. | [`PrivacyChatClientIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatClientIntegrationTest.java) |
+| Spring AI chat memory → model copy | Stored memory can retain application-owned raw text while the copy sent to the model is tokenized. | [`PrivacyChatMemoryIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatMemoryIntegrationTest.java) |
+| Spring AI VectorStore RAG → model | When retrieval returns a document containing detected PII, the raw value is replaced with an opaque token before the model call. | [`PrivacyVectorStoreRagIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyVectorStoreRagIntegrationTest.java) |
+| Allowed tool input value disclosure | A scoped tool receives originals only for explicitly allowed entity types. | [`PrivacyToolCallbackWrapperTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
+| Denied tool input value disclosure | Raw values of disallowed inputs remain protected. | [`PrivacyToolCallbackWrapperTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
+| Tool result → model | Detected PII in tool results is re-tokenized before returning to the model. | [`PrivacySequentialToolIntegrationTest`](../spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
+| MCP Streamable HTTP tool round trip | The local MCP round trip restores only allowed input values, keeps denied values protected, and re-protects results before they return to the model. | [`McpToolLoopIntegrationTest`](../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/McpToolLoopIntegrationTest.java) |
+| Request lifecycle on completion and error | Sessions are closed after normal completion and downstream failure. | [`PrivacyLifecycleAdvisorTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
+| Logical streaming response protection | Output frames are buffered as one logical response so PII split across frames is protected before delivery to the subscriber. | [`PrivacyOutputAdvisorStreamTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyOutputAdvisorStreamTest.java) |
+| Streaming cancellation after partial response buffering | Cancellation emits no raw PII, cancels upstream processing, closes the privacy session, and invalidates its mapping. | [`PrivacyLifecycleAdvisorTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
+
 ## JMH Benchmarks
 
 The repository's JMH benchmarks measure execution time for key local processing

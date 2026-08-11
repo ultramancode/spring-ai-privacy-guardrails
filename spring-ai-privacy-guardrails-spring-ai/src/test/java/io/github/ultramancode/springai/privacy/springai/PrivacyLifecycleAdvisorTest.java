@@ -1,6 +1,7 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -143,6 +146,57 @@ class PrivacyLifecycleAdvisorTest {
         subscription.dispose();
 
         assertThat(service.activeSessionCount()).isZero();
+    }
+
+    @Test
+    void adviseStreamCancellationAfterBufferingRawFrameDoesNotLeakAndDestroysSessionMapping() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyLifecycleAdvisor lifecycle = new PrivacyLifecycleAdvisor(service);
+        PrivacyOutputAdvisor output = new PrivacyOutputAdvisor(service);
+        StreamAdvisorChain chain = streamChain(service, lifecycle, output);
+        AtomicBoolean upstreamFrameEmitted = new AtomicBoolean();
+        AtomicBoolean upstreamCancelled = new AtomicBoolean();
+        AtomicReference<PrivacyContextHandle> activeHandle = new AtomicReference<>();
+        AtomicReference<String> sessionToken = new AtomicReference<>();
+        when(chain.nextStream(any())).thenAnswer(invocation -> {
+            ChatClientRequest active = invocation.getArgument(0);
+            PrivacyContextHandle handle = PrivacyRequestContextSupport.findHandle(active).orElseThrow();
+            activeHandle.set(handle);
+            sessionToken.set(service.tokenize(handle, "Alice"));
+            return Flux.concat(
+                            Flux.just(new ChatClientResponse(
+                                            TestPrivacyServices.response("Alice").chatResponse(),
+                                            active.context()
+                                    ))
+                                    .doOnNext(rawResponseFrame -> upstreamFrameEmitted.set(true)),
+                            Flux.never()
+                    )
+                    .doOnCancel(() -> upstreamCancelled.set(true));
+        });
+        List<ChatClientResponse> subscriberResponses = new ArrayList<>();
+
+        reactor.core.Disposable subscription = lifecycle.adviseStream(request(), chain)
+                .subscribe(subscriberResponses::add);
+
+        assertThat(upstreamFrameEmitted).isTrue();
+        assertThat(subscriberResponses).isEmpty();
+        assertThat(sessionToken.get())
+                .matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+        assertThat(service.activeSessionCount()).isOne();
+
+        subscription.dispose();
+
+        assertThat(upstreamCancelled).isTrue();
+        assertThat(subscriberResponses).isEmpty();
+        assertThat(subscriberResponses)
+                .noneSatisfy(response -> assertThat(response.chatResponse()
+                        .getResult()
+                        .getOutput()
+                        .getText()).contains("Alice"));
+        assertThat(service.activeSessionCount()).isZero();
+        assertThatThrownBy(() -> service.detokenize(activeHandle.get(), sessionToken.get()))
+                .isInstanceOf(PrivacyGuardrailException.class)
+                .hasMessageContaining("closed");
     }
 
     @Test

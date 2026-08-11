@@ -9,5 +9,7 @@ dependencies {
     implementation "tools.jackson.core:jackson-databind:${providers.gradleProperty('jacksonVersion').get()}"
 
     testImplementation 'org.springframework.ai:spring-ai-deepseek'
+    testImplementation 'org.springframework.ai:spring-ai-vector-store'
+    testImplementation 'org.springframework.ai:spring-ai-vector-store-advisor'
     testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
 }

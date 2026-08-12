@@ -108,6 +108,10 @@ final class LocalMcpCrmServer implements AutoCloseable {
                 .build();
     }
 
+    void useRecords(Map<String, String> recordsByCustomerId) {
+        this.lookupHandler.useRecords(recordsByCustomerId);
+    }
+
     String receivedArgument(String name) {
         return this.lookupHandler.receivedArgument(name);
     }
@@ -190,12 +194,16 @@ final class LocalMcpCrmServer implements AutoCloseable {
 
     private static final class CrmLookupHandler {
 
-        private final Map<String, String> recordsByCustomerId;
+        private volatile Map<String, String> recordsByCustomerId;
         private int calls;
         private boolean lookupSucceeded;
         private Map<String, Object> receivedArguments = Map.of();
 
         private CrmLookupHandler(Map<String, String> recordsByCustomerId) {
+            this.recordsByCustomerId = Map.copyOf(recordsByCustomerId);
+        }
+
+        private void useRecords(Map<String, String> recordsByCustomerId) {
             this.recordsByCustomerId = Map.copyOf(recordsByCustomerId);
         }
 

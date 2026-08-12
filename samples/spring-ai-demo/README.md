@@ -27,10 +27,11 @@ The demo binds only to `http://127.0.0.1:8080`.
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
 Inspector**. Use the `Local Tool | RAG | MCP` selector to run the existing
-runtime demos from one page, and switch the fixed UI copy with the `EN |
-한국어` toggle. Each view renders only evidence returned by its demo endpoints;
-the inspector does not expose token mappings, recognizer internals, or model
-configuration.
+runtime demos from one page. The `EN | 한국어` toggle sends the selected locale
+to the demo endpoints and reruns the selected deterministic scenario so the UI
+copy, synthetic input, and runtime results stay aligned. Each view renders only
+evidence returned by its demo endpoints; the inspector does not expose token
+mappings, recognizer internals, or model configuration.
 
 <p align="center">
   <img src="../../docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing protected model and tool boundaries" width="960">
@@ -47,9 +48,10 @@ advisor bundle. `modelResponse` shows the opaque tokens that reached the model,
 and `activeSessionsAfterCall` must be `0` after request cleanup.
 
 Custom synthetic text can be sent with `POST /demo/chat-client` and a JSON body
-such as `{"text":"My employee id is EMP-1234"}`. The GET endpoints run the
-checked-in default example; POST requests with missing or blank `text` are
-rejected with HTTP `400` rather than silently substituting that example.
+such as `{"text":"My employee id is EMP-1234"}`. The `GET /demo/chat-client`
+endpoint runs its checked-in fixed example; POST requests with missing
+or blank `text` are rejected with HTTP `400` rather than silently substituting
+that example.
 
 ## Local RAG Boundary Demo
 
@@ -66,19 +68,23 @@ vector store, embedding service, or model is used.
 ## Regex-Only Protection
 
 ```bash
-curl "http://127.0.0.1:8080/demo/protect"
+curl "http://127.0.0.1:8080/demo/protect" \
+  -H 'Accept-Language: en'
 ```
+
+`GET /demo/protect` selects its deterministic English or Korean fixture from
+`Accept-Language`; this command pins the English fixture used below.
 
 Expected shape:
 
 ```json
 {
-  "protectedPrompt": "직원번호는 [[PII_EMPLOYEE_ID_<32-hex-session-nonce>_1]]이고 이메일은 [[PII_EMAIL_ADDRESS_<32-hex-session-nonce>_1]], 전화번호는 [[PII_PHONE_NUMBER_<32-hex-session-nonce>_1]], 고객번호는 [[PII_CUSTOMER_ID_<32-hex-session-nonce>_1]]입니다.",
+  "protectedPrompt": "Employee ID is [[PII_EMPLOYEE_ID_<32-hex-session-nonce>_1]], email is [[PII_EMAIL_ADDRESS_<32-hex-session-nonce>_1]], phone is [[PII_PHONE_NUMBER_<32-hex-session-nonce>_1]], and customer ID is [[PII_CUSTOMER_ID_<32-hex-session-nonce>_1]].",
   "detectedSpans": [
-    {"type":"EMPLOYEE_ID","start":6,"end":14,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"EMAIL_ADDRESS","start":22,"end":38,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"PHONE_NUMBER","start":46,"end":59,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"CUSTOMER_ID","start":67,"end":78,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"}
+    {"type":"EMPLOYEE_ID","start":15,"end":23,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"EMAIL_ADDRESS","start":34,"end":50,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"PHONE_NUMBER","start":61,"end":74,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"CUSTOMER_ID","start":95,"end":106,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"}
   ],
   "successfulProviders": ["REGEX"]
 }

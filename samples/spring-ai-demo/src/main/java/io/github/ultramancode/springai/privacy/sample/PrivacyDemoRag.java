@@ -11,6 +11,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -22,39 +23,85 @@ import org.springframework.ai.vectorstore.VectorStore;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 final class PrivacyDemoRag {
 
-    private static final String QUERY = "Which email owns the customer account?";
     private static final String RAW_PII = "alice@example.com";
-    private static final String RETRIEVED_DOCUMENT = "Customer account owner email: " + RAW_PII;
+    private static final RagFixture ENGLISH = new RagFixture(
+            "Which email owns the customer account?",
+            "Customer account owner email: " + RAW_PII,
+            new PromptTemplate("""
+                    {query}
 
-    private final ChatClient chatClient;
+                    Context information is below, surrounded by ---------------------
+
+                    ---------------------
+                    {question_answer_context}
+                    ---------------------
+
+                    Given the context and provided history information and not prior knowledge,
+                    reply to the user comment. If the answer is not in the context, inform
+                    the user that you can't answer the question.
+                    """)
+    );
+    private static final RagFixture KOREAN = new RagFixture(
+            "고객 계정 소유자의 이메일은 무엇인가요?",
+            "고객 계정 소유자 이메일: " + RAW_PII,
+            new PromptTemplate("""
+                    {query}
+
+                    컨텍스트 정보는 아래 --------------------- 사이에 있습니다.
+
+                    ---------------------
+                    {question_answer_context}
+                    ---------------------
+
+                    사전 지식이 아니라 주어진 컨텍스트와 대화 이력을 사용해 답하세요.
+                    답이 컨텍스트에 없다면 질문에 답할 수 없다고 알려주세요.
+                    """)
+    );
+
+    private final Map<PrivacyDemoLocale, ChatClient> chatClients;
     private final RecordingPromptChatModel chatModel;
 
     PrivacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
         VectorStore vectorStore = SimpleVectorStore.builder(new DeterministicEmbeddingModel()).build();
         vectorStore.add(List.of(
-                new Document(RETRIEVED_DOCUMENT),
+                new Document(ENGLISH.retrievedDocument()),
+                new Document(KOREAN.retrievedDocument()),
                 new Document("Weather archive: clear skies")
         ));
+        this.chatModel = new RecordingPromptChatModel();
+        this.chatClients = Map.of(
+                PrivacyDemoLocale.EN, chatClient(privacyConfigurer, vectorStore, ENGLISH),
+                PrivacyDemoLocale.KO, chatClient(privacyConfigurer, vectorStore, KOREAN)
+        );
+    }
+
+    private ChatClient chatClient(
+            PrivacyChatClientConfigurer privacyConfigurer,
+            VectorStore vectorStore,
+            RagFixture fixture
+    ) {
         QuestionAnswerAdvisor retrievalAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
                 .searchRequest(SearchRequest.builder()
                         .topK(1)
                         .similarityThreshold(0.9)
                         .build())
+                .promptTemplate(fixture.promptTemplate())
                 .build();
-        this.chatModel = new RecordingPromptChatModel();
         ChatClient.Builder builder = ChatClient.builder(this.chatModel)
                 .defaultAdvisors(retrievalAdvisor);
-        this.chatClient = privacyConfigurer.configure(builder).build();
+        return privacyConfigurer.configure(builder).build();
     }
 
-    Result run() {
+    Result run(PrivacyDemoLocale locale) {
+        RagFixture fixture = fixture(locale);
         try {
-            ChatClientResponse response = this.chatClient.prompt()
-                    .user(QUERY)
+            ChatClientResponse response = this.chatClients.get(locale).prompt()
+                    .user(fixture.query())
                     .call()
                     .chatClientResponse();
             String retrievedDocument = requireRetrievedDocument(response);
@@ -71,6 +118,10 @@ final class PrivacyDemoRag {
         } finally {
             this.chatModel.clearRecordedPrompt();
         }
+    }
+
+    private static RagFixture fixture(PrivacyDemoLocale locale) {
+        return locale == PrivacyDemoLocale.KO ? KOREAN : ENGLISH;
     }
 
     private static String requireRetrievedDocument(ChatClientResponse response) {
@@ -92,6 +143,13 @@ final class PrivacyDemoRag {
     ) {
     }
 
+    private record RagFixture(
+            String query,
+            String retrievedDocument,
+            PromptTemplate promptTemplate
+    ) {
+    }
+
     private static final class DeterministicEmbeddingModel implements EmbeddingModel {
 
         @Override
@@ -110,16 +168,20 @@ final class PrivacyDemoRag {
 
         @Override
         public int dimensions() {
-            return 2;
+            return 3;
         }
 
         private static float[] vectorFor(String content) {
             String normalized = content.toLowerCase(Locale.ROOT);
+            if (normalized.contains("고객") || normalized.contains("계정")
+                    || normalized.contains("소유자")) {
+                return new float[]{0.0f, 1.0f, 0.0f};
+            }
             if (normalized.contains("customer") || normalized.contains("account")
                     || normalized.contains("owner")) {
-                return new float[]{1.0f, 0.0f};
+                return new float[]{1.0f, 0.0f, 0.0f};
             }
-            return new float[]{0.0f, 1.0f};
+            return new float[]{0.0f, 0.0f, 1.0f};
         }
     }
 

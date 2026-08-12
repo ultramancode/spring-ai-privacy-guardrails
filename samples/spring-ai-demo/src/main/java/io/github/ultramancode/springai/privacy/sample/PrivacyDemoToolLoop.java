@@ -65,8 +65,8 @@ final class PrivacyDemoToolLoop {
         this.objectMapper = objectMapper;
     }
 
-    Result run(String input) {
-        DemoToolLoopModel model = new DemoToolLoopModel(this.objectMapper);
+    Result run(String input, PrivacyDemoLocale locale) {
+        DemoToolLoopModel model = new DemoToolLoopModel(this.objectMapper, "CRM", locale);
         PrivacyDemoCrmTool delegate = new PrivacyDemoCrmTool(this.objectMapper);
         ToolCallback scopedTool = this.toolCallbackFactory.wrap(delegate);
 
@@ -148,6 +148,8 @@ final class PrivacyDemoToolLoop {
     static final class DemoToolLoopModel implements ChatModel {
 
         private final ObjectMapper objectMapper;
+        private final String protectedResultSource;
+        private final PrivacyDemoLocale locale;
         private final Set<String> rawValuesSeenByModel = new LinkedHashSet<>();
         private int calls;
         private boolean protectedToolResultSeenByModel;
@@ -156,7 +158,21 @@ final class PrivacyDemoToolLoop {
         private String issuedToolArguments;
 
         DemoToolLoopModel(ObjectMapper objectMapper) {
+            this(objectMapper, "CRM", PrivacyDemoLocale.EN);
+        }
+
+        DemoToolLoopModel(ObjectMapper objectMapper, String protectedResultSource) {
+            this(objectMapper, protectedResultSource, PrivacyDemoLocale.EN);
+        }
+
+        DemoToolLoopModel(
+                ObjectMapper objectMapper,
+                String protectedResultSource,
+                PrivacyDemoLocale locale
+        ) {
             this.objectMapper = objectMapper;
+            this.protectedResultSource = protectedResultSource;
+            this.locale = locale;
         }
 
         @Override
@@ -199,7 +215,9 @@ final class PrivacyDemoToolLoop {
             this.rawToolResultValueCountAtModel = countContainedValues(toolResult, RAW_VALUES);
             this.protectedToolResultSeenByModel = this.rawToolResultValueCountAtModel == 0
                     && EXPECTED_TOKEN_PATTERNS.stream().allMatch(pattern -> pattern.matcher(toolResult).find());
-            return response(new AssistantMessage("Local model received protected CRM result: " + toolResult));
+            return response(new AssistantMessage(
+                    this.locale.protectedResult(this.protectedResultSource, toolResult)
+            ));
         }
 
         private void recordRawValues(Prompt prompt) {

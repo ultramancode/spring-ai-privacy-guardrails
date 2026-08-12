@@ -38,17 +38,6 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             OpaquePiiTokenFormat.patternForEntityType("PHONE_NUMBER");
     private static final Pattern CUSTOMER_ID_TOKEN_PATTERN =
             OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID");
-    private static final Map<String, String> CRM_RECORDS = Map.of(
-            SCENARIO.customerId(),
-            "CRM result: 직원번호는 %s / 이메일은 %s / 전화번호는 %s / 고객번호는 %s"
-                    .formatted(
-                            SCENARIO.employeeId(),
-                            SCENARIO.email(),
-                            SCENARIO.phone(),
-                            SCENARIO.customerId()
-                    )
-    );
-
     private final PrivacyChatClientConfigurer privacyConfigurer;
     private final PrivacyToolCallbackFactory toolCallbackFactory;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
@@ -71,10 +60,11 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         this.objectMapper = objectMapper;
     }
 
-    synchronized PrivacyDemoToolLoop.Result run(String input) {
-        LocalMcpCrmServer server = localMcpServer();
+    synchronized PrivacyDemoToolLoop.Result run(String input, PrivacyDemoLocale locale) {
+        LocalMcpCrmServer server = localMcpServer(locale);
+        server.useRecords(crmRecords(locale));
         initializeMcpClient(server);
-        return runAgainstLocalServer(input, server);
+        return runAgainstLocalServer(input, locale, server);
     }
 
     @Override
@@ -123,10 +113,11 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
 
     private PrivacyDemoToolLoop.Result runAgainstLocalServer(
             String input,
+            PrivacyDemoLocale locale,
             LocalMcpCrmServer server
     ) {
         PrivacyDemoToolLoop.DemoToolLoopModel model =
-                new PrivacyDemoToolLoop.DemoToolLoopModel(this.objectMapper);
+                new PrivacyDemoToolLoop.DemoToolLoopModel(this.objectMapper, "MCP", locale);
 
         ChatClient.Builder builder = ChatClient.builder(model).defaultTools(this.protectedMcpTools);
         this.privacyConfigurer.configure(builder);
@@ -221,14 +212,14 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         }
     }
 
-    private LocalMcpCrmServer localMcpServer() {
+    private LocalMcpCrmServer localMcpServer(PrivacyDemoLocale locale) {
         if (this.localMcpServer != null) {
             return this.localMcpServer;
         }
 
         Path baseDirectory = createBaseDirectory();
         try {
-            this.localMcpServer = LocalMcpCrmServer.start(baseDirectory, CRM_RECORDS);
+            this.localMcpServer = LocalMcpCrmServer.start(baseDirectory, crmRecords(locale));
             this.serverBaseDirectory = baseDirectory;
             return this.localMcpServer;
         }
@@ -241,6 +232,21 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             }
             throw failure;
         }
+    }
+
+    private static Map<String, String> crmRecords(PrivacyDemoLocale locale) {
+        String record = locale == PrivacyDemoLocale.KO
+                ? "CRM 결과: 직원번호는 %s / 이메일은 %s / 전화번호는 %s / 고객번호는 %s"
+                : "CRM result: Employee ID is %s / email is %s / phone is %s / customer ID is %s";
+        return Map.of(
+                SCENARIO.customerId(),
+                record.formatted(
+                        SCENARIO.employeeId(),
+                        SCENARIO.email(),
+                        SCENARIO.phone(),
+                        SCENARIO.customerId()
+                )
+        );
     }
 
     private static ToolDefinition requireSingleToolDefinition(ToolCallbackProvider toolCallbackProvider) {

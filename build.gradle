@@ -102,5 +102,7 @@ privacyBuild {
     localizedDocument 'docs/architecture.md', 'docs/ko/architecture.md'
     localizedDocument 'docs/configuration.md', 'docs/ko/configuration.md'
     localizedDocument 'docs/evaluation.md', 'docs/ko/evaluation.md'
+    localizedDocument 'docs/sample.md', 'docs/ko/sample.md'
     localizedDocument 'docs/threat-model.md', 'docs/ko/threat-model.md'
+    localizedDocument 'samples/spring-ai-demo/README.md', 'samples/spring-ai-demo/README.ko.md'
 }

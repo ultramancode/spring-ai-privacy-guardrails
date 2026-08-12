@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 1c3969052e9d05df41e7c6819c4910114703925472b196c6143c316873cb775a -->
+<!-- i18n-source-sha256: 22cec1dcc794638942bde8f7b5fda122b99776d853f3d64024c1d68b21e0114f -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -47,19 +47,25 @@ flowchart LR
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-`http://127.0.0.1:8080`을 열면 샘플 전용 **Privacy Boundary Inspector**에서 분석기의
-탐지 결과와 모델에 전달된 토큰화 입력을 확인할 수 있습니다. 또한 `CUSTOMER_ID` 원문이
-허용된 도구를 호출할 때만 복원되고 결과가 다시 보호되는 과정도 확인할 수 있습니다.
+`http://127.0.0.1:8080`을 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
+있습니다. `Local Tool | RAG | MCP` 화면은 샘플 백엔드가 반환한 런타임 근거를
+표시합니다. 고정 예제 데이터를 사용하는 Local Tool과 MCP 흐름에서는 탐지된 원문 값이 모델
+경계에서 요청 범위의 불투명 토큰으로 바뀌고, 허용된 `CUSTOMER_ID`만 현재 요청에서 도구
+경계로 복원되며, 도구 결과에서 탐지된 값이 모델 재진입 전에 다시 보호되는 과정을 확인할
+수 있습니다. RAG 화면은 검색된 원문 문서와 모델 경계에 실제로 기록된 보호 컨텍스트를
+비교하고, MCP 화면은 실제 로컬 Streamable HTTP MCP 왕복 호출을 사용합니다.
 
 <p align="center">
-  <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델의 원문 개인정보 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">
+  <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델에서 관찰된 고정 예제 데이터의 개인정보 원문 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">
 </p>
 
 데모의 탐지 규칙에 해당하지 않는 텍스트는 로컬 모델이 변경하지 않고 반환할 수 있으며,
-Inspector는 토큰 매핑을 노출하지 않습니다. 선택적으로 사용할 수 있는 Presidio·OpenNLP
-구성, MCP 왕복 테스트와 실제 모델 연동 방법은
+Inspector는 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, 런타임 MCP 데모와 선택형
+Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 [샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다. 기본 저장소 검증
-과정에서는 원격 모델을 호출하지 않습니다.
+과정에서는 원격 모델을 호출하지 않습니다. 이에 대응하는 재현 가능한 자동 검증 범위는
+[개인정보 보호 경계 검증 매트릭스](docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
+참고하세요.
 
 ## 애플리케이션에 적용
 
@@ -224,7 +230,10 @@ CI는 Java 21과 25에서 기본 검증을 실행하고, Java 21에서 Presidio 
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역
 - [평가와 벤치마크](docs/ko/evaluation.md): 검증 항목과 해석 범위
-- [샘플 가이드](samples/spring-ai-demo/README.ko.md): API, MCP와 실제 모델 연동 예제
+- [샘플 / 데모 가이드](docs/ko/sample.md): Inspector 시나리오, 런타임 엔드포인트와 각
+  화면의 검증 근거
+- [전체 샘플 가이드](samples/spring-ai-demo/README.ko.md): 선택적 분석기와 실제 모델 연동
+  예제
 
 ## 보안 경계
 

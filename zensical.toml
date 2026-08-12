@@ -15,12 +15,14 @@ extra_javascript = ["javascripts/consent.js"]
 nav = [
   { "Home" = "index.md" },
   { "Reference" = [
+    { "Sample / Demo Guide" = "sample.md" },
     { "Configuration" = "configuration.md" },
     { "Architecture" = "architecture.md" },
     { "Threat Model" = "threat-model.md" },
     { "Evaluation" = "evaluation.md" },
   ] },
   { "한국어" = [
+    { "샘플 / 데모 가이드" = "ko/sample.md" },
     { "설정과 사용법" = "ko/configuration.md" },
     { "아키텍처" = "ko/architecture.md" },
     { "위협 모델" = "ko/threat-model.md" },

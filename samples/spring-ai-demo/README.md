@@ -1,5 +1,7 @@
 # Spring AI Privacy Guardrails Demo
 
+[English](README.md) | [한국어](README.ko.md)
+
 This runnable sample exercises the privacy advisor path with a deterministic
 local `ChatModel`, so it requires no external LLM API key. It explicitly applies
 the starter's `PrivacyChatClientConfigurer` to one `ChatClient` without changing
@@ -26,10 +28,12 @@ root.
 The demo binds only to `http://127.0.0.1:8080`.
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
-Inspector**. It presents analyzer spans, tokenized model input, scoped tool
-arguments, result retokenization, and request cleanup. The inspector uses a
-fixed synthetic source input. It does not expose token mappings, recognizer
-internals, or model configuration.
+Inspector**. Use the `Local Tool | RAG | MCP` selector to run the existing
+runtime demos from one page. The `EN | 한국어` toggle sends the selected locale
+to the demo endpoints and reruns the selected deterministic scenario so the UI
+copy, synthetic input, and runtime results stay aligned. Each view renders only
+evidence returned by its demo endpoints; the inspector does not expose token
+mappings, recognizer internals, or model configuration.
 
 <p align="center">
   <img src="../../docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing protected model and tool boundaries" width="960">
@@ -42,13 +46,16 @@ curl "http://127.0.0.1:8080/demo/chat-client"
 ```
 
 This endpoint uses a Spring AI `ChatClient` with the starter's fixed privacy
-advisor bundle. `modelResponse` shows the opaque tokens that reached the model,
-and `activeSessionsAfterCall` must be `0` after request cleanup.
+advisor bundle. `modelResponse` shows the opaque tokens that reached the model.
+`activeSessionsAfterCall` is the service-wide active session count observed
+after the call; the isolated sample normally reports `0`, but concurrent calls
+can make it nonzero without indicating that this request leaked a session.
 
 Custom synthetic text can be sent with `POST /demo/chat-client` and a JSON body
-such as `{"text":"My employee id is EMP-1234"}`. The GET endpoints run the
-checked-in default example; POST requests with missing or blank `text` are
-rejected with HTTP `400` rather than silently substituting that example.
+such as `{"text":"My employee id is EMP-1234"}`. The `GET /demo/chat-client`
+endpoint runs its checked-in fixed example; POST requests with missing
+or blank `text` are rejected with HTTP `400` rather than silently substituting
+that example.
 
 ## Local RAG Boundary Demo
 
@@ -65,19 +72,23 @@ vector store, embedding service, or model is used.
 ## Regex-Only Protection
 
 ```bash
-curl "http://127.0.0.1:8080/demo/protect"
+curl "http://127.0.0.1:8080/demo/protect" \
+  -H 'Accept-Language: en'
 ```
+
+`GET /demo/protect` selects its deterministic English or Korean fixture from
+`Accept-Language`; this command pins the English fixture used below.
 
 Expected shape:
 
 ```json
 {
-  "protectedPrompt": "직원번호는 [[PII_EMPLOYEE_ID_<32-hex-session-nonce>_1]]이고 이메일은 [[PII_EMAIL_ADDRESS_<32-hex-session-nonce>_1]], 전화번호는 [[PII_PHONE_NUMBER_<32-hex-session-nonce>_1]], 고객번호는 [[PII_CUSTOMER_ID_<32-hex-session-nonce>_1]]입니다.",
+  "protectedPrompt": "Employee ID is [[PII_EMPLOYEE_ID_<32-hex-session-nonce>_1]], email is [[PII_EMAIL_ADDRESS_<32-hex-session-nonce>_1]], phone is [[PII_PHONE_NUMBER_<32-hex-session-nonce>_1]], and customer ID is [[PII_CUSTOMER_ID_<32-hex-session-nonce>_1]].",
   "detectedSpans": [
-    {"type":"EMPLOYEE_ID","start":6,"end":14,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"EMAIL_ADDRESS","start":22,"end":38,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"PHONE_NUMBER","start":46,"end":59,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"CUSTOMER_ID","start":67,"end":78,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"}
+    {"type":"EMPLOYEE_ID","start":15,"end":23,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"EMAIL_ADDRESS","start":34,"end":50,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"PHONE_NUMBER","start":61,"end":74,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"CUSTOMER_ID","start":95,"end":106,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"}
   ],
   "successfulProviders": ["REGEX"]
 }
@@ -140,9 +151,9 @@ curl "http://127.0.0.1:8080/demo/mcp-tool-loop"
 
 This endpoint runs the same deterministic flow through an actual local
 Streamable HTTP MCP round trip. Its evidence shows raw PII absent at the model,
-only `CUSTOMER_ID` restored at the MCP tool, the MCP result protected before
-model re-entry, and zero active privacy sessions after completion. It requires
-no external MCP infrastructure or model.
+only `CUSTOMER_ID` restored at the MCP tool, and the MCP result protected before
+model re-entry. It also reports the service-wide active session count observed
+after the call. It requires no external MCP infrastructure or model.
 
 ## Opt-In OpenAI-Compatible Live Model Verification
 

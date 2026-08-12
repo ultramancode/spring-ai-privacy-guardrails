@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.spec.McpSchema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -26,6 +27,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -99,14 +101,15 @@ class McpToolLoopIntegrationTest {
 
             String finalResponse = builder.build().prompt().user(INPUT).call().content();
 
-            assertThat(server.calls()).isEqualTo(1);
-            assertThat(server.lookupSucceeded()).isTrue();
-            assertThat(server.receivedArgument("customerId")).isEqualTo(CUSTOMER_ID);
-            assertThat(server.receivedArgument("employeeId"))
+            LocalMcpCrmServer.RequestEvidence requestEvidence = server.requestEvidence();
+            assertThat(requestEvidence.calls()).isEqualTo(1);
+            assertThat(requestEvidence.lookupSucceeded()).isTrue();
+            assertThat(requestEvidence.receivedArgument("customerId")).isEqualTo(CUSTOMER_ID);
+            assertThat(requestEvidence.receivedArgument("employeeId"))
                     .matches(OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID"));
-            assertThat(server.receivedArgument("email"))
+            assertThat(requestEvidence.receivedArgument("email"))
                     .matches(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
-            assertThat(server.receivedArgument("phone"))
+            assertThat(requestEvidence.receivedArgument("phone"))
                     .matches(OpaquePiiTokenFormat.patternForEntityType("PHONE_NUMBER"));
 
             assertThat(model.calls()).isEqualTo(2);
@@ -120,6 +123,32 @@ class McpToolLoopIntegrationTest {
         }
 
         assertThat(this.privacyService.activeSessionCount()).isZero();
+    }
+
+    @Test
+    void mcpHandlerPublishesEachCompletedCallAsOneCoherentEvidenceSnapshot() throws Exception {
+        Path serverDirectory = Files.createDirectory(this.tempDirectory.resolve("evidence-publication"));
+        try (LocalMcpCrmServer server = LocalMcpCrmServer.start(serverDirectory, CRM_RECORDS);
+             McpSyncClient mcpClient = server.connect()) {
+            mcpClient.initialize();
+
+            for (int call = 1; call <= 25; call++) {
+                Map<String, Object> arguments = Map.of(
+                        "employeeId", "employee-token-" + call,
+                        "email", "email-token-" + call,
+                        "phone", "phone-token-" + call,
+                        "customerId", CUSTOMER_ID
+                );
+                mcpClient.callTool(McpSchema.CallToolRequest.builder("customerLookup")
+                        .arguments(arguments)
+                        .build());
+
+                LocalMcpCrmServer.RequestEvidence evidence = server.requestEvidence();
+                assertThat(evidence.calls()).isEqualTo(call);
+                assertThat(evidence.lookupSucceeded()).isTrue();
+                assertThat(evidence.receivedArguments()).containsExactlyInAnyOrderEntriesOf(arguments);
+            }
+        }
     }
 
     private record TokenField(String name, Pattern pattern) {

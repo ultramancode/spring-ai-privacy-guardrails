@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 44331fbbef1bb2b0688a355797a24461a85583febb119dd1ce206a8e657a431d -->
+<!-- i18n-source-sha256: 1c3969052e9d05df41e7c6819c4910114703925472b196c6143c316873cb775a -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -49,17 +49,16 @@ flowchart LR
 
 `http://127.0.0.1:8080`을 열면 샘플 전용 **Privacy Boundary Inspector**에서 분석기의
 탐지 결과와 모델에 전달된 토큰화 입력을 확인할 수 있습니다. 또한 `CUSTOMER_ID` 원문이
-허용된 도구를 호출할 때만 복원되고, 결과가 다시 보호되며, 호출이 끝나면 활성 세션 수가
-0으로 돌아오는 과정도 확인할 수 있습니다.
+허용된 도구를 호출할 때만 복원되고 결과가 다시 보호되는 과정도 확인할 수 있습니다.
 
 <p align="center">
-  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="모델의 원문 개인정보 0건, 범위가 지정된 도구 공개 1건, 호출 후 활성 세션 0개를 보여주는 Privacy Boundary Inspector" width="960">
+  <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델의 원문 개인정보 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">
 </p>
 
 데모의 탐지 규칙에 해당하지 않는 텍스트는 로컬 모델이 변경하지 않고 반환할 수 있으며,
 Inspector는 토큰 매핑을 노출하지 않습니다. 선택적으로 사용할 수 있는 Presidio·OpenNLP
 구성, MCP 왕복 테스트와 실제 모델 연동 방법은
-[샘플 가이드](samples/spring-ai-demo/README.md)에 설명되어 있습니다. 기본 저장소 검증
+[샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다. 기본 저장소 검증
 과정에서는 원격 모델을 호출하지 않습니다.
 
 ## 애플리케이션에 적용
@@ -225,7 +224,7 @@ CI는 Java 21과 25에서 기본 검증을 실행하고, Java 21에서 Presidio 
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역
 - [평가와 벤치마크](docs/ko/evaluation.md): 검증 항목과 해석 범위
-- [샘플 가이드](samples/spring-ai-demo/README.md): API, MCP와 실제 모델 연동 예제 (영문)
+- [샘플 가이드](samples/spring-ai-demo/README.ko.md): API, MCP와 실제 모델 연동 예제
 
 ## 보안 경계
 

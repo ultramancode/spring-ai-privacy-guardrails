@@ -15,12 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/demo")
 public class PrivacyDemoController {
-
-    private static final PrivacyDemoScenario SCENARIO = PrivacyDemoScenario.DEFAULT;
 
     private final PrivacyService privacyService;
     private final ChatClient chatClient;
@@ -43,13 +42,13 @@ public class PrivacyDemoController {
     }
 
     @GetMapping("/scenario")
-    public DemoScenarioResponse scenario() {
-        return new DemoScenarioResponse(SCENARIO.input());
+    public DemoScenarioResponse scenario(Locale locale) {
+        return new DemoScenarioResponse(scenarioFor(locale).input());
     }
 
     @GetMapping("/chat-client")
     public AdvisorChatResponse chatClient() {
-        return chatClient(new DemoRequest(SCENARIO.input()));
+        return chatClient(new DemoRequest(PrivacyDemoScenario.ENGLISH.input()));
     }
 
     @PostMapping("/chat-client")
@@ -60,8 +59,8 @@ public class PrivacyDemoController {
     }
 
     @GetMapping("/protect")
-    public ProtectedPromptResponse protect() {
-        return protect(new DemoRequest(SCENARIO.input()));
+    public ProtectedPromptResponse protect(Locale locale) {
+        return protect(new DemoRequest(scenarioFor(locale).input()));
     }
 
     @PostMapping("/protect")
@@ -78,8 +77,8 @@ public class PrivacyDemoController {
     }
 
     @GetMapping("/rag")
-    public RagResponse rag() {
-        PrivacyDemoRag.Result result = this.rag.run();
+    public RagResponse rag(Locale locale) {
+        PrivacyDemoRag.Result result = this.rag.run(PrivacyDemoLocale.from(locale));
         return new RagResponse(
                 result.retrievedDocument(),
                 result.modelVisibleContext(),
@@ -91,15 +90,27 @@ public class PrivacyDemoController {
     }
 
     @GetMapping("/tool-loop")
-    public ToolLoopResponse toolLoop() {
-        PrivacyDemoToolLoop.Result toolLoopResult = this.toolLoop.run(SCENARIO.input());
+    public ToolLoopResponse toolLoop(Locale locale) {
+        PrivacyDemoLocale demoLocale = PrivacyDemoLocale.from(locale);
+        PrivacyDemoToolLoop.Result toolLoopResult = this.toolLoop.run(
+                PrivacyDemoScenario.forLocale(demoLocale).input(),
+                demoLocale
+        );
         return toolLoopResponse("actual-chat-client-tool-loop", toolLoopResult);
     }
 
     @GetMapping("/mcp-tool-loop")
-    public ToolLoopResponse mcpToolLoop() {
-        PrivacyDemoToolLoop.Result toolLoopResult = this.mcpToolLoop.run(SCENARIO.input());
+    public ToolLoopResponse mcpToolLoop(Locale locale) {
+        PrivacyDemoLocale demoLocale = PrivacyDemoLocale.from(locale);
+        PrivacyDemoToolLoop.Result toolLoopResult = this.mcpToolLoop.run(
+                PrivacyDemoScenario.forLocale(demoLocale).input(),
+                demoLocale
+        );
         return toolLoopResponse("actual-streamable-http-mcp-tool-loop", toolLoopResult);
+    }
+
+    private static PrivacyDemoScenario scenarioFor(Locale locale) {
+        return PrivacyDemoScenario.forLocale(locale);
     }
 
     private ToolLoopResponse toolLoopResponse(

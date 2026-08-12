@@ -49,11 +49,10 @@ repository root:
 Open `http://127.0.0.1:8080` to use the sample's **Privacy Boundary
 Inspector**. It shows analyzer findings and the tokenized input sent to the
 model. It also demonstrates that the original `CUSTOMER_ID` is restored only
-when the permitted tool runs, that the result is protected again, and that the
-active session count returns to zero after the call.
+when the permitted tool runs and that the result is protected again.
 
 <p align="center">
-  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing zero raw PII values sent to the model, one scoped tool disclosure, and zero active sessions after the call" width="960">
+  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing zero raw PII values sent to the model and one scoped tool disclosure" width="960">
 </p>
 
 Text not matched by the demo's detection rules may be returned unchanged by the

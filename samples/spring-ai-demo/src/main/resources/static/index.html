@@ -88,8 +88,8 @@
     }
 
     .scenario-panel[hidden] { display: none; }
-    .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; margin-bottom: 12px; }
-    .rag-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-bottom: 12px; }
+    .rag-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .metric, .card {
       border: 1px solid var(--line);
       background: var(--panel);
@@ -546,7 +546,6 @@
       <div class="metric" id="deniedToolMetric"><span data-i18n="metric.deniedLocal">Disallowed raw exposure at CRM</span><div class="metric-result"><strong id="deniedToolMeaning">—</strong><small class="metric-status" id="deniedToolStatus" data-i18n="status.wait">WAIT</small></div><div class="metric-meta"><span data-i18n="summary.observedTotal">Observed / total</span><code id="deniedToolCount">—</code></div></div>
       <div class="metric scoped" id="allowedToolMetric"><span data-i18n="metric.allowedLocal">Allowed original restoration</span><div class="metric-result"><strong id="allowedToolMeaning">—</strong><small class="metric-status" id="allowedToolStatus" data-i18n="status.wait">WAIT</small></div><div class="metric-meta"><span data-i18n="summary.observedTotal">Observed / total</span><code id="allowedToolCount">—</code></div></div>
       <div class="metric" id="resultRawMetric"><span data-i18n="metric.resultRaw">Result raw re-exposure</span><div class="metric-result"><strong id="resultRawMeaning">—</strong><small class="metric-status" id="resultRawStatus" data-i18n="status.wait">WAIT</small></div><div class="metric-meta"><span data-i18n="summary.observedTotal">Observed / total</span><code id="resultRawCount">—</code></div></div>
-      <div class="metric" id="activeSessionsMetric"><span data-i18n="metric.sessions">Active sessions after call</span><div class="metric-result"><strong id="activeSessions">—</strong><small class="metric-status" id="activeSessionsStatus" data-i18n="status.wait">WAIT</small></div></div>
     </section>
 
     <section class="flow" data-i18n-aria-label="protectedExecutionFlow" aria-label="Protected execution flow">
@@ -615,7 +614,6 @@
       <div class="metric observation"><span data-i18n="rag.retrievedRaw">Retrieved-document raw PII</span><div class="metric-result"><strong id="ragRetrievedRaw">—</strong><small class="metric-status" data-i18n="rag.beforeProtection">Before protection</small></div></div>
       <div class="metric observation"><span data-i18n="rag.modelRaw">Model raw PII</span><div class="metric-result"><strong id="ragModelRaw">—</strong><small class="metric-status" data-i18n="rag.actualModelContext">Actual model context</small></div></div>
       <div class="metric observation"><span data-i18n="rag.modelToken">Model tokenized PII</span><div class="metric-result"><strong id="ragModelToken">—</strong><small class="metric-status" data-i18n="rag.actualModelContext">Actual model context</small></div></div>
-      <div class="metric observation" id="ragActiveSessionsMetric"><span data-i18n="metric.sessions">Active sessions after call</span><div class="metric-result"><strong id="ragActiveSessions">—</strong><small class="metric-status" id="ragActiveSessionsStatus" data-i18n="status.wait">WAIT</small></div></div>
     </section>
 
     <section class="boundary-comparison" data-i18n-aria-label="ragComparison" aria-label="Retrieved document to model-visible protected context">
@@ -624,7 +622,7 @@
         <pre class="raw-output" id="retrievedDocument">—</pre>
       </article>
 
-      <div class="rag-boundary" aria-hidden="true"><small data-i18n="rag.boundary">RAG privacy boundary</small><div class="rag-boundary-flow"><span data-i18n="rag.rawPii">RAW PII</span><b>↓</b><strong data-i18n="rag.opaqueToken">OPAQUE TOKEN</strong></div><em class="rag-boundary-state" data-i18n="rag.boundaryProtected">PROTECTED</em></div>
+      <div class="rag-boundary" aria-hidden="true"><small data-i18n="rag.boundary">RAG privacy boundary</small><div class="rag-boundary-flow"><span id="ragBoundaryInput" data-i18n="status.wait">WAIT</span><b>↓</b><strong id="ragBoundaryOutput" data-i18n="status.wait">WAIT</strong></div><em class="rag-boundary-state" id="ragBoundaryState" data-i18n="status.wait">WAIT</em></div>
 
       <article class="card rag-after">
         <div class="step"><span class="number">2</span><div><h2 data-i18n="rag.contextTitle">Model-visible protected context</h2><p class="hint" data-i18n="rag.contextHint">This is the context actually sent to the model after the RAG document was protected. Raw PII has been replaced with opaque tokens.</p></div></div>
@@ -638,7 +636,7 @@
         <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceRetrievedRaw">Retrieved document contains raw PII</span><code>retrievedDocumentContainsRawPii</code></span><b class="value" id="ragRetrievedRawDetail">—</b></div>
         <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceModelRaw">Model context contains raw PII</span><code>modelVisibleContextContainsRawPii</code></span><b class="value" id="ragModelRawDetail">—</b></div>
         <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceModelToken">Model context contains protected tokens</span><code>modelVisibleContextContainsTokenizedPii</code></span><b class="value" id="ragModelTokenDetail">—</b></div>
-        <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceActiveSessions">Active sessions after call</span><code>activeSessionsAfterCall</code></span><b class="value" id="ragActiveSessionsDetail">—</b></div>
+        <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceActiveSessions">Service-wide active sessions after call</span><code>activeSessionsAfterCall</code></span><b class="value" id="ragActiveSessionsDetail">—</b></div>
       </div>
     </article>
   </section>
@@ -649,7 +647,6 @@
       <div class="metric" id="mcpDeniedToolMetric"><span data-i18n="metric.deniedMcp">Disallowed raw exposure at MCP</span><div class="metric-result"><strong id="mcpDeniedToolMeaning">—</strong><small class="metric-status" id="mcpDeniedToolStatus" data-i18n="status.wait">WAIT</small></div><div class="metric-meta"><span data-i18n="summary.observedTotal">Observed / total</span><code id="mcpDeniedToolCount">—</code></div></div>
       <div class="metric scoped" id="mcpAllowedToolMetric"><span data-i18n="metric.allowedMcp">Allowed original restoration</span><div class="metric-result"><strong id="mcpAllowedToolMeaning">—</strong><small class="metric-status" id="mcpAllowedToolStatus" data-i18n="status.wait">WAIT</small></div><div class="metric-meta"><span data-i18n="summary.observedTotal">Observed / total</span><code id="mcpAllowedToolCount">—</code></div></div>
       <div class="metric" id="mcpResultRawMetric"><span data-i18n="metric.resultRaw">Result raw re-exposure</span><div class="metric-result"><strong id="mcpResultRawMeaning">—</strong><small class="metric-status" id="mcpResultRawStatus" data-i18n="status.wait">WAIT</small></div><div class="metric-meta"><span data-i18n="summary.observedTotal">Observed / total</span><code id="mcpResultRawCount">—</code></div></div>
-      <div class="metric" id="mcpActiveSessionsMetric"><span data-i18n="metric.sessions">Active sessions after call</span><div class="metric-result"><strong id="mcpActiveSessions">—</strong><small class="metric-status" id="mcpActiveSessionsStatus" data-i18n="status.wait">WAIT</small></div></div>
     </section>
 
     <section class="flow" data-i18n-aria-label="mcpExecutionFlow" aria-label="Streamable HTTP MCP execution flow">
@@ -748,14 +745,11 @@
       "metric.deniedMcp": "Disallowed raw exposure at MCP",
       "metric.allowedMcp": "Allowed original restoration",
       "metric.resultRaw": "Result raw re-exposure",
-      "metric.sessions": "Active sessions after call",
       "summary.observedTotal": "Observed / total",
       "summary.none": "NONE",
       "summary.customerOnly": "CUSTOMER_ID ONLY",
       "summary.rawObserved": "RAW OBSERVED",
       "summary.scopedRestored": "SCOPED RESTORED",
-      "summary.cleanupComplete": "CLEANUP COMPLETE",
-      "summary.sessionsRemain": "SESSIONS REMAIN",
       "flow.rawInput": "Raw input",
       "flow.tokenizedModel": "Tokenized model input",
       "flow.scopedCrm": "Scoped CRM disclosure",
@@ -802,6 +796,9 @@
       "rag.rawPii": "RAW PII",
       "rag.opaqueToken": "OPAQUE TOKEN",
       "rag.boundaryProtected": "PROTECTED",
+      "rag.modelRawObserved": "RAW PII OBSERVED",
+      "rag.tokenNotObserved": "TOKEN NOT OBSERVED",
+      "rag.boundaryNotConfirmed": "NOT CONFIRMED",
       "rag.retrievedTitle": "Retrieved document",
       "rag.retrievedHint": "This is the actual document text returned by vector search. At this stage, it still contains raw PII.",
       "rag.contextTitle": "Model-visible protected context",
@@ -811,7 +808,7 @@
       "rag.evidenceRetrievedRaw": "Retrieved document contains raw PII",
       "rag.evidenceModelRaw": "Model context contains raw PII",
       "rag.evidenceModelToken": "Model context contains protected tokens",
-      "rag.evidenceActiveSessions": "Active sessions after call",
+      "rag.evidenceActiveSessions": "Service-wide active sessions after call",
       "mcp.inputTitle": "Example MCP scenario input",
       "mcp.inputHint": "This example input is sent to the actual MCP tool loop. The following steps show only evidence recorded during that execution.",
       "mcp.runtimeTitle": "Streamable HTTP MCP round-trip evidence",
@@ -858,14 +855,11 @@
       "metric.deniedMcp": "MCP 비허용 원문 노출",
       "metric.allowedMcp": "허용된 원문 복원",
       "metric.resultRaw": "결과 원문 재노출",
-      "metric.sessions": "호출 후 활성 세션",
       "summary.observedTotal": "관측 / 전체",
       "summary.none": "없음",
       "summary.customerOnly": "CUSTOMER_ID만",
       "summary.rawObserved": "원문 관측",
       "summary.scopedRestored": "범위 내 복원",
-      "summary.cleanupComplete": "정리 완료",
-      "summary.sessionsRemain": "세션 남음",
       "flow.rawInput": "원문 입력",
       "flow.tokenizedModel": "토큰화된 모델 입력",
       "flow.scopedCrm": "범위 제한 CRM 공개",
@@ -912,6 +906,9 @@
       "rag.rawPii": "원문 PII",
       "rag.opaqueToken": "불투명 토큰",
       "rag.boundaryProtected": "보호됨",
+      "rag.modelRawObserved": "원문 PII 관측",
+      "rag.tokenNotObserved": "보호 토큰 미관측",
+      "rag.boundaryNotConfirmed": "확인되지 않음",
       "rag.retrievedTitle": "검색된 문서",
       "rag.retrievedHint": "벡터 검색으로 조회된 실제 문서 원문입니다. 이 단계에는 원문 개인정보가 포함되어 있습니다.",
       "rag.contextTitle": "모델에 노출된 보호 컨텍스트",
@@ -921,7 +918,7 @@
       "rag.evidenceRetrievedRaw": "검색 문서에 원문 PII 포함",
       "rag.evidenceModelRaw": "모델 컨텍스트에 원문 PII 포함",
       "rag.evidenceModelToken": "모델 컨텍스트에 보호 토큰 포함",
-      "rag.evidenceActiveSessions": "호출 후 활성 세션",
+      "rag.evidenceActiveSessions": "호출 후 서비스 전체 활성 세션",
       "mcp.inputTitle": "예제 MCP 시나리오 입력",
       "mcp.inputHint": "이 예제 입력이 실제 MCP 도구 루프로 전달되며, 이후 단계에는 해당 실행에서 기록된 근거만 표시합니다.",
       "mcp.runtimeTitle": "Streamable HTTP MCP 왕복 근거",
@@ -1044,16 +1041,6 @@
     metric.classList.toggle("fail", !evidence.passed);
   }
 
-  function setValueMetric(prefix, id, value) {
-    const metric = element(prefixed(prefix, id + "Metric"));
-    metric.classList.remove("pass", "fail");
-    element(prefixed(prefix, id)).textContent = String(value);
-    setLocalizedText(
-      element(prefixed(prefix, id + "Status")),
-      value === 0 ? "summary.cleanupComplete" : "summary.sessionsRemain"
-    );
-  }
-
   function setStageBoolean(prefix, id, value) {
     const stage = element(prefixed(prefix, id));
     stage.classList.toggle("pass", value);
@@ -1148,10 +1135,6 @@
       element(prefixed(prefix, id + "Count")).textContent = "—";
       setLocalizedText(element(prefixed(prefix, id + "Status")), "status.wait");
     });
-    const sessionMetric = element(prefixed(prefix, "activeSessionsMetric"));
-    sessionMetric.classList.remove("pass", "fail");
-    element(prefixed(prefix, "activeSessions")).textContent = "—";
-    setLocalizedText(element(prefixed(prefix, "activeSessionsStatus")), "status.wait");
     ["stageModel", "stageTool", "stageResult", "stageCleanup"].forEach(id => {
       const stage = element(prefixed(prefix, id));
       stage.classList.remove("pass", "fail");
@@ -1178,13 +1161,35 @@
     ["ragRetrievedRaw", "ragModelRaw", "ragModelToken"].forEach(id => {
       setTechnicalText(element(id), "—");
     });
-    ["ragActiveSessions", "ragRetrievedRawDetail", "ragModelRawDetail",
-      "ragModelTokenDetail", "ragActiveSessionsDetail"].forEach(id => {
+    ["ragRetrievedRawDetail", "ragModelRawDetail", "ragModelTokenDetail",
+      "ragActiveSessionsDetail"].forEach(id => {
       element(id).textContent = "—";
     });
-    setLocalizedText(element("ragActiveSessionsStatus"), "status.wait");
+    ["ragBoundaryInput", "ragBoundaryOutput", "ragBoundaryState"].forEach(id => {
+      setLocalizedText(element(id), "status.wait");
+    });
     element("retrievedDocument").textContent = "—";
     element("modelVisibleContext").textContent = "—";
+  }
+
+  function renderRagBoundary(rag) {
+    setLocalizedText(
+      element("ragBoundaryInput"),
+      rag.retrievedDocumentContainsRawPii ? "rag.rawPii" : "summary.none"
+    );
+    setLocalizedText(
+      element("ragBoundaryOutput"),
+      rag.modelVisibleContextContainsRawPii
+        ? "rag.modelRawObserved"
+        : (rag.modelVisibleContextContainsTokenizedPii ? "rag.opaqueToken" : "rag.tokenNotObserved")
+    );
+    const protectedBoundary = rag.retrievedDocumentContainsRawPii
+      && !rag.modelVisibleContextContainsRawPii
+      && rag.modelVisibleContextContainsTokenizedPii;
+    setLocalizedText(
+      element("ragBoundaryState"),
+      protectedBoundary ? "rag.boundaryProtected" : "rag.boundaryNotConfirmed"
+    );
   }
 
   function renderToolEvidence(prefix, tool) {
@@ -1217,8 +1222,6 @@
       evidence.rawToolResultValuesAtModel,
       evidence.rawToolResultValuesAtModel.observed === 0 ? "summary.none" : "summary.rawObserved"
     );
-    setValueMetric(prefix, "activeSessions", tool.activeSessionsAfterCall);
-
     setCheck(prefix, "allowedDisclosureCheck", tool.toolReceivedOnlyAllowedOriginals);
     setCheck(prefix, "lookupCheck", tool.toolLookupSucceededWithRestoredCustomerId);
     setStageBoolean(prefix, "stageModel", tool.modelSawOnlyTokens);
@@ -1266,6 +1269,7 @@
     const modelRaw = booleanText(rag.modelVisibleContextContainsRawPii);
     const modelToken = booleanText(rag.modelVisibleContextContainsTokenizedPii);
     const activeSessions = String(rag.activeSessionsAfterCall);
+    renderRagBoundary(rag);
 
     setLocalizedText(
       element("ragRetrievedRaw"),
@@ -1279,7 +1283,6 @@
       element("ragModelToken"),
       rag.modelVisibleContextContainsTokenizedPii ? "rag.protected" : "summary.none"
     );
-    setValueMetric("rag", "activeSessions", rag.activeSessionsAfterCall);
     element("ragRetrievedRawDetail").textContent = retrievedRaw;
     element("ragModelRawDetail").textContent = modelRaw;
     element("ragModelTokenDetail").textContent = modelToken;

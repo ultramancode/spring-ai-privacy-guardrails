@@ -112,16 +112,20 @@ final class LocalMcpCrmServer implements AutoCloseable {
         this.lookupHandler.useRecords(recordsByCustomerId);
     }
 
+    RequestEvidence requestEvidence() {
+        return this.lookupHandler.snapshot();
+    }
+
     String receivedArgument(String name) {
-        return this.lookupHandler.receivedArgument(name);
+        return requestEvidence().receivedArgument(name);
     }
 
     int calls() {
-        return this.lookupHandler.calls();
+        return requestEvidence().calls();
     }
 
     boolean lookupSucceeded() {
-        return this.lookupHandler.lookupSucceeded();
+        return requestEvidence().lookupSucceeded();
     }
 
     @Override
@@ -192,9 +196,29 @@ final class LocalMcpCrmServer implements AutoCloseable {
         );
     }
 
+    record RequestEvidence(
+            int calls,
+            boolean lookupSucceeded,
+            Map<String, Object> receivedArguments
+    ) {
+
+        RequestEvidence {
+            receivedArguments = Map.copyOf(receivedArguments);
+        }
+
+        String receivedArgument(String name) {
+            Object value = this.receivedArguments.get(name);
+            if (!(value instanceof String text)) {
+                throw new IllegalStateException("MCP argument '%s' must be a string".formatted(name));
+            }
+            return text;
+        }
+    }
+
     private static final class CrmLookupHandler {
 
         private volatile Map<String, String> recordsByCustomerId;
+        private final Object evidenceLock = new Object();
         private int calls;
         private boolean lookupSucceeded;
         private Map<String, Object> receivedArguments = Map.of();
@@ -208,11 +232,14 @@ final class LocalMcpCrmServer implements AutoCloseable {
         }
 
         private McpSchema.CallToolResult lookup(McpSchema.CallToolRequest request) {
-            this.calls++;
-            this.receivedArguments = Map.copyOf(request.arguments());
-            String customerId = receivedArgument("customerId");
+            Map<String, Object> arguments = Map.copyOf(request.arguments());
+            String customerId = requiredArgument(arguments, "customerId");
             String toolResult = this.recordsByCustomerId.get(customerId);
-            this.lookupSucceeded = toolResult != null;
+            synchronized (this.evidenceLock) {
+                this.calls++;
+                this.receivedArguments = arguments;
+                this.lookupSucceeded = toolResult != null;
+            }
             if (toolResult == null) {
                 return McpSchema.CallToolResult.builder()
                         .addTextContent("No CRM record exists for the supplied customerId")
@@ -225,20 +252,18 @@ final class LocalMcpCrmServer implements AutoCloseable {
                     .build();
         }
 
-        private String receivedArgument(String name) {
-            Object value = this.receivedArguments.get(name);
+        private RequestEvidence snapshot() {
+            synchronized (this.evidenceLock) {
+                return new RequestEvidence(this.calls, this.lookupSucceeded, this.receivedArguments);
+            }
+        }
+
+        private static String requiredArgument(Map<String, Object> arguments, String name) {
+            Object value = arguments.get(name);
             if (!(value instanceof String text)) {
                 throw new IllegalStateException("MCP argument '%s' must be a string".formatted(name));
             }
             return text;
-        }
-
-        private int calls() {
-            return this.calls;
-        }
-
-        private boolean lookupSucceeded() {
-            return this.lookupSucceeded;
         }
     }
 }

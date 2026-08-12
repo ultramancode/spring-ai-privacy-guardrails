@@ -144,8 +144,8 @@ class PrivacyDemoControllerTest {
                         "\"rag.evidenceModelRaw\": \"모델 컨텍스트에 원문 PII 포함\"",
                         "data-i18n=\"rag.evidenceModelToken\">Model context contains protected tokens</span>",
                         "\"rag.evidenceModelToken\": \"모델 컨텍스트에 보호 토큰 포함\"",
-                        "data-i18n=\"rag.evidenceActiveSessions\">Active sessions after call</span>",
-                        "\"rag.evidenceActiveSessions\": \"호출 후 활성 세션\"",
+                        "data-i18n=\"rag.evidenceActiveSessions\">Service-wide active sessions after call</span>",
+                        "\"rag.evidenceActiveSessions\": \"호출 후 서비스 전체 활성 세션\"",
                         "<code>retrievedDocumentContainsRawPii</code>",
                         "<code>modelVisibleContextContainsRawPii</code>",
                         "<code>modelVisibleContextContainsTokenizedPii</code>",
@@ -216,16 +216,18 @@ class PrivacyDemoControllerTest {
                         "class=\"card step-card step-6\"",
                         "class=\"rag-boundary\"",
                         "class=\"rag-boundary-flow\"",
-                        "data-i18n=\"rag.boundaryProtected\">PROTECTED</em>",
+                        "id=\"ragBoundaryInput\"",
+                        "id=\"ragBoundaryOutput\"",
+                        "id=\"ragBoundaryState\"",
                         "\"rag.boundaryProtected\": \"보호됨\"",
+                        "function renderRagBoundary(rag)",
+                        "renderRagBoundary(rag)",
                         "id=\"modelRawMeaning\"",
                         "id=\"mcpAllowedToolMeaning\"",
                         "\"summary.none\": \"NONE\"",
                         "\"summary.none\": \"없음\"",
                         "\"summary.customerOnly\": \"CUSTOMER_ID ONLY\"",
                         "\"summary.customerOnly\": \"CUSTOMER_ID만\"",
-                        "\"summary.cleanupComplete\": \"CLEANUP COMPLETE\"",
-                        "\"summary.cleanupComplete\": \"정리 완료\"",
                         "\"rag.present\": \"PRESENT\"",
                         "\"rag.present\": \"있음\"",
                         "\"rag.protected\": \"PROTECTED\"",
@@ -237,6 +239,9 @@ class PrivacyDemoControllerTest {
                 .doesNotContain(
                         "setStageValue(prefix, \"stageCleanup\", tool.activeSessionsAfterCall)",
                         "setStageBoolean(prefix, \"stageCleanup\"",
+                        "\"summary.cleanupComplete\"",
+                        "\"summary.sessionsRemain\"",
+                        "data-i18n=\"rag.boundaryProtected\">PROTECTED</em>",
                         "data-i18n=\"flow.input\"",
                         "\"flow.input\":",
                         "id=\"runtimeBadges\"",
@@ -271,6 +276,39 @@ class PrivacyDemoControllerTest {
         assertScenarioWiring(page, "rag", "/demo/rag", "runRag");
         assertScenarioWiring(page, "mcp", "/demo/mcp-tool-loop", "runMcp");
         assertTranslationCoverage(page);
+    }
+
+    @Test
+    void inspectorOmitsGlobalSessionSummaryCardsAndBindsRagBoundaryToBackendEvidence() throws Exception {
+        String page = this.mockMvc.perform(get("/index.html"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(page)
+                .contains(
+                        "data-i18n=\"rag.evidenceActiveSessions\">Service-wide active sessions after call</span>",
+                        "<code>activeSessionsAfterCall</code>",
+                        "element(\"ragActiveSessionsDetail\").textContent = activeSessions",
+                        "function renderRagBoundary(rag)",
+                        "rag.retrievedDocumentContainsRawPii",
+                        "!rag.modelVisibleContextContainsRawPii",
+                        "rag.modelVisibleContextContainsTokenizedPii",
+                        "protectedBoundary ? \"rag.boundaryProtected\" : \"rag.boundaryNotConfirmed\"",
+                        "renderRagBoundary(rag)"
+                )
+                .doesNotContain(
+                        "id=\"activeSessionsMetric\"",
+                        "id=\"ragActiveSessionsMetric\"",
+                        "id=\"mcpActiveSessionsMetric\"",
+                        "\"metric.sessions\"",
+                        "\"summary.serviceSnapshot\"",
+                        "setValueMetric(",
+                        "summary.cleanupComplete",
+                        "summary.sessionsRemain",
+                        "data-i18n=\"rag.boundaryProtected\">PROTECTED</em>"
+                );
     }
 
     @Test

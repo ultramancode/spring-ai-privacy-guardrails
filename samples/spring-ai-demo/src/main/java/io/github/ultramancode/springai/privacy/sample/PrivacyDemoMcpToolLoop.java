@@ -122,16 +122,17 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         ChatClient.Builder builder = ChatClient.builder(model).defaultTools(this.protectedMcpTools);
         this.privacyConfigurer.configure(builder);
 
-        int callsBeforeRequest = server.calls();
+        int callsBeforeRequest = server.requestEvidence().calls();
         String finalResponse = builder.build().prompt().user(input).call().content();
-        if (server.calls() - callsBeforeRequest != 1) {
+        LocalMcpCrmServer.RequestEvidence requestEvidence = server.requestEvidence();
+        if (requestEvidence.calls() - callsBeforeRequest != 1) {
             throw new IllegalStateException("MCP demo expected exactly one tool call");
         }
 
-        String employeeId = server.receivedArgument("employeeId");
-        String email = server.receivedArgument("email");
-        String phone = server.receivedArgument("phone");
-        String customerId = server.receivedArgument("customerId");
+        String employeeId = requestEvidence.receivedArgument("employeeId");
+        String email = requestEvidence.receivedArgument("email");
+        String phone = requestEvidence.receivedArgument("phone");
+        String customerId = requestEvidence.receivedArgument("customerId");
         String receivedArguments = String.join("\n", employeeId, email, phone, customerId);
         int deniedRawValueCount = countContainedValues(receivedArguments, DENIED_TOOL_VALUES);
         int allowedRawValueCount = countContainedValues(receivedArguments, ALLOWED_TOOL_VALUES);
@@ -150,7 +151,7 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
                 model.issuedToolArguments(),
                 this.disclosureScope.entityTypes().stream().sorted().toList(),
                 receivedOnlyAllowedOriginals,
-                server.lookupSucceeded(),
+                requestEvidence.lookupSucceeded(),
                 model.protectedToolResultSeenByModel(),
                 new PrivacyDemoToolLoop.BoundaryEvidence(
                         PrivacyDemoToolLoop.EvidenceCount.expectedNone(

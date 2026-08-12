@@ -1,5 +1,7 @@
 # Spring AI Privacy Guardrails Demo
 
+[English](README.md) | [한국어](README.ko.md)
+
 This runnable sample exercises the privacy advisor path with a deterministic
 local `ChatModel`, so it requires no external LLM API key. It explicitly applies
 the starter's `PrivacyChatClientConfigurer` to one `ChatClient` without changing
@@ -44,8 +46,10 @@ curl "http://127.0.0.1:8080/demo/chat-client"
 ```
 
 This endpoint uses a Spring AI `ChatClient` with the starter's fixed privacy
-advisor bundle. `modelResponse` shows the opaque tokens that reached the model,
-and `activeSessionsAfterCall` must be `0` after request cleanup.
+advisor bundle. `modelResponse` shows the opaque tokens that reached the model.
+`activeSessionsAfterCall` is the service-wide active session count observed
+after the call; the isolated sample normally reports `0`, but concurrent calls
+can make it nonzero without indicating that this request leaked a session.
 
 Custom synthetic text can be sent with `POST /demo/chat-client` and a JSON body
 such as `{"text":"My employee id is EMP-1234"}`. The `GET /demo/chat-client`
@@ -147,9 +151,9 @@ curl "http://127.0.0.1:8080/demo/mcp-tool-loop"
 
 This endpoint runs the same deterministic flow through an actual local
 Streamable HTTP MCP round trip. Its evidence shows raw PII absent at the model,
-only `CUSTOMER_ID` restored at the MCP tool, the MCP result protected before
-model re-entry, and zero active privacy sessions after completion. It requires
-no external MCP infrastructure or model.
+only `CUSTOMER_ID` restored at the MCP tool, and the MCP result protected before
+model re-entry. It also reports the service-wide active session count observed
+after the call. It requires no external MCP infrastructure or model.
 
 ## Opt-In OpenAI-Compatible Live Model Verification
 

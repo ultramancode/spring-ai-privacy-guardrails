@@ -13,6 +13,7 @@ and request-lifecycle boundaries.
 
 | Guide | Covers |
 | --- | --- |
+| [Sample / Demo Guide](sample.md) | Inspector scenarios, runtime endpoints, locale behavior, and evidence boundaries. |
 | [Configuration](configuration.md) | Starters, analyzers, output policy, tool disclosure, and processing limits. |
 | [Architecture](architecture.md) | Module boundaries, request sessions, evidence resolution, and execution lifecycle. |
 | [Threat model](threat-model.md) | Protected assets, trust boundaries, controls, limitations, and separately managed areas. |
@@ -27,8 +28,9 @@ credentials.
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-Open `http://127.0.0.1:8080` to inspect the tokenized model input, scoped tool
-disclosure, tool-result retokenization, and request cleanup.
+Open `http://127.0.0.1:8080` to inspect Local Tool, RAG, and MCP runtime
+evidence at the model and tool boundaries.
 
-See the [sample application](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/main/samples/spring-ai-demo)
-for runnable profiles and integration examples.
+See the [Sample / Demo Guide](sample.md) for the Inspector workflow and the
+[full sample application guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md)
+for optional profiles and integration examples.

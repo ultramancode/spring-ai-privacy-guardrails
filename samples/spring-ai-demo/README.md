@@ -4,8 +4,8 @@
 
 This runnable sample exercises the privacy advisor path with a deterministic
 local `ChatModel`, so it requires no external LLM API key. It explicitly applies
-the starter's `PrivacyChatClientConfigurer` to one `ChatClient` without changing
-unrelated clients:
+the starter's `PrivacyChatClientConfigurer` to the sample's protected
+`ChatClient` builders:
 
 ```text
 raw user input -> tokenized model prompt -> capability-scoped tool disclosure
@@ -27,6 +27,8 @@ root.
 
 The demo binds only to `http://127.0.0.1:8080`.
 
+### Privacy Boundary Inspector
+
 Open that URL in a browser to use the sample-only **Privacy Boundary
 Inspector**. Use the `Local Tool | RAG | MCP` selector to run the existing
 runtime demos from one page. The `EN | 한국어` toggle sends the selected locale
@@ -38,6 +40,23 @@ mappings, recognizer internals, or model configuration.
 <p align="center">
   <img src="../../docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing protected model and tool boundaries" width="960">
 </p>
+
+### Inspector Runtime Endpoints
+
+| Inspector view | Backend requests | Returned runtime evidence |
+| --- | --- | --- |
+| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Localized fixed input and `detectedSpans`, opaque model input and tool arguments, scoped `CUSTOMER_ID` restoration, and the re-protected tool result. |
+| `RAG` | `GET /demo/rag` | The raw `retrievedDocument`, the actual `modelVisibleContext`, and backend booleans that compare raw and tokenized PII at those two stages. |
+| `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | The actual local Streamable HTTP MCP runtime mode, protected model and tool-call values, scoped disclosure, and result re-protection. |
+
+The Inspector sends `Accept-Language: en` or `ko` with these requests and
+reruns the selected flow. The backend locale changes the fixed input, RAG
+query and prompt template, and CRM result wrapper; it does not only translate
+browser labels. The endpoint responses contain the evidence fields rendered by
+the page, but never token mappings.
+
+These runtime demonstrations complement the reproducible automated coverage in
+the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
 
 ## ChatClient With The Explicit Privacy Configurer
 
@@ -60,7 +79,8 @@ that example.
 ## Local RAG Boundary Demo
 
 ```bash
-curl "http://127.0.0.1:8080/demo/rag"
+curl "http://127.0.0.1:8080/demo/rag" \
+  -H 'Accept-Language: en'
 ```
 
 This endpoint retrieves a fixed synthetic document from an in-memory
@@ -130,12 +150,17 @@ adversarial synthetic cases using this configuration.
 ## ChatClient Tool Loop Demo
 
 ```bash
-curl "http://127.0.0.1:8080/demo/tool-loop"
+curl "http://127.0.0.1:8080/demo/tool-loop" \
+  -H 'Accept-Language: en'
 ```
 
-The response shows that model requests receive opaque values, the CRM delegate
-receives only its authorized customer ID, the tool result is protected before
-the next model call, and the request session is cleaned up.
+The response shows that the fixed fixture's detected values reach the model
+only as opaque tokens. Within the current request, the CRM delegate receives
+the original `customerId` while `employeeId`, `email`, and `phone` remain
+opaque tokens. Detected values in the tool result are protected before the next
+model call. `activeSessionsAfterCall` is the service-wide active session count
+observed after the call; concurrent requests can make it nonzero without
+showing that this request leaked a session.
 
 Disclosure scope comes from `spring.ai.privacy.tools.disclosures`; the demo uses the
 auto-configured `PrivacyToolCallbackFactory` and explicit privacy configurer
@@ -146,14 +171,16 @@ The `/demo/tool-loop` endpoint uses an in-process CRM delegate.
 ## Streamable HTTP MCP Tool Loop Demo
 
 ```bash
-curl "http://127.0.0.1:8080/demo/mcp-tool-loop"
+curl "http://127.0.0.1:8080/demo/mcp-tool-loop" \
+  -H 'Accept-Language: en'
 ```
 
 This endpoint runs the same deterministic flow through an actual local
-Streamable HTTP MCP round trip. Its evidence shows raw PII absent at the model,
-only `CUSTOMER_ID` restored at the MCP tool, and the MCP result protected before
-model re-entry. It also reports the service-wide active session count observed
-after the call. It requires no external MCP infrastructure or model.
+Streamable HTTP MCP round trip. Its evidence shows the fixed fixture's detected
+raw values absent at the model, only `CUSTOMER_ID` restored at the MCP tool, and
+detected values in the MCP result protected before model re-entry. It also
+reports the service-wide active session count observed after the call. It
+requires no external MCP infrastructure or model.
 
 ## Opt-In OpenAI-Compatible Live Model Verification
 

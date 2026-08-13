@@ -47,19 +47,26 @@ repository root:
 ```
 
 Open `http://127.0.0.1:8080` to use the sample's **Privacy Boundary
-Inspector**. It shows analyzer findings and the tokenized input sent to the
-model. It also demonstrates that the original `CUSTOMER_ID` is restored only
-when the permitted tool runs and that the result is protected again.
+Inspector**. Its `Local Tool | RAG | MCP` views render runtime evidence returned
+by the sample backend. For the fixed fixture, the Local Tool and MCP flows show
+detected raw values replaced with opaque request-scoped tokens at the model
+boundary, only the allowed `CUSTOMER_ID` restored from the current request at
+the tool boundary, and detected values in the tool result protected again
+before model re-entry. The RAG view compares the raw retrieved document with the
+protected context actually recorded at the model boundary, and the MCP view
+uses a real local Streamable HTTP MCP round trip.
 
 <p align="center">
-  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing zero raw PII values sent to the model and one scoped tool disclosure" width="960">
+  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing no fixed-fixture raw PII at the model and one scoped tool disclosure" width="960">
 </p>
 
 Text not matched by the demo's detection rules may be returned unchanged by the
 local model, and the Inspector does not expose token mappings. The
-[Sample Guide](samples/spring-ai-demo/README.md) covers optional Presidio and
-OpenNLP configurations, MCP round-trip tests, and real-model integration.
-The default repository checks do not call remote models.
+[Sample Guide](samples/spring-ai-demo/README.md) covers the Local Tool, RAG, and
+runtime MCP demos plus optional Presidio, OpenNLP, and real-model integration.
+The default repository checks do not call remote models. See the
+[Privacy Boundary Verification Matrix](docs/evaluation.md#privacy-boundary-verification-matrix)
+for the corresponding reproducible automated coverage.
 
 ## Add Protection to an Application
 
@@ -240,8 +247,10 @@ runs live integration tests against a Presidio service and the JMH smoke tests.
   controls, limitations, and separately managed areas
 - [Evaluation and Benchmarks](docs/evaluation.md): verification coverage and
   interpretation limits
-- [Sample Guide](samples/spring-ai-demo/README.md): API, MCP, and real-model
-  integration examples
+- [Sample / Demo Guide](docs/sample.md): Inspector scenarios, runtime endpoints,
+  and the evidence each view verifies
+- [Full Sample Guide](samples/spring-ai-demo/README.md): optional analyzer and
+  real-model integration examples
 
 ## Security Boundary
 

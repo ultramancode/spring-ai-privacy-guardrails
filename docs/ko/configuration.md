@@ -396,7 +396,7 @@ spring:
 OpenNLP 연동은 기존 NER 모델을 활용하려는 애플리케이션을 위한 선택적 구성으로,
 범용 개인정보 탐지의 기본 방식으로 권장하지는 않습니다.
 
-[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)에서
+[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md#선택적-jvm-전용-opennlp-adapter)에서
 모델 준비, 설정 및 실제 연동 테스트 방법을 확인할 수 있습니다.
 
 ## 도구별 원문 공개

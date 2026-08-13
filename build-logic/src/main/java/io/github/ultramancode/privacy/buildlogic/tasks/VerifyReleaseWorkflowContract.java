@@ -21,6 +21,14 @@ public abstract class VerifyReleaseWorkflowContract extends DefaultTask {
             "\"https://central.sonatype.com/api/v1/publisher/upload?";
     private static final String RECOVERY_MARKER =
             "recovery_marker=\"<!-- central-deployment-id:";
+    private static final String CENTRAL_PUBLICATION_STEP =
+            "- name: Wait for Maven Central publication";
+    private static final String PUBLIC_MODULE_VERIFICATION_STEP =
+            "- name: Verify all modules on public Maven Central";
+    private static final String PUBLIC_CONSUMER_STEP =
+            "- name: Run consumer from public Maven Central";
+    private static final String GITHUB_RELEASE_STEP =
+            "- name: Publish GitHub release";
 
     @InputFile
     @PathSensitive(PathSensitivity.RELATIVE)
@@ -34,7 +42,7 @@ public abstract class VerifyReleaseWorkflowContract extends DefaultTask {
         );
         verify(workflow);
         getLogger().lifecycle(
-                "Verified release evidence ordering and Maven-POM-only consumer preflight."
+                "Verified release evidence and public consumer ordering."
         );
     }
 
@@ -51,6 +59,35 @@ public abstract class VerifyReleaseWorkflowContract extends DefaultTask {
         if (!workflow.contains("publishedPomOnlyArtifactSmokeTest")) {
             throw new GradleException(
                     "Release workflow must execute publishedPomOnlyArtifactSmokeTest"
+            );
+        }
+
+        int centralPublication = uniqueIndex(
+                workflow,
+                CENTRAL_PUBLICATION_STEP,
+                "Maven Central publication wait step"
+        );
+        int publicModuleVerification = uniqueIndex(
+                workflow,
+                PUBLIC_MODULE_VERIFICATION_STEP,
+                "public Maven Central module verification step"
+        );
+        int publicConsumer = uniqueIndex(
+                workflow,
+                PUBLIC_CONSUMER_STEP,
+                "public Maven Central consumer step"
+        );
+        int githubRelease = uniqueIndex(
+                workflow,
+                GITHUB_RELEASE_STEP,
+                "GitHub Release publication step"
+        );
+        if (centralPublication >= publicModuleVerification
+                || publicModuleVerification >= publicConsumer
+                || publicConsumer >= githubRelease) {
+            throw new GradleException(
+                    "Release workflow must wait for Central publication, verify every public "
+                            + "module, run the public consumer, and only then publish GitHub Release"
             );
         }
     }

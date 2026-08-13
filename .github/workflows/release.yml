@@ -80,6 +80,51 @@ jobs:
           ./gradlew --no-daemon validateReleaseVersion -Pversion="$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Extract release notes from changelog
+        run: |
+          version="${{ steps.release.outputs.version }}"
+          heading="## [$version]"
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          if ! awk -v heading="$heading" '
+            {
+              line = $0
+              sub(/\r$/, "", line)
+            }
+            line == heading {
+              found = 1
+              in_section = 1
+              next
+            }
+            in_section && line ~ /^## / {
+              exit
+            }
+            !in_section {
+              next
+            }
+            line ~ /^[[:space:]]*$/ {
+              if (has_content) {
+                pending_blank_lines++
+              }
+              next
+            }
+            {
+              while (pending_blank_lines > 0) {
+                print ""
+                pending_blank_lines--
+              }
+              print line
+              has_content = 1
+            }
+            END {
+              if (!found || !has_content) {
+                exit 1
+              }
+            }
+          ' CHANGELOG.md > "$notes_file"; then
+            echo "CHANGELOG.md must contain a non-empty $heading section" >&2
+            exit 1
+          fi
+
       - name: Verify and build signed release bundle
         env:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
@@ -426,14 +471,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes_json=$(gh api --method POST \
-            "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-            -f tag_name="$RELEASE_TAG")
-          release_name=$(jq -r .name <<< "$notes_json")
-          release_body=$(jq -r .body <<< "$notes_json")
           jq -n \
-            --arg name "$release_name" \
-            --arg body "$release_body" \
+            --arg name "$RELEASE_TAG" \
+            --rawfile body "$RUNNER_TEMP/release-notes.md" \
             --arg tag_name "$RELEASE_TAG" \
             '{name: $name, body: $body, tag_name: $tag_name, draft: false, prerelease: false}' \
             > "$RUNNER_TEMP/publish-release.json"

@@ -89,12 +89,12 @@ Presidio 스타터에는 외부 Presidio Analyzer 서비스가 필요합니다. 
 
 ### 의존성과 기본 설정
 
-아래 예제는 버전 `0.1.0`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
+아래 예제는 버전 `0.1.1`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
 스타터와 애플리케이션 전용 정규식 규칙을 사용할 수 있습니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1"
 }
 ```
 

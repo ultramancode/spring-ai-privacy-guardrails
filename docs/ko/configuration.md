@@ -16,9 +16,9 @@
 
 | 스타터 | 의존성 | 용도 |
 | --- | --- | --- |
-| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.0` | 일반 개인정보 탐지에 권장합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
-| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.0` | Regex 또는 사용자 정의 분석기용입니다. 별도의 분석기 연동은 포함하지 않습니다. |
-| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.0` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
+| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | 일반 개인정보 탐지에 권장합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
+| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1` | Regex 또는 사용자 정의 분석기용입니다. 별도의 분석기 연동은 포함하지 않습니다. |
+| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
 
 스타터 의존성만 추가해도 개인정보 보호 기능이 자동으로 켜지지는 않습니다. 전역
 기능과 사용할 분석기를 명시적으로 활성화하세요. Presidio를
@@ -592,7 +592,7 @@ try (PrivacySession session = privacyService.openSession()) {
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.1.0"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.1.1"
 }
 ```
 

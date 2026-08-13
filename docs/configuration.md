@@ -13,9 +13,9 @@ Choose the starter or starters that match the analyzers you plan to use.
 
 | Starter | Dependency | Use |
 | --- | --- | --- |
-| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.0` | Recommended for general PII detection. Includes the base Spring Boot starter, Presidio HTTP integration, and conditional health support. |
-| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.0` | For Regex or custom analyzers. Does not include a separate analyzer integration. |
-| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.0` | Advanced JVM-only configuration for applications that already own compatible NER models. |
+| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | Recommended for general PII detection. Includes the base Spring Boot starter, Presidio HTTP integration, and conditional health support. |
+| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1` | For Regex or custom analyzers. Does not include a separate analyzer integration. |
+| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1` | Advanced JVM-only configuration for applications that already own compatible NER models. |
 
 Adding a starter dependency does not enable privacy protection automatically.
 Explicitly enable global privacy and each analyzer you want to use. For
@@ -620,7 +620,7 @@ the model, tools, and test values used in the example.
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.1.0"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.1.1"
 }
 ```
 

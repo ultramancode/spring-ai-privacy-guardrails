@@ -17,7 +17,7 @@ jobs:
   publish:
     name: Publish ${{ github.ref_name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     environment: maven-central
     env:
       RELEASE_TAG: ${{ github.ref_name }}
@@ -329,11 +329,17 @@ jobs:
           echo "::add-mask::$authorization"
           deployment_id="${{ steps.central.outputs.deployment_id }}"
           state=
-          for _ in $(seq 1 90); do
+          validation_started_at=$SECONDS
+          validation_deadline=$((validation_started_at + 1800))
+          attempt=0
+          while (( SECONDS < validation_deadline )); do
+            attempt=$((attempt + 1))
             status_json=$(curl --request POST --fail-with-body --silent --show-error \
               --header "Authorization: Bearer $authorization" \
               "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")
             state=$(jq -r '.deploymentState // empty' <<< "$status_json")
+            elapsed=$((SECONDS - validation_started_at))
+            echo "Maven Central validation state=$state; attempt=$attempt; elapsed=${elapsed}s"
             case "$state" in
               VALIDATED|PUBLISHING|PUBLISHED)
                 break
@@ -352,7 +358,7 @@ jobs:
             esac
           done
           if [[ "$state" != "VALIDATED" && "$state" != "PUBLISHING" && "$state" != "PUBLISHED" ]]; then
-            echo "Maven Central validation timed out in state $state" >&2
+            echo "Maven Central validation timed out after 30 minutes in state $state" >&2
             exit 1
           fi
           echo "state=$state" >> "$GITHUB_OUTPUT"
@@ -394,11 +400,17 @@ jobs:
           deployment_id="${{ steps.central.outputs.deployment_id }}"
           state=
           status_json=
-          for _ in $(seq 1 90); do
+          publication_started_at=$SECONDS
+          publication_deadline=$((publication_started_at + 1800))
+          attempt=0
+          while (( SECONDS < publication_deadline )); do
+            attempt=$((attempt + 1))
             status_json=$(curl --request POST --fail-with-body --silent --show-error \
               --header "Authorization: Bearer $authorization" \
               "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")
             state=$(jq -r '.deploymentState // empty' <<< "$status_json")
+            elapsed=$((SECONDS - publication_started_at))
+            echo "Maven Central publication state=$state; attempt=$attempt; elapsed=${elapsed}s"
             case "$state" in
               PUBLISHED)
                 break
@@ -407,7 +419,10 @@ jobs:
                 jq -c '.errors // []' <<< "$status_json" >&2
                 exit 1
                 ;;
-              PENDING|VALIDATING|VALIDATED|PUBLISHING)
+              PUBLISHING)
+                sleep 60
+                ;;
+              PENDING|VALIDATING|VALIDATED)
                 sleep 10
                 ;;
               *)
@@ -417,9 +432,12 @@ jobs:
             esac
           done
           if [[ "$state" != "PUBLISHED" ]]; then
-            echo "Maven Central publication timed out in state $state" >&2
+            echo "Maven Central publication timed out after 30 minutes in state $state" >&2
             exit 1
           fi
+
+      - name: Verify all modules on public Maven Central
+        run: |
           modules=(
             spring-ai-privacy-guardrails-core
             spring-ai-privacy-guardrails-opennlp

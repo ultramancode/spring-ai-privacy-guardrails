@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 22cec1dcc794638942bde8f7b5fda122b99776d853f3d64024c1d68b21e0114f -->
+<!-- i18n-source-sha256: aeee91d5d44825e5e57b10e66e4e34692aad43296dca982c9f55fb0ffba1817b -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">

@@ -3,7 +3,7 @@
 [English](../sample.md) | [한국어](sample.md)
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: b04902893af1ad6f46e31f23f9be2ec63599a7da96aa4d8348f917c09926e8ba -->
+<!-- i18n-source-sha256: fbbe8921815d4b0688682aee5adf1637cc7f3fb4cc4bcd672b8ffe98fa24d618 -->
 
 실행 가능한 샘플은 항상 같은 결과를 반환하는 로컬 `ChatModel`, 메모리 내 RAG 구성 요소,
 루프백 MCP 서버를 사용하므로 클라우드 자격 증명이 필요하지 않습니다. **Privacy
@@ -23,7 +23,17 @@ JDK 21이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 `Local Tool | RAG | MCP` 선택기로 시나리오를 실행하고, `EN | 한국어`로 선택한 런타임
 로케일에서 시나리오를 다시 실행할 수 있습니다.
 
-![Local Tool, RAG, MCP 런타임 근거를 보여주는 Privacy Boundary Inspector](../images/privacy-boundary-inspector-demo-ko.gif)
+<div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
+  <iframe
+    src="https://www.youtube-nocookie.com/embed/vir-x78e9j8"
+    title="Spring AI Privacy Guardrails 한국어 데모"
+    style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
+    loading="lazy"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen>
+  </iframe>
+</div>
 
 ## 런타임 엔드포인트
 
@@ -54,6 +64,8 @@ Inspector는 `/demo/scenario`, `/demo/protect`, `/demo/tool-loop`의 결과를 �
 반환되는 `boundaryEvidence`의 각 항목에는 화면에 표시되는 관측 개수, 검사한 예제 값의
 전체 개수와 그에 따른 통과 여부가 포함됩니다.
 
+![보호된 모델 입력, 최소 권한 CRM 공개, 모델 재진입 보호를 보여주는 Local Tool 개인정보 경계 Inspector](../images/privacy-boundary-inspector-local-tool-ko.png)
+
 ### RAG
 
 샘플은 메모리 내 `SimpleVectorStore`에서 `alice@example.com`이 포함된 고정 문서 하나를
@@ -65,6 +77,8 @@ Inspector는 `/demo/scenario`, `/demo/protect`, `/demo/tool-loop`의 결과를 �
 이 시나리오는 저장 문서가 아니라 모델 경계의 보호를 검증합니다. 항상 같은 결과를
 반환하는 로컬 임베딩을 사용하며 외부 벡터 저장소, 임베딩 서비스 또는 LLM을
 사용하지 않습니다.
+
+![검색된 문서와 모델에 노출된 보호 컨텍스트를 비교하는 RAG 개인정보 경계 Inspector](../images/privacy-boundary-inspector-rag-ko.png)
 
 ### MCP
 
@@ -78,6 +92,8 @@ MCP 시나리오는 같은 고정 도구 정책으로 실제 루프백 HTTP 왕�
 
 서버는 샘플 JVM 안에 내장되어 있고 첫 호출 후 재사용됩니다. 원격 또는 별도 배포된 MCP
 서비스는 아닙니다.
+
+![Streamable HTTP 왕복, 최소 권한 공개, 모델 재진입 보호를 보여주는 MCP 개인정보 경계 Inspector](../images/privacy-boundary-inspector-mcp-ko.png)
 
 ## EN/KO 런타임 로케일
 

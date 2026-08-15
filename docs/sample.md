@@ -21,7 +21,17 @@ Open `http://127.0.0.1:8080`. The sample binds only to that loopback address.
 Use the `Local Tool | RAG | MCP` selector to run a scenario, and use
 `EN | 한국어` to rerun it with the selected runtime locale.
 
-![Privacy Boundary Inspector showing Local Tool, RAG, and MCP runtime evidence](images/privacy-boundary-inspector-demo.gif)
+<div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
+  <iframe
+    src="https://www.youtube-nocookie.com/embed/IeeA5ogIX_I"
+    title="Spring AI Privacy Guardrails English demo"
+    style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
+    loading="lazy"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen>
+  </iframe>
+</div>
 
 ## Runtime Endpoints
 
@@ -55,6 +65,8 @@ Each entry in the returned `boundaryEvidence` contains the observed count, the
 total number of fixture values checked, and the resulting pass/fail status used
 by the Inspector.
 
+![Local Tool Privacy Boundary Inspector showing protected model input, least-privilege CRM disclosure, and protected model re-entry](images/privacy-boundary-inspector-local-tool.png)
+
 ### RAG
 
 The sample retrieves one fixed document containing `alice@example.com` from an
@@ -67,6 +79,8 @@ prompt, and replaced there by an opaque `EMAIL_ADDRESS` token.
 This scenario verifies the model boundary, not protection of documents at rest.
 It uses deterministic local embeddings and no external vector store, embedding
 service, or LLM.
+
+![RAG Privacy Boundary Inspector comparing the retrieved document with the model-visible protected context](images/privacy-boundary-inspector-rag.png)
 
 ### MCP
 
@@ -81,6 +95,8 @@ protected before model re-entry. The response identifies this path as
 
 The server is embedded in the sample JVM and reused after its first call; this
 is not a remote or separately deployed MCP service.
+
+![MCP Privacy Boundary Inspector showing the Streamable HTTP round trip, least-privilege disclosure, and protected model re-entry](images/privacy-boundary-inspector-mcp.png)
 
 ## EN/KO Runtime Locale
 

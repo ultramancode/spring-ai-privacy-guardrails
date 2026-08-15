@@ -9,6 +9,15 @@ Detection answers **what text is sensitive**. Spring AI Privacy Guardrails
 enforces **where the original value may travel** across model, tool, output,
 and request-lifecycle boundaries.
 
+## See It in Action
+
+The Privacy Boundary Inspector shows Local Tool, RAG, and MCP runtime evidence
+returned by the sample backend.
+
+![Privacy Boundary Inspector showing Local Tool, RAG, and MCP runtime evidence](images/privacy-boundary-inspector-demo.gif)
+
+See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
+
 ## Reference
 
 | Guide | Covers |

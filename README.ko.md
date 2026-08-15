@@ -1,12 +1,22 @@
 # Spring AI Privacy Guardrails
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.ultramancode/spring-ai-privacy-guardrails-spring-boot-starter?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.ultramancode/spring-ai-privacy-guardrails-spring-boot-starter)
+[![CI](https://github.com/ultramancode/spring-ai-privacy-guardrails/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ultramancode/spring-ai-privacy-guardrails/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: aeee91d5d44825e5e57b10e66e4e34692aad43296dca982c9f55fb0ffba1817b -->
+<!-- i18n-source-sha256: 7fe880a513ae776d6c819bec2ee1f2b6376bf98f0b0e3afbeb8d6b26b904325d -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
+</p>
+
+<p align="center">
+  <strong>데모 영상:</strong>
+  <a href="https://youtu.be/vir-x78e9j8">한국어</a> ·
+  <a href="https://youtu.be/IeeA5ogIX_I">English</a>
 </p>
 
 **내장 및 확장 가능한 분석기로 개인정보를 탐지하고, 원문 값이 어디까지 이동할 수
@@ -48,12 +58,14 @@ flowchart LR
 ```
 
 `http://127.0.0.1:8080`을 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
-있습니다. `Local Tool | RAG | MCP` 화면은 샘플 백엔드가 반환한 런타임 근거를
-표시합니다. 고정 예제 데이터를 사용하는 Local Tool과 MCP 흐름에서는 탐지된 원문 값이 모델
-경계에서 요청 범위의 불투명 토큰으로 바뀌고, 허용된 `CUSTOMER_ID`만 현재 요청에서 도구
-경계로 복원되며, 도구 결과에서 탐지된 값이 모델 재진입 전에 다시 보호되는 과정을 확인할
-수 있습니다. RAG 화면은 검색된 원문 문서와 모델 경계에 실제로 기록된 보호 컨텍스트를
-비교하고, MCP 화면은 실제 로컬 Streamable HTTP MCP 왕복 호출을 사용합니다.
+있습니다. 각 화면은 샘플 백엔드가 반환한 런타임 근거를 표시합니다.
+
+- **Local Tool**은 탐지된 원문 값이 모델 경계에서 요청 범위의 불투명 토큰으로 바뀌고,
+  허용된 `CUSTOMER_ID`만 도구 경계로 복원되며, 도구 결과가 모델 재진입 전에 다시
+  보호되는 과정을 보여줍니다.
+- **RAG**는 검색된 원문 문서와 모델 경계에 실제로 기록된 보호 컨텍스트를 비교합니다.
+- **MCP**는 같은 범위 제한 공개와 결과 재보호를 실제 로컬 Streamable HTTP MCP 왕복
+  호출을 통해 보여줍니다.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델에서 관찰된 고정 예제 데이터의 개인정보 원문 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">
@@ -62,8 +74,10 @@ flowchart LR
 데모의 탐지 규칙에 해당하지 않는 텍스트는 로컬 모델이 변경하지 않고 반환할 수 있으며,
 Inspector는 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, 런타임 MCP 데모와 선택형
 Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
-[샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다. 기본 저장소 검증
-과정에서는 원격 모델을 호출하지 않습니다. 이에 대응하는 재현 가능한 자동 검증 범위는
+[샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다.
+
+기본 저장소 검증 과정에서는 원격 모델을 호출하지 않습니다. 이에 대응하는 재현 가능한
+자동 검증 범위는
 [개인정보 보호 경계 검증 매트릭스](docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
 참고하세요.
 
@@ -136,8 +150,10 @@ ChatClient privacyChatClient(
 
 `PrivacyChatClientConfigurer`를 적용한 `ChatClient`만 보호됩니다. 개인정보 보호 기능을
 활성화하려면 하나 이상의 분석기가 필요하며, 분석기가 없으면 애플리케이션 시작이
-실패합니다. 직접 호출하는 `ChatModel`은 자동 보호 범위에 포함되지 않습니다. 파생
-클라이언트, 분석기 조합과 실패 정책은 [설정 문서](docs/ko/configuration.md)를 참고하세요.
+실패합니다.
+
+직접 호출하는 `ChatModel`은 자동 보호 범위에 포함되지 않습니다. 파생 클라이언트,
+분석기 조합과 실패 정책은 [설정 문서](docs/ko/configuration.md)를 참고하세요.
 
 ## 도구별 원문 공개
 
@@ -172,6 +188,7 @@ ToolCallback customerLookup(
 
 MCP처럼 실행 중에 도구 목록이 달라지는 `ToolCallbackProvider`는 `wrapProvider(...)`로
 감쌀 수 있고, 여러 `ToolCallbackProvider`는 `wrapProviders(...)`로 결합할 수 있습니다.
+
 사용자 정의 `ToolCallingManager`나 `ToolCallbackResolver`를 사용하는 별도 실행 경로는
 애플리케이션이 보호해야 합니다. 자세한 규칙은
 [도구별 원문 공개](docs/ko/configuration.md#도구별-원문-공개)를 참고하세요.
@@ -240,11 +257,14 @@ CI는 Java 21과 25에서 기본 검증을 실행하고, Java 21에서 Presidio 
 이 라이브러리는 지원되는 Spring AI 실행 경로에서 우발적으로 개인정보가 공개될 위험을
 줄이지만, 완전한 DLP 시스템이나 법률 준수 보장은 아닙니다.
 
-이 라이브러리는 애플리케이션의 인증·인가와 로깅 정책, 저장된 `ChatMemory`·벡터 저장소와
-데이터베이스의 접근 제어 및 데이터 보존 정책을 대신 관리하지 않습니다. 분석기 품질의
-검증과 조정도 운영 환경에 맞게 수행해야 합니다. 라이브러리가 명시적으로 지원하는 추론
-텍스트 외의 응답 메타데이터와 비텍스트 미디어는 자동으로 보호하지 않습니다. 원격
-분석기에는 인증과 전송 암호화를 적용하세요.
+애플리케이션은 다음 영역을 별도로 관리해야 합니다.
+
+- 인증·인가 및 로깅 정책
+- 저장된 `ChatMemory`·벡터 저장소·데이터베이스의 접근 제어 및 데이터 보존 정책
+- 운영 환경에 맞는 분석기 품질 검증과 조정
+- 라이브러리가 명시적으로 지원하는 추론 텍스트 외의 응답 메타데이터와 비텍스트 미디어
+  보호
+- 원격 분석기의 인증 및 전송 암호화
 
 운영 환경에서 사용하기 전에 [보안 정책](SECURITY.md)과
 [위협 모델](docs/ko/threat-model.md)을 확인하세요.

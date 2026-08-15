@@ -1,9 +1,19 @@
 # Spring AI Privacy Guardrails
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.ultramancode/spring-ai-privacy-guardrails-spring-boot-starter?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.ultramancode/spring-ai-privacy-guardrails-spring-boot-starter)
+[![CI](https://github.com/ultramancode/spring-ai-privacy-guardrails/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ultramancode/spring-ai-privacy-guardrails/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails execution boundaries" width="100%">
+</p>
+
+<p align="center">
+  <strong>Watch the demo:</strong>
+  <a href="https://youtu.be/IeeA5ogIX_I">English</a> ·
+  <a href="https://youtu.be/vir-x78e9j8">한국어</a>
 </p>
 
 **Detect PII with built-in and pluggable analyzers. Control where original
@@ -47,14 +57,15 @@ repository root:
 ```
 
 Open `http://127.0.0.1:8080` to use the sample's **Privacy Boundary
-Inspector**. Its `Local Tool | RAG | MCP` views render runtime evidence returned
-by the sample backend. For the fixed fixture, the Local Tool and MCP flows show
-detected raw values replaced with opaque request-scoped tokens at the model
-boundary, only the allowed `CUSTOMER_ID` restored from the current request at
-the tool boundary, and detected values in the tool result protected again
-before model re-entry. The RAG view compares the raw retrieved document with the
-protected context actually recorded at the model boundary, and the MCP view
-uses a real local Streamable HTTP MCP round trip.
+Inspector**. Its views render runtime evidence returned by the sample backend:
+
+- **Local Tool** shows detected raw values replaced with opaque request-scoped
+  tokens at the model boundary, only the allowed `CUSTOMER_ID` restored at the
+  tool boundary, and the tool result protected again before model re-entry.
+- **RAG** compares the raw retrieved document with the protected context
+  actually recorded at the model boundary.
+- **MCP** demonstrates the same scoped disclosure and result re-protection
+  through a real local Streamable HTTP MCP round trip.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing no fixed-fixture raw PII at the model and one scoped tool disclosure" width="960">
@@ -64,6 +75,7 @@ Text not matched by the demo's detection rules may be returned unchanged by the
 local model, and the Inspector does not expose token mappings. The
 [Sample Guide](samples/spring-ai-demo/README.md) covers the Local Tool, RAG, and
 runtime MCP demos plus optional Presidio, OpenNLP, and real-model integration.
+
 The default repository checks do not call remote models. See the
 [Privacy Boundary Verification Matrix](docs/evaluation.md#privacy-boundary-verification-matrix)
 for the corresponding reproducible automated coverage.
@@ -140,9 +152,11 @@ ChatClient privacyChatClient(
 
 Only `ChatClient` instances configured with `PrivacyChatClientConfigurer` are
 protected. Enabling privacy protection requires at least one analyzer;
-otherwise, application startup fails. Direct calls to a `ChatModel` are outside
-the automatic protection boundary. See [Configuration](docs/configuration.md)
-for derived clients, analyzer combinations, and failure policies.
+otherwise, application startup fails.
+
+Direct calls to a `ChatModel` are outside the automatic protection boundary.
+See [Configuration](docs/configuration.md) for derived clients, analyzer
+combinations, and failure policies.
 
 ## Per-Tool Original Disclosure
 
@@ -180,8 +194,10 @@ before they are returned to the model or application.
 
 For a `ToolCallbackProvider` whose tool list changes at runtime, such as an MCP
 provider, use `wrapProvider(...)`. Combine multiple `ToolCallbackProvider`
-instances with `wrapProviders(...)`. The application must protect any separate
-execution paths that use a custom `ToolCallingManager` or
+instances with `wrapProviders(...)`.
+
+The application must protect any separate execution paths that use a custom
+`ToolCallingManager` or
 `ToolCallbackResolver`. See
 [Per-Tool Original Disclosure](docs/configuration.md#per-tool-original-disclosure)
 for the complete rules.
@@ -258,13 +274,15 @@ This library reduces the risk of accidental PII disclosure on supported Spring
 AI execution paths, but it is not a complete DLP system or a guarantee of legal
 compliance.
 
-The library does not manage application authentication or authorization,
-logging policies, data-retention policies, or access controls for stored
-`ChatMemory`, vector stores, and databases. Analyzer quality must also be
-validated and tuned for the production environment. Aside from explicitly
-supported reasoning text, the library does not automatically protect response
-metadata or non-text media. Apply authentication and transport encryption to
-remote analyzers.
+Applications remain responsible for:
+
+- authentication, authorization, and logging policies;
+- access control and data-retention policies for stored `ChatMemory`, vector
+  stores, and databases;
+- validating and tuning analyzer quality for the production environment;
+- protecting response metadata and non-text media outside the explicitly
+  supported reasoning text; and
+- authentication and transport encryption for remote analyzers.
 
 Before using the library in production, review [Security](SECURITY.md) and the
 [Threat Model](docs/threat-model.md).

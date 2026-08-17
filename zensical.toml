@@ -14,6 +14,7 @@ extra_javascript = ["javascripts/consent.js"]
 
 nav = [
   { "Home" = "index.md" },
+  { "Getting Started" = "getting-started.md" },
   { "Reference" = [
     { "Sample / Demo Guide" = "sample.md" },
     { "Configuration" = "configuration.md" },
@@ -22,6 +23,7 @@ nav = [
     { "Evaluation" = "evaluation.md" },
   ] },
   { "한국어" = [
+    { "시작하기" = "ko/getting-started.md" },
     { "샘플 / 데모 가이드" = "ko/sample.md" },
     { "설정과 사용법" = "ko/configuration.md" },
     { "아키텍처" = "ko/architecture.md" },

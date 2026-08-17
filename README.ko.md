@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 7fe880a513ae776d6c819bec2ee1f2b6376bf98f0b0e3afbeb8d6b26b904325d -->
+<!-- i18n-source-sha256: b671c8e5a9df168b041f5317eca73db71ab0e65575a7e484e5fc6b43f63eaa0f -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -83,6 +83,8 @@ Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 
 ## 애플리케이션에 적용
 
+단계별 설정 방법은 [시작하기](docs/ko/getting-started.md)를 참고하세요.
+
 다음 예제는 `ChatModel`과 `ChatClient.Builder`가 이미 구성된 Spring AI 애플리케이션에
 개인정보 보호 경계를 추가합니다.
 
@@ -92,9 +94,12 @@ Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 
 | 사용 사례 | 추가할 스타터 |
 | --- | --- |
-| 일반 개인정보 탐지에 Presidio 사용 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
+| 다양한 PII 유형 탐지 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` (권장) |
 | 정규식(Regex) 규칙 또는 사용자 정의 분석기 사용 | `spring-ai-privacy-guardrails-spring-boot-starter` |
 | 호환되는 OpenNLP 모델을 보유한 JVM 전용 환경 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
+
+다양한 PII 유형 탐지가 필요한 경우 Presidio를 기본 선택지로 권장합니다. 정규식으로
+정의한 애플리케이션 고유 형식은 내장 Regex 분석기를 사용할 수 있습니다.
 
 Presidio 스타터에는 외부 Presidio Analyzer 서비스가 필요합니다. Presidio와 OpenNLP
 스타터에는 Privacy Guardrails 기본 스타터가 이미 포함되어 있으므로 이를 별도로 추가하지
@@ -171,17 +176,16 @@ spring:
             - CUSTOMER_ID
 ```
 
-도구는 `PrivacyToolCallbackFactory`로 감싸서 보호된 `ChatClient`에 등록합니다.
+기존 Spring AI `ToolCallback`을 `PrivacyToolCallbackFactory`로 감싼 뒤 보호된
+`ChatClient`에 등록합니다.
 
 ```java
-@Bean
-ToolCallback customerLookup(
-        PrivacyToolCallbackFactory toolCallbackFactory,
-        CustomerLookupTool delegate
-) {
-    return toolCallbackFactory.wrap(delegate);
-}
+ToolCallback protectedCustomerLookup =
+        toolCallbackFactory.wrap(customerLookupToolCallback);
 ```
+
+여기서 `customerLookupToolCallback`은 애플리케이션에 이미 존재하는 Spring AI
+`ToolCallback`입니다.
 
 보호된 `ChatClient`의 표준 도구 경로에서는 감싸지 않은 콜백을 실행 전에 거부합니다.
 도구 결과는 모델이나 애플리케이션으로 전달되기 전에 다시 보호됩니다.
@@ -243,6 +247,7 @@ CI는 Java 21과 25에서 기본 검증을 실행하고, Java 21에서 Presidio 
 
 ## 상세 문서
 
+- [시작하기](docs/ko/getting-started.md): 단계별 스타터 선택과 개인정보 보호 경계 설정
 - [설정과 사용법](docs/ko/configuration.md): 스타터, 분석기, 도구와 출력 정책
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역

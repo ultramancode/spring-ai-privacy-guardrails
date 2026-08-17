@@ -3,7 +3,7 @@
 [English](../sample.md) | [한국어](sample.md)
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: fbbe8921815d4b0688682aee5adf1637cc7f3fb4cc4bcd672b8ffe98fa24d618 -->
+<!-- i18n-source-sha256: c5f493d88183ccf1321a85ba8c5bde4fe21fa59bbcc9c87228d234c30f0a37e7 -->
 
 실행 가능한 샘플은 항상 같은 결과를 반환하는 로컬 `ChatModel`, 메모리 내 RAG 구성 요소,
 루프백 MCP 서버를 사용하므로 클라우드 자격 증명이 필요하지 않습니다. **Privacy
@@ -84,7 +84,7 @@ Inspector는 `/demo/scenario`, `/demo/protect`, `/demo/tool-loop`의 결과를 �
 
 MCP 시나리오는 같은 고정 도구 정책으로 실제 루프백 HTTP 왕복 호출을 수행합니다.
 애플리케이션은 `/mcp`에 내장 로컬 서버를 시작하고 Streamable HTTP로 연결해
-`customerLookup`을 검색한 뒤, 동적 도구 프로바이더를 감싸 MCP 도구 호출을 한 번
+`customerLookup`을 검색한 뒤, 해당 `ToolCallbackProvider`를 감싸 MCP 도구 호출을 한 번
 실행합니다. 서버 측 근거는 `CUSTOMER_ID`만 복원되고 다른 인자는 토큰 상태를 유지함을
 확인합니다. 두 번째 모델 호출에서 기록한 근거는 MCP 결과에서 탐지된 값이 모델 재진입
 전에 보호됨을 확인합니다. 응답은 이 경로를

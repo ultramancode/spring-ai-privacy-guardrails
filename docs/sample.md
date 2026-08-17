@@ -86,12 +86,12 @@ service, or LLM.
 
 The MCP scenario follows the same fixed tool policy through a real loopback HTTP
 round trip. The application starts an embedded local server at `/mcp`, connects
-with Streamable HTTP, discovers `customerLookup`, wraps the dynamic tool
-provider, and executes one MCP tool call. Server-side evidence confirms that
-only `CUSTOMER_ID` is restored while the other arguments remain tokens. Evidence
-from the second model call confirms that detected values in the MCP result are
-protected before model re-entry. The response identifies this path as
-`actual-streamable-http-mcp-tool-loop`.
+with Streamable HTTP, discovers `customerLookup`, wraps its
+`ToolCallbackProvider`, and executes one MCP tool call. Server-side evidence
+confirms that only `CUSTOMER_ID` is restored while the other arguments remain
+tokens. Evidence from the second model call confirms that detected values in the
+MCP result are protected before model re-entry. The response identifies this
+path as `actual-streamable-http-mcp-tool-loop`.
 
 The server is embedded in the sample JVM and reused after its first call; this
 is not a remote or separately deployed MCP service.

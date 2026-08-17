@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 19b4b5691d3ae717b7f60691ae91aef9888aeced0428686707bbd1e175bc46aa -->
+<!-- i18n-source-sha256: 977c098c071ed742a93b06b8dc2ef0fa3667f034fdc02ae3ca949caf90e8cfba -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
@@ -16,7 +16,7 @@
 
 | 스타터 | 의존성 | 용도 |
 | --- | --- | --- |
-| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | 일반 개인정보 탐지에 권장합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
+| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | 애플리케이션 고유 형식보다 다양한 PII 유형을 탐지할 때 사용합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
 | 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1` | Regex 또는 사용자 정의 분석기용입니다. 별도의 분석기 연동은 포함하지 않습니다. |
 | OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
 
@@ -479,7 +479,7 @@ spring:
 설정한 정책을 적용합니다.
 
 - `TOKENIZE`는 같은 요청 안에서 동일한 개인정보를 일관된 토큰으로 치환합니다.
-- `REDACT`는 개인정보를 원문으로 복원할 수 없는 엔티티 유형 표시로 대체합니다.
+- `REDACT`는 개인정보를 원문으로 복원할 수 없는 유형 마커로 대체합니다.
 - `BLOCK`은 개인정보가 포함된 출력을 차단하고 `PrivacyOutputBlockedException`을
   발생시킵니다.
 
@@ -518,8 +518,8 @@ spring:
 | `true` | 적용 | 완성된 응답을 검사한 뒤 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용하여 전달합니다. |
 
 출력 보호가 활성화되어도 Spring AI의 스트리밍 API를 사용할 수 있지만, 개인정보를
-검사하기 위해 완성된 응답을 먼저 버퍼링합니다. 따라서 모델이 생성하는 텍스트를
-토큰 단위로 실시간 전달할 수는 없습니다. 실시간 스트리밍이 반드시 필요하다면
+검사하기 위해 완성된 응답을 먼저 버퍼링합니다. 따라서 모델 응답이 생성되는 즉시
+전달되는 실시간 스트리밍은 사용할 수 없습니다. 실시간 스트리밍이 반드시 필요하다면
 `output.enabled=false`로 두고 최종 모델 출력의 개인정보 보호를 애플리케이션에서
 처리해야 합니다.
 

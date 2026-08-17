@@ -23,9 +23,8 @@ flowchart LR
 
 Detection offsets always refer to the caller-supplied input text. Analyzers
 return ranges, entity types, scores, and other evidence; `core` validates,
-canonicalizes, and resolves that evidence according to application policy. A
-request-scoped `PrivacySession` manages mappings between tokens and their
-original PII values.
+canonicalizes, and resolves that evidence according to application policy.
+Token-to-original mappings are managed per request through `PrivacySession`.
 
 The library protects data that crosses supported model, tool, and output
 boundaries. The automatic protection scope does not cover data handled
@@ -118,13 +117,14 @@ also documents overlap-resolution behavior.
 
 ## Requests and Sessions
 
-`PrivacySession` manages token-to-original-PII-value mappings within one request.
+Token-to-original mappings are managed per request through `PrivacySession`.
 Direct `core` usage and Spring AI integration use the same session model.
 
 Each request receives a separate session, and tokens created in that session are
 valid only within that request. The Spring AI execution context carries only a
-session handle; the actual token-to-original-value mapping remains in the
-library's internal session and is not included in model requests or tool inputs.
+session handle; the actual token-to-original-value mapping remains in
+library-managed internal state and is not included in model requests or tool
+inputs.
 
 A session is not bound to a specific execution thread, so tool execution can
 continue on another thread while using the same request session. If the session

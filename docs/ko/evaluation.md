@@ -52,8 +52,8 @@
 | 거부된 도구 입력값 공개 | 허용되지 않은 입력값의 원문은 보호 상태를 유지합니다. | [`PrivacyToolCallbackWrapperTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
 | 도구 결과 → 모델 | 도구 결과의 탐지된 개인정보는 모델로 돌아가기 전에 다시 토큰화됩니다. | [`PrivacySequentialToolIntegrationTest`](../../spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
 | MCP Streamable HTTP 도구 왕복 | 로컬 MCP 왕복에서 허용된 입력값만 복원하고, 거부된 값은 보호하며, 결과는 모델로 돌아가기 전에 다시 보호됩니다. | [`McpToolLoopIntegrationTest`](../../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/McpToolLoopIntegrationTest.java) |
-| 정상 완료와 오류 시 요청 수명주기 | 정상 완료와 downstream 실패 후 세션이 종료됩니다. | [`PrivacyLifecycleAdvisorTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
-| 논리적 스트리밍 응답 보호 | 출력 프레임을 하나의 논리적 응답으로 버퍼링하므로 여러 프레임에 걸친 개인정보를 subscriber에게 전달하기 전에 보호합니다. | [`PrivacyOutputAdvisorStreamTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyOutputAdvisorStreamTest.java) |
+| 정상 완료와 오류 시 요청 수명주기 | 정상 완료 또는 후속 처리 실패 후 세션이 종료됩니다. | [`PrivacyLifecycleAdvisorTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
+| 논리적 스트리밍 응답 보호 | 출력 프레임을 하나의 논리적 응답으로 버퍼링하므로 여러 프레임에 걸친 개인정보를 응답 소비자에게 전달하기 전에 보호합니다. | [`PrivacyOutputAdvisorStreamTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyOutputAdvisorStreamTest.java) |
 | 일부 응답 버퍼링 후 스트리밍 취소 | 취소 시 개인정보 원문을 내보내지 않고 상위 스트림 처리를 취소하며, 개인정보 보호 세션을 종료하고 해당 매핑을 무효화합니다. | [`PrivacyLifecycleAdvisorTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
 
 ## JMH 벤치마크

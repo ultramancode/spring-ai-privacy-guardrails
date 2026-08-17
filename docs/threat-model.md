@@ -9,7 +9,7 @@ privacy boundaries supported by the library.
 
 - Original PII that may appear in model input, retrieved content, tool input and
   results, and final output.
-- Token-to-original-PII-value mappings managed by each request-scoped
+- Token-to-original-PII-value mappings managed per request through
   `PrivacySession`.
 - Credentials used for remote analyzer services and analyzer requests and
   responses.
@@ -34,7 +34,7 @@ the deployment environment's configuration.
 | Threat | Library control | Scope and considerations |
 | --- | --- | --- |
 | PII reaches a model without protection or is returned in a final response | PII in supported model input is protected before the model call. When output protection is enabled, the configured output policy is applied to the final response. | Detection coverage depends on the configured analyzers and settings. Unsupported content and changes made outside a privacy boundary are outside the automatic protection scope. |
-| A token from another request is reused, or an original-value mapping is accessed through an invalid session | Each request manages its tokens and original-value mappings in a separate session. Tokens from another request are not restored to original values, and unknown or closed sessions fail. | A session handle is an internal value used to distinguish request-scoped privacy state. |
+| A token from another request is reused, or an original-value mapping is accessed through an invalid session | Tokens and original-value mappings are managed separately for each request through `PrivacySession`. Tokens from another request are not restored to original values, and unknown or closed sessions fail. | A session handle is an internal value used to distinguish request-scoped privacy state. |
 | A tool receives unauthorized original PII or returns new PII | Original-value disclosure to tools is default-deny, and only configured entity types are restored immediately before execution. Results from protected tools are inspected and protected again. | On a protected `ChatClient`'s standard path, callbacks not wrapped by `PrivacyToolCallbackFactory` are rejected. Custom tool execution paths must be protected separately. |
 | Structured values, streaming responses, or `returnDirect` flows bypass PII inspection | JSON and supported value structures are inspected under size and complexity bounds. When output protection is enabled, streaming responses are collected through completion for inspection, and the configured output policy also applies to `returnDirect` results. | Encoded or compressed content whose original text cannot be read directly must be converted by the application into text or supported JSON before inspection. |
 | An analyzer returns invalid results, results overlap, or some analyzers fail | The library validates detection spans and entity types. It resolves overlapping results and type conflicts according to defined rules and handles analyzer failures using the configured failure policy. | Actual detection coverage can vary with the analyzers, score thresholds, and whether some analyzer failures are allowed. |

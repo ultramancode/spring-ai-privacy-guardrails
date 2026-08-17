@@ -82,6 +82,8 @@ for the corresponding reproducible automated coverage.
 
 ## Add Protection to an Application
 
+For a step-by-step setup path, see [Getting Started](docs/getting-started.md).
+
 The following example adds privacy boundaries to a Spring AI application that
 already provides a `ChatModel` and `ChatClient.Builder`.
 
@@ -91,9 +93,12 @@ Choose the starter that matches the analyzer you plan to use.
 
 | Use case | Starter |
 | --- | --- |
-| General PII detection with Presidio | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
+| Broader PII detection | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` (recommended) |
 | Regex rules or custom analyzers | `spring-ai-privacy-guardrails-spring-boot-starter` |
 | JVM-only environment with compatible OpenNLP models | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
+
+For broader PII detection, Presidio is the recommended default choice. Use the
+built-in Regex analyzer for application-specific formats.
 
 The Presidio starter requires an external Presidio Analyzer service. The
 Presidio and OpenNLP starters already include the base Privacy Guardrails
@@ -175,18 +180,16 @@ spring:
             - CUSTOMER_ID
 ```
 
-Wrap tools with `PrivacyToolCallbackFactory` and register them with a protected
-`ChatClient`.
+Wrap an existing Spring AI `ToolCallback` with `PrivacyToolCallbackFactory` and
+register the wrapped callback with a protected `ChatClient`.
 
 ```java
-@Bean
-ToolCallback customerLookup(
-        PrivacyToolCallbackFactory toolCallbackFactory,
-        CustomerLookupTool delegate
-) {
-    return toolCallbackFactory.wrap(delegate);
-}
+ToolCallback protectedCustomerLookup =
+        toolCallbackFactory.wrap(customerLookupToolCallback);
 ```
+
+Here, `customerLookupToolCallback` is the application's existing Spring AI
+`ToolCallback`.
 
 In the standard tool-execution path of a protected `ChatClient`, unwrapped
 callbacks are rejected before execution. Tool results are protected again
@@ -255,6 +258,8 @@ runs live integration tests against a Presidio service and the JMH smoke tests.
 
 ## Documentation
 
+- [Getting Started](docs/getting-started.md): step-by-step starter selection and
+  privacy-boundary setup
 - [Configuration](docs/configuration.md): starters, analyzers, tool policies,
   and output policies
 - [Architecture](docs/architecture.md): modules and model, tool, and session

@@ -13,7 +13,7 @@ Choose the starter or starters that match the analyzers you plan to use.
 
 | Starter | Dependency | Use |
 | --- | --- | --- |
-| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | Recommended for general PII detection. Includes the base Spring Boot starter, Presidio HTTP integration, and conditional health support. |
+| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | For detecting PII beyond application-specific patterns. Includes the base Spring Boot starter, Presidio HTTP integration, and conditional health support. |
 | Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1` | For Regex or custom analyzers. Does not include a separate analyzer integration. |
 | OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1` | Advanced JVM-only configuration for applications that already own compatible NER models. |
 
@@ -544,9 +544,9 @@ inputs, model-call boundaries, or tool results.
 
 The Spring AI streaming API remains usable when output protection is enabled,
 but the library must first buffer the complete response for privacy inspection.
-Model-generated text therefore cannot be delivered token by token in real time.
-If real-time streaming is required, leave `output.enabled=false` and handle
-privacy protection for final model output in the application.
+Model-generated text therefore cannot be delivered in real time as it is
+generated. If real-time streaming is required, leave `output.enabled=false`
+and handle privacy protection for final model output in the application.
 
 `response-inspection.*` is independent of `output.enabled`. These settings bound
 the amount and streaming scope of content the library must inspect, including

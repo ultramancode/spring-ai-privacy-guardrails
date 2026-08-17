@@ -22,6 +22,7 @@ See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 
 | Guide | Covers |
 | --- | --- |
+| [Getting Started](getting-started.md) | Starter selection, basic setup, and model, tool, MCP, and output protection. |
 | [Sample / Demo Guide](sample.md) | Inspector scenarios, runtime endpoints, locale behavior, and evidence boundaries. |
 | [Configuration](configuration.md) | Starters, analyzers, output policy, tool disclosure, and processing limits. |
 | [Architecture](architecture.md) | Module boundaries, request sessions, evidence resolution, and execution lifecycle. |

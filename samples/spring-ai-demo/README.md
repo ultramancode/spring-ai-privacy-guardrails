@@ -114,6 +114,9 @@ Expected shape:
 }
 ```
 
+This concrete token string shape is not a public contract; application logic
+must not parse it or otherwise depend on it.
+
 The session nonce is generated again for every request. Calling the endpoint
 twice with the same input must produce different opaque tokens.
 Each span's `providers` list contains only canonical analyzer provider IDs from

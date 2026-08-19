@@ -100,7 +100,7 @@ public class PublishedArtifactConsumer {
             if (probe.modelRequests().size() != 2 || probe.toolCalls().size() != 1) {
                 throw new IllegalStateException("Published configurer did not execute one complete tool loop");
             }
-            ToolCallSnapshot call = probe.toolCalls().getFirst();
+            ToolCallSnapshot call = probe.toolCalls().get(0);
             if (!call.input().contains("CUST-0042") || call.input().contains("alice@example.com")) {
                 throw new IllegalStateException("Published tool wrapper violated scoped disclosure");
             }

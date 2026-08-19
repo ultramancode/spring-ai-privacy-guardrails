@@ -49,7 +49,7 @@ flowchart LR
 ## Run the Sample
 
 The sample includes a deterministic local `ChatModel`, so no cloud credentials
-are required. With JDK 21 installed, run the following command from the
+are required. With JDK 17 installed, run the following command from the
 repository root:
 
 ```bash
@@ -247,14 +247,15 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 
 | Component | Verified version |
 | --- | --- |
-| Java baseline | 21 |
-| Java compatibility CI | 25 |
+| Java baseline | 17 |
+| Java compatibility CI | 17, 21, 25 |
 | Spring AI | 2.0.0 |
 | Spring Boot | 4.1.0 |
 | Gradle wrapper | 9.6.1 |
 
-CI runs the default verification on Java 21 and 25. On Java 21, it separately
-runs live integration tests against a Presidio service and the JMH smoke tests.
+CI runs the default verification on Java 17, 21, and 25. On Java 21, it
+separately runs live integration tests against a Presidio service and the JMH
+smoke tests.
 
 ## Documentation
 

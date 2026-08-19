@@ -72,7 +72,7 @@ class DemoRegexEvaluationTest {
                     .isZero();
         }
 
-        assertThat(cases).hasSize(62);
+        assertThat(cases).hasSize(64);
         assertThat(truePositives).isEqualTo(37);
         assertThat(falsePositives).isZero();
         assertThat(falseNegatives).isZero();

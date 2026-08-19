@@ -3,7 +3,7 @@
 [English](../sample.md) | [한국어](sample.md)
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: c5f493d88183ccf1321a85ba8c5bde4fe21fa59bbcc9c87228d234c30f0a37e7 -->
+<!-- i18n-source-sha256: 930961a32c7cfe45a9c11352923b75b776bf7993dd3217010833417b35fea5e0 -->
 
 실행 가능한 샘플은 항상 같은 결과를 반환하는 로컬 `ChatModel`, 메모리 내 RAG 구성 요소,
 루프백 MCP 서버를 사용하므로 클라우드 자격 증명이 필요하지 않습니다. **Privacy
@@ -13,7 +13,7 @@ Boundary Inspector**는 샘플 백엔드가 반환한 런타임 근거를 표시
 
 ## Inspector 실행
 
-JDK 21이 설치된 환경에서 저장소 루트의 다음 명령을 실행합니다.
+JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합니다.
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run

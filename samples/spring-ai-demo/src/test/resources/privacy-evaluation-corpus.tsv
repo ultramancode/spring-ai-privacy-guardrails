@@ -45,10 +45,12 @@ phone-invalid-prefix	-	-	잘못된 휴대폰은 015-1234-5678입니다.
 phone-short-tail	-	-	짧은 번호는 010-1234-567입니다.
 phone-long-tail	-	-	긴 번호는 010-1234-56789입니다.
 phone-dotted	-	-	점 표기는 010.1234.5678입니다.
+phone-ascii-word-adjacency	-	-	A010-1234-5678B
 rrn-invalid-category	-	-	잘못된 식별값은 900101-5234567입니다.
 rrn-unhyphenated	-	-	붙여 쓴 식별값은 9001011234567입니다.
 rrn-short	-	-	짧은 식별값은 900101-123456입니다.
 rrn-long	-	-	긴 식별값은 900101-12345678입니다.
+rrn-ascii-word-adjacency	-	-	A900101-1234567B
 employee-lowercase	-	-	소문자 사번은 emp-1234입니다.
 employee-too-long	-	-	긴 사번은 EMP-12345입니다.
 employee-alpha	-	-	문자 사번은 EMP-ABCD입니다.

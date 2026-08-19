@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: b671c8e5a9df168b041f5317eca73db71ab0e65575a7e484e5fc6b43f63eaa0f -->
+<!-- i18n-source-sha256: b78c83758b3437d681dd74423bae09bf4f3e65e93b7c3040a38bc4df34ddbe81 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -50,7 +50,7 @@ flowchart LR
 ## 샘플 실행
 
 샘플에는 같은 입력에 항상 같은 결과를 반환하는 로컬 `ChatModel`이 포함되어 있어
-클라우드 자격 증명이 필요하지 않습니다. JDK 21이 설치된 환경에서 저장소 루트의 다음
+클라우드 자격 증명이 필요하지 않습니다. JDK 17이 설치된 환경에서 저장소 루트의 다음
 명령을 실행하세요.
 
 ```bash
@@ -236,14 +236,14 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 
 | 구성 요소 | 검증한 버전 |
 | --- | --- |
-| Java 기준 버전 | 21 |
-| Java 호환성 CI | 25 |
+| Java 기준 버전 | 17 |
+| Java 호환성 CI | 17, 21, 25 |
 | Spring AI | 2.0.0 |
 | Spring Boot | 4.1.0 |
 | Gradle wrapper | 9.6.1 |
 
-CI는 Java 21과 25에서 기본 검증을 실행하고, Java 21에서 Presidio 서비스와의 실제 연동
-테스트와 JMH 스모크 테스트를 별도로 실행합니다.
+CI는 Java 17, 21, 25에서 기본 검증을 실행하고, Java 21에서 Presidio 서비스와의 실제
+연동 테스트와 JMH 스모크 테스트를 별도로 실행합니다.
 
 ## 상세 문서
 

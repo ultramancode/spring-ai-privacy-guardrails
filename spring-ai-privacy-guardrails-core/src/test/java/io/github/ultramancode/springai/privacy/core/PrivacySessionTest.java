@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -106,14 +108,18 @@ class PrivacySessionTest {
     }
 
     @Test
-    void sessionsRemainIsolatedAcrossVirtualThreads() throws Exception {
+    void sessionsRemainIsolatedAcrossConcurrentThreads() throws Exception {
         PrivacyService service = privacyService();
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
             CompletableFuture<String> alice = CompletableFuture.supplyAsync(() -> roundTrip(service, "Alice"), executor);
             CompletableFuture<String> bob = CompletableFuture.supplyAsync(() -> roundTrip(service, "Bob"), executor);
 
             assertThat(alice.get()).isEqualTo("Alice");
             assertThat(bob.get()).isEqualTo("Bob");
+        } finally {
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }
         assertThat(service.activeSessionCount()).isZero();
     }

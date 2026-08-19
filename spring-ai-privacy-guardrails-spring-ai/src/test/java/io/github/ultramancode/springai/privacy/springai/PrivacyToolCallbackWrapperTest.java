@@ -10,6 +10,8 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -20,7 +22,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -466,30 +470,42 @@ class PrivacyToolCallbackWrapperTest {
     }
 
     @Test
+    @EnabledForJreRange(min = JRE.JAVA_21)
     void scopedToolContextSurvivesVirtualThreadTransitionWithoutThreadLocal() throws Exception {
         PrivacyService service = TestPrivacyServices.privacyService();
-        try (PrivacySession session = service.openSession();
-                var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            String token = service.tokenize(session.handle(), "Alice");
-            PrivacyToolCallbackWrapper wrapper = wrap(
-                    delegate(input -> {
-                        assertThat(input).isEqualTo("{\"query\":\"lookup Alice\"}");
-                        return "Alice found";
-                    }),
-                    service,
-                    ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
-            );
+        try (PrivacySession session = service.openSession()) {
+            ExecutorService executor = virtualThreadExecutor();
+            try {
+                String token = service.tokenize(session.handle(), "Alice");
+                PrivacyToolCallbackWrapper wrapper = wrap(
+                        delegate(input -> {
+                            assertThat(input).isEqualTo("{\"query\":\"lookup Alice\"}");
+                            return "Alice found";
+                        }),
+                        service,
+                        ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                );
 
-            String result = CompletableFuture.supplyAsync(
-                    () -> wrapper.call(
-                            "{\"query\":\"lookup " + token + "\"}",
-                            toolContext(session.handle())
-                    ),
-                    executor
-            ).get();
+                String result = CompletableFuture.supplyAsync(
+                        () -> wrapper.call(
+                                "{\"query\":\"lookup " + token + "\"}",
+                                toolContext(session.handle())
+                        ),
+                        executor
+                ).get();
 
-            assertThat(service.detokenize(session.handle(), result)).isEqualTo("Alice found");
+                assertThat(service.detokenize(session.handle(), result)).isEqualTo("Alice found");
+            } finally {
+                executor.shutdownNow();
+                assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+            }
         }
+    }
+
+    private static ExecutorService virtualThreadExecutor() throws ReflectiveOperationException {
+        return (ExecutorService) Executors.class
+                .getMethod("newVirtualThreadPerTaskExecutor")
+                .invoke(null);
     }
 
     @Test

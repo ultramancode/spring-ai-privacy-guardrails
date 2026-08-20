@@ -32,6 +32,7 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
     private final PrivacyMessageTransformer messageTransformer;
     private final PrivacyModelControlValidator modelControlValidator;
     private final PrivacyToolCallbackFactory.Provenance requiredFactoryProvenance;
+    private final PrivacyEnforcementNotifier enforcementNotifier;
     private final int order;
 
     /**
@@ -40,7 +41,7 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
      * @param privacyService service that owns request sessions and transformations
      */
     public PrivacyModelBoundaryAdvisor(PrivacyService privacyService) {
-        this(privacyService, null, DEFAULT_ORDER);
+        this(privacyService, null, PrivacyEnforcementObserver.noop(), DEFAULT_ORDER);
     }
 
     /**
@@ -50,7 +51,7 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
      * @param order Spring AI advisor order
      */
     public PrivacyModelBoundaryAdvisor(PrivacyService privacyService, int order) {
-        this(privacyService, null, order);
+        this(privacyService, null, PrivacyEnforcementObserver.noop(), order);
     }
 
     /**
@@ -64,7 +65,12 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
             PrivacyService privacyService,
             PrivacyToolCallbackFactory requiredFactory
     ) {
-        this(privacyService, requiredFactory, DEFAULT_ORDER);
+        this(
+                privacyService,
+                requiredFactory,
+                PrivacyEnforcementObserver.noop(),
+                DEFAULT_ORDER
+        );
     }
 
     /**
@@ -80,6 +86,29 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
             PrivacyToolCallbackFactory requiredFactory,
             int order
     ) {
+        this(
+                privacyService,
+                requiredFactory,
+                PrivacyEnforcementObserver.noop(),
+                order
+        );
+    }
+
+    /**
+     * Creates a factory-bound model boundary with an optional privacy-safe observer.
+     *
+     * @param privacyService service that owns request sessions and transformations
+     * @param requiredFactory factory whose wrappers are accepted, or {@code null} to
+     * accept wrappers from any factory using the same service
+     * @param enforcementObserver observer for boundary and outcome events only
+     * @param order Spring AI advisor order
+     */
+    public PrivacyModelBoundaryAdvisor(
+            PrivacyService privacyService,
+            PrivacyToolCallbackFactory requiredFactory,
+            PrivacyEnforcementObserver enforcementObserver,
+            int order
+    ) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
         if (requiredFactory != null && !requiredFactory.usesPrivacyService(privacyService)) {
             throw new IllegalArgumentException("requiredFactory must use the same PrivacyService");
@@ -87,6 +116,7 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
         this.requiredFactoryProvenance = requiredFactory == null ? null : requiredFactory.provenance();
         this.messageTransformer = new PrivacyMessageTransformer(privacyService);
         this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
+        this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
         this.order = order;
     }
 
@@ -139,10 +169,15 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
                 : Set.of();
         this.modelControlValidator.validateModelVisibleToolDefinitions(handle, request);
         ChatClientRequest tokenized = this.messageTransformer.tokenize(handle, request);
-        return PrivacyToolExecutionContextSupport.attachRegisteredToolNames(
+        ChatClientRequest protectedRequest = PrivacyToolExecutionContextSupport.attachRegisteredToolNames(
                 tokenized,
                 registeredToolNames
         );
+        this.enforcementNotifier.notify(
+                PrivacyEnforcementBoundary.MODEL,
+                PrivacyEnforcementOutcome.PROTECTED
+        );
+        return protectedRequest;
     }
 
 }

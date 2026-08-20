@@ -3,7 +3,7 @@
 [English](../architecture.md) | [한국어](architecture.md)
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: ea4985b6522b23cb5e3db8f011be1fef4cc731124f422ba676a2a578b7131d10 -->
+<!-- i18n-source-sha256: 7cefceefe2799e4e372c7491b3d8b0b4dd699a96976763283f834a092ab00c11 -->
 
 ## 책임 범위
 
@@ -225,6 +225,11 @@ sequenceDiagram
 `PiiAnalyzerFailureObserver`도 같은 방식으로 정리된 실패 정보만 전달받습니다.
 이 정보는 분석 결과를 변경하지 않으며, 메트릭, 추적과 로그 같은 운영 진단에
 활용할 수 있습니다.
+
+선택적으로 등록할 수 있는 `PrivacyEnforcementObserver`는 모델, 도구 입력, 도구 결과,
+애플리케이션 출력 경계에서 발생한 `PROTECTED`, `DISCLOSED`, `BLOCKED` 결과를
+전달합니다. 이벤트에는 `boundary`와 `outcome`만 포함되며, 옵저버에서 오류가
+발생해도 개인정보 보호 처리에는 영향을 주지 않습니다.
 
 모델 제공자, 애플리케이션 도구와 외부 라이브러리에서 발생한 예외는 원래 예외
 유형으로 전달될 수 있습니다. 라이브러리 외부에서 생성된 예외와 로그는 이 정제

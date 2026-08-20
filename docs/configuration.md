@@ -216,7 +216,7 @@ spring:
         enabled: true
         rules:
           - entity-type: EMPLOYEE_ID
-            pattern: "\\bEMP-\\d{4}\\b"
+            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
 ```
 
@@ -300,7 +300,7 @@ spring:
         enabled: true
         rules:
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
             capture-group: 0
             validator-id: customer-id-check

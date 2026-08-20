@@ -3,7 +3,7 @@
 [English](../getting-started.md) | [한국어](getting-started.md)
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 446be668814a1a7e4fadfed228e8e696940ba5b440df237fed9f605a2205e5b4 -->
+<!-- i18n-source-sha256: 74ec755369d25288a429d77fc1619820b62fc988adaba189ee7025b712392df5 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -79,10 +79,10 @@ spring:
         enabled: true
         rules:
           - entity-type: EMPLOYEE_ID
-            pattern: "\\bEMP-\\d{4}\\b"
+            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
 ```
 
@@ -106,7 +106,7 @@ spring:
         enabled: true
         rules:
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
             capture-group: 0
             validator-id: customer-id-check

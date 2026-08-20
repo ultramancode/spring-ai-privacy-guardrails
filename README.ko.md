@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: b78c83758b3437d681dd74423bae09bf4f3e65e93b7c3040a38bc4df34ddbe81 -->
+<!-- i18n-source-sha256: 25de59e5a884e237304c5cb524eeab828b459f4db48eeba8e02a9e45d4530095 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -129,7 +129,7 @@ spring:
         enabled: true
         rules:
           - entity-type: EMPLOYEE_ID
-            pattern: "\\bEMP-\\d{4}\\b"
+            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
 ```
 

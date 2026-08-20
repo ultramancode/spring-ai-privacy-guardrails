@@ -20,21 +20,23 @@ spring:
             - CUSTOMER_ID
       regex:
         enabled: true
+        # Prefer explicit ASCII boundaries to \b for ASCII-oriented rules,
+        # so behavior stays consistent across supported JDKs.
         rules:
           - entity-type: EMAIL_ADDRESS
-            pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+            pattern: '(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9_])'
             score: 0.95
           - entity-type: PHONE_NUMBER
-            pattern: '\b01[016789]-\d{3,4}-\d{4}\b'
+            pattern: '(?<![A-Za-z0-9_])01[016789]-[0-9]{3,4}-[0-9]{4}(?![A-Za-z0-9_])'
             score: 0.95
           - entity-type: KOREAN_RRN
-            pattern: '\b\d{6}-[1-4]\d{6}\b'
+            pattern: '(?<![A-Za-z0-9_])[0-9]{6}-[1-4][0-9]{6}(?![A-Za-z0-9_])'
             score: 0.9
           - entity-type: EMPLOYEE_ID
-            pattern: '\bEMP-\d{4}\b'
+            pattern: '(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])'
             score: 0.9
           - entity-type: CUSTOMER_ID
-            pattern: '\bCUST-\d{6}\b'
+            pattern: '(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])'
             score: 0.9
 
 ---

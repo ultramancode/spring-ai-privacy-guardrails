@@ -11,7 +11,7 @@ returned by the sample backend.
 
 ## Run the Inspector
 
-From the repository root, with JDK 21 installed:
+From the repository root, with JDK 17 installed:
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run

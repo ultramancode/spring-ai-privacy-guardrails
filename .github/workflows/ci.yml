@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [21, 25]
+        java: [17, 21, 25]
 
     steps:
       - name: Check out repository
@@ -35,14 +35,20 @@ jobs:
       - name: Build and test
         run: ./gradlew --no-daemon clean check -PtestJavaVersion=${{ matrix.java }}
 
+      - name: Verify published artifact smoke on Java 17 baseline
+        if: matrix.java == 17
+        run: >-
+          ./gradlew --no-daemon
+          publishedArtifactSmokeTest
+          publishedPomOnlyArtifactSmokeTest
+          -PtestJavaVersion=17
+
       - name: Verify Javadoc and publication metadata
         if: matrix.java == 21
         run: >-
           ./gradlew --no-daemon
           javadoc
           generatePomFileForMavenJavaPublication
-          publishedArtifactSmokeTest
-          publishedPomOnlyArtifactSmokeTest
           -PtestJavaVersion=21
 
       - name: Smoke-test repository benchmarks
@@ -114,6 +120,7 @@ jobs:
             :spring-ai-privacy-guardrails-presidio:test \
             :spring-ai-privacy-guardrails-sample-demo:test \
             --tests '*Presidio*LiveIntegrationTest' \
+            -PtestJavaVersion=21 \
             --rerun-tasks
 
       - name: Show Presidio logs

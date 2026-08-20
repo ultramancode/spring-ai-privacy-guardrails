@@ -17,11 +17,14 @@ The project is pre-1.0. Its contribution flow is:
 ./gradlew clean check
 ```
 
-Java 21 is the baseline, and CI also tests Java 25. New behavior must include
+Java 17 is the baseline, and CI also tests Java 21 and 25. New behavior must include
 focused tests; changes to Spring AI boundaries should include an integration
 test where practical. `check` runs the test suite and verifies the repository's
 module rules. Update the declared module policy when a change intentionally
 alters that graph.
+
+To reproduce another compatibility lane locally, install that JDK and override
+the build/test toolchain, for example with `-PtestJavaVersion=21`.
 
 Name JUnit test methods in `lowerCamelCase` without underscores.
 

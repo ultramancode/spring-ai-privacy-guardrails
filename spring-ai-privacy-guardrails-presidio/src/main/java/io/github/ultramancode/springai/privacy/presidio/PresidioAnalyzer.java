@@ -288,7 +288,7 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
             return;
         }
         try {
-            Thread.sleep(duration);
+            TimeUnit.NANOSECONDS.sleep(TimeUnit.NANOSECONDS.convert(duration));
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
             throw new PrivacyGuardrailException(

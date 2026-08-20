@@ -21,8 +21,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -157,9 +159,10 @@ class OpenNlpPiiAnalyzerTest {
     }
 
     @Test
-    void analyzeIsSafeAcrossVirtualThreads() throws Exception {
+    void analyzeIsSafeAcrossConcurrentThreads() throws Exception {
         OpenNlpPiiAnalyzer analyzer = analyzer();
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
             List<Future<List<PiiSpan>>> futures = List.of(
                     executor.submit(() -> analyzer.analyze("Alice joined", PiiAnalysisOptions.defaults())),
                     executor.submit(() -> analyzer.analyze("Bob joined", PiiAnalysisOptions.defaults()))
@@ -169,6 +172,9 @@ class OpenNlpPiiAnalyzerTest {
             PiiSpan bob = futures.get(1).get().get(0);
             assertThat("Alice joined".substring(alice.start(), alice.end())).isEqualTo("Alice");
             assertThat("Bob joined".substring(bob.start(), bob.end())).isEqualTo("Bob");
+        } finally {
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }
     }
 

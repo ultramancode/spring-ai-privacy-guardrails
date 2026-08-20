@@ -16,6 +16,8 @@ import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -47,12 +49,13 @@ class PresidioAnalyzerTest {
     private ExecutorService serverExecutor;
 
     @AfterEach
-    void stopServer() {
+    void stopServer() throws InterruptedException {
         if (this.server != null) {
             this.server.stop(0);
         }
         if (this.serverExecutor != null) {
-            this.serverExecutor.close();
+            shutdownExecutor(this.serverExecutor);
+            this.serverExecutor = null;
         }
     }
 
@@ -204,7 +207,7 @@ class PresidioAnalyzerTest {
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(Duration.ofSeconds(5), 2));
         AtomicReference<Throwable> observedFailure = new AtomicReference<>();
         AtomicBoolean interruptRestored = new AtomicBoolean();
-        Thread analysisThread = Thread.ofVirtual().start(() -> {
+        Thread analysisThread = new Thread(() -> {
             try {
                 analyzer.analyze("Alice", PiiAnalysisOptions.defaults());
             } catch (Throwable failure) {
@@ -214,7 +217,8 @@ class PresidioAnalyzerTest {
         });
 
         try {
-            assertThat(partialBodyFlushed.await(2, TimeUnit.SECONDS)).isTrue();
+            analysisThread.start();
+            assertThat(partialBodyFlushed.await(5, TimeUnit.SECONDS)).isTrue();
             analysisThread.interrupt();
             analysisThread.join(2_000);
 
@@ -735,16 +739,26 @@ class PresidioAnalyzerTest {
     }
 
     @Test
+    @EnabledForJreRange(min = JRE.JAVA_21)
     void analyzeIsSafeToCallFromVirtualThreads() throws Exception {
         startServer(200, "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":5,\"score\":0.9}]");
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        ExecutorService executor = virtualThreadExecutor();
+        try {
             List<PiiSpan> result = executor.submit(
                     () -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults())
             ).get();
             assertThat(result).containsExactly(new PiiSpan("PERSON", 0, 5, 0.9));
+        } finally {
+            shutdownExecutor(executor);
         }
+    }
+
+    private static ExecutorService virtualThreadExecutor() throws ReflectiveOperationException {
+        return (ExecutorService) Executors.class
+                .getMethod("newVirtualThreadPerTaskExecutor")
+                .invoke(null);
     }
 
     private PresidioAnalyzerConfig config() {
@@ -807,7 +821,7 @@ class PresidioAnalyzerTest {
 
     private void startConcurrentServer(HttpHandler handler) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(0), 0);
-        this.serverExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        this.serverExecutor = Executors.newFixedThreadPool(2);
         this.server.setExecutor(this.serverExecutor);
         this.server.createContext("/analyze", handler);
         this.server.start();
@@ -857,5 +871,10 @@ class PresidioAnalyzerTest {
         exchange.sendResponseHeaders(status, body.length);
         exchange.getResponseBody().write(body);
         exchange.close();
+    }
+
+    private void shutdownExecutor(ExecutorService executor) throws InterruptedException {
+        executor.shutdownNow();
+        assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
     }
 }

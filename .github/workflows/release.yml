@@ -53,7 +53,7 @@ jobs:
 
           check_runs=$(gh api \
             "repos/$GITHUB_REPOSITORY/commits/$release_commit/check-runs?per_page=100")
-          required_checks=("Java 21" "Java 25" "Presidio Docker smoke test")
+          required_checks=("Java 17" "Java 21" "Java 25" "Presidio Docker smoke test")
           for check_name in "${required_checks[@]}"; do
             if ! jq -e --arg name "$check_name" \
               '[.check_runs[] | select(.name == $name and .conclusion == "success")] | length > 0' \
@@ -68,7 +68,9 @@ jobs:
         uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: |
+            17
+            21
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
@@ -136,6 +138,7 @@ jobs:
           publishedPomOnlyArtifactSmokeTest
           cyclonedxBom
           centralPortalBundle
+          -PtestJavaVersion=21
           -Pversion=${{ steps.release.outputs.version }}
 
       - name: Verify release evidence

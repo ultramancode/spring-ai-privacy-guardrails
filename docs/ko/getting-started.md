@@ -3,7 +3,7 @@
 [English](../getting-started.md) | [한국어](getting-started.md)
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: a1a86cd4ae38e6b1b513c92d85972e659cf9ebf521b5095cc26840d7f503068d -->
+<!-- i18n-source-sha256: 74ec755369d25288a429d77fc1619820b62fc988adaba189ee7025b712392df5 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -25,7 +25,7 @@ JVM 내부에서 자체 NER 모델을 사용하려면 OpenNLP를, 애플리케�
 
 현재 릴리즈는 다음 환경에서 검증됩니다.
 
-- Java 21
+- Java 17
 - Spring AI 2.0.0
 - Spring Boot 4.1.0
 
@@ -79,10 +79,10 @@ spring:
         enabled: true
         rules:
           - entity-type: EMPLOYEE_ID
-            pattern: "\\bEMP-\\d{4}\\b"
+            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
 ```
 
@@ -106,7 +106,7 @@ spring:
         enabled: true
         rules:
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
             capture-group: 0
             validator-id: customer-id-check

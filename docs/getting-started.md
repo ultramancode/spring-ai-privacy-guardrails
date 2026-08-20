@@ -22,7 +22,7 @@ the [Sample / Demo Guide](sample.md).
 
 The current release is verified with:
 
-- Java 21
+- Java 17
 - Spring AI 2.0.0
 - Spring Boot 4.1.0
 
@@ -75,10 +75,10 @@ spring:
         enabled: true
         rules:
           - entity-type: EMPLOYEE_ID
-            pattern: "\\bEMP-\\d{4}\\b"
+            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
 ```
 
@@ -103,7 +103,7 @@ spring:
         enabled: true
         rules:
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
             capture-group: 0
             validator-id: customer-id-check

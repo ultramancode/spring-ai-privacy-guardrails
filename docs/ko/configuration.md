@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 977c098c071ed742a93b06b8dc2ef0fa3667f034fdc02ae3ca949caf90e8cfba -->
+<!-- i18n-source-sha256: 195674133ab92586897fa4941ad8e2c9ea8d7b09163f168a7efc62120cbddcf3 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
@@ -209,7 +209,7 @@ spring:
         enabled: true
         rules:
           - entity-type: EMPLOYEE_ID
-            pattern: "\\bEMP-\\d{4}\\b"
+            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
 ```
 
@@ -287,7 +287,7 @@ spring:
         enabled: true
         rules:
           - entity-type: CUSTOMER_ID
-            pattern: "\\bCUST-\\d{6}\\b"
+            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
             score: 0.90
             capture-group: 0
             validator-id: customer-id-check

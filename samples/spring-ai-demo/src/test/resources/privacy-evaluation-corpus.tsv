@@ -25,6 +25,7 @@ customer-name-particle	-	-	고객명은 최민수가 맞습니다.
 email-subdomain	EMAIL_ADDRESS	user.name@privacy.example.io	알림 주소는 user.name@privacy.example.io입니다.
 email-short-local	EMAIL_ADDRESS	a@b.co	테스트 메일은 a@b.co입니다.
 email-uppercase	EMAIL_ADDRESS	SECURITY@EXAMPLE.ORG	보안 메일은 SECURITY@EXAMPLE.ORG입니다.
+email-trailing-period	EMAIL_ADDRESS	john@example.com	Email john@example.com.
 phone-016	PHONE_NUMBER	016-321-7654	예전 휴대폰은 016-321-7654입니다.
 phone-019	PHONE_NUMBER	019-987-6543	합성 연락처 019-987-6543을 사용합니다.
 phone-three-digit-middle	PHONE_NUMBER	010-123-4567	임시 번호는 010-123-4567입니다.
@@ -41,21 +42,26 @@ email-missing-domain	-	-	잘못된 메일은 user@입니다.
 email-double-at	-	-	잘못된 메일은 user@@example.com입니다.
 email-domain-underscore	-	-	허용하지 않는 예시는 user@example_domain입니다.
 email-one-letter-tld	-	-	짧은 도메인은 user@example.c입니다.
+email-ascii-word-adjacency	-	-	test@example.com_
 phone-invalid-prefix	-	-	잘못된 휴대폰은 015-1234-5678입니다.
 phone-short-tail	-	-	짧은 번호는 010-1234-567입니다.
 phone-long-tail	-	-	긴 번호는 010-1234-56789입니다.
 phone-dotted	-	-	점 표기는 010.1234.5678입니다.
+phone-ascii-word-adjacency	-	-	A010-1234-5678B
 rrn-invalid-category	-	-	잘못된 식별값은 900101-5234567입니다.
 rrn-unhyphenated	-	-	붙여 쓴 식별값은 9001011234567입니다.
 rrn-short	-	-	짧은 식별값은 900101-123456입니다.
 rrn-long	-	-	긴 식별값은 900101-12345678입니다.
+rrn-ascii-word-adjacency	-	-	A900101-1234567B
 employee-lowercase	-	-	소문자 사번은 emp-1234입니다.
 employee-too-long	-	-	긴 사번은 EMP-12345입니다.
 employee-alpha	-	-	문자 사번은 EMP-ABCD입니다.
+employee-ascii-word-adjacency	-	-	AEMP-1234B
 customer-lowercase	-	-	소문자 고객번호는 cust-123456입니다.
 customer-too-short	-	-	짧은 고객번호는 CUST-12345입니다.
 customer-too-long	-	-	긴 고객번호는 CUST-1234567입니다.
 customer-separated	-	-	공백 고객번호는 CUST 123456입니다.
+customer-ascii-word-adjacency	-	-	ACUST-123456B
 person-five-syllables	-	-	제 이름은 가나다라마입니다.
 person-unrelated-label	-	-	사용자 이름은 홍길동입니다.
 json-ordinary	-	-	{"status":"public","count":1234}

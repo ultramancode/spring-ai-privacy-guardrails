@@ -32,9 +32,9 @@ Choose the starter for the analyzer you want to use:
 
 | Starter | Dependency | Use |
 | --- | --- | --- |
-| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1` | Built-in Regex rules or custom analyzers |
-| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | PII detection through an external Presidio Analyzer service |
-| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1` | JVM-local NER with application-supplied compatible models |
+| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.0` | Built-in Regex rules or custom analyzers |
+| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.0` | PII detection through an external Presidio Analyzer service |
+| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.0` | JVM-local NER with application-supplied compatible models |
 
 The Presidio and OpenNLP starters already include the base starter. Adding a
 starter does not enable privacy protection or an analyzer automatically.
@@ -50,7 +50,7 @@ Add the base starter.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.0"
 }
 ```
 
@@ -60,7 +60,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-boot-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -280,7 +280,7 @@ starter only when that analyzer is also needed.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.0"
 }
 ```
 
@@ -290,7 +290,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -333,7 +333,7 @@ with application-supplied compatible OpenNLP models.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.0"
 }
 ```
 
@@ -343,7 +343,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 

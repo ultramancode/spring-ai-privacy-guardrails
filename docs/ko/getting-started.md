@@ -3,7 +3,7 @@
 [English](../getting-started.md) | [한국어](getting-started.md)
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 0c3b2e4ef0b88eb57579f2dd02f13a3e737d5deb4cd888a637abadfc8d5c2510 -->
+<!-- i18n-source-sha256: fcd57eb5daf59910bc1d213a553cd2341e098bcd786d3e2e59d90c7a4483766c -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -35,9 +35,9 @@ JVM 내부에서 자체 NER 모델을 사용하려면 OpenNLP를, 애플리케�
 
 | 스타터 | 의존성 | 용도 |
 | --- | --- | --- |
-| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1` | 내장 Regex 규칙 또는 사용자 정의 분석기 |
-| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1` | Presidio를 외부 분석 서비스로 연동해 다양한 PII 유형 탐지 |
-| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1` | 애플리케이션이 제공하는 호환 모델을 이용한 JVM 내부 NER |
+| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.0` | 내장 Regex 규칙 또는 사용자 정의 분석기 |
+| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.0` | Presidio를 외부 분석 서비스로 연동해 다양한 PII 유형 탐지 |
+| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.0` | 애플리케이션이 제공하는 호환 모델을 이용한 JVM 내부 NER |
 
 Presidio와 OpenNLP 스타터에는 기본 스타터가 이미 포함되어 있습니다.
 스타터 의존성을 추가하는 것만으로 개인정보 보호나 분석기가 자동으로 활성화되지는
@@ -54,7 +54,7 @@ Regex 분석기를 사용할 수 있습니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.1.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.0"
 }
 ```
 
@@ -64,7 +64,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-boot-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -282,7 +282,7 @@ Presidio를 사용할 때는 기본 스타터를 별도로 추가할 필요가 �
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.1.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.0"
 }
 ```
 
@@ -292,7 +292,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -335,7 +335,7 @@ OpenNLP 스타터를 사용합니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.1.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.0"
 }
 ```
 
@@ -345,7 +345,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 

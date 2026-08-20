@@ -9,6 +9,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
 import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
@@ -196,8 +197,11 @@ public class PrivacyGuardrailsAutoConfiguration {
     PrivacyChatClientConfigurer privacyChatClientConfigurer(
             PrivacyService privacyService,
             PrivacyToolCallbackFactory toolCallbackFactory,
-            PrivacyGuardrailsProperties properties
+            PrivacyGuardrailsProperties properties,
+            ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
     ) {
+        PrivacyEnforcementObserver configuredEnforcementObserver = enforcementObserver
+                .getIfAvailable(PrivacyEnforcementObserver::noop);
         PrivacyGuardrailsProperties.Output outputProperties = properties.getOutput();
         PrivacyResponseInspectionLimits responseInspectionLimits =
                 properties.getResponseInspection().limits();
@@ -209,7 +213,8 @@ public class PrivacyGuardrailsAutoConfiguration {
                     privacyService,
                     outputProperties.getAction(),
                     outputProperties.getBlockExceptionMessage(),
-                    responseInspectionLimits
+                    responseInspectionLimits,
+                    configuredEnforcementObserver
             ));
         }
         advisors.add(new PrivacyToolContextAdvisor(privacyService, toolCallbackFactory));
@@ -219,7 +224,9 @@ public class PrivacyGuardrailsAutoConfiguration {
         ));
         advisors.add(new PrivacyModelBoundaryAdvisor(
                 privacyService,
-                toolCallbackFactory
+                toolCallbackFactory,
+                configuredEnforcementObserver,
+                PrivacyModelBoundaryAdvisor.DEFAULT_ORDER
         ));
         return new PrivacyChatClientConfigurer(advisors);
     }
@@ -234,9 +241,14 @@ public class PrivacyGuardrailsAutoConfiguration {
     @ConditionalOnMissingBean
     PrivacyToolCallbackFactory privacyToolCallbackFactory(
             PrivacyService privacyService,
-            ToolDisclosurePolicy toolDisclosurePolicy
+            ToolDisclosurePolicy toolDisclosurePolicy,
+            ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
     ) {
-        return new PrivacyToolCallbackFactory(privacyService, toolDisclosurePolicy);
+        return new PrivacyToolCallbackFactory(
+                privacyService,
+                toolDisclosurePolicy,
+                enforcementObserver.getIfAvailable(PrivacyEnforcementObserver::noop)
+        );
     }
 
 }

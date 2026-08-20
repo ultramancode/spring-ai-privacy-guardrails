@@ -652,6 +652,58 @@ environments. The try-with-resources pattern above clears captured records when
 the probe closes. Use `clear()` to reset only the recorded values while the
 probe remains open.
 
+## Privacy-Safe Runtime Observation
+
+Applications can register an optional Spring bean of type
+`PrivacyEnforcementObserver` to observe privacy enforcement at starter-managed
+boundaries:
+
+```java
+@Bean
+PrivacyEnforcementObserver privacyEnforcementObserver() {
+    return event -> privacyMetrics.record(event.boundary(), event.outcome());
+}
+```
+
+The observer receives an event each time a request passes through a supported
+privacy boundary. `boundary()` identifies where the event occurred, and
+`outcome()` describes the result at that boundary. A single request may therefore
+produce multiple events. If a request does not pass through a boundary, no event
+is delivered for that boundary. A boundary failure does not produce an empty
+outcome.
+
+`PrivacyEnforcementEvent` intentionally contains only `boundary()` and
+`outcome()`. It never includes raw PII, opaque tokens, entity types, payloads,
+tool names, request identifiers, or correlation data.
+
+| Boundary | When the event is delivered | Outcome and meaning |
+| --- | --- | --- |
+| `MODEL` | After protection of the request sent to the model completes | `PROTECTED` — model-request protection completed |
+| `TOOL_INPUT` | After tool-input handling completes | `DISCLOSED` — at least one original PII value was restored under policy<br>`PROTECTED` — no original PII value was restored for delivery to the tool |
+| `TOOL_RESULT` | After protection of the tool result completes | `PROTECTED` — tool-result protection completed |
+| `APPLICATION_OUTPUT` | When output protection is applied to the final response | `PROTECTED` — output protection completed and the response can be returned<br>`BLOCKED` — the `BLOCK` policy detected PII and raises a block exception instead of returning the response |
+
+`PROTECTED` means that protection at the boundary completed successfully. It
+does not indicate whether PII was present or whether content changed. For
+`TOOL_INPUT`, `PROTECTED` specifically means that no original PII value was
+restored for delivery to the tool.
+
+Streaming application output reports one event after protection of the complete
+buffered response finishes. Observer callbacks may run concurrently across
+requests. For streaming output, Reactor may invoke the callback on the thread
+processing the response stream rather than the thread that first handled the
+request; observers must not assume those threads are the same.
+
+Short operations such as logging and metrics updates can run directly. If
+network or database I/O is needed, enqueue the work and return promptly.
+Non-fatal observer failures are ignored and cannot change privacy enforcement.
+
+The Spring Boot starter automatically connects the registered observer bean.
+When constructing `PrivacyModelBoundaryAdvisor`, `PrivacyToolCallbackFactory`,
+or `PrivacyOutputAdvisor` directly without the starter's auto-configuration,
+pass the observer as a constructor argument. Existing constructors that do not
+accept an observer do not deliver observation events.
+
 ## Stored Data and Diagnostics
 
 This library protects PII in memory and retrieved documents when they are sent

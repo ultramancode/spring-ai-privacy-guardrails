@@ -21,6 +21,7 @@ public final class PrivacyToolCallbackFactory {
 
     private final PrivacyService privacyService;
     private final ToolDisclosurePolicy disclosurePolicy;
+    private final PrivacyEnforcementNotifier enforcementNotifier;
     private final Provenance provenance = new Provenance();
 
     /**
@@ -33,11 +34,27 @@ public final class PrivacyToolCallbackFactory {
             PrivacyService privacyService,
             ToolDisclosurePolicy disclosurePolicy
     ) {
+        this(privacyService, disclosurePolicy, PrivacyEnforcementObserver.noop());
+    }
+
+    /**
+     * Creates a factory with an optional privacy-safe enforcement observer.
+     *
+     * @param privacyService service that owns request sessions and transformations
+     * @param disclosurePolicy least-privilege decision applied independently to each tool
+     * @param enforcementObserver observer for boundary and outcome events only
+     */
+    public PrivacyToolCallbackFactory(
+            PrivacyService privacyService,
+            ToolDisclosurePolicy disclosurePolicy,
+            PrivacyEnforcementObserver enforcementObserver
+    ) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
         this.disclosurePolicy = Objects.requireNonNull(
                 disclosurePolicy,
                 "disclosurePolicy must not be null"
         );
+        this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
     }
 
     /**
@@ -158,6 +175,7 @@ public final class PrivacyToolCallbackFactory {
                 delegate,
                 this.privacyService,
                 this.disclosurePolicy,
+                this.enforcementNotifier,
                 this.provenance
         );
     }

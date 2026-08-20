@@ -16,6 +16,10 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
+import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementBoundary;
+import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementEvent;
+import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
+import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementOutcome;
 import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
@@ -488,6 +492,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
     @Test
     void explicitConfigurerRunsCompleteToolLoopOutputPolicyAndSessionCleanup() {
         AtomicReference<String> delegateToolInput = new AtomicReference<>();
+        List<PrivacyEnforcementEvent> enforcementEvents = new CopyOnWriteArrayList<>();
         this.contextRunner
                 .withBean(RegexPiiAnalyzer.class, () -> new RegexPiiAnalyzer(List.of(
                         new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.99, 0),
@@ -498,6 +503,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                                 0
                         )
                 )))
+                .withBean(PrivacyEnforcementObserver.class, () -> enforcementEvents::add)
                 .withPropertyValues(
                         "spring.ai.privacy.output.enabled=true",
                         "spring.ai.privacy.tools.disclosures[customerLookup][0]=CUSTOMER_ID"
@@ -534,6 +540,31 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     assertThat(result)
                             .doesNotContain("final@example.test")
                             .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
+                    assertThat(enforcementEvents).contains(
+                            new PrivacyEnforcementEvent(
+                                    PrivacyEnforcementBoundary.MODEL,
+                                    PrivacyEnforcementOutcome.PROTECTED
+                            ),
+                            new PrivacyEnforcementEvent(
+                                    PrivacyEnforcementBoundary.TOOL_INPUT,
+                                    PrivacyEnforcementOutcome.DISCLOSED
+                            ),
+                            new PrivacyEnforcementEvent(
+                                    PrivacyEnforcementBoundary.TOOL_RESULT,
+                                    PrivacyEnforcementOutcome.PROTECTED
+                            ),
+                            new PrivacyEnforcementEvent(
+                                    PrivacyEnforcementBoundary.APPLICATION_OUTPUT,
+                                    PrivacyEnforcementOutcome.PROTECTED
+                            )
+                    );
+                    assertThat(enforcementEvents.toString()).doesNotContain(
+                            "CUST-0042",
+                            "user@example.test",
+                            "CUSTOMER_ID",
+                            "EMAIL_ADDRESS",
+                            "[[PII_"
+                    );
                     assertThat(context.getBean(PrivacyService.class).activeSessionCount()).isZero();
                 });
     }

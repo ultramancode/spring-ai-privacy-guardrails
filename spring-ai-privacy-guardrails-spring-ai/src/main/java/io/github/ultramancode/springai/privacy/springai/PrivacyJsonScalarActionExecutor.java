@@ -8,6 +8,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyService;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /** Applies one privacy action to a pre-analyzed JSON scalar. */
@@ -47,16 +48,43 @@ final class PrivacyJsonScalarActionExecutor {
                     }
                     yield scalar;
                 }
-                case DISCLOSE -> privacyService.detokenizeValueTree(
+                case DISCLOSE -> disclose(
+                        privacyService,
                         handle,
-                        privacyService.tokenizeScalar(
-                                handle,
-                                scalar,
-                                tokenizationSpans(scalar, spans)
-                        ),
-                        allowedEntityTypes
-                );
+                        scalar,
+                        spans,
+                        allowedEntityTypes,
+                        phase
+                ).value();
             };
+        } catch (PrivacyGuardrailException failure) {
+            throw PrivacyJsonPayloadTransformer.remapOutputLimit(failure, phase);
+        }
+    }
+
+    static DisclosureResult disclose(
+            PrivacyService privacyService,
+            PrivacyContextHandle handle,
+            Object scalar,
+            List<PiiSpan> spans,
+            Set<String> allowedEntityTypes,
+            PrivacyPhase phase
+    ) {
+        try {
+            Object protectedScalar = privacyService.tokenizeScalar(
+                    handle,
+                    scalar,
+                    tokenizationSpans(scalar, spans)
+            );
+            Object disclosedScalar = privacyService.detokenizeValueTree(
+                    handle,
+                    protectedScalar,
+                    allowedEntityTypes
+            );
+            return new DisclosureResult(
+                    disclosedScalar,
+                    !Objects.equals(protectedScalar, disclosedScalar)
+            );
         } catch (PrivacyGuardrailException failure) {
             throw PrivacyJsonPayloadTransformer.remapOutputLimit(failure, phase);
         }
@@ -81,5 +109,8 @@ final class PrivacyJsonScalarActionExecutor {
         REDACT,
         CONTAINS_PII,
         DISCLOSE
+    }
+
+    record DisclosureResult(Object value, boolean disclosed) {
     }
 }

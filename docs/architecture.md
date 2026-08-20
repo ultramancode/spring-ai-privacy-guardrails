@@ -246,6 +246,11 @@ failure category and processing phase.
 It cannot change the analysis result, and the information can be used for
 operational diagnostics such as metrics, tracing, and logs.
 
+The optional `PrivacyEnforcementObserver` reports `PROTECTED`, `DISCLOSED`, and
+`BLOCKED` outcomes at the model, tool-input, tool-result, and application-output
+boundaries. Events contain only `boundary` and `outcome`; observer failures
+cannot affect privacy enforcement.
+
 Exceptions raised by model providers, application tools, and external
 libraries may propagate using their original exception types. Exceptions and
 logs created outside the library are outside this sanitization boundary, and

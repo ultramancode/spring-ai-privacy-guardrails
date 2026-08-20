@@ -48,6 +48,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
     private final String blockExceptionMessage;
     private final PrivacyResponseInspectionLimits responseInspectionLimits;
     private final PrivacyModelControlValidator modelControlValidator;
+    private final PrivacyEnforcementNotifier enforcementNotifier;
     private final int order;
 
     /**
@@ -61,6 +62,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 DEFAULT_ACTION,
                 DEFAULT_BLOCK_EXCEPTION_MESSAGE,
                 PrivacyResponseInspectionLimits.defaults(),
+                PrivacyEnforcementObserver.noop(),
                 DEFAULT_ORDER
         );
     }
@@ -78,6 +80,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 action,
                 blockExceptionMessage,
                 PrivacyResponseInspectionLimits.defaults(),
+                PrivacyEnforcementObserver.noop(),
                 DEFAULT_ORDER
         );
     }
@@ -101,6 +104,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 action,
                 blockExceptionMessage,
                 responseInspectionLimits,
+                PrivacyEnforcementObserver.noop(),
                 DEFAULT_ORDER
         );
     }
@@ -121,6 +125,60 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
             PrivacyResponseInspectionLimits responseInspectionLimits,
             int order
     ) {
+        this(
+                privacyService,
+                action,
+                blockExceptionMessage,
+                responseInspectionLimits,
+                PrivacyEnforcementObserver.noop(),
+                order
+        );
+    }
+
+    /**
+     * Creates an output boundary with an optional privacy-safe observer and default order.
+     *
+     * @param privacyService service that owns request sessions and transformations
+     * @param action action applied when sensitive output is detected
+     * @param blockExceptionMessage non-sensitive message used by {@link PrivacyOutputAction#BLOCK}
+     * @param responseInspectionLimits hard limits applied while inspecting call and stream responses
+     * @param enforcementObserver observer for boundary and outcome events only
+     */
+    public PrivacyOutputAdvisor(
+            PrivacyService privacyService,
+            PrivacyOutputAction action,
+            String blockExceptionMessage,
+            PrivacyResponseInspectionLimits responseInspectionLimits,
+            PrivacyEnforcementObserver enforcementObserver
+    ) {
+        this(
+                privacyService,
+                action,
+                blockExceptionMessage,
+                responseInspectionLimits,
+                enforcementObserver,
+                DEFAULT_ORDER
+        );
+    }
+
+    /**
+     * Creates an output boundary with an optional privacy-safe observer at a selected order.
+     *
+     * @param privacyService service that owns request sessions and transformations
+     * @param action action applied when sensitive output is detected
+     * @param blockExceptionMessage non-sensitive message used by {@link PrivacyOutputAction#BLOCK}
+     * @param responseInspectionLimits hard limits applied while inspecting call and stream responses
+     * @param enforcementObserver observer for boundary and outcome events only
+     * @param order Spring AI advisor order
+     */
+    public PrivacyOutputAdvisor(
+            PrivacyService privacyService,
+            PrivacyOutputAction action,
+            String blockExceptionMessage,
+            PrivacyResponseInspectionLimits responseInspectionLimits,
+            PrivacyEnforcementObserver enforcementObserver,
+            int order
+    ) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
         this.action = Objects.requireNonNull(action, "action must not be null");
         if (blockExceptionMessage == null || blockExceptionMessage.isBlank()) {
@@ -132,6 +190,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 "responseInspectionLimits must not be null"
         );
         this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
+        this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
         this.order = order;
     }
 
@@ -156,6 +215,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
         new PrivacyResponseInspectionGuard(this.responseInspectionLimits).accept(response);
         ChatResponse originalChatResponse = response.chatResponse();
         if (originalChatResponse == null || originalChatResponse.getResults().isEmpty()) {
+            notifyApplicationOutput(PrivacyEnforcementOutcome.PROTECTED);
             return response;
         }
 
@@ -167,12 +227,16 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
             changed = changed || protectedGeneration != generation;
         }
 
-        if (!changed) {
-            return response;
+        ChatClientResponse protectedResponse = response;
+        if (changed) {
+            ChatResponse chatResponse = new ChatResponse(
+                    generations,
+                    originalChatResponse.getMetadata()
+            );
+            protectedResponse = response.mutate().chatResponse(chatResponse).build();
         }
-
-        ChatResponse chatResponse = new ChatResponse(generations, originalChatResponse.getMetadata());
-        return response.mutate().chatResponse(chatResponse).build();
+        notifyApplicationOutput(PrivacyEnforcementOutcome.PROTECTED);
+        return protectedResponse;
     }
 
     Flux<ChatClientResponse> protectAtApplicationBoundary(
@@ -267,6 +331,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 this.action
         );
         if (policyResult.blocked()) {
+            notifyApplicationOutput(PrivacyEnforcementOutcome.BLOCKED);
             throw new PrivacyOutputBlockedException(this.blockExceptionMessage);
         }
         return policyResult.text();
@@ -302,20 +367,22 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                         return response;
                     })
                     .collectList()
-                    .flatMapMany(buffered -> Flux.fromIterable(
-                            PrivacyBufferedStreamTransformer.transform(
-                                    buffered,
-                                    (message, metadata) -> protectMessage(
-                                            handle,
-                                            message,
-                                            isReturnDirect(metadata)
-                                    ),
-                                    metadata -> PrivacyProviderTextMetadataTransformer.transformGenerationMetadata(
-                                            metadata,
-                                            text -> protectText(handle, text, isReturnDirect(metadata))
-                                    )
+                    .map(buffered -> PrivacyBufferedStreamTransformer.transform(
+                            buffered,
+                            (message, metadata) -> protectMessage(
+                                    handle,
+                                    message,
+                                    isReturnDirect(metadata)
+                            ),
+                            metadata -> PrivacyProviderTextMetadataTransformer.transformGenerationMetadata(
+                                    metadata,
+                                    text -> protectText(handle, text, isReturnDirect(metadata))
                             )
-                    ));
+                    ))
+                    .doOnNext(ignored -> notifyApplicationOutput(
+                            PrivacyEnforcementOutcome.PROTECTED
+                    ))
+                    .flatMapMany(Flux::fromIterable);
         });
     }
 
@@ -329,6 +396,13 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 PrivacyFailureCode.STREAM_TIMEOUT,
                 PrivacyPhase.OUTPUT_POLICY,
                 "Streaming response exceeded the configured privacy idle timeout"
+        );
+    }
+
+    private void notifyApplicationOutput(PrivacyEnforcementOutcome outcome) {
+        this.enforcementNotifier.notify(
+                PrivacyEnforcementBoundary.APPLICATION_OUTPUT,
+                outcome
         );
     }
 }

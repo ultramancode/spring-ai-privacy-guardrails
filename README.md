@@ -225,6 +225,17 @@ See [Configuration](docs/configuration.md) for detailed behavior and
 [Architecture](docs/architecture.md) for request flow and module
 responsibilities.
 
+## Privacy-Safe Runtime Observation
+
+Applications can optionally register a `PrivacyEnforcementObserver` to receive
+privacy enforcement events at supported model, tool-input, tool-result, and
+application-output boundaries. Each event contains only `boundary`, identifying
+where it occurred, and `outcome`, describing the result at that boundary. It does
+not include PII, tokens, payloads, tool names, or request identifiers.
+
+See [Privacy-Safe Runtime Observation](docs/configuration.md#privacy-safe-runtime-observation)
+for registration, outcome semantics, and callback execution guidance.
+
 ## Published Modules
 
 Analyzer-specific starters bring in their runtime modules as transitive

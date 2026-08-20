@@ -28,17 +28,23 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
     private final ToolMetadata toolMetadata;
     private final PrivacyService privacyService;
     private final ToolDisclosurePolicy disclosurePolicy;
+    private final PrivacyEnforcementNotifier enforcementNotifier;
     private final PrivacyToolCallbackFactory.Provenance factoryProvenance;
 
     PrivacyToolCallbackWrapper(
             ToolCallback delegate,
             PrivacyService privacyService,
             ToolDisclosurePolicy disclosurePolicy,
+            PrivacyEnforcementNotifier enforcementNotifier,
             PrivacyToolCallbackFactory.Provenance factoryProvenance
     ) {
         this.delegate = delegate;
         this.privacyService = privacyService;
         this.disclosurePolicy = disclosurePolicy;
+        this.enforcementNotifier = Objects.requireNonNull(
+                enforcementNotifier,
+                "enforcementNotifier must not be null"
+        );
         this.factoryProvenance = Objects.requireNonNull(
                 factoryProvenance,
                 "factoryProvenance must not be null"
@@ -83,8 +89,19 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
         Objects.requireNonNull(toolInput, "toolInput must not be null");
         PrivacyContextHandle handle = requireActiveHandle(toolContext);
         ToolDisclosureScope disclosureScope = disclosureScope();
-        String cleanInput = transformInput(handle, toolInput, disclosureScope);
+        PrivacyJsonPayloadTransformer.DisclosureResult inputResult = transformInput(
+                handle,
+                toolInput,
+                disclosureScope
+        );
+        String cleanInput = inputResult.payload();
         ToolContext delegateContext = withoutInternalPrivacyEntries(toolContext);
+        this.enforcementNotifier.notify(
+                PrivacyEnforcementBoundary.TOOL_INPUT,
+                inputResult.disclosed()
+                        ? PrivacyEnforcementOutcome.DISCLOSED
+                        : PrivacyEnforcementOutcome.PROTECTED
+        );
         String delegateResult = this.delegate.call(cleanInput, delegateContext);
         if (delegateResult == null) {
             throw new ToolExecutionException(
@@ -96,7 +113,12 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
                     )
             );
         }
-        return tokenizeResult(handle, delegateResult);
+        String protectedResult = tokenizeResult(handle, delegateResult);
+        this.enforcementNotifier.notify(
+                PrivacyEnforcementBoundary.TOOL_RESULT,
+                PrivacyEnforcementOutcome.PROTECTED
+        );
+        return protectedResult;
     }
 
     private ToolDisclosureScope disclosureScope() {
@@ -111,12 +133,12 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
         return scope;
     }
 
-    private String transformInput(
+    private PrivacyJsonPayloadTransformer.DisclosureResult transformInput(
             PrivacyContextHandle handle,
             String toolInput,
             ToolDisclosureScope disclosureScope
     ) {
-        return PrivacyJsonPayloadTransformer.disclose(
+        return PrivacyJsonPayloadTransformer.discloseWithOutcome(
                 this.privacyService,
                 handle,
                 toolInput,

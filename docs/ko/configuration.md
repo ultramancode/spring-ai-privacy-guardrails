@@ -3,7 +3,7 @@
 [English](../configuration.md) | [한국어](configuration.md)
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 195674133ab92586897fa4941ad8e2c9ea8d7b09163f168a7efc62120cbddcf3 -->
+<!-- i18n-source-sha256: 68a4492bd4bbe162b50cb9b45971bf33b03db1a9e60e97ff23bd7ffddd9ff2ba -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
@@ -622,6 +622,54 @@ try (PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService)) {
 `PrivacyTestProbe`에는 테스트 원문이 기록될 수 있으므로 테스트 환경에서만
 사용하세요. 위 예제처럼 try-with-resources로 사용하면 종료 시 기록이 정리됩니다.
 테스트 도중 기록만 초기화하려면 `clear()`를 사용할 수 있습니다.
+
+## 개인정보 보호 런타임 관측
+
+애플리케이션은 선택적으로 `PrivacyEnforcementObserver` 타입의 Spring 빈을 하나 등록해
+스타터가 관리하는 개인정보 보호 경계의 처리 결과를 받을 수 있습니다.
+
+```java
+@Bean
+PrivacyEnforcementObserver privacyEnforcementObserver() {
+    return event -> privacyMetrics.record(event.boundary(), event.outcome());
+}
+```
+
+옵저버는 요청이 지원되는 개인정보 보호 경계를 지날 때마다 이벤트를 전달합니다.
+`boundary()`는 이벤트가 발생한 지점을, `outcome()`은 해당 지점의 처리 결과를
+나타냅니다. 따라서 요청 하나에서 여러 이벤트가 발생할 수 있습니다. 요청이 특정
+경계를 지나지 않으면 해당 경계의 이벤트는 전달되지 않습니다. 경계 처리에 실패해도
+별도의 빈 결과를 전달하지 않습니다.
+
+`PrivacyEnforcementEvent`에는 의도적으로 `boundary()`와 `outcome()`만 포함됩니다.
+개인정보 원문, 불투명 토큰, 엔티티 유형, 페이로드, 도구 이름, 요청 식별자와
+상관관계 데이터는 전달하지 않습니다.
+
+| 경계 (`boundary`) | 이벤트 발생 시점 | 결과 (`outcome`)와 의미 |
+| --- | --- | --- |
+| `MODEL` | 모델에 전달할 요청의 보호 처리가 완료된 뒤 | `PROTECTED` — 모델 요청 보호가 완료됨 |
+| `TOOL_INPUT` | 도구 입력 처리가 완료된 뒤 | `DISCLOSED` — 정책에 따라 개인정보 원문을 하나 이상 복원함<br>`PROTECTED` — 도구에 전달하기 위해 복원된 개인정보 원문이 없음 |
+| `TOOL_RESULT` | 도구 결과의 보호 처리가 완료된 뒤 | `PROTECTED` — 도구 결과 보호가 완료됨 |
+| `APPLICATION_OUTPUT` | 최종 응답에 출력 보호를 적용할 때 | `PROTECTED` — 출력 보호가 완료되어 응답을 반환할 수 있음<br>`BLOCKED` — `BLOCK` 정책이 개인정보를 탐지해 응답 대신 차단 예외를 발생시킴 |
+
+`PROTECTED`는 해당 경계의 보호 처리가 정상적으로 완료됐다는 뜻입니다. 개인정보가
+있었는지 또는 실제 내용이 변경됐는지는 나타내지 않습니다. `TOOL_INPUT`에서
+`PROTECTED`는 도구에 전달하기 위해 복원된 개인정보 원문이 없다는 뜻입니다.
+
+스트리밍 애플리케이션 출력은 버퍼링된 전체 응답의 보호 처리가 끝난 뒤 이벤트를
+한 번만 전달합니다. 옵저버 콜백은 여러 요청에서 동시에 실행될 수 있습니다. 스트리밍
+출력에서는 Reactor가 응답 스트림을 처리하는 스레드에서 콜백을 실행할 수 있으므로,
+요청을 처음 처리한 스레드와 같다고 가정하면 안 됩니다.
+
+로그 기록이나 메트릭 갱신처럼 짧은 작업은 콜백에서 바로 수행해도 됩니다. 네트워크나
+데이터베이스 I/O가 필요하면 작업을 별도 큐에 넣고 콜백은 즉시 반환하는 방식을
+권장합니다. 옵저버 콜백에서 발생한 비치명적 오류는 무시되며 개인정보 보호 처리에는
+영향을 주지 않습니다.
+
+Spring Boot 스타터를 사용하면 등록한 옵저버 빈이 자동으로 연결됩니다. 스타터의 자동
+구성 없이 `PrivacyModelBoundaryAdvisor`, `PrivacyToolCallbackFactory`,
+`PrivacyOutputAdvisor`를 직접 생성하는 경우에는 옵저버를 생성자 인자로 전달해야
+합니다. 옵저버 인자가 없는 기존 생성자를 사용하면 관측 이벤트는 전달되지 않습니다.
 
 ## 저장 데이터와 진단 정보
 

@@ -8,10 +8,12 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
@@ -167,6 +169,81 @@ class PrivacyEnforcementObserverTest {
                         PrivacyEnforcementOutcome.PROTECTED
                 )
         );
+    }
+
+    @Test
+    void disallowedProtectedToolInputReportsProtected() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        List<PrivacyEnforcementEvent> events = new ArrayList<>();
+        PrivacyToolCallbackFactory toolFactory = new PrivacyToolCallbackFactory(
+                service,
+                ToolDisclosurePolicy.denyAll(),
+                events::add
+        );
+
+        try (PrivacySession session = service.openSession()) {
+            String personToken = service.tokenize(session.handle(), "Alice");
+            ToolCallback protectedTool = toolFactory.wrap(tool(input -> {
+                assertThat(input).contains(personToken).doesNotContain("Alice");
+                return "safe result";
+            }));
+
+            protectedTool.call(
+                    "{\"name\":\"" + personToken + "\"}",
+                    toolContext(session.handle())
+            );
+        }
+
+        assertThat(events).containsExactly(
+                new PrivacyEnforcementEvent(
+                        PrivacyEnforcementBoundary.TOOL_INPUT,
+                        PrivacyEnforcementOutcome.PROTECTED
+                ),
+                new PrivacyEnforcementEvent(
+                        PrivacyEnforcementBoundary.TOOL_RESULT,
+                        PrivacyEnforcementOutcome.PROTECTED
+                )
+        );
+    }
+
+    @Test
+    void returnDirectApplicationOutputReportsProtectedExactlyOnce() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        List<PrivacyEnforcementEvent> events = new ArrayList<>();
+        PrivacyOutputAdvisor outputBoundary = new PrivacyOutputAdvisor(
+                service,
+                PrivacyOutputAction.REDACT,
+                "blocked",
+                PrivacyResponseInspectionLimits.defaults(),
+                events::add
+        );
+
+        try (PrivacySession session = service.openSession()) {
+            String personToken = service.tokenize(session.handle(), "Alice");
+            Generation returnDirectGeneration = new Generation(
+                    new AssistantMessage(personToken),
+                    ChatGenerationMetadata.builder()
+                            .finishReason(ToolExecutionResult.FINISH_REASON)
+                            .build()
+            );
+
+            ChatClientResponse protectedResponse = outputBoundary.protectAtApplicationBoundary(
+                    session.handle(),
+                    new ChatClientResponse(
+                            new ChatResponse(List.of(returnDirectGeneration)),
+                            Map.of()
+                    )
+            );
+
+            assertThat(protectedResponse.chatResponse().getResult().getOutput().getText())
+                    .contains("[REDACTED_PERSON]")
+                    .doesNotContain("Alice", "[[PII_");
+        }
+
+        assertThat(events).containsExactly(new PrivacyEnforcementEvent(
+                PrivacyEnforcementBoundary.APPLICATION_OUTPUT,
+                PrivacyEnforcementOutcome.PROTECTED
+        ));
     }
 
     @Test

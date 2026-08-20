@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 25de59e5a884e237304c5cb524eeab828b459f4db48eeba8e02a9e45d4530095 -->
+<!-- i18n-source-sha256: 7950caa98085af5e8695a777ee8be0cf603184bab4d12729ace74dfc320c261b -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -214,6 +214,16 @@ MCP처럼 실행 중에 도구 목록이 달라지는 `ToolCallbackProvider`는 
 
 구성별 세부 동작은 [설정과 사용법](docs/ko/configuration.md), 요청 흐름과 모듈 역할은
 [아키텍처](docs/ko/architecture.md)를 참고하세요.
+
+## 개인정보 보호 런타임 관측
+
+애플리케이션은 선택적으로 `PrivacyEnforcementObserver`를 등록해 모델·도구 입력·도구
+결과·애플리케이션 출력 경계에서 발생하는 개인정보 보호 처리 이벤트를 받을 수 있습니다.
+각 이벤트에는 이벤트가 발생한 경계(`boundary`)와 해당 경계의 처리 결과(`outcome`)만
+포함됩니다. 개인정보 원문, 토큰, 페이로드, 도구 이름과 요청 식별자는 포함되지 않습니다.
+
+등록 방법, 결과의 의미와 콜백 실행 지침은
+[개인정보 보호 런타임 관측](docs/ko/configuration.md#개인정보-보호-런타임-관측)을 참고하세요.
 
 ## 배포 모듈
 

@@ -3,7 +3,7 @@
 [English](../getting-started.md) | [한국어](getting-started.md)
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 74ec755369d25288a429d77fc1619820b62fc988adaba189ee7025b712392df5 -->
+<!-- i18n-source-sha256: 0c3b2e4ef0b88eb57579f2dd02f13a3e737d5deb4cd888a637abadfc8d5c2510 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -440,6 +440,8 @@ Regex, Presidio 또는 OpenNLP가 적합하지 않은 경우 애플리케이션�
 
 - 전체 설정 속성과 API 참고 문서는 [설정과 사용법](configuration.md)을
   참고하세요.
+- 개인정보 원문이나 페이로드를 노출하지 않고 경계 처리 결과만 관측하려면
+  [개인정보 보호 런타임 관측](configuration.md#개인정보-보호-런타임-관측)을 참고하세요.
 - 로컬 도구, RAG 및 Streamable HTTP MCP의 실제 실행 근거는
   [샘플 / 데모 가이드](sample.md)를 참고하세요.
 - 모델, 도구, 세션 및 요청 수명주기 경계는

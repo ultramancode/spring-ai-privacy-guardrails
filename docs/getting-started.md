@@ -439,6 +439,8 @@ Direct `ChatModel` calls and custom execution paths outside the configured
 
 - See [Configuration](configuration.md) for the complete property and API
   reference.
+- See [Privacy-Safe Runtime Observation](configuration.md#privacy-safe-runtime-observation)
+  to observe boundary outcomes without exposing PII or payloads.
 - See the [Sample / Demo Guide](sample.md) for Local Tool, RAG, and Streamable
   HTTP MCP runtime evidence.
 - See [Architecture](architecture.md) for model, tool, session, and request

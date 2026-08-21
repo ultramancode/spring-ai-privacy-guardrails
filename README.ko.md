@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: cff246b3300beffe4df30d741eafc7cb0aea31c3437e2c4433318fc30e4c7c9c -->
+<!-- i18n-source-sha256: 27bb64080fbfa5c89aafcfc287d8e68de6f1ba47abd67e4a9213de31c49dfc16 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -244,16 +244,20 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 
 ## 호환성과 상태
 
-| 구성 요소 | 검증한 버전 |
+| 구성 요소 | 호환 범위 / 검증 버전 |
 | --- | --- |
 | Java 기준 버전 | 17 |
 | Java 호환성 CI | 17, 21, 25 |
-| Spring AI | 2.0.0 |
-| Spring Boot | 4.1.0 |
+| Spring AI 호환 계열 | 2.0.x |
+| Spring AI 권장 버전 | 2.0.1 |
+| Spring Boot | 4.1.1 |
+| Presidio Analyzer | 2.2.364 |
+| Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
 
-CI는 Java 17, 21, 25에서 기본 검증을 실행하고, Java 21에서 Presidio 서비스와의 실제
-연동 테스트와 JMH 스모크 테스트를 별도로 실행합니다.
+CI는 표의 현재 버전 조합을 검증하며, Spring AI는 2.0.x 계열 호환성도 확인합니다.
+Presidio 실제 연동 테스트와 OpenNLP 어댑터 테스트도 CI에 포함됩니다. 신규 사용자는
+표의 권장 및 검증 버전을 사용하세요.
 
 ## 상세 문서
 

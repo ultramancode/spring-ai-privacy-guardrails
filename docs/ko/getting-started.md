@@ -3,7 +3,7 @@
 [English](../getting-started.md) | [한국어](getting-started.md)
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: fcd57eb5daf59910bc1d213a553cd2341e098bcd786d3e2e59d90c7a4483766c -->
+<!-- i18n-source-sha256: aa30565f1dd788f7a57f639dcf2830f844dcfc4a0917004f1a8b0b99b451b904 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -26,8 +26,8 @@ JVM 내부에서 자체 NER 모델을 사용하려면 OpenNLP를, 애플리케�
 현재 릴리즈는 다음 환경에서 검증됩니다.
 
 - Java 17
-- Spring AI 2.0.0
-- Spring Boot 4.1.0
+- Spring AI 2.0.1
+- Spring Boot 4.1.1
 
 ## 1. 스타터 선택
 

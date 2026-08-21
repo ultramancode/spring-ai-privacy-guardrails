@@ -1,6 +1,6 @@
 services:
   presidio-analyzer:
-    image: ghcr.io/data-privacy-stack/presidio-analyzer:2.2.363@sha256:330c78c144eca0c554e4cf12ab7c05a21872dca63fe6f93d67f08741de30b62f
+    image: ghcr.io/data-privacy-stack/presidio-analyzer:2.2.364@sha256:ae8f6f111ac2f04e3fec552f7f80edd0dcbfa2dd69ee1b9e030475be31669885
     ports:
       - "127.0.0.1:5002:3000"
     healthcheck:

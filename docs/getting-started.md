@@ -23,8 +23,8 @@ the [Sample / Demo Guide](sample.md).
 The current release is verified with:
 
 - Java 17
-- Spring AI 2.0.0
-- Spring Boot 4.1.0
+- Spring AI 2.0.1
+- Spring Boot 4.1.1
 
 ## 1. Choose a Starter
 

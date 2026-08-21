@@ -256,21 +256,17 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 
 ## Compatibility and Status
 
-| Component | Compatibility / verified version |
+| Component | Current verified baseline |
 | --- | --- |
-| Java baseline | 17 |
-| Java compatibility CI | 17, 21, 25 |
-| Spring AI compatibility line | 2.0.x |
-| Spring AI recommended version | 2.0.1 |
+| Java | 17 (CI: 17, 21, 25) |
+| Spring AI | 2.0.1 |
 | Spring Boot | 4.1.1 |
 | Presidio Analyzer | 2.2.364 |
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
 
-CI verifies the current versions listed above and also checks compatibility
-within the Spring AI 2.0.x line. It includes live Presidio integration tests and
-OpenNLP adapter tests. New users should use the recommended and verified
-versions above.
+Spring AI maintains compatibility within the current `2.0.x` line, and `2.0.1`
+is recommended for new users.
 
 ## Documentation
 

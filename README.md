@@ -256,17 +256,20 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 
 ## Compatibility and Status
 
-| Component | Verified version |
+| Component | Current verified baseline |
 | --- | --- |
-| Java baseline | 17 |
-| Java compatibility CI | 17, 21, 25 |
-| Spring AI | 2.0.0 |
-| Spring Boot | 4.1.0 |
+| Java | 17 |
+| Spring AI | 2.0.1 |
+| Spring Boot | 4.1.1 |
+| Presidio Analyzer | 2.2.364 |
+| Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
 
-CI runs the default verification on Java 17, 21, and 25. On Java 21, it
-separately runs live integration tests against a Presidio service and the JMH
-smoke tests.
+CI runs the full test suite on Java 17, 21, and 25. Presidio integration tests,
+which require an external service, and JMH smoke tests run as separate CI jobs.
+
+Spring AI maintains compatibility within the current `2.0.x` line, and `2.0.1`
+is recommended for new users.
 
 ## Documentation
 

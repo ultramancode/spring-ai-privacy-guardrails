@@ -1,7 +1,7 @@
 # Presidio Sample
 
 This sample starts a local Presidio analyzer endpoint for integration testing.
-The Compose file pins Presidio Analyzer `2.2.363` and its multi-platform image
+The Compose file pins Presidio Analyzer `2.2.364` and its multi-platform image
 digest for reproducible smoke tests. Run the commands below from the repository
 root in a Linux shell.
 

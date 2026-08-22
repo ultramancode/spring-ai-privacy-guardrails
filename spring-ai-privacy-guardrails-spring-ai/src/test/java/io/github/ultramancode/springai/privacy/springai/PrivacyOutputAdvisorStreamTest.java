@@ -29,6 +29,8 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 import reactor.core.publisher.Flux;
 
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -690,21 +692,6 @@ class PrivacyOutputAdvisorStreamTest {
                 "blocked",
                 new PrivacyResponseInspectionLimits(10, 100, 1, Duration.ofSeconds(1))
         );
-        Media unsupportedMedia = Media.builder()
-                .mimeType(MimeTypeUtils.APPLICATION_OCTET_STREAM)
-                .data(new Object())
-                .build();
-        StreamAdvisorChain unsupportedMediaChain = mock(StreamAdvisorChain.class);
-        when(unsupportedMediaChain.nextStream(any())).thenReturn(Flux.just(response(List.of(new Generation(
-                AssistantMessage.builder().media(List.of(unsupportedMedia)).build()
-        )))));
-        PrivacyOutputAdvisor unsupportedMediaAdvisor = new PrivacyOutputAdvisor(
-                service,
-                PrivacyOutputAction.TOKENIZE,
-                "blocked",
-                new PrivacyResponseInspectionLimits(10, 100, 100, Duration.ofSeconds(1))
-        );
-
         try (PrivacySession session = service.openSession()) {
             assertThatThrownBy(() -> protectStreamAtApplicationBoundary(
                     characterAdvisor, session.handle(), characterChain
@@ -734,8 +721,32 @@ class PrivacyOutputAdvisorStreamTest {
                             "code",
                             PrivacyFailureCode.RESPONSE_INSPECTION_LIMIT_EXCEEDED
                     );
+        }
+    }
+
+    @Test
+    void adviseStreamFailsClosedForUrlMediaData() throws MalformedURLException {
+        PrivacyService service = privacyService();
+        Media remoteMedia = Media.builder()
+                .mimeType(MimeTypeUtils.IMAGE_PNG)
+                .data(URI.create("https://example.invalid/media").toURL())
+                .build();
+        StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
+        when(chain.nextStream(any())).thenReturn(Flux.just(response(List.of(new Generation(
+                AssistantMessage.builder().media(List.of(remoteMedia)).build()
+        )))));
+        PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
+                service,
+                PrivacyOutputAction.TOKENIZE,
+                "blocked",
+                new PrivacyResponseInspectionLimits(10, 100, 100, Duration.ofSeconds(1))
+        );
+
+        // URL-valued media data cannot be locally size-accounted without dereferencing it,
+        // so this representation fails closed without network access.
+        try (PrivacySession session = service.openSession()) {
             assertThatThrownBy(() -> protectStreamAtApplicationBoundary(
-                    unsupportedMediaAdvisor, session.handle(), unsupportedMediaChain
+                    advisor, session.handle(), chain
             ).collectList().block())
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasFieldOrPropertyWithValue(

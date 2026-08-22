@@ -43,6 +43,18 @@ jobs:
           publishedPomOnlyArtifactSmokeTest
           -PtestJavaVersion=17
 
+      - name: Verify Spring AI 2.0.0 patch compatibility
+        if: matrix.java == 17
+        run: |
+          ./gradlew --no-daemon clean test \
+            -PspringAiVersion=2.0.0 \
+            -PtestJavaVersion=17
+          ./gradlew --no-daemon \
+            publishedArtifactSmokeTest \
+            publishedPomOnlyArtifactSmokeTest \
+            -PspringAiVersion=2.0.0 \
+            -PtestJavaVersion=17
+
       - name: Verify Javadoc and publication metadata
         if: matrix.java == 21
         run: >-

@@ -116,7 +116,7 @@ jobs:
         uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 17
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
@@ -132,7 +132,7 @@ jobs:
             :spring-ai-privacy-guardrails-presidio:test \
             :spring-ai-privacy-guardrails-sample-demo:test \
             --tests '*Presidio*LiveIntegrationTest' \
-            -PtestJavaVersion=21 \
+            -PtestJavaVersion=17 \
             --rerun-tasks
 
       - name: Show Presidio logs

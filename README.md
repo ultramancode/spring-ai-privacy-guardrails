@@ -112,12 +112,12 @@ neither privacy protection nor an analyzer.
 
 ### Dependency and Basic Configuration
 
-The examples below use version `0.2.0`. To start without an external analyzer
+The examples below use version `0.2.1`. To start without an external analyzer
 service, use the base starter with an application-specific regex rule.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1"
 }
 ```
 

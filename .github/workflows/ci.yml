@@ -83,7 +83,7 @@ jobs:
             identity_args+=(--allow-noncanonical-source)
           fi
           ./scripts/verify-release-sbom.sh \
-            0.2.1-SNAPSHOT \
+            0.3.0-SNAPSHOT \
             build/reports/cyclonedx/bom.json \
             "${identity_args[@]}"
 

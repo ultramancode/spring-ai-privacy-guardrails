@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: a99edee37016e43d18ccf9bdd14cf098c980951e9c1b3647f34702435d85e562 -->
+<!-- i18n-source-sha256: 6e1a421c9df07f5db7aec1f78d4b3e8ba1ca60a5776f88fea343e59c9b3817d9 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -246,12 +246,15 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 
 | 구성 요소 | 현재 검증 기준 |
 | --- | --- |
-| Java | 17 (CI: 17, 21, 25) |
+| Java | 17 |
 | Spring AI | 2.0.1 |
 | Spring Boot | 4.1.1 |
 | Presidio Analyzer | 2.2.364 |
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
+
+CI는 Java 17, 21, 25에서 전체 테스트를 실행합니다. 외부 서비스가 필요한 Presidio 연동
+테스트와 JMH 스모크 테스트는 별도 CI 작업으로 실행합니다.
 
 Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자에게는 `2.0.1`을
 권장합니다.

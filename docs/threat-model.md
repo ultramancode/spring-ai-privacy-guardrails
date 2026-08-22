@@ -1,6 +1,6 @@
 # Threat Model
 
-[English](threat-model.md) | [한국어](ko/threat-model.md)
+**English** | [한국어](ko/threat-model.md)
 
 ## Protected Assets
 

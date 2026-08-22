@@ -1,6 +1,6 @@
 # Getting Started
 
-[English](getting-started.md) | [한국어](ko/getting-started.md)
+**English** | [한국어](ko/getting-started.md)
 
 This guide shows the basic path for adding Spring AI Privacy Guardrails to an
 existing Spring AI application and applying privacy protection across model,

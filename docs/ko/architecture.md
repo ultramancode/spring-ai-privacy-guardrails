@@ -1,9 +1,9 @@
 # 아키텍처
 
-[English](../architecture.md) | [한국어](architecture.md)
+[English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 7cefceefe2799e4e372c7491b3d8b0b4dd699a96976763283f834a092ab00c11 -->
+<!-- i18n-source-sha256: 3e33757cba7ee312a17c4bb5d2180201f1f1e7ceee070e28a2f29898703651d6 -->
 
 ## 책임 범위
 

@@ -1,6 +1,6 @@
 # Architecture
 
-[English](architecture.md) | [한국어](ko/architecture.md)
+**English** | [한국어](ko/architecture.md)
 
 ## Responsibility Boundary
 

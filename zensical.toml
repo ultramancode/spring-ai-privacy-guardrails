@@ -23,6 +23,7 @@ nav = [
     { "Evaluation" = "evaluation.md" },
   ] },
   { "한국어" = [
+    { "홈" = "ko/index.md" },
     { "시작하기" = "ko/getting-started.md" },
     { "샘플 / 데모 가이드" = "ko/sample.md" },
     { "설정과 사용법" = "ko/configuration.md" },

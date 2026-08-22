@@ -11,6 +11,11 @@
 </p>
 
 <p align="center">
+  Featured on the Spring Blog:
+  <a href="https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/">This Week in Spring — August 18, 2026</a>
+</p>
+
+<p align="center">
   <strong>Watch the demo:</strong>
   <a href="https://youtu.be/IeeA5ogIX_I">English</a> ·
   <a href="https://youtu.be/vir-x78e9j8">한국어</a>

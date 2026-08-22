@@ -1,9 +1,9 @@
 # 평가와 벤치마크
 
-[English](../evaluation.md) | [한국어](evaluation.md)
+[English](../evaluation.md) | **한국어**
 
 <!-- i18n-source: docs/evaluation.md -->
-<!-- i18n-source-sha256: 33949a0ca4fc3dcae1820950db8791d5dd6fc84c408ed6aab2b5591f4d3c3a63 -->
+<!-- i18n-source-sha256: 7959e7e34ca5d266809bf9d10805d7ee375957ba904afc792cfaf9bc060ec27d -->
 
 이 저장소에는 데모 분석기의 회귀 테스트, 개인정보 보호 경계 테스트와 JMH 벤치마크가
 포함되어 있습니다. 회귀 테스트는 탐지 결과를, 경계 테스트는 정책 적용을, JMH 벤치마크는

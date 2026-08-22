@@ -1,5 +1,7 @@
 # Spring AI Privacy Guardrails
 
+**English** | [한국어](ko/index.md)
+
 ![Spring AI Privacy Guardrails execution boundary](images/hero.svg)
 
 Keep detected PII out of the model. Reveal only what each trusted tool needs.
@@ -8,6 +10,9 @@ Protect every tool result before it leaves the tool boundary.
 Detection answers **what text is sensitive**. Spring AI Privacy Guardrails
 enforces **where the original value may travel** across model, tool, output,
 and request-lifecycle boundaries.
+
+Featured on the Spring Blog:
+[This Week in Spring — August 18, 2026](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/).
 
 ## See It in Action
 
@@ -43,4 +48,4 @@ evidence at the model and tool boundaries.
 
 See the [Sample / Demo Guide](sample.md) for the Inspector workflow and the
 [full sample application guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md)
-for optional profiles and integration examples.
+for Presidio and OpenNLP profiles and integration examples.

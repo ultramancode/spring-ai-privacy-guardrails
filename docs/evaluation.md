@@ -1,6 +1,11 @@
+---
+hide:
+  - footer
+---
+
 # Evaluation and Benchmarks
 
-[English](evaluation.md) | [한국어](ko/evaluation.md)
+**English** | [한국어](ko/evaluation.md)
 
 This repository includes a regression test for the demo analyzer,
 privacy-boundary tests, and JMH benchmarks. The regression test checks detection

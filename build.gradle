@@ -99,6 +99,7 @@ privacyBuild {
     }
 
     localizedDocument 'README.md', 'README.ko.md'
+    localizedDocument 'docs/index.md', 'docs/ko/index.md'
     localizedDocument 'docs/architecture.md', 'docs/ko/architecture.md'
     localizedDocument 'docs/configuration.md', 'docs/ko/configuration.md'
     localizedDocument 'docs/evaluation.md', 'docs/ko/evaluation.md'

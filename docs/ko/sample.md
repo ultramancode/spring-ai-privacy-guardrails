@@ -1,9 +1,9 @@
 # 샘플 / 데모 가이드
 
-[English](../sample.md) | [한국어](sample.md)
+[English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: 930961a32c7cfe45a9c11352923b75b776bf7993dd3217010833417b35fea5e0 -->
+<!-- i18n-source-sha256: c3fb41c77a5558724417f11b23b0244ba95678af865288e99e7f8664610c5dd1 -->
 
 실행 가능한 샘플은 항상 같은 결과를 반환하는 로컬 `ChatModel`, 메모리 내 RAG 구성 요소,
 루프백 MCP 서버를 사용하므로 클라우드 자격 증명이 필요하지 않습니다. **Privacy

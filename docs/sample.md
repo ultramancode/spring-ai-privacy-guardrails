@@ -1,6 +1,6 @@
 # Sample / Demo Guide
 
-[English](sample.md) | [한국어](ko/sample.md)
+**English** | [한국어](ko/sample.md)
 
 The runnable sample uses a deterministic local `ChatModel`, in-memory RAG
 components, and a loopback MCP server. No cloud credentials are required. Its

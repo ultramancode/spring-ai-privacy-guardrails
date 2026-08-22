@@ -1,6 +1,6 @@
 # Configuration and Usage
 
-[English](configuration.md) | [한국어](ko/configuration.md)
+**English** | [한국어](ko/configuration.md)
 
 This document is the comprehensive application-facing reference for Spring AI
 Privacy Guardrails. The base Spring Boot starter provides the `core` module and

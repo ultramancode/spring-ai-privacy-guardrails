@@ -1,9 +1,9 @@
 # 설정과 사용법
 
-[English](../configuration.md) | [한국어](configuration.md)
+[English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: ce9298b47dcedbcd797f55614d4dd89f8727066c9ee7df574cd67dd571ae413f -->
+<!-- i18n-source-sha256: 65f41de3537c276c75aac6f02ef1fb8b914415dfc63cf4bdb0e0b30dc32c1fb4 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를

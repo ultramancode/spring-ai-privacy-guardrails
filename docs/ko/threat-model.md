@@ -1,9 +1,9 @@
 # 위협 모델
 
-[English](../threat-model.md) | [한국어](threat-model.md)
+[English](../threat-model.md) | **한국어**
 
 <!-- i18n-source: docs/threat-model.md -->
-<!-- i18n-source-sha256: 8fb2a9124d8a83633cbefe5fc0df5636df7cffdc85cf9c963a261ad0de82f24d -->
+<!-- i18n-source-sha256: 997d483a14a45ec6157a2545c3fbe68f06735de8fdef4ed22d9a81f768983888 -->
 
 ## 보호 대상
 

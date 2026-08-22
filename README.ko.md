@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 1fc0a4af07a224971ee690224992558adb3b3606ccae1408472c7971a0e51971 -->
+<!-- i18n-source-sha256: 284ab7a7a8c6a4049700b9b9995a4793e9e2678a35b2be383f0f3c9678d5a91a -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -113,12 +113,12 @@ Presidio 스타터에는 외부 Presidio Analyzer 서비스가 필요합니다. 
 
 ### 의존성과 기본 설정
 
-아래 예제는 버전 `0.2.0`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
+아래 예제는 버전 `0.2.1`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
 스타터와 애플리케이션 전용 정규식 규칙을 사용할 수 있습니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1"
 }
 ```
 

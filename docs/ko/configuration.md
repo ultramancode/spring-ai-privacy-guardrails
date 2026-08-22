@@ -3,7 +3,7 @@
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 65f41de3537c276c75aac6f02ef1fb8b914415dfc63cf4bdb0e0b30dc32c1fb4 -->
+<!-- i18n-source-sha256: 07b16d27791faf4a39d5a1f8909c4b1f3f23d13fc14bb7db0445c667bab90657 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
@@ -16,9 +16,9 @@
 
 | 스타터 | 의존성 | 용도 |
 | --- | --- | --- |
-| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.0` | 애플리케이션 고유 형식보다 다양한 PII 유형을 탐지할 때 사용합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
-| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.0` | Regex 또는 사용자 정의 분석기용입니다. 별도의 분석기 연동은 포함하지 않습니다. |
-| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.0` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
+| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.1` | 애플리케이션 고유 형식보다 다양한 PII 유형을 탐지할 때 사용합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
+| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1` | Regex 또는 사용자 정의 분석기용입니다. 별도의 분석기 연동은 포함하지 않습니다. |
+| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.1` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
 
 스타터 의존성만 추가해도 개인정보 보호 기능이 자동으로 켜지지는 않습니다. 전역
 기능과 사용할 분석기를 명시적으로 활성화하세요. Presidio를
@@ -592,7 +592,7 @@ try (PrivacySession session = privacyService.openSession()) {
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.2.0"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.2.1"
 }
 ```
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.1]
+
+This maintenance release refreshes upstream compatibility baselines and CI
+coverage without changing public APIs or privacy-enforcement behavior.
+
+### Changed
+
+- Updated the default Spring AI baseline to 2.0.1 and Spring Boot to 4.1.1.
+- Updated Presidio Analyzer to 2.2.364 and Apache OpenNLP to 2.5.11.
+
+### Documentation
+
+- Improved navigation across the English and Korean documentation, including a
+  Korean documentation home.
+- Documented the project's mention in the official Spring Blog post
+  [This Week in Spring — August 18, 2026](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/).
+
+### Compatibility
+
+- Retained Java 17 CI verification for Spring AI 2.0.0 alongside the default
+  2.0.1 baseline.
+- Verified the live Presidio integration on Java 17.
+- No breaking changes.
+
 ## [0.2.0]
 
 This release lowers the Java baseline to 17 and adds privacy-safe runtime

@@ -343,6 +343,37 @@ class PrivacyToolContextAdvisorTest {
     }
 
     @Test
+    void toolSearchProjectionPinsTheControlCallbackIdentity() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        ToolCallback declared = new PrivacyToolCallbackFactory(
+                service,
+                ToolDisclosurePolicy.denyAll()
+        ).wrap(tool("customerLookup"));
+        ToolCallingChatOptions initialOptions = ToolCallingChatOptions.builder()
+                .toolCallbacks(List.of(declared))
+                .build();
+        ChatClientRequest validated = PrivacyToolExecutionContextSupport
+                .attachValidatedToolCallbackSnapshot(new ChatClientRequest(
+                        new Prompt("hello", initialOptions),
+                        Map.of()
+                ));
+        ToolCallback control = tool("toolSearchTool");
+        ChatClientRequest toolSearchIteration = toolSearchIteration(validated, control);
+
+        PrivacyToolExecutionContextSupport.requireCallbacksMatchValidatedSnapshot(
+                toolSearchIteration
+        );
+
+        ToolCallback replacement = tool("toolSearchTool");
+        assertThatThrownBy(() -> PrivacyToolExecutionContextSupport
+                .requireCallbacksMatchValidatedSnapshot(
+                        toolSearchIteration(toolSearchIteration, replacement)
+                ))
+                .isInstanceOf(PrivacyGuardrailException.class)
+                .hasMessage("Tool callbacks changed after the privacy tool-context boundary");
+    }
+
+    @Test
     void applicationAdvisorBetweenToolCallingAndExecutionBoundaryIsAllowed() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolContextAdvisor advisor = new PrivacyToolContextAdvisor(service);
@@ -399,6 +430,20 @@ class PrivacyToolContextAdvisorTest {
                 new Prompt("hello", options),
                 Map.of(PrivacyRequestContextSupport.CONTEXT_HANDLE, handle)
         );
+    }
+
+    private ChatClientRequest toolSearchIteration(
+            ChatClientRequest request,
+            ToolCallback callback
+    ) {
+        ToolCallingChatOptions options = ((ToolCallingChatOptions) request.prompt().getOptions())
+                .mutate()
+                .toolCallbacks(List.of(callback))
+                .toolContext("toolSearchToolSessionId", "test-session")
+                .build();
+        return request.mutate()
+                .prompt(new Prompt(request.prompt().getInstructions(), options))
+                .build();
     }
 
     private ToolCallback tool(String name) {

@@ -2,6 +2,9 @@ plugins {
     id 'application'
 }
 
+def consumerSpringBootVersion = providers.gradleProperty('consumerSpringBootVersion')
+        .orElse('4.0.0')
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
@@ -9,11 +12,36 @@ java {
 }
 
 dependencies {
+    implementation enforcedPlatform(
+            "org.springframework.boot:spring-boot-dependencies:${consumerSpringBootVersion.get()}"
+    )
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:${providers.gradleProperty('privacyVersion').get()}"
 }
 
 application {
     mainClass = 'example.PublishedArtifactConsumer'
+}
+
+tasks.register('verifySpringBootAlignment') {
+    doLast {
+        Set<String> selectedVersions = configurations.runtimeClasspath.incoming
+                .resolutionResult
+                .allComponents
+                .collect { component -> component.moduleVersion }
+                .findAll { module -> module != null && module.group == 'org.springframework.boot' }
+                .collect { module -> module.version }
+                .toSet()
+        if (selectedVersions != Set.of(consumerSpringBootVersion.get())) {
+            throw new GradleException(
+                    "Expected Spring Boot ${consumerSpringBootVersion.get()} but resolved ${selectedVersions}"
+            )
+        }
+    }
+}
+
+tasks.named('run') {
+    dependsOn tasks.named('verifySpringBootAlignment')
 }

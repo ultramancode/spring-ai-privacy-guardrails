@@ -1,0 +1,20 @@
+description = 'Spring Boot starter for the optional Spring Security tool boundary.'
+
+dependencies {
+    api platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
+    api project(':spring-ai-privacy-guardrails-spring-boot-starter')
+    api project(':spring-ai-privacy-guardrails-spring-security')
+    api 'org.springframework.boot:spring-boot-starter'
+    api 'org.springframework.security:spring-security-core'
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${providers.gradleProperty('springBootVersion').get()}"
+
+    testImplementation 'org.springframework.boot:spring-boot-test'
+    testImplementation 'org.springframework.ai:spring-ai-anthropic'
+    testImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-anthropic'
+    testImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-chat-client'
+    testImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-openai'
+    testImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
+    testImplementation 'org.springframework.ai:spring-ai-openai'
+    testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
+}

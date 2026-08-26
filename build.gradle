@@ -75,6 +75,26 @@ privacyBuild {
         )
     }
 
+    module('spring-ai-privacy-guardrails-spring-security') { module ->
+        module.publication(
+                'io.github.ultramancode.springai.privacy.security',
+                'Spring AI Privacy Guardrails Spring Security Integration'
+        )
+        module.dependsOnProject 'spring-ai-privacy-guardrails-spring-ai'
+        module.denyExternalGroup 'org.springframework.boot'
+    }
+
+    module('spring-ai-privacy-guardrails-spring-security-spring-boot-starter') { module ->
+        module.publication(
+                'io.github.ultramancode.springai.privacy.security.autoconfigure',
+                'Spring AI Privacy Guardrails Spring Security Spring Boot Starter'
+        )
+        module.dependsOnProject(
+                'spring-ai-privacy-guardrails-spring-boot-starter',
+                'spring-ai-privacy-guardrails-spring-security'
+        )
+    }
+
     module('spring-ai-privacy-guardrails-test') { module ->
         module.publication(
                 'io.github.ultramancode.springai.privacy.test',

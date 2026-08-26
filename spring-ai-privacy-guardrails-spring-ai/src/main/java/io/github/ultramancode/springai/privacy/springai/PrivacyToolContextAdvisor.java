@@ -24,10 +24,12 @@ import java.util.Set;
 /**
  * Copies the active opaque privacy handle into the tool options observed at this advisor's
  * configured position. Register this advisor when tools can be supplied or injected
- * dynamically. The callback list observed here is rejected unless every entry was
- * created by {@link PrivacyToolCallbackFactory}. The default order describes the tested
- * standard layout; applications using custom advisor orders or tool advisors own that
- * composition and any option mutations performed after this advisor.
+ * dynamically. The callback list observed here is rejected unless every application
+ * callback was created by {@link PrivacyToolCallbackFactory}. Spring AI's built-in Tool
+ * Search control callback is accepted as a non-disclosing control tool and is pinned to
+ * one request-scoped identity before the model can use it. The default order describes
+ * the tested standard layout; applications using custom advisor orders or tool advisors
+ * own that composition and any option mutations performed after this advisor.
  */
 public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -156,6 +158,16 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
         }
         Set<String> names = new LinkedHashSet<>(callbacks.size());
         for (ToolCallback callback : callbacks) {
+            if (SpringAiToolSearchSupport.isControlCallback(callback, toolCallingOptions)) {
+                if (!names.add(callback.getToolDefinition().name())) {
+                    throw new PrivacyGuardrailException(
+                            PrivacyFailureCode.TRANSFORMATION_CONFLICT,
+                            PrivacyPhase.TOOL_INPUT,
+                            DUPLICATE_TOOL_MESSAGE
+                    );
+                }
+                continue;
+            }
             if (!(callback instanceof PrivacyToolCallbackWrapper wrapper)) {
                 throw new PrivacyGuardrailException(
                         PrivacyFailureCode.TRANSFORMATION_CONFLICT,

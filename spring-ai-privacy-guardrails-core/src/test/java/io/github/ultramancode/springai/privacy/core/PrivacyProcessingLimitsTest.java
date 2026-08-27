@@ -8,11 +8,47 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyProcessingLimitsTest {
+
+    @Test
+    void directTextInputEnforcesTheBoundaryBeforeAnalyzerInvocation() {
+        AtomicInteger analyzerCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = (text, options) -> {
+            analyzerCalls.incrementAndGet();
+            return List.of();
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        assertThat(service.analyze("x".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS)))
+                .isEmpty();
+        assertThat(analyzerCalls).hasValue(1);
+
+        assertThatThrownBy(() -> service.analyze(
+                "x".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1)
+        )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+            assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+            assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+        });
+        assertThat(analyzerCalls).hasValue(1);
+    }
+
+    @Test
+    void callerSuppliedSpansRejectOversizedSourceText() {
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+
+        assertThatThrownBy(() -> service.redact(
+                "x".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1),
+                List.of(new PiiSpan("SECRET", 0, 1, 1.0))
+        )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+            assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+            assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+        });
+    }
 
     @Test
     void detokenizeScansThousandsOfMappingsWithoutSearchingForEachMapping() {

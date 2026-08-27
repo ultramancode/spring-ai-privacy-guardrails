@@ -3,7 +3,7 @@
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 07b16d27791faf4a39d5a1f8909c4b1f3f23d13fc14bb7db0445c667bab90657 -->
+<!-- i18n-source-sha256: 65e3e20843d8e73c13a563a4da5794290fcdea24fcc9bc559a662984f2de11e9 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
@@ -535,7 +535,9 @@ spring:
 
 | 범위 | 최대치 |
 | --- | ---: |
-| Spring AI 경계에서 처리하는 단일 텍스트·JSON 페이로드와 `core` 값 트리의 전체 콘텐츠 | 1,000,000자 |
+| 자동 분석 또는 호출자 제공 span과 함께 처리하는 단일 `core` 직접 텍스트 입력 | UTF-16 코드 유닛 1,000,000개 |
+| Spring AI 경계에서 처리하는 단일 텍스트·JSON 페이로드 | UTF-16 코드 유닛 1,000,000개 |
+| 단일 `core` 값 트리의 전체 콘텐츠 | UTF-16 코드 유닛 1,000,000개 |
 | JSON 또는 값 트리의 노드 수 | 100,000개 |
 | JSON 또는 값 트리의 중첩 단계 | 128 |
 | 변환 후 생성되는 출력 | 8,000,000자 |

@@ -6,6 +6,9 @@ import java.util.Set;
 /** Public facade for PII analysis, transformation, and privacy session lifecycle. */
 public final class PrivacyService {
 
+    /** Hard maximum UTF-16 code units accepted for analysis or supplied-span resolution. */
+    public static final int MAX_TEXT_INPUT_CHARACTERS = 1_000_000;
+
     /** Hard maximum for text produced by a privacy transformation that changes content. */
     public static final int MAX_TRANSFORMED_TEXT_CHARACTERS = 8_000_000;
 

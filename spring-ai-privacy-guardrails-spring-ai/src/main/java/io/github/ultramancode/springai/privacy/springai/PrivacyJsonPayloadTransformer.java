@@ -19,7 +19,7 @@ import java.util.function.UnaryOperator;
 /** Orchestrates JSON-aware privacy actions with safe plain-text fallback. */
 final class PrivacyJsonPayloadTransformer {
 
-    static final int MAX_PAYLOAD_CHARACTERS = 1_000_000;
+    static final int MAX_PAYLOAD_CHARACTERS = PrivacyService.MAX_TEXT_INPUT_CHARACTERS;
     static final int MAX_STRING_SCALAR_CHARACTERS =
             PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS;
     static final int MAX_NUMBER_LEXEME_CHARACTERS =

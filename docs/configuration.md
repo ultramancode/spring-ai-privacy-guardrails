@@ -561,7 +561,9 @@ caused by excessively large or complex inputs. The main maxima are:
 
 | Scope | Maximum |
 | --- | ---: |
-| One text or JSON payload processed at a Spring AI boundary, or the aggregate content of one `core` value tree | 1,000,000 characters |
+| One direct `core` text input analyzed automatically or with caller-supplied spans | 1,000,000 UTF-16 code units |
+| One text or JSON payload processed at a Spring AI boundary | 1,000,000 UTF-16 code units |
+| Aggregate content of one `core` value tree | 1,000,000 UTF-16 code units |
 | JSON or value-tree nodes | 100,000 |
 | JSON or value-tree nesting levels | 128 |
 | Output produced after transformation | 8,000,000 characters |

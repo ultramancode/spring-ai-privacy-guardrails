@@ -449,6 +449,8 @@ jobs:
             spring-ai-privacy-guardrails-presidio-spring-boot-starter
             spring-ai-privacy-guardrails-spring-ai
             spring-ai-privacy-guardrails-spring-boot-starter
+            spring-ai-privacy-guardrails-spring-security
+            spring-ai-privacy-guardrails-spring-security-spring-boot-starter
             spring-ai-privacy-guardrails-test
           )
           version="${{ steps.release.outputs.version }}"

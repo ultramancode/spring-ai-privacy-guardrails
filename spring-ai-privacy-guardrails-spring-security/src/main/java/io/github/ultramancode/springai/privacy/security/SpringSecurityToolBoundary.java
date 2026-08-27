@@ -35,8 +35,11 @@ public final class SpringSecurityToolBoundary {
     /**
      * Starts a boundary builder that decorates an existing Spring AI manager.
      *
-     * @param delegate existing manager whose resolver, observations, exception processing,
-     *                 and execution limits must be preserved
+     * <p>This boundary handles tool-definition resolution and validates requested tool
+     * calls before invoking the delegate. The delegate must execute tool calls using the
+     * callbacks supplied in the prompt.</p>
+     *
+     * @param delegate manager used for tool-call execution
      * @param authorizationManager policy evaluated for definition and execution phases
      * @return boundary builder
      */

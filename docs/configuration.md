@@ -556,17 +556,22 @@ enabled, `response-inspection.max-characters` and
 media limit measures data size only; it does not detect PII in image or audio
 content.
 
-Separate from configurable limits, internal safety maxima limit memory usage
-caused by excessively large or complex inputs. The main maxima are:
+In addition to configurable limits, the library enforces fixed internal safety
+ceilings to bound memory use for unusually large or complex inputs. The table
+shows where each ceiling applies and how it is measured:
 
-| Scope | Maximum |
-| --- | ---: |
-| One direct `core` text input analyzed automatically or with caller-supplied spans | 1,000,000 UTF-16 code units |
-| One text or JSON payload processed at a Spring AI boundary | 1,000,000 UTF-16 code units |
-| Aggregate content of one `core` value tree | 1,000,000 UTF-16 code units |
-| JSON or value-tree nodes | 100,000 |
-| JSON or value-tree nesting levels | 128 |
-| Output produced after transformation | 8,000,000 characters |
+| Enforcement point | What is measured | Maximum |
+| --- | --- | ---: |
+| Spring AI boundary | Length of the complete payload before JSON parsing or plain-text processing (UTF-16 code units) | 1,000,000 |
+| `core` text processing | Length of one text value analyzed automatically or processed with caller-supplied spans (UTF-16 code units) | 1,000,000 |
+| `core` value-tree processing | Combined length of strings, map keys, and numeric representations in one value tree (UTF-16 code units) | 1,000,000 |
+| JSON or value-tree processing | Number of nodes in one JSON document or `core` value tree | 100,000 |
+| JSON or value-tree processing | Nesting depth of one JSON document or `core` value tree | 128 |
+| Privacy transformation | Length of the complete output from one transformation (UTF-16 code units) | 8,000,000 |
+
+Text lengths follow Java `String.length()` semantics. Most characters count as
+one UTF-16 code unit, but many emoji count as two even when displayed as a
+single character.
 
 Exceeding a safety maximum raises `PAYLOAD_LIMIT_EXCEEDED` before processing or
 result delivery continues.

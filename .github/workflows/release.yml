@@ -127,6 +127,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Korean translations
+        run: ./gradlew --no-daemon verifyDocTranslations
+
       - name: Verify and build signed release bundle
         env:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractList;
@@ -51,6 +52,18 @@ class PrivacyProcessingLimitsTest {
             assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
             assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
         });
+    }
+
+    @Test
+    void automaticTextOperationsRejectOversizedWhitespace() {
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        String oversizedWhitespace = " ".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1);
+
+        try (PrivacySession session = service.openSession()) {
+            assertAnalysisPayloadLimitExceeded(() -> service.redact(oversizedWhitespace));
+            assertAnalysisPayloadLimitExceeded(() -> service.redact(session.handle(), oversizedWhitespace));
+            assertAnalysisPayloadLimitExceeded(() -> service.containsPii(session.handle(), oversizedWhitespace));
+        }
     }
 
     @Test
@@ -222,6 +235,14 @@ class PrivacyProcessingLimitsTest {
                 return PiiAnalyzer.MAX_RESULT_SPANS + 1;
             }
         };
+    }
+
+    private static void assertAnalysisPayloadLimitExceeded(ThrowingCallable operation) {
+        assertThatThrownBy(operation)
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
     }
 
     private static PiiAnalyzer namedAnalyzer(String providerId, PiiAnalyzer delegate) {

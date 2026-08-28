@@ -326,7 +326,7 @@ final class PiiAnalysisCoordinator {
         }
     }
 
-    private static void requireTextInputWithinLimit(String text) {
+    static void requireTextInputWithinLimit(String text) {
         if (text != null && text.length() > PrivacyService.MAX_TEXT_INPUT_CHARACTERS) {
             throw new PrivacyGuardrailException(
                     PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,

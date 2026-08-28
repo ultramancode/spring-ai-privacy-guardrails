@@ -40,6 +40,7 @@ final class PrivacyTextTransformer {
     }
 
     String redact(String text) {
+        PiiAnalysisCoordinator.requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
             return text;
         }
@@ -60,6 +61,7 @@ final class PrivacyTextTransformer {
     }
 
     String redact(String text, PrivacyContext context) {
+        PiiAnalysisCoordinator.requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
             return text;
         }
@@ -72,6 +74,7 @@ final class PrivacyTextTransformer {
     }
 
     boolean containsPii(String text, PrivacyContext context) {
+        PiiAnalysisCoordinator.requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
             return false;
         }

@@ -28,6 +28,11 @@ the build/test toolchain, for example with `-PtestJavaVersion=21`.
 
 Name JUnit test methods in `lowerCamelCase` without underscores.
 
+English documentation is canonical. Korean translation updates are welcome but
+not required when changing English documentation. Maintainers synchronize
+localized documentation separately and verify it before a release with
+`./gradlew verifyDocTranslations`.
+
 For a local snapshot consumed by another build, run
 `./gradlew publishToMavenLocal` and add `mavenLocal()` only in that local
 consumer.

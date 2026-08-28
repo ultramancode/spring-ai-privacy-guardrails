@@ -40,10 +40,13 @@ class PrivacyProcessingLimitsTest {
     @Test
     void callerSuppliedSpansRejectOversizedSourceText() {
         PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        int oversizedLength = PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1;
+        // A range failure here would show that span resolution ran before the text limit check.
+        PiiSpan outOfRangeSpan = new PiiSpan("SECRET", oversizedLength, oversizedLength + 1, 1.0);
 
         assertThatThrownBy(() -> service.redact(
-                "x".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1),
-                List.of(new PiiSpan("SECRET", 0, 1, 1.0))
+                "x".repeat(oversizedLength),
+                List.of(outOfRangeSpan)
         )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
             assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
             assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);

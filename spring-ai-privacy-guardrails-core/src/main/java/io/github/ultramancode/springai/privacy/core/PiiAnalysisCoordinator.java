@@ -81,6 +81,7 @@ final class PiiAnalysisCoordinator {
     }
 
     PiiAnalysisResult analyzeDetailed(String text) {
+        requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
             return new PiiAnalysisResult(List.of(), Set.of(), List.of());
         }
@@ -144,6 +145,7 @@ final class PiiAnalysisCoordinator {
     }
 
     List<ResolvedPiiSpan> resolveSuppliedSpans(String text, List<PiiSpan> spans) {
+        requireTextInputWithinLimit(text);
         requireSuppliedSpanCount(spans);
         return this.evidenceResolver.resolveSuppliedSpans(text, spans, this.options);
     }
@@ -320,6 +322,16 @@ final class PiiAnalysisCoordinator {
                     PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                     PrivacyPhase.ANALYSIS,
                     "Caller-supplied PII spans exceeded the bounded processing limit"
+            );
+        }
+    }
+
+    static void requireTextInputWithinLimit(String text) {
+        if (text != null && text.length() > PrivacyService.MAX_TEXT_INPUT_CHARACTERS) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "Privacy text input exceeded the bounded processing limit"
             );
         }
     }

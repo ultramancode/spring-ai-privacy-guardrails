@@ -103,16 +103,105 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
         }
     }
 
-    private List<PiiSpan> analyzeText(String text, PiiAnalysisOptions options) {
-        String requestedLanguage = options.language();
-        if (!this.language.equals(requestedLanguage)) {
-            throw new OpenNlpAnalysisException(
-                    PrivacyFailureCode.ANALYZER_EXECUTION_FAILED,
-                    "OpenNLP analyzer language does not match the requested language"
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>Implementation note:</strong> This implementation analyzes each
+     * text locally and independently while reusing its tokenizer and name finders
+     * within the batch.</p>
+     */
+    @Override
+    public List<List<PiiSpan>> analyzeSegments(
+            List<String> texts,
+            PiiAnalysisOptions options
+    ) {
+        Objects.requireNonNull(texts, "texts must not be null");
+        Objects.requireNonNull(options, "options must not be null");
+        if (texts.size() > PiiAnalyzer.MAX_ANALYSIS_SEGMENTS) {
+            throw new IllegalArgumentException("texts exceeded the safe segment limit");
+        }
+        boolean hasNonBlankText = false;
+        for (String text : texts) {
+            String sourceText = Objects.requireNonNull(
+                    text,
+                    "texts must not contain null values"
             );
+            if (!sourceText.isBlank()) {
+                hasNonBlankText = true;
+            }
+        }
+        if (!hasNonBlankText) {
+            return texts.stream()
+                    .map(ignored -> List.<PiiSpan>of())
+                    .toList();
         }
 
-        Span[] tokenPositions = this.tokenizerFactory.get().tokenizePos(text);
+        try {
+            requireLanguage(options);
+            Tokenizer tokenizer = this.tokenizerFactory.get();
+            List<NameFinderME> finders = this.entityModels.stream()
+                    .map(entityModel -> new NameFinderME(entityModel.model()))
+                    .toList();
+            List<List<PiiSpan>> results = new ArrayList<>(texts.size());
+            long spanCount = 0L;
+            for (String text : texts) {
+                rejectInterruptedAnalysis();
+                if (text.isBlank()) {
+                    results.add(List.of());
+                    continue;
+                }
+
+                List<PiiSpan> spans;
+                try {
+                    spans = analyzeText(
+                            text,
+                            tokenizer,
+                            finders,
+                            PiiAnalyzer.MAX_RESULT_SPANS - spanCount
+                    );
+                } finally {
+                    // NameFinderME retains adaptive state. Clear that state between
+                    // independent texts.
+                    finders.forEach(NameFinderME::clearAdaptiveData);
+                }
+                spanCount += spans.size();
+                if (spanCount > PiiAnalyzer.MAX_RESULT_SPANS) {
+                    throw new OpenNlpAnalysisException(
+                            PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
+                            "OpenNLP analyzer segmented result exceeded the safe span limit"
+                    );
+                }
+                results.add(spans);
+            }
+            return List.copyOf(results);
+        } catch (OpenNlpAnalysisException failure) {
+            throw failure;
+        } catch (Throwable failure) {
+            throw PrivacyFailureSanitizer.sanitize(
+                    failure,
+                    PrivacyFailureCode.ANALYZER_EXECUTION_FAILED,
+                    PrivacyPhase.ANALYSIS,
+                    "OpenNLP analyzer execution failed"
+            );
+        }
+    }
+
+    private List<PiiSpan> analyzeText(String text, PiiAnalysisOptions options) {
+        requireLanguage(options);
+        Tokenizer tokenizer = this.tokenizerFactory.get();
+        List<NameFinderME> finders = this.entityModels.stream()
+                .map(entityModel -> new NameFinderME(entityModel.model()))
+                .toList();
+        return analyzeText(text, tokenizer, finders, PiiAnalyzer.MAX_RESULT_SPANS);
+    }
+
+    private List<PiiSpan> analyzeText(
+            String text,
+            Tokenizer tokenizer,
+            List<NameFinderME> finders,
+            long maximumResultSpans
+    ) {
+        Span[] tokenPositions = tokenizer.tokenizePos(text);
         if (tokenPositions.length == 0) {
             return List.of();
         }
@@ -122,12 +211,13 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
         }
 
         List<PiiSpan> spans = new ArrayList<>();
-        for (OpenNlpEntityModel entityModel : this.entityModels) {
-            NameFinderME finder = new NameFinderME(entityModel.model());
+        for (int modelIndex = 0; modelIndex < this.entityModels.size(); modelIndex++) {
+            OpenNlpEntityModel entityModel = this.entityModels.get(modelIndex);
+            NameFinderME finder = finders.get(modelIndex);
             Span[] entities = finder.find(tokens);
             double[] probabilities = finder.probs(entities);
             for (int index = 0; index < entities.length; index++) {
-                if (spans.size() >= PiiAnalyzer.MAX_RESULT_SPANS) {
+                if (spans.size() >= maximumResultSpans) {
                     throw new OpenNlpAnalysisException(
                             PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
                             "OpenNLP analyzer result exceeded the safe span limit"
@@ -147,6 +237,24 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
             }
         }
         return List.copyOf(spans);
+    }
+
+    private void requireLanguage(PiiAnalysisOptions options) {
+        if (!this.language.equals(options.language())) {
+            throw new OpenNlpAnalysisException(
+                    PrivacyFailureCode.ANALYZER_EXECUTION_FAILED,
+                    "OpenNLP analyzer language does not match the requested language"
+            );
+        }
+    }
+
+    private static void rejectInterruptedAnalysis() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new OpenNlpAnalysisException(
+                    PrivacyFailureCode.ANALYSIS_INTERRUPTED,
+                    "PII analysis interrupted"
+            );
+        }
     }
 
     static void validateEntitySpan(Span entity, int tokenCount) {

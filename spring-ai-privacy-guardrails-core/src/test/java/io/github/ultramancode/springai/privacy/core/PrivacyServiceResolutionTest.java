@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -197,6 +198,41 @@ class PrivacyServiceResolutionTest {
                 .extracting(PiiAnalyzerFailure::provider)
                 .isEqualTo("PRESIDIO");
         assertThat(result.spans()).singleElement().satisfies(span -> {
+            assertThat(span.start()).isZero();
+            assertThat(span.end()).isEqualTo(5);
+        });
+    }
+
+    @Test
+    void analyzeSegmentsUsesFallbackWithoutSharingOffsetsBetweenTexts() {
+        PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
+                .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
+                .primaryProvider("PRESIDIO")
+                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+                .build();
+        AtomicInteger primaryBatchCalls = new AtomicInteger();
+        AtomicInteger fallbackBatchCalls = new AtomicInteger();
+        PiiAnalyzer primary = segmentedAnalyzer("PRESIDIO", (texts, options) -> {
+            primaryBatchCalls.incrementAndGet();
+            throw new IllegalStateException("unavailable segmented provider");
+        });
+        PiiAnalyzer fallback = segmentedAnalyzer("REGEX", (texts, options) -> {
+            fallbackBatchCalls.incrementAndGet();
+            return List.of(
+                    List.of(),
+                    List.of(new PiiSpan("PERSON", 0, 5, 0.95))
+            );
+        });
+        PrivacyService service = service(policy, primary, fallback);
+
+        List<List<ResolvedPiiSpan>> results = service.analyzeSegments(
+                List.of("safe", "Alice")
+        );
+
+        assertThat(primaryBatchCalls).hasValue(1);
+        assertThat(fallbackBatchCalls).hasValue(1);
+        assertThat(results.get(0)).isEmpty();
+        assertThat(results.get(1)).singleElement().satisfies(span -> {
             assertThat(span.start()).isZero();
             assertThat(span.end()).isEqualTo(5);
         });
@@ -445,6 +481,31 @@ class PrivacyServiceResolutionTest {
             @Override
             public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
                 return spans;
+            }
+
+            @Override
+            public String providerId() {
+                return providerId;
+            }
+        };
+    }
+
+    private PiiAnalyzer segmentedAnalyzer(
+            String providerId,
+            BiFunction<List<String>, PiiAnalysisOptions, List<List<PiiSpan>>> operation
+    ) {
+        return new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+                return List.of();
+            }
+
+            @Override
+            public List<List<PiiSpan>> analyzeSegments(
+                    List<String> texts,
+                    PiiAnalysisOptions options
+            ) {
+                return operation.apply(texts, options);
             }
 
             @Override

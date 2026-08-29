@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,6 +53,56 @@ class OpenNlpPiiAnalyzerTest {
             assertThat(text.substring(span.start(), span.end())).isEqualTo("Alice");
             assertThat(span.score()).isBetween(0.0, 1.0);
         });
+    }
+
+    @Test
+    void analyzeSegmentsKeepsTokenizationAndOffsetsIndependentPerText() {
+        OpenNlpPiiAnalyzer analyzer = analyzer();
+        List<String> texts = List.of("Alice joined", "🙂 Bob joined");
+
+        List<List<PiiSpan>> results = analyzer.analyzeSegments(
+                texts,
+                PiiAnalysisOptions.defaults()
+        );
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0)).anySatisfy(span ->
+                assertThat(texts.get(0).substring(span.start(), span.end())).isEqualTo("Alice")
+        );
+        assertThat(results.get(1)).anySatisfy(span ->
+                assertThat(texts.get(1).substring(span.start(), span.end())).isEqualTo("Bob")
+        );
+    }
+
+    @Test
+    void analyzeSegmentsReusesBatchLocalFindersAndMatchesIndependentAnalysis() throws IOException {
+        List<String> texts = List.of("Alice joined", "Bob called", "Alice left");
+        OpenNlpPiiAnalyzer independentAnalyzer = analyzer();
+        List<List<PiiSpan>> independentResults = texts.stream()
+                .map(text -> independentAnalyzer.analyze(text, PiiAnalysisOptions.defaults()))
+                .toList();
+        AtomicInteger finderInitializations = new AtomicInteger();
+        TokenNameFinderModel countingModel = new TokenNameFinderModel(
+                new ByteArrayInputStream(serializedPersonModel())
+        ) {
+            @Override
+            public SequenceClassificationModel getNameFinderSequenceModel() {
+                finderInitializations.incrementAndGet();
+                return super.getNameFinderSequenceModel();
+            }
+        };
+        OpenNlpPiiAnalyzer segmentedAnalyzer = new OpenNlpPiiAnalyzer(
+                "en",
+                List.of(new OpenNlpEntityModel("PERSON", countingModel))
+        );
+
+        List<List<PiiSpan>> segmentedResults = segmentedAnalyzer.analyzeSegments(
+                texts,
+                PiiAnalysisOptions.defaults()
+        );
+
+        assertThat(segmentedResults).isEqualTo(independentResults);
+        assertThat(finderInitializations).hasValue(1);
     }
 
     @Test

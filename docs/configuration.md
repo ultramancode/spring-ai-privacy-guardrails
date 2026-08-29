@@ -279,10 +279,37 @@ requests, so it must be thread-safe and reentrant. Each analyzer must provide a
 unique provider ID. Apply finite deadlines to blocking work and cooperate with
 thread interruption.
 
-One analysis may return at most 100,000 spans
-(`PiiAnalyzer.MAX_RESULT_SPANS`). The library does not bound memory allocated
-inside a custom analyzer before it returns, so custom analyzers must also bound
-their own memory usage.
+For structured JSON, the library analyzes property names, string values, and
+numeric values. It skips property names and string values that are empty or
+contain only whitespace. The library passes each analysis target to
+`PiiAnalyzer.analyzeSegments(...)` as an independent text. As a result,
+analysis of one value cannot affect another, and offsets remain relative to
+the corresponding value.
+
+For example, `{"name":"Alice","city":"Seoul"}` produces four analysis targets:
+`name`, `Alice`, `city`, and `Seoul`. The default implementation calls
+`analyze(...)` four times, while the Presidio and OpenNLP adapters provided by
+this project implement `analyzeSegments(...)` for their respective execution
+models. When there is a large amount of text to analyze, the integration divides
+it into groups and processes them in order. Presidio handles each group with one
+REST array request, so the example above uses one request. OpenNLP analyzes each
+text locally while reusing its tokenizer and name finders. External request
+counts and processing costs therefore depend on the analyzer implementation.
+
+A custom analyzer backed by an external service that accepts text arrays can
+override `analyzeSegments(...)` to process multiple texts in one request. The
+override must return results separated by text in input order and use offsets
+relative to each text. Applications can also call
+`PrivacyService.analyzeSegments(...)` directly to analyze multiple texts in the
+same way.
+
+One `PrivacyService.analyzeSegments(...)` call accepts at most 100,000 texts
+(`PiiAnalyzer.MAX_ANALYSIS_SEGMENTS`), and the combined input length cannot
+exceed `PrivacyService.MAX_TEXT_INPUT_CHARACTERS`. It may return at most 100,000
+spans in total (`PiiAnalyzer.MAX_RESULT_SPANS`). The Presidio and OpenNLP
+adapters apply safety bounds to processing volume and result size. Direct
+implementations of `PiiAnalyzer` should likewise bound the temporary data and
+results they produce during analysis.
 
 ## Regex Analyzer
 
@@ -365,6 +392,14 @@ Set `analyzer-url` to the base HTTP(S) address of the Presidio server. When
 credentials are required, keep them out of the URL and use `headers` together
 with the application's secret-management facilities.
 
+When their combined length grows, the texts selected for analysis in structured
+JSON are divided into multiple groups. The Presidio adapter sends each group in
+one REST array request and keeps results and offsets separate for each text. This
+reduces network requests while preserving isolation between texts.
+
+The REST array input used by `analyzeSegments(...)` is supported by Presidio
+Analyzer 2.2.361 and later, and CI verifies it against 2.2.364.
+
 `timeout` applies to each HTTP request through complete Presidio response-body
 receipt. Transport failures, `timeout` expiration, HTTP 408/429 responses, and
 5xx responses are retried according to `max-retries`; other 4xx responses fail
@@ -408,6 +443,10 @@ Configure `entity-models` with the NER model file for each entity type. Detectio
 quality may change when the NER model and tokenization strategy are not
 compatible, so validate the configuration against representative application
 data.
+
+`analyzeSegments(...)` reuses the tokenizer and name finders within one call to
+analyze multiple texts independently. OpenNLP analysis runs inside the
+application and does not call an external analysis service.
 
 OpenNLP integration is an optional configuration for applications that already
 use suitable NER models. It is not the recommended default for general PII
@@ -564,6 +603,7 @@ shows where each ceiling applies and how it is measured:
 | --- | --- | ---: |
 | Spring AI boundary | Length of the complete payload before JSON parsing or plain-text processing (UTF-16 code units) | 1,000,000 |
 | `core` text processing | Length of one text value analyzed automatically or processed with caller-supplied spans (UTF-16 code units) | 1,000,000 |
+| `core` segmented analysis | Combined length of all texts passed to one `analyzeSegments(...)` call (UTF-16 code units) | 1,000,000 |
 | `core` value-tree processing | Combined length of strings, map keys, and numeric representations in one value tree (UTF-16 code units) | 1,000,000 |
 | JSON or value-tree processing | Number of nodes in one JSON document or `core` value tree | 100,000 |
 | JSON or value-tree processing | Nesting depth of one JSON document or `core` value tree | 128 |

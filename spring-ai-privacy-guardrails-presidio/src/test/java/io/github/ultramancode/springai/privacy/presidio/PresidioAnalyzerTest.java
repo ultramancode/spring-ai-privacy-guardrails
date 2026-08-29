@@ -72,6 +72,82 @@ class PresidioAnalyzerTest {
     }
 
     @Test
+    void analyzeSegmentsUsesOneArrayRequestAndPreservesPerTextOffsets() throws IOException {
+        AtomicInteger requests = new AtomicInteger();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        startServer(exchange -> {
+            requests.incrementAndGet();
+            requestBody.set(new String(
+                    exchange.getRequestBody().readAllBytes(),
+                    StandardCharsets.UTF_8
+            ));
+            respond(exchange, 200, """
+                    [
+                      [{"entity_type":"PERSON","start":2,"end":7,"score":0.98}],
+                      [{"entity_type":"EMAIL_ADDRESS","start":0,"end":16,"score":0.99}]
+                    ]
+                    """);
+        });
+        PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
+
+        List<List<PiiSpan>> results = analyzer.analyzeSegments(
+                List.of("🙂 Alice", "safe@example.com"),
+                PiiAnalysisOptions.defaults()
+        );
+
+        assertThat(requests).hasValue(1);
+        Map<String, Object> body = this.objectMapper.readValue(requestBody.get(), REQUEST_TYPE);
+        assertThat(body)
+                .containsEntry("text", List.of("🙂 Alice", "safe@example.com"))
+                .containsEntry("language", "en");
+        assertThat(results).containsExactly(
+                List.of(new PiiSpan("PERSON", 3, 8, 0.98)),
+                List.of(new PiiSpan("EMAIL_ADDRESS", 0, 16, 0.99))
+        );
+    }
+
+    @Test
+    void analyzeSegmentsOmitsBlankTextsFromTheRemoteBatch() throws IOException {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        startServer(200, """
+                [[{"entity_type":"PERSON","start":0,"end":5,"score":0.98}]]
+                """, requestBody);
+        PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
+
+        List<List<PiiSpan>> results = analyzer.analyzeSegments(
+                List.of("  ", "Alice"),
+                PiiAnalysisOptions.defaults()
+        );
+
+        Map<String, Object> body = this.objectMapper.readValue(requestBody.get(), REQUEST_TYPE);
+        assertThat(body).containsEntry("text", List.of("Alice"));
+        assertThat(results).containsExactly(
+                List.of(),
+                List.of(new PiiSpan("PERSON", 0, 5, 0.98))
+        );
+    }
+
+    @Test
+    void analyzeSegmentsRejectsResponseCountMismatchWithoutRetrying() throws IOException {
+        AtomicInteger requests = new AtomicInteger();
+        startServer(exchange -> {
+            requests.incrementAndGet();
+            respond(exchange, 200, "[[]]");
+        });
+        PresidioAnalyzer analyzer = new PresidioAnalyzer(config(3, Map.of()));
+
+        assertThatThrownBy(() -> analyzer.analyzeSegments(
+                List.of("first", "second"),
+                PiiAnalysisOptions.defaults()
+        )).hasMessageContaining("expected contract")
+                .hasNoCause()
+                .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure ->
+                        assertThat(failure.code())
+                                .isEqualTo(PrivacyFailureCode.ANALYZER_RESPONSE_INVALID));
+        assertThat(requests).hasValue(1);
+    }
+
+    @Test
     void analyzeRejectsNonCanonicalProviderEntityLabels() throws IOException {
         startServer(200, """
                 [{"entity_type":"person","start":0,"end":5,"score":0.98}]

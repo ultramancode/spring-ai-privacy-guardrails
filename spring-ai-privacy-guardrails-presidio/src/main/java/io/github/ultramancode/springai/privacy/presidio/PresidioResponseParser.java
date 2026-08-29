@@ -24,8 +24,9 @@ final class PresidioResponseParser {
     private static final int MAX_RESPONSE_NAME_CHARACTERS = 256;
     private static final int MAX_RESPONSE_STRING_CHARACTERS = 250_000;
     private static final int MAX_RESPONSE_NUMBER_CHARACTERS = 1_000;
-    // Four required scalar fields use ten JSON tokens; the remaining budget covers ignored fields.
-    private static final long MAX_RESPONSE_TOKENS = 1_100_000L;
+    // Four required scalar fields use ten JSON tokens. Segmented responses may add
+    // two array tokens per source text. The remaining budget covers ignored fields.
+    private static final long MAX_RESPONSE_TOKENS = 1_300_002L;
     private final JsonFactory jsonFactory;
 
     PresidioResponseParser(int maxResponseBytes) {
@@ -49,22 +50,11 @@ final class PresidioResponseParser {
             if (parser.nextToken() != JsonToken.START_ARRAY) {
                 throw invalidResponseContract();
             }
-
-            List<PiiSpan> spans = new ArrayList<>();
-            JsonToken token;
-            while ((token = parser.nextToken()) != JsonToken.END_ARRAY) {
-                if (token == null || token != JsonToken.START_OBJECT) {
-                    throw invalidResponseContract();
-                }
-                if (spans.size() >= PiiAnalyzer.MAX_RESULT_SPANS) {
-                    throw invalidResponseContract();
-                }
-                spans.add(readSpan(parser, offsetIndex));
-            }
+            List<PiiSpan> spans = readSpans(parser, offsetIndex, new SpanBudget());
             if (parser.nextToken() != null) {
                 throw invalidResponseContract();
             }
-            return List.copyOf(spans);
+            return spans;
         } catch (PresidioCallException failure) {
             throw failure;
         } catch (JacksonException exception) {
@@ -74,6 +64,60 @@ final class PresidioResponseParser {
                     PrivacyFailureCode.ANALYZER_RESPONSE_INVALID
             );
         }
+    }
+
+    List<List<PiiSpan>> parseSegments(byte[] responseBody, List<String> sourceTexts) {
+        Objects.requireNonNull(sourceTexts, "sourceTexts must not be null");
+        try (JsonParser parser = this.jsonFactory.createParser(ObjectReadContext.empty(), responseBody)) {
+            if (parser.nextToken() != JsonToken.START_ARRAY) {
+                throw invalidResponseContract();
+            }
+
+            SpanBudget spanBudget = new SpanBudget();
+            List<List<PiiSpan>> results = new ArrayList<>(sourceTexts.size());
+            for (String sourceText : sourceTexts) {
+                if (parser.nextToken() != JsonToken.START_ARRAY) {
+                    throw invalidResponseContract();
+                }
+                results.add(readSpans(
+                        parser,
+                        Utf16OffsetIndex.from(Objects.requireNonNull(
+                                sourceText,
+                                "sourceTexts must not contain null values"
+                        )),
+                        spanBudget
+                ));
+            }
+            if (parser.nextToken() != JsonToken.END_ARRAY || parser.nextToken() != null) {
+                throw invalidResponseContract();
+            }
+            return List.copyOf(results);
+        } catch (PresidioCallException failure) {
+            throw failure;
+        } catch (JacksonException exception) {
+            throw new PresidioCallException(
+                    "Could not parse Presidio analyzer response",
+                    false,
+                    PrivacyFailureCode.ANALYZER_RESPONSE_INVALID
+            );
+        }
+    }
+
+    private List<PiiSpan> readSpans(
+            JsonParser parser,
+            Utf16OffsetIndex offsetIndex,
+            SpanBudget spanBudget
+    ) throws JacksonException {
+        List<PiiSpan> spans = new ArrayList<>();
+        JsonToken token;
+        while ((token = parser.nextToken()) != JsonToken.END_ARRAY) {
+            if (token == null || token != JsonToken.START_OBJECT) {
+                throw invalidResponseContract();
+            }
+            spanBudget.accept();
+            spans.add(readSpan(parser, offsetIndex));
+        }
+        return List.copyOf(spans);
     }
 
     private PiiSpan readSpan(JsonParser parser, Utf16OffsetIndex offsetIndex) throws JacksonException {
@@ -208,5 +252,17 @@ final class PresidioResponseParser {
     }
 
     private record Utf16Span(int start, int end) {
+    }
+
+    private static final class SpanBudget {
+
+        private int spanCount;
+
+        private void accept() {
+            if (this.spanCount >= PiiAnalyzer.MAX_RESULT_SPANS) {
+                throw invalidResponseContract();
+            }
+            this.spanCount++;
+        }
     }
 }

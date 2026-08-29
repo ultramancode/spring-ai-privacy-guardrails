@@ -22,6 +22,7 @@ import java.util.function.Function;
 /** Validates and rewrites bounded JSON while preserving untouched numeric lexemes. */
 final class PrivacyJsonDocumentProcessor {
 
+    private static final int MAX_EXPANDED_NUMBER_CHARACTERS = 4_096;
     // Every container can add one end token, so Jackson may count twice as many tokens as nodes.
     private static final long MAX_JSON_TOKENS =
             2L * PrivacyJsonPayloadTransformer.MAX_JSON_NODES;
@@ -289,7 +290,7 @@ final class PrivacyJsonDocumentProcessor {
         }
         PrivacyJsonPayloadTransformer.requireWithinLimit(
                 expandedNumberLength(value),
-                PrivacyJsonPayloadTransformer.MAX_EXPANDED_NUMBER_CHARACTERS,
+                MAX_EXPANDED_NUMBER_CHARACTERS,
                 phase
         );
         return new BigDecimal(value.toPlainString());

@@ -17,6 +17,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -26,8 +27,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 
-/** Remote PII analyzer backed by the Presidio Analyzer HTTP API. */
+/**
+ * Remote PII analyzer backed by the Presidio Analyzer HTTP API. Segmented
+ * analysis requires Presidio Analyzer 2.2.361 or later, whose REST API accepts
+ * an array of texts while preserving one result list per input text.
+ */
 public final class PresidioAnalyzer implements PiiAnalyzer {
 
     /** Stable provider ID used by core resolution and diagnostics. */
@@ -85,13 +91,66 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
             return List.of();
         }
 
-        return analyzeWithRetry(text, options);
+        return analyzeWithRetry(
+                new PresidioAnalyzeRequest<>(text, options.language()),
+                responseBody -> this.responseParser.parse(responseBody, text)
+        );
     }
 
-    private List<PiiSpan> analyzeWithRetry(String text, PiiAnalysisOptions options) {
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>Implementation note:</strong> Blank texts are omitted from the
+     * request and receive empty result lists. Non-blank texts are sent in one
+     * Presidio array request per attempt.</p>
+     */
+    @Override
+    public List<List<PiiSpan>> analyzeSegments(
+            List<String> texts,
+            PiiAnalysisOptions options
+    ) {
+        Objects.requireNonNull(texts, "texts must not be null");
+        Objects.requireNonNull(options, "options must not be null");
+        if (texts.size() > PiiAnalyzer.MAX_ANALYSIS_SEGMENTS) {
+            throw new IllegalArgumentException("texts exceeded the safe segment limit");
+        }
+
+        List<List<PiiSpan>> results = new ArrayList<>(texts.size());
+        List<String> nonBlankTexts = new ArrayList<>(texts.size());
+        List<Integer> nonBlankSourceIndexes = new ArrayList<>(texts.size());
+        for (int index = 0; index < texts.size(); index++) {
+            String text = Objects.requireNonNull(
+                    texts.get(index),
+                    "texts must not contain null values"
+            );
+            results.add(List.of());
+            if (!text.isBlank()) {
+                nonBlankTexts.add(text);
+                nonBlankSourceIndexes.add(index);
+            }
+        }
+        if (nonBlankTexts.isEmpty()) {
+            return List.copyOf(results);
+        }
+
+        List<String> requestTexts = List.copyOf(nonBlankTexts);
+        List<List<PiiSpan>> analyzedResults = analyzeWithRetry(
+                new PresidioAnalyzeRequest<>(requestTexts, options.language()),
+                responseBody -> this.responseParser.parseSegments(responseBody, requestTexts)
+        );
+        for (int index = 0; index < analyzedResults.size(); index++) {
+            results.set(nonBlankSourceIndexes.get(index), analyzedResults.get(index));
+        }
+        return List.copyOf(results);
+    }
+
+    private <T> T analyzeWithRetry(
+            PresidioAnalyzeRequest<?> request,
+            Function<byte[], T> responseDecoder
+    ) {
         for (int attemptIndex = 0; ; attemptIndex++) {
             try {
-                return callPresidio(text, options);
+                return callPresidio(request, responseDecoder);
             } catch (PresidioCallException failure) {
                 if (!failure.retryable() || attemptIndex >= this.config.maxRetries()) {
                     throw failure.withAttemptCount(attemptIndex + 1);
@@ -109,13 +168,14 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
         }
     }
 
-    private List<PiiSpan> callPresidio(String text, PiiAnalysisOptions options) {
+    private <T> T callPresidio(
+            PresidioAnalyzeRequest<?> requestBody,
+            Function<byte[], T> responseDecoder
+    ) {
         String body;
         try {
             // Core entity names are canonical, not Presidio-native; the core resolver owns post-filtering.
-            body = this.objectMapper.writeValueAsString(
-                    new PresidioAnalyzeRequest(text, options.language())
-            );
+            body = this.objectMapper.writeValueAsString(requestBody);
         } catch (JacksonException serializationFailure) {
             throw new PresidioCallException(
                     "Could not serialize Presidio request",
@@ -204,7 +264,7 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
             );
         }
 
-        return this.responseParser.parse(response.body(), text);
+        return responseDecoder.apply(response.body());
     }
 
     private static long remainingTimeoutNanos(long attemptStartedAt, Duration timeout) {
@@ -299,7 +359,7 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
         }
     }
 
-    private record PresidioAnalyzeRequest(String text, String language) {
+    private record PresidioAnalyzeRequest<T>(T text, String language) {
     }
 
 }

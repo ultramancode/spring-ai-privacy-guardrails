@@ -1,9 +1,12 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -89,6 +92,36 @@ class PrivacyInputAdvisorTest {
             assertThat(service.isSessionActive(session.handle())).isTrue();
         }
         assertThat(service.activeSessionCount()).isZero();
+    }
+
+    @Test
+    void adviseCallPreservesJsonScalarIsolationBeforeModelInvocation() {
+        PrivacyService service = new PrivacyService(
+                List.of(new RegexPiiAnalyzer(List.of(
+                        new RegexPiiRule("EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
+                ))),
+                PiiAnalysisOptions.defaults()
+        );
+        PrivacyInputAdvisor advisor = new PrivacyInputAdvisor(service);
+        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        String input = "[\"safe\",\"EMP-1234\"]";
+        when(chain.nextCall(any())).thenAnswer(invocation -> {
+            ChatClientRequest updated = invocation.getArgument(0);
+            PrivacyContextHandle handle = PrivacyRequestContextSupport.findHandle(updated).orElseThrow();
+            String modelInput = updated.prompt().getUserMessage().getText();
+            assertThat(modelInput).doesNotContain("EMP-1234");
+            assertThat(service.detokenize(handle, modelInput)).isEqualTo(input);
+            return new ChatClientResponse(response("ok").chatResponse(), updated.context());
+        });
+
+        try (var session = service.openSession()) {
+            ChatClientRequest request = PrivacyRequestContextSupport.attachLifecycle(
+                    new ChatClientRequest(new Prompt(input), Map.of()),
+                    session.handle()
+            );
+
+            assertThat(advisor.adviseCall(request, chain).chatResponse()).isNotNull();
+        }
     }
 
     @Test

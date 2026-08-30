@@ -3,7 +3,7 @@
 [English](../evaluation.md) | **한국어**
 
 <!-- i18n-source: docs/evaluation.md -->
-<!-- i18n-source-sha256: 7959e7e34ca5d266809bf9d10805d7ee375957ba904afc792cfaf9bc060ec27d -->
+<!-- i18n-source-sha256: 098ddb21eaf2d8866e0ad48f3789b4a2a09fe69dd67cd015af8bfc8cf2d3a954 -->
 
 이 저장소에는 데모 분석기의 회귀 테스트, 개인정보 보호 경계 테스트와 JMH 벤치마크가
 포함되어 있습니다. 회귀 테스트는 탐지 결과를, 경계 테스트는 정책 적용을, JMH 벤치마크는
@@ -52,6 +52,9 @@
 | 거부된 도구 입력값 공개 | 허용되지 않은 입력값의 원문은 보호 상태를 유지합니다. | [`PrivacyToolCallbackWrapperTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
 | 도구 결과 → 모델 | 도구 결과의 탐지된 개인정보는 모델로 돌아가기 전에 다시 토큰화됩니다. | [`PrivacySequentialToolIntegrationTest`](../../spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
 | MCP Streamable HTTP 도구 왕복 | 로컬 MCP 왕복에서 허용된 입력값만 복원하고, 거부된 값은 보호하며, 결과는 모델로 돌아가기 전에 다시 보호됩니다. | [`McpToolLoopIntegrationTest`](../../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/McpToolLoopIntegrationTest.java) |
+| Spring Security 도구 정의와 실행 권한 | 거부된 정의를 숨기고, 공개된 도구도 실행 전에 권한을 다시 확인합니다. 콜백을 하나라도 실행하기 전에 전체 요청 묶음을 확인하고, 권한이 허용된 뒤에만 개인정보 원문을 복원합니다. | [`SpringSecurityToolBoundaryIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java) |
+| Tool Search와 콜백 변경 | 허용된 정의만 인덱싱하고, 검색 결과의 비즈니스 콜백이 최초 캡처 집합에 속하는지 확인합니다. Resolver fallback은 숨겨진 도구를 활성화할 수 없으며, 지원하지 않는 콜백 추가나 교체는 오류로 처리합니다. | [`SpringSecurityToolBoundaryIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java) |
+| Blocking, reactive 및 비동기 SecurityContext | 요청 진입 시 blocking 보안 context 또는 Reactor `SecurityContext`에서 `Authentication`을 캡처하고, streaming에서는 reactive context를 우선합니다. context 누락을 거부하고, 전파된 executor를 지원하며, 완료나 취소 시 세션을 닫습니다. | [`SpringSecurityToolBoundaryIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java) |
 | 정상 완료와 오류 시 요청 수명주기 | 정상 완료 또는 후속 처리 실패 후 세션이 종료됩니다. | [`PrivacyLifecycleAdvisorTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
 | 논리적 스트리밍 응답 보호 | 출력 프레임을 하나의 논리적 응답으로 버퍼링하므로 여러 프레임에 걸친 개인정보를 응답 소비자에게 전달하기 전에 보호합니다. | [`PrivacyOutputAdvisorStreamTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyOutputAdvisorStreamTest.java) |
 | 일부 응답 버퍼링 후 스트리밍 취소 | 취소 시 개인정보 원문을 내보내지 않고 상위 스트림 처리를 취소하며, 개인정보 보호 세션을 종료하고 해당 매핑을 무효화합니다. | [`PrivacyLifecycleAdvisorTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |

@@ -32,9 +32,9 @@ Choose the starter for the analyzer you want to use:
 
 | Starter | Dependency | Use |
 | --- | --- | --- |
-| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1` | Built-in Regex rules or custom analyzers |
-| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.1` | PII detection through an external Presidio Analyzer service |
-| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.1` | JVM-local NER with application-supplied compatible models |
+| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0` | Built-in Regex rules or custom analyzers |
+| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0` | PII detection through an external Presidio Analyzer service |
+| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0` | JVM-local NER with application-supplied compatible models |
 
 The Presidio and OpenNLP starters already include the base starter. Adding a
 starter does not enable privacy protection or an analyzer automatically.
@@ -50,7 +50,7 @@ Add the base starter.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
 }
 ```
 
@@ -60,7 +60,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-boot-starter</artifactId>
-    <version>0.2.1</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
@@ -266,6 +266,24 @@ For an actual local Streamable HTTP MCP round trip showing scoped disclosure and
 tool-result re-protection, see the
 [Sample / Demo Guide](sample.md#mcp).
 
+### Optional Spring Security Tool Authorization
+
+When the current principal should determine which tools the model can discover
+or execute, add the optional Spring Security starter available from `0.3.0`.
+It includes the base starter, so replace any separately declared base starter
+and keep additional Privacy Guardrails artifacts on version `0.3.0`.
+Provide an `AuthorizationManager<ToolAuthorizationContext>`, enable
+`spring.ai.privacy.security.enabled=true`, and apply
+`PrivacySecurityChatClientConfigurer` instead of `PrivacyChatClientConfigurer`
+to that builder.
+
+This integration hides denied definitions and re-authorizes execution before a
+privacy wrapper restores allowed original values. It does not provide
+authentication infrastructure. See
+[Spring Security Tool Authorization](security.md) for the complete setup and
+details about support for custom managers, Tool Search, and asynchronous context
+propagation.
+
 ## 5. Use Presidio for PII Detection
 
 Presidio is an open-source framework for PII detection and de-identification.
@@ -280,7 +298,7 @@ starter only when that analyzer is also needed.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0"
 }
 ```
 
@@ -290,7 +308,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.2.1</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
@@ -333,7 +351,7 @@ with application-supplied compatible OpenNLP models.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0"
 }
 ```
 
@@ -343,7 +361,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.2.1</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 

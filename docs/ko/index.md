@@ -8,7 +8,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: a670bb0c5f213b5f51138e4f7e06bb35f2cb55da9df5203d741e4506e5b65489 -->
+<!-- i18n-source-sha256: 832f4dd128678e327f881077fdbb7386aed4546a364d7c33a0dabf757e773cf6 -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -38,6 +38,7 @@ Privacy Boundary Inspector는 Local Tool, RAG 및 MCP 실행 중 샘플 백엔�
 | [시작하기](getting-started.md) | 스타터 선택, 기본 설정과 모델·도구·MCP·출력 보호 |
 | [샘플 / 데모 가이드](sample.md) | Inspector 시나리오, 런타임 엔드포인트, 언어별 동작과 경계별 보호 상태 |
 | [설정과 사용법](configuration.md) | 스타터, 분석기, 출력 정책, 도구 공개와 처리 제한 |
+| [Spring Security 도구 권한 부여](security.md) | 선택적 사용자별 도구 발견·실행 권한, Tool Search와 비동기 context |
 | [아키텍처](architecture.md) | 모듈 경계, 요청 세션, 탐지 결과 해석과 실행 수명 주기 |
 | [위협 모델](threat-model.md) | 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역 |
 | [평가와 벤치마크](evaluation.md) | 경계 테스트, 재현 가능한 분석기 기준선과 프로젝트 벤치마크 |

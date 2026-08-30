@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: d1b9b3bd0b19291db03c4e057ccf20919bf2d29514c4e2d071aa1897c03c5d92 -->
+<!-- i18n-source-sha256: cae090578572c6b130e2c01c0f661aed3addcae848d29f4f9011bd5469f13fbe -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -113,12 +113,12 @@ Presidio 스타터에는 외부 Presidio Analyzer 서비스가 필요합니다. 
 
 ### 의존성과 기본 설정
 
-아래 예제는 버전 `0.2.1`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
+아래 예제는 버전 `0.3.0`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
 스타터와 애플리케이션 전용 정규식 규칙을 사용할 수 있습니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
 }
 ```
 
@@ -202,6 +202,33 @@ MCP처럼 실행 중에 도구 목록이 달라지는 `ToolCallbackProvider`는 
 애플리케이션이 보호해야 합니다. 자세한 규칙은
 [도구별 원문 공개](docs/ko/configuration.md#도구별-원문-공개)를 참고하세요.
 
+## 선택적 Spring Security 도구 권한 부여
+
+`0.3.0`부터 선택적 Spring Security 스타터를 추가해 권한 없는 도구 정의를 숨기고,
+허용된 개인정보 원문을 복원하기 전에 도구 실행 권한을 다시 확인할 수 있습니다.
+
+```gradle
+dependencies {
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0"
+}
+```
+
+Security 스타터에는 기본 스타터가 이미 포함됩니다. 기존 애플리케이션을 업그레이드할
+때는 별도로 선언한 기본 스타터를 제거하고, 함께 사용하는 Privacy Guardrails
+artifact도 버전 `0.3.0`으로 맞추세요.
+
+`AuthorizationManager<ToolAuthorizationContext>` 정책을 제공하고
+`spring.ai.privacy.security.enabled=true`를 활성화한 뒤, 선택한 builder에는 개인정보
+보호 전용 configurer 대신 `PrivacySecurityChatClientConfigurer`를 적용합니다. 선택적
+통합이 추가하는 Spring Security 의존성은 `spring-security-core`뿐이며, 인증, JWT,
+OAuth 또는 resource server 기반 구성은 제공하지 않습니다.
+
+권한 정책은 현재 사용자가 도구를 발견하거나 실행할 수 있는지 결정합니다. 기존
+`tools.disclosures` 정책은 이와 별개로 권한이 허용된 도구가 어떤 개인정보 엔티티
+유형을 원문으로 받을 수 있는지 결정합니다. 설정 방법과 Tool Search, 사용자 정의
+manager 및 비동기 context 규칙은
+[Spring Security 도구 권한 부여](docs/ko/security.md)를 참고하세요.
+
 ## 핵심 보호 동작
 
 <p align="center">
@@ -241,6 +268,8 @@ MCP처럼 실행 중에 도구 목록이 달라지는 `ToolCallbackProvider`는 
 | `spring-ai-privacy-guardrails-spring-ai` | Advisor와 도구별 원문 공개 경계 |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP 어댑터 |
 | `spring-ai-privacy-guardrails-opennlp` | 사용자 제공 OpenNLP 모델용 JVM 전용 어댑터 |
+| `spring-ai-privacy-guardrails-spring-security` | Spring AI 도구를 위한 선택적 Spring Security 권한 부여 경계 |
+| `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Spring Security 도구 권한 경계를 자동 구성하는 선택적 스타터 |
 | `spring-ai-privacy-guardrails-test` | 선택형 모델·도구 프로브와 AssertJ 검증 API |
 
 모듈의 책임과 의존성 구조는 [아키텍처](docs/ko/architecture.md)를 참고하세요. 저장소 전용
@@ -254,6 +283,7 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 | Java | 17 |
 | Spring AI | 2.0.1 |
 | Spring Boot | 4.1.1 |
+| Spring Security | Spring Boot 기준 7.1.1, 선택적 통합은 7.0.0까지 검증 |
 | Presidio Analyzer | 2.2.364 |
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
@@ -270,6 +300,8 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 
 - [시작하기](docs/ko/getting-started.md): 단계별 스타터 선택과 개인정보 보호 경계 설정
 - [설정과 사용법](docs/ko/configuration.md): 스타터, 분석기, 도구와 출력 정책
+- [Spring Security 도구 권한 부여](docs/ko/security.md): 선택적 권한 정책, manager
+  구성, Tool Search와 실행 context
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역
 - [평가와 벤치마크](docs/ko/evaluation.md): 검증 항목과 해석 범위
@@ -285,7 +317,7 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 
 애플리케이션은 다음 영역을 별도로 관리해야 합니다.
 
-- 인증·인가 및 로깅 정책
+- 인증, 권한 정책 설계, 애플리케이션 자체 실행 경로와 로깅 정책
 - 저장된 `ChatMemory`·벡터 저장소·데이터베이스의 접근 제어 및 데이터 보존 정책
 - 운영 환경에 맞는 분석기 품질 검증과 조정
 - 라이브러리가 명시적으로 지원하는 추론 텍스트 외의 응답 메타데이터와 비텍스트 미디어

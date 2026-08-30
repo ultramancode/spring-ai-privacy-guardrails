@@ -112,12 +112,12 @@ neither privacy protection nor an analyzer.
 
 ### Dependency and Basic Configuration
 
-The examples below use version `0.2.1`. To start without an external analyzer
+The examples below use version `0.3.0`. To start without an external analyzer
 service, use the base starter with an application-specific regex rule.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
 }
 ```
 
@@ -210,6 +210,35 @@ The application must protect any separate execution paths that use a custom
 [Per-Tool Original Disclosure](docs/configuration.md#per-tool-original-disclosure)
 for the complete rules.
 
+## Optional Spring Security Tool Authorization
+
+From version `0.3.0`, applications can add the optional Spring Security starter
+to hide unauthorized tool definitions and re-authorize tool execution before
+any allowed original PII is restored.
+
+```gradle
+dependencies {
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0"
+}
+```
+
+The Security starter already includes the base starter. When upgrading an
+existing application, remove a separately declared base starter and keep any
+additional Privacy Guardrails artifacts on version `0.3.0`.
+
+Provide an `AuthorizationManager<ToolAuthorizationContext>` policy, enable
+`spring.ai.privacy.security.enabled=true`, and configure the selected builder
+with `PrivacySecurityChatClientConfigurer` instead of the privacy-only
+configurer. Among Spring Security modules, the optional integration depends only
+on Spring Security Core. It does not provide authentication, JWT, OAuth, or
+resource-server infrastructure.
+
+Authorization decides whether the current principal may discover or execute a
+tool. The existing `tools.disclosures` policy independently decides which PII
+entity types an authorized tool may receive. See
+[Spring Security Tool Authorization](docs/security.md) for setup, Tool Search,
+custom manager, and asynchronous-context rules.
+
 ## Core Protection Behavior
 
 <p align="center">
@@ -252,6 +281,8 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-spring-ai` | Advisors and per-tool original-disclosure boundaries |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |
+| `spring-ai-privacy-guardrails-spring-security` | Optional Spring Security authorization boundary for Spring AI tools |
+| `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Opt-in auto-configuration for the Spring Security tool boundary |
 | `spring-ai-privacy-guardrails-test` | Optional model and tool probes with AssertJ assertions |
 
 See [Architecture](docs/architecture.md) for module responsibilities and the
@@ -266,6 +297,7 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 | Java | 17 |
 | Spring AI | 2.0.1 |
 | Spring Boot | 4.1.1 |
+| Spring Security | 7.1.1 through Spring Boot 4.1.1; optional integration verified down to 7.0.0 |
 | Presidio Analyzer | 2.2.364 |
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
@@ -284,6 +316,8 @@ is recommended for new users.
   privacy-boundary setup
 - [Configuration](docs/configuration.md): starters, analyzers, tool policies,
   and output policies
+- [Spring Security Tool Authorization](docs/security.md): optional
+  authorization policy, manager wiring, Tool Search, and execution context
 - [Architecture](docs/architecture.md): modules and model, tool, and session
   execution flow
 - [Threat Model](docs/threat-model.md): protected assets, trust boundaries,
@@ -303,12 +337,13 @@ compliance.
 
 Applications remain responsible for:
 
-- authentication, authorization, and logging policies;
+- authentication, authorization policy design, application-owned execution
+  paths, and logging policies.
 - access control and data-retention policies for stored `ChatMemory`, vector
-  stores, and databases;
-- validating and tuning analyzer quality for the production environment;
+  stores, and databases.
+- validating and tuning analyzer quality for the production environment.
 - protecting response metadata and non-text media outside the explicitly
-  supported reasoning text; and
+  supported reasoning text.
 - authentication and transport encryption for remote analyzers.
 
 Before using the library in production, review [Security](SECURITY.md) and the

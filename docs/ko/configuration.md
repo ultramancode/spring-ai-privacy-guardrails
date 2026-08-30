@@ -3,12 +3,13 @@
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: abf5e0bf66116164762f802fd1efacc5e97889cae663028f65419db896638d21 -->
+<!-- i18n-source-sha256: 8d60ba69814540e60ba7ddeb415c913a43b1480d2d3deaac811a316e1e9731c2 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
 제공하며, 분석기별 Spring Boot 스타터는 별도의 개인정보 보호 정책을 정의하지 않고
-해당 분석기 연동을 추가합니다.
+해당 분석기 연동을 추가합니다. 선택적 Spring Security 스타터는 이와 별도의 경계로
+사용자별 도구 권한 부여를 추가합니다.
 
 ## 스타터 선택
 
@@ -16,9 +17,9 @@
 
 | 스타터 | 의존성 | 용도 |
 | --- | --- | --- |
-| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.1` | 애플리케이션 고유 형식보다 다양한 PII 유형을 탐지할 때 사용합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
-| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1` | Regex 또는 사용자 정의 분석기용입니다. 별도의 분석기 연동은 포함하지 않습니다. |
-| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.1` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
+| Presidio Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0` | 애플리케이션 고유 형식보다 다양한 PII 유형을 탐지할 때 사용합니다. 기본 Spring Boot 스타터, Presidio HTTP 연동과 조건부 상태 점검 기능을 포함합니다. |
+| 기본 Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0` | Regex 또는 사용자 정의 분석기용입니다. 별도의 분석기 연동은 포함하지 않습니다. |
+| OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
 
 스타터 의존성만 추가해도 개인정보 보호 기능이 자동으로 켜지지는 않습니다. 전역
 기능과 사용할 분석기를 명시적으로 활성화하세요. Presidio를
@@ -37,6 +38,20 @@ spring:
 스타터가 이미 포함되므로, Presidio와 OpenNLP를 함께 사용할 때는 기본 스타터를 별도로
 추가하지 않고 두 분석기용 스타터를 선언합니다. 선택한 모든 분석기가 원문 텍스트를
 받으므로 필요한 조합만 구성하세요.
+
+### 선택적 Spring Security 스타터
+
+`0.3.0`부터 현재 사용자에 따라 도구 발견과 실행을 제한하려면
+`spring-ai-privacy-guardrails-spring-security-spring-boot-starter`를 추가합니다.
+이 스타터는 기본 Privacy Guardrails 스타터를 포함하지만, 분석기별 연동이나 인증
+인프라는 포함하지 않습니다.
+
+기존 애플리케이션을 업그레이드할 때는 별도로 선언한 기본 스타터를 제거하고, 함께
+사용하는 모든 Privacy Guardrails artifact를 버전 `0.3.0`으로 맞추세요.
+
+Security 경계를 사용하려면 `AuthorizationManager<ToolAuthorizationContext>` Bean과
+`spring.ai.privacy.enabled=true`, `spring.ai.privacy.security.enabled=true`가 모두
+필요합니다. 전체 설정은 [Spring Security 도구 권한 부여](security.md)를 참고하세요.
 
 ## ChatClient에 보호 적용
 
@@ -57,6 +72,11 @@ ChatClient chatClient(
 `PrivacyChatClientConfigurer`는 입력, 모델 호출, 도구 실행과 요청 수명주기에 필요한
 개인정보 보호 경계를 구성하며, 출력 보호가 활성화되어 있으면 출력 경계도 함께
 적용합니다.
+
+선택적 Spring Security 도구 경계를 사용하는 `ChatClient`에는 대신
+`PrivacySecurityChatClientConfigurer`를 적용하세요. 이 configurer는 기존 개인정보 보호 구성에
+Security context Advisor를 추가합니다. 같은 builder에 두 configurer를 모두 적용하지
+마세요.
 
 이미 보호 구성이 적용된 `ChatClient`나 builder를 `mutate()` 또는 `clone()`한 경우에는
 `PrivacyChatClientConfigurer`를 다시 적용하지 마세요.
@@ -87,6 +107,7 @@ Spring AI의 표준 `UserMessage`, `SystemMessage`, `AssistantMessage`,
 | 속성 | 기본값 | 의미 |
 | --- | --- | --- |
 | `spring.ai.privacy.enabled` | `false` | 개인정보 보호 구성 요소를 활성화합니다. 보호할 `ChatClient.Builder`에는 `PrivacyChatClientConfigurer`를 별도로 적용해야 합니다. |
+| `spring.ai.privacy.security.enabled` | `false` | 선택적 Spring Security 도구 경계를 활성화합니다. 전역 개인정보 보호 활성화, `AuthorizationManager<ToolAuthorizationContext>`와 보호할 builder의 `PrivacySecurityChatClientConfigurer`가 필요합니다. |
 | `analysis.language` | `en` | 대소문자를 구분하지 않는 ASCII 언어 코드입니다. 소문자 정규형으로 분석기에 전달합니다. |
 | `analysis.included-entity-types` | 비어 있음 | 탐지 허용 목록입니다. 신뢰할 수 있는 유형을 등록하는 설정은 아닙니다. |
 | `analysis.minimum-score` | `0.0` | 전체 신뢰도 하한입니다. |
@@ -495,9 +516,17 @@ return privacyConfigurer.configure(builder)
 원문 공개가 허용된 도구는 실제 개인정보를 전달받을 수 있으므로 도구 구현의 예외
 메시지나 로그에 개인정보가 남지 않도록 주의하세요.
 
+선택적 Spring Security 통합을 활성화하면 도구 권한을 이 공개 정책보다 먼저
+확인합니다. 권한 정책은 현재 사용자가 도구를 발견하거나 실행할 수 있는지 결정하고,
+`tools.disclosures`는 권한이 허용된 도구가 어떤 엔티티 유형을 받을 수 있는지 계속
+결정합니다. 자세한 내용은
+[Spring Security 도구 권한 부여](security.md#보장-범위)를 참고하세요.
+
 이 기능은 Spring AI의 표준 `ToolCallback`과 `ToolCallbackProvider` 등록 경로를
 대상으로 합니다. 사용자 정의 `ToolCallingManager`나 `ToolCallbackResolver`를 통한
-실행은 지원 범위에 포함되지 않습니다.
+실행은 자동 개인정보 보호 경계에 포함되지 않습니다. 선택적 Security 통합에서 사용자
+정의 manager를 사용하려면 `SpringSecurityToolBoundary`를 명시적으로 제공해야 하며,
+delegate가 보호된 prompt에 전달된 개인정보 보호 래퍼 콜백을 실행해야 합니다.
 
 ## 출력 정책과 스트리밍
 
@@ -634,7 +663,7 @@ try (PrivacySession session = privacyService.openSession()) {
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.2.1"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.3.0"
 }
 ```
 

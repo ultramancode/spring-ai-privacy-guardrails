@@ -15,6 +15,8 @@ privacy boundaries supported by the library.
   responses.
 - Original-value disclosure policy defining which entity types each tool may
   receive.
+- When the optional Spring Security integration is enabled, request-scoped
+  tool-definition and execution-authorization decisions tied to the current principal.
 
 ## Trust Boundaries
 
@@ -28,6 +30,12 @@ validates analyzer results and applies the same policy to data that extensions
 exchange through a supported privacy boundary. When a remote model or analyzer
 service is used, transport security and data handling follow that service's and
 the deployment environment's configuration.
+
+The optional Spring Security tool boundary trusts the application's
+authentication mechanism and `AuthorizationManager<ToolAuthorizationContext>`
+policy. Tool authorization and PII disclosure remain separate: an authorized
+tool receives original values only for entity types allowed by the disclosure
+policy.
 
 ## Threats and Controls
 
@@ -43,6 +51,8 @@ the deployment environment's configuration.
 | Very large input or slow custom analyzers and tools cause excessive processing time or memory use | The library enforces size, item-count, nesting-depth, and similar bounds when inspecting supported text and JSON, `core` value structures, and responses. | The application must configure execution-time and resource limits for custom analyzers and tools. Stream cancellation cleans up the session but cannot forcibly stop synchronous analyzer or tool code that is already running. |
 | Unsupported messages, metadata, or non-text content contain PII | `Message` implementations that cannot be processed safely fail instead of being sent to the model. Privacy protection is applied to text in supported messages and to reasoning text explicitly supported by the library. | Other response metadata and non-text content such as images and audio must be protected separately. Media limits check data size only; they do not detect PII in media content. |
 | A custom advisor or tool execution path omits a privacy step | On a `ChatClient` with the library's standard privacy configuration, missing or duplicate required advisors and unprotected tool callbacks are detected. | The application must protect advisors that change data outside the privacy boundary and separate execution paths that use a custom `ToolCallingManager` or `ToolCallbackResolver`. |
+| An unauthorized tool is disclosed or executed | When the optional Spring Security integration is configured, denied definitions are hidden, model-requested tools must have passed the definition boundary, the whole requested batch is pre-authorized, and each business callback is authorized again immediately before invocation and PII restoration. Resolver fallback cannot activate a hidden tool. | Authentication and policy correctness remain application responsibilities. Paths wired directly to a raw manager or that omit the boundary's advisor-manager pair are not covered. A long-running request reflects mid-request permission revocation only when the policy consults current external state. |
+| An advisor adds or replaces a callback after authorization | The Security boundary records the original callback instances and rejects later additions or replacements. For Spring AI Tool Search, only its identified control callback transition is admitted, and only authorized definitions are indexed. | Application-owned callback mutation outside the configured boundary is not controlled. Callback removal and reordering are allowed because they do not expand the captured set. |
 
 Exact policies and processing bounds are documented in
 [Configuration](configuration.md).
@@ -64,6 +74,10 @@ with results from the analyzers that succeeded. Detection coverage may therefore
 be reduced. See
 [Configuration](configuration.md#detection-and-resolution) for details.
 
+The optional Spring Security integration authorizes tool discovery and
+execution. It does not make `tools.disclosures` identity-specific. The same
+entity-type disclosure policy applies after a tool has been authorized.
+
 ## Areas Managed Separately
 
 This threat model covers PII processing at the supported direct-use `core`
@@ -71,7 +85,8 @@ boundary and Spring AI integration boundaries. The application and deployment
 environment must manage the following areas separately.
 
 - Prompt injection and model content safety.
-- Application and host security, user access control, tool-call authorization,
-  storage access control, network security, and log management.
+- Application and host security, authentication, authorization policy design,
+  tool paths outside the optional Security boundary, storage access control,
+  network security, and log management.
 - Data-retention policies and legal or regulatory compliance for model and
   analyzer services.

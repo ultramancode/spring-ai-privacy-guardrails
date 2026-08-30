@@ -5,7 +5,9 @@
 This document is the comprehensive application-facing reference for Spring AI
 Privacy Guardrails. The base Spring Boot starter provides the `core` module and
 the Spring AI integration boundary. Analyzer-specific Spring Boot starters add
-their analyzer integration without defining a separate privacy policy.
+their analyzer integration without defining a separate privacy policy. The
+optional Spring Security starter adds principal-aware tool authorization as a
+separate boundary.
 
 ## Starter Selection
 
@@ -13,9 +15,9 @@ Choose the starter or starters that match the analyzers you plan to use.
 
 | Starter | Dependency | Use |
 | --- | --- | --- |
-| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.2.1` | For detecting PII beyond application-specific patterns. Includes the base Spring Boot starter, Presidio HTTP integration, and conditional health support. |
-| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1` | For Regex or custom analyzers. Does not include a separate analyzer integration. |
-| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.2.1` | Advanced JVM-only configuration for applications that already own compatible NER models. |
+| Presidio Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0` | For detecting PII beyond application-specific patterns. Includes the base Spring Boot starter, Presidio HTTP integration, and conditional health support. |
+| Base Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0` | For Regex or custom analyzers. Does not include a separate analyzer integration. |
+| OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0` | Advanced JVM-only configuration for applications that already own compatible NER models. |
 
 Adding a starter dependency does not enable privacy protection automatically.
 Explicitly enable global privacy and each analyzer you want to use. For
@@ -36,6 +38,24 @@ the base Spring Boot starter, so a Presidio + OpenNLP setup declares the two
 analyzer starters without adding the base starter separately. Every selected
 analyzer receives the source text, so configure only the combination you need.
 
+### Optional Spring Security Starter
+
+Starting with `0.3.0`, add
+`spring-ai-privacy-guardrails-spring-security-spring-boot-starter` when the
+current principal should control tool discovery and execution. This starter
+includes the base Privacy Guardrails starter but does not include an
+analyzer-specific integration or authentication infrastructure.
+
+When upgrading an existing application, remove a separately declared base
+starter and keep every additional Privacy Guardrails artifact on version
+`0.3.0`.
+
+The Security boundary requires an
+`AuthorizationManager<ToolAuthorizationContext>` bean and both
+`spring.ai.privacy.enabled=true` and
+`spring.ai.privacy.security.enabled=true`. See
+[Spring Security Tool Authorization](security.md) for the complete setup.
+
 ## Apply Privacy Protection to ChatClient
 
 Enabling the starter and an analyzer does not automatically apply protection to
@@ -55,6 +75,11 @@ ChatClient chatClient(
 `PrivacyChatClientConfigurer` configures the privacy boundaries required for
 input, model calls, tool execution, and request lifecycle handling. When output
 protection is enabled, it also adds the output boundary.
+
+For a `ChatClient` that uses the optional Spring Security tool boundary, apply
+`PrivacySecurityChatClientConfigurer` instead. It applies this same privacy
+bundle plus the Security context advisor. Do not apply both configurers to the
+same builder.
 
 If a protected `ChatClient` or builder was derived with `mutate()` or `clone()`,
 do not apply `PrivacyChatClientConfigurer` again.
@@ -87,6 +112,7 @@ configured under `spring.ai.privacy`.
 | Property | Default | Meaning |
 | --- | --- | --- |
 | `spring.ai.privacy.enabled` | `false` | Enables privacy-protection components. Apply `PrivacyChatClientConfigurer` separately to every `ChatClient.Builder` that requires protection. |
+| `spring.ai.privacy.security.enabled` | `false` | Enables the optional Spring Security tool boundary. Requires global privacy to be enabled, an `AuthorizationManager<ToolAuthorizationContext>`, and `PrivacySecurityChatClientConfigurer` on the protected builder. |
 | `analysis.language` | `en` | Case-insensitive ASCII language code, canonicalized to lowercase before it is passed to analyzers. |
 | `analysis.included-entity-types` | empty | Detection allowlist. This does not register trusted types. |
 | `analysis.minimum-score` | `0.0` | Global confidence floor. |
@@ -520,10 +546,18 @@ and protects PII before the result is passed to the model.
 A tool that is authorized to receive originals may see real PII, so make sure
 the tool implementation does not expose PII in exception messages or logs.
 
+When the optional Spring Security integration is enabled, tool authorization
+runs before this disclosure policy. Authorization decides whether the current
+principal may discover or execute the tool. `tools.disclosures` still decides
+which entity types that authorized tool may receive. See
+[Spring Security Tool Authorization](security.md#guarantees).
+
 This feature covers Spring AI's standard `ToolCallback` and
 `ToolCallbackProvider` registration paths. Execution through a custom
 `ToolCallingManager` or `ToolCallbackResolver` is outside the supported
-boundary.
+automatic privacy boundary. A custom manager used with the optional Security
+integration requires an explicit `SpringSecurityToolBoundary`, and the delegate
+must execute the privacy-wrapped callbacks supplied in the secured prompt.
 
 ## Output Policy and Streaming
 
@@ -667,7 +701,7 @@ the model, tools, and test values used in the example.
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.2.1"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.3.0"
 }
 ```
 

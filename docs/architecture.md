@@ -27,8 +27,9 @@ canonicalizes, and resolves that evidence according to application policy.
 Token-to-original mappings are managed per request through `PrivacySession`.
 
 The library protects data that crosses supported model, tool, and output
-boundaries. The automatic protection scope does not cover data handled
-separately inside the application or application-level access control.
+boundaries. The optional Spring Security integration can also authorize tool
+discovery and execution. Data handled separately inside the application and
+access-control paths outside the configured boundary remain application-owned.
 
 ## Module Structure
 
@@ -45,13 +46,16 @@ flowchart LR
     CORE --> PRES["Presidio integration"]
     CORE --> SAI["Spring AI integration"]
     CORE --> OPEN["OpenNLP integration"]
+    SAI --> SEC["Spring Security integration"]
 
     PRES --> PRESBOOT["Presidio Spring Boot Starter"]
     SAI --> BASE["Base Spring Boot Starter"]
     OPEN --> OPENBOOT["OpenNLP Spring Boot Starter"]
+    SEC --> SECBOOT["Spring Security Spring Boot Starter"]
 
     BASE --> PRESBOOT
     BASE --> OPENBOOT
+    BASE --> SECBOOT
 ```
 
 The `core` module has no Spring dependency and provides detection resolution,
@@ -63,6 +67,12 @@ The Spring AI integration module connects `core` to `ChatClient`, model calls,
 and tool execution boundaries. The base Spring Boot starter assembles `core`
 with the Spring AI integration, while analyzer-specific Spring Boot starters
 add the corresponding analyzer integration.
+
+The optional Spring Security integration depends on the public Spring AI
+integration and Spring Security Core. Its Spring Boot starter combines that
+module with the base starter without adding authentication, JWT, OAuth, or
+resource-server infrastructure. No Spring Security dependency is added to
+`core`.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
 Benchmarks and samples are repository-internal modules for performance
@@ -80,6 +90,7 @@ and are not part of the compatibility contract.
 | Analyzer extension | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | Tool policy | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI integration | `PrivacyChatClientConfigurer` |
+| Spring Security integration | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `PrivacySecurityChatClientConfigurer` |
 | Test support | `PrivacyTestProbe`, `PrivacyTestAssertions`, `PrivacyTestProbeAssert` |
 
 This table shows representative APIs only. See the Javadoc for the complete
@@ -234,6 +245,45 @@ disclosed are not re-protected and may contain those values.
 
 Detailed disclosure rules and the `returnDirect` flow are documented under
 [Per-Tool Original Disclosure](configuration.md#per-tool-original-disclosure).
+
+## Optional Tool Authorization Boundary
+
+The Spring Security integration adds two coordinated components around the
+existing privacy path. A request advisor captures `Authentication` from the
+blocking or reactive security context and stores it in a private request
+registry. An opaque handle, not the `Authentication`, enters Spring AI tool
+context. An authorization-aware `ToolCallingManager` uses that handle to filter
+definitions and re-authorize execution.
+
+```mermaid
+flowchart LR
+    A["SecurityContext<br/>at request entry"] --> B["Security context advisor"]
+    B --> C["Opaque request handle"]
+    C --> D["Authorization-aware<br/>ToolCallingManager"]
+    D --> E["Authorized definitions<br/>to model"]
+    D --> F["Execution re-authorization"]
+    F --> G["Privacy tool wrapper<br/>scoped PII restoration"]
+```
+
+The authorization manager receives the current `Authentication`, the tool
+definition, and either the definition or execution phase. It does not receive
+tool arguments. Consequently, execution authorization completes before the
+privacy wrapper restores any original request PII.
+
+The Spring Boot starter decorates Spring AI's auto-configured
+`DefaultToolCallingManager` and publishes the decorator as primary. A custom
+manager requires an application-provided `SpringSecurityToolBoundary` because
+the public manager interface cannot establish whether an arbitrary
+implementation honors the supplied callback and execution contracts.
+
+Spring AI Tool Search is supported as a controlled callback transition. The
+index receives only authorized definitions. The control callback is identified
+by Spring AI's reserved name and request-scoped marker, then pinned to the same
+callback instance. A selected business callback must match the callback captured
+at request entry. Other callback additions and replacements fail closed.
+
+See [Spring Security Tool Authorization](security.md) for configuration,
+context propagation, and supported-path details.
 
 ## Errors and Diagnostics
 

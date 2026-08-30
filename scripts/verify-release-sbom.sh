@@ -40,13 +40,25 @@ jq -e \
     and any(.metadata.component.externalReferences[]?;
       .type == "vcs" and .url == $public_vcs)
     and (
+      def expected_modules: [
+        "spring-ai-privacy-guardrails-core",
+        "spring-ai-privacy-guardrails-opennlp",
+        "spring-ai-privacy-guardrails-opennlp-spring-boot-starter",
+        "spring-ai-privacy-guardrails-presidio",
+        "spring-ai-privacy-guardrails-presidio-spring-boot-starter",
+        "spring-ai-privacy-guardrails-spring-ai",
+        "spring-ai-privacy-guardrails-spring-boot-starter",
+        "spring-ai-privacy-guardrails-spring-security",
+        "spring-ai-privacy-guardrails-spring-security-spring-boot-starter",
+        "spring-ai-privacy-guardrails-test"
+      ];
       [.components[]
         | select(
             .group == "io.github.ultramancode"
             and (.name | startswith($module_prefix))
           )
       ] as $modules
-      | ($modules | length) == 8
+      | ($modules | map(.name) | sort) == (expected_modules | sort)
       and all($modules[];
         . as $module
         | $module.version == $version
@@ -60,4 +72,4 @@ jq -e \
     )
   ' "$bom_file" >/dev/null
 
-echo "Verified release SBOM identity, version, licenses, VCS, and eight module purls."
+echo "Verified release SBOM identity, version, licenses, VCS, and expected module purls."

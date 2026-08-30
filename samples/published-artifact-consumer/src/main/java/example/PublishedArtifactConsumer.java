@@ -6,10 +6,16 @@ import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
 import io.github.ultramancode.springai.privacy.test.ToolCallSnapshot;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
@@ -17,14 +23,24 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationResult;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -36,6 +52,21 @@ import java.util.regex.Matcher;
 @EnableAutoConfiguration
 public class PublishedArtifactConsumer {
 
+    @Bean
+    PublishedAuthorizationChecks publishedAuthorizationChecks() {
+        return new PublishedAuthorizationChecks();
+    }
+
+    @Bean
+    AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager(
+            PublishedAuthorizationChecks checks
+    ) {
+        return (authentication, authorizationContext) -> checks.authorize(
+                authentication.get(),
+                authorizationContext
+        );
+    }
+
     public static void main(String[] args) {
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
                 PublishedArtifactConsumer.class
@@ -45,6 +76,7 @@ public class PublishedArtifactConsumer {
                         "spring.main.banner-mode=off",
                         "logging.level.root=ERROR",
                         "spring.ai.privacy.enabled=true",
+                        "spring.ai.privacy.security.enabled=true",
                         "spring.ai.privacy.regex.enabled=true",
                         "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
                         "spring.ai.privacy.regex.rules[0].pattern="
@@ -65,6 +97,7 @@ public class PublishedArtifactConsumer {
         context.getBean(PrivacyGuardrailsAutoConfiguration.class);
         context.getBean(RegexPiiAnalyzer.class);
         context.getBean(PrivacyChatClientConfigurer.class);
+        context.getBean(PrivacySecurityChatClientConfigurer.class);
         PrivacyService privacyService = context.getBean(PrivacyService.class);
 
         String tokenized;
@@ -86,19 +119,55 @@ public class PublishedArtifactConsumer {
             PrivacyService privacyService
     ) {
         PrivacyToolCallbackFactory toolCallbackFactory = context.getBean(PrivacyToolCallbackFactory.class);
+        SpringSecurityToolBoundary securityBoundary = context.getBean(
+                SpringSecurityToolBoundary.class
+        );
+        ToolCallingManager securedManager = context.getBean(ToolCallingManager.class);
+        if (securedManager != securityBoundary.toolCallingManager()) {
+            throw new IllegalStateException("Published Security starter did not select its secured manager");
+        }
+        PublishedAuthorizationChecks authorizationChecks = context.getBean(
+                PublishedAuthorizationChecks.class
+        );
+        AtomicInteger deniedToolCalls = new AtomicInteger();
         try (PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService)) {
             ToolCallback protectedTool = probe.wrapTool(customerLookup(), toolCallbackFactory);
-            ChatModel model = probe.wrapModel(new PublishedToolLoopModel());
-            ChatClient.Builder builder = ChatClient.builder(model).defaultTools(protectedTool);
-            context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
-            String finalResponse = builder.build()
-                    .prompt()
-                    .user("Find CUST-0042 for alice@example.com")
-                    .call()
-                    .content();
+            ToolCallback deniedTool = probe.wrapTool(
+                    adminDelete(deniedToolCalls),
+                    toolCallbackFactory
+            );
+            ChatModel model = probe.wrapModel(new PublishedToolLoopModel(securedManager));
+            ChatClient.Builder builder = ChatClient.builder(
+                    model,
+                    ObservationRegistry.NOOP,
+                    null,
+                    null,
+                    ToolCallingAdvisor.builder().toolCallingManager(securedManager)
+            ).defaultTools(protectedTool, deniedTool);
+            context.getBean(PrivacySecurityChatClientConfigurer.class).configure(builder);
+            SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+            securityContext.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                    "published-consumer",
+                    "not-used",
+                    List.of()
+            ));
+            SecurityContextHolder.setContext(securityContext);
+            String finalResponse;
+            try {
+                finalResponse = builder.build()
+                        .prompt()
+                        .user("Find CUST-0042 for alice@example.com")
+                        .call()
+                        .content();
+            } finally {
+                SecurityContextHolder.clearContext();
+            }
 
             if (probe.modelRequests().size() != 2 || probe.toolCalls().size() != 1) {
                 throw new IllegalStateException("Published configurer did not execute one complete tool loop");
+            }
+            if (deniedToolCalls.get() != 0) {
+                throw new IllegalStateException("Published Security starter executed a denied tool");
             }
             ToolCallSnapshot call = probe.toolCalls().get(0);
             if (!call.input().contains("CUST-0042") || call.input().contains("alice@example.com")) {
@@ -117,6 +186,7 @@ public class PublishedArtifactConsumer {
                     || !OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS").matcher(finalResponse).find()) {
                 throw new IllegalStateException("Published output policy did not protect the final response");
             }
+            authorizationChecks.verify();
         }
         if (privacyService.activeSessionCount() != 0) {
             throw new IllegalStateException("Published tool smoke retained a privacy session after close");
@@ -133,15 +203,79 @@ public class PublishedArtifactConsumer {
                 .build();
     }
 
+    private static ToolCallback adminDelete(AtomicInteger calls) {
+        return FunctionToolCallback.builder(
+                        "adminDelete",
+                        (AdminDeleteRequest ignored) -> {
+                            calls.incrementAndGet();
+                            return "deleted";
+                        }
+                )
+                .description("Deletes one synthetic customer")
+                .inputType(AdminDeleteRequest.class)
+                .build();
+    }
+
     private record CustomerLookupRequest(String customerId, String email) {
+    }
+
+    private record AdminDeleteRequest(String customerId) {
+    }
+
+    private static final class PublishedAuthorizationChecks {
+
+        private final AtomicInteger definitionChecks = new AtomicInteger();
+        private final AtomicInteger executionChecks = new AtomicInteger();
+        private final AtomicInteger deniedDefinitionChecks = new AtomicInteger();
+
+        private AuthorizationResult authorize(
+                Authentication authentication,
+                ToolAuthorizationContext context
+        ) {
+            boolean granted = authentication != null
+                    && authentication.isAuthenticated()
+                    && authentication.getName().equals("published-consumer")
+                    && context.toolDefinition().name().equals("customerLookup");
+            if (granted && context.phase() == ToolAuthorizationPhase.DEFINITION) {
+                this.definitionChecks.incrementAndGet();
+            }
+            if (granted && context.phase() == ToolAuthorizationPhase.EXECUTION) {
+                this.executionChecks.incrementAndGet();
+            }
+            if (!granted
+                    && context.phase() == ToolAuthorizationPhase.DEFINITION
+                    && context.toolDefinition().name().equals("adminDelete")) {
+                this.deniedDefinitionChecks.incrementAndGet();
+            }
+            return new AuthorizationDecision(granted);
+        }
+
+        private void verify() {
+            if (this.definitionChecks.get() == 0
+                    || this.executionChecks.get() == 0
+                    || this.deniedDefinitionChecks.get() == 0) {
+                throw new IllegalStateException(
+                        "Published Security starter did not verify allowed and denied tool boundaries"
+                );
+            }
+        }
     }
 
     private static final class PublishedToolLoopModel implements ChatModel {
 
+        private final ToolCallingManager toolCallingManager;
         private final AtomicInteger calls = new AtomicInteger();
+
+        private PublishedToolLoopModel(ToolCallingManager toolCallingManager) {
+            this.toolCallingManager = Objects.requireNonNull(
+                    toolCallingManager,
+                    "toolCallingManager must not be null"
+            );
+        }
 
         @Override
         public ChatResponse call(Prompt prompt) {
+            verifyExposedDefinitions(prompt);
             if (this.calls.incrementAndGet() == 1) {
                 String modelInput = prompt.getInstructions().stream()
                         .map(Message::getText)
@@ -175,6 +309,19 @@ public class PublishedArtifactConsumer {
         @Override
         public ChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
+        }
+
+        private void verifyExposedDefinitions(Prompt prompt) {
+            if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) {
+                throw new IllegalStateException("Expected tool-calling options");
+            }
+            List<ToolDefinition> definitions = this.toolCallingManager.resolveToolDefinitions(options);
+            if (definitions.size() != 1
+                    || !definitions.get(0).name().equals("customerLookup")) {
+                throw new IllegalStateException(
+                        "Published Security starter exposed an unexpected tool definition"
+                );
+            }
         }
 
         private static String token(String text, String entityType) {

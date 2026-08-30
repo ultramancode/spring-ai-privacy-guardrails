@@ -4,10 +4,13 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import io.github.ultramancode.privacy.buildlogic.tasks.ValidateReleaseVersion;
 import io.github.ultramancode.privacy.buildlogic.tasks.VerifyCentralStagingRepository;
@@ -139,7 +142,7 @@ public final class ReleasePlugin implements Plugin<Project> {
                 }
         );
 
-        configureCycloneDx(project);
+        configureCycloneDx(project, extension);
 
         TaskProvider<ValidateReleaseVersion> validateReleaseVersion = project.getTasks().register(
                 "validateReleaseVersion",
@@ -287,7 +290,16 @@ public final class ReleasePlugin implements Plugin<Project> {
         });
     }
 
-    private static void configureCycloneDx(Project project) {
+    private static void configureCycloneDx(
+            Project project,
+            PrivacyBuildExtension extension
+    ) {
+        Set<String> expectedFirstPartyModules = new LinkedHashSet<>();
+        extension.whenModuleDeclared(spec -> {
+            if (spec.isPublishable()) {
+                expectedFirstPartyModules.add(spec.getName());
+            }
+        });
         project.getPluginManager().apply("org.cyclonedx.bom");
         project.getTasks().named("cyclonedxBom", CyclonedxAggregateTask.class).configure(task -> {
             task.setGroup("verification");
@@ -304,7 +316,8 @@ public final class ReleasePlugin implements Plugin<Project> {
             task.getXmlOutput().unsetConvention();
             configureSbomIdentity(task);
             task.doLast(ignored -> normalizeReleaseSbom(
-                    task.getJsonOutput().get().getAsFile()
+                    task.getJsonOutput().get().getAsFile(),
+                    Set.copyOf(expectedFirstPartyModules)
             ));
         });
         // CycloneDX adds the direct BOM as an outgoing artifact when its task is
@@ -326,7 +339,10 @@ public final class ReleasePlugin implements Plugin<Project> {
         task.getExternalReferences().set(List.of(publicVcsReference()));
     }
 
-    private static void normalizeReleaseSbom(File sbomFile) {
+    private static void normalizeReleaseSbom(
+            File sbomFile,
+            Set<String> expectedFirstPartyModuleNames
+    ) {
         try {
             Bom bom = new JsonParser().parse(sbomFile);
             Component rootComponent = bom.getMetadata().getComponent();
@@ -338,10 +354,15 @@ public final class ReleasePlugin implements Plugin<Project> {
                     .filter(component -> component.getName() != null
                             && component.getName().startsWith("spring-ai-privacy-guardrails-"))
                     .toList();
-            if (firstPartyModules.size() != 8) {
+            Set<String> expectedModuleNames = new TreeSet<>(expectedFirstPartyModuleNames);
+            Set<String> actualModuleNames = firstPartyModules.stream()
+                    .map(Component::getName)
+                    .collect(Collectors.toCollection(TreeSet::new));
+            if (firstPartyModules.size() != expectedModuleNames.size()
+                    || !actualModuleNames.equals(expectedModuleNames)) {
                 throw new GradleException(
-                        "Release SBOM must contain exactly 8 first-party modules, found "
-                                + firstPartyModules.size()
+                        "Release SBOM first-party modules must match publishable modules. Expected "
+                                + expectedModuleNames + ", found " + actualModuleNames
                 );
             }
             for (Component component : firstPartyModules) {

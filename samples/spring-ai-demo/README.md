@@ -4,8 +4,8 @@
 
 This runnable sample exercises the privacy advisor path with a deterministic
 local `ChatModel`, so it requires no external LLM API key. It explicitly applies
-the starter's `PrivacyChatClientConfigurer` to the sample's protected
-`ChatClient` builders:
+the starter's privacy configurer and, for tool-bearing clients, its combined
+`PrivacySecurityChatClientConfigurer`:
 
 ```text
 raw user input -> tokenized model prompt -> capability-scoped tool disclosure
@@ -30,7 +30,7 @@ The demo binds only to `http://127.0.0.1:8080`.
 ### Privacy Boundary Inspector
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
-Inspector**. Use the `Local Tool | RAG | MCP` selector to run the existing
+Inspector**. Use the `Local Tool | RAG | MCP | Security` selector to run the existing
 runtime demos from one page. The `EN | 한국어` toggle sends the selected locale
 to the demo endpoints and reruns the selected deterministic scenario so the UI
 copy, synthetic input, and runtime results stay aligned. Each view renders only
@@ -48,6 +48,7 @@ mappings, recognizer internals, or model configuration.
 | `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Localized fixed input and `detectedSpans`, opaque model input and tool arguments, scoped `CUSTOMER_ID` restoration, and the re-protected tool result. |
 | `RAG` | `GET /demo/rag` | The raw `retrievedDocument`, the actual `modelVisibleContext`, and backend booleans that compare raw and tokenized PII at those two stages. |
 | `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | The actual local Streamable HTTP MCP runtime mode, protected model and tool-call values, scoped disclosure, and result re-protection. |
+| `Security` | `GET /demo/security-tool-boundary` | Backend-recorded definition and execution decisions for the same customer lookup request as a general employee and a customer-support employee, callback counts, and privacy evidence from the allowed run. |
 
 The Inspector sends `Accept-Language: en` or `ko` with these requests and
 reruns the selected flow. The backend locale changes the fixed input, RAG
@@ -166,10 +167,30 @@ observed after the call; concurrent requests can make it nonzero without
 showing that this request leaked a session.
 
 Disclosure scope comes from `spring.ai.privacy.tools.disclosures`; the demo uses the
-auto-configured `PrivacyToolCallbackFactory` and explicit privacy configurer
-rather than creating parallel policies.
+auto-configured `PrivacyToolCallbackFactory` and combined
+`PrivacySecurityChatClientConfigurer` rather than creating parallel policies.
 
 The `/demo/tool-loop` endpoint uses an in-process CRM delegate.
+
+## Spring Security Tool Boundary Demo
+
+```bash
+curl "http://127.0.0.1:8080/demo/security-tool-boundary" \
+  -H 'Accept-Language: en'
+```
+
+This endpoint runs the same deterministic customer lookup request twice. For a
+general employee (`ROLE_EMPLOYEE`), `customerLookup` is absent from the
+model-visible definitions and the forced request is denied before the callback
+runs. For a customer-support employee (`ROLE_CUSTOMER_SUPPORT`), the tool is
+exposed and executed once; the existing disclosure policy restores only
+`CUSTOMER_ID`, and the result is protected again before model re-entry. The
+sample installs a fixed in-process authorization policy and requires no login,
+token issuer, external model, or external service.
+
+<p align="center">
+  <img src="../../docs/images/privacy-boundary-inspector-security.png" alt="Security Inspector comparing a blocked general employee with an authorized customer-support employee" width="960">
+</p>
 
 ## Streamable HTTP MCP Tool Loop Demo
 

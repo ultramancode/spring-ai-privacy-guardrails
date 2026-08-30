@@ -16,11 +16,12 @@ configurations {
 
 dependencies {
     implementation platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
-    implementation project(':spring-ai-privacy-guardrails-spring-boot-starter')
+    implementation project(':spring-ai-privacy-guardrails-spring-security-spring-boot-starter')
     runtimeOnly project(':spring-ai-privacy-guardrails-opennlp-spring-boot-starter')
     runtimeOnly project(':spring-ai-privacy-guardrails-presidio-spring-boot-starter')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
     implementation 'org.springframework.ai:spring-ai-mcp'
     implementation 'org.springframework.ai:spring-ai-vector-store'
     implementation 'org.springframework.ai:spring-ai-vector-store-advisor'

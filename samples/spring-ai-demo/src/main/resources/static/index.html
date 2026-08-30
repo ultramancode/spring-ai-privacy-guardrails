@@ -472,6 +472,140 @@
       text-transform: uppercase;
     }
 
+    .security-role-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .security-comparison-context {
+      margin-bottom: 16px;
+      padding: 22px 24px;
+      border: 1px solid #31536a;
+      border-radius: 8px;
+      background: #0a1722;
+      color: var(--muted);
+    }
+    .security-request-copy { min-width: 0; }
+    .security-section-index {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid #347a78;
+      border-radius: 5px;
+      background: #0d292d;
+      color: #81ddd5;
+      font: 900 12px/1 var(--mono);
+    }
+    .security-stage-label,
+    .security-outcome small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .security-request-copy strong { color: var(--text); font-size: 24px; line-height: 1.3; }
+    .security-section-heading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding: 0 2px;
+    }
+    .security-section-heading h2 { font-size: 18px; }
+    .security-role-card { display: flex; flex-direction: column; gap: 16px; }
+    .security-role-card.viewer { border-color: #70404b; }
+    .security-role-card.support { border-color: #2f6d56; }
+    .security-role-heading {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px 12px;
+    }
+    .security-role-heading h2 { grid-column: 1 / -1; font-size: 18px; }
+    .security-stage-label { display: block; color: #75c9c3; }
+    .role-badge {
+      flex: 0 0 auto;
+      padding: 9px 13px;
+      border: 2px solid var(--line-strong);
+      border-radius: 6px;
+      background: #0a1722;
+      color: #c6d3dc;
+      font: 900 14px/1.2 var(--mono);
+      letter-spacing: .045em;
+    }
+    .security-role-card.viewer .role-badge { border-color: #a84d5d; background: #32151f; color: #ffa6b3; }
+    .security-role-card.support .role-badge { border-color: #438d6d; background: #0d2a23; color: #84edb3; }
+    .authorization-path {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 0;
+    }
+    .authorization-step {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #091520;
+    }
+    .authorization-step small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .045em;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+    .authorization-step strong {
+      display: block;
+      margin-top: 9px;
+      color: var(--text);
+      font: 800 14px/1.35 var(--mono);
+      overflow-wrap: anywhere;
+    }
+    .authorization-step:first-child strong { font-size: 15px; }
+    .authorization-step.pass { border-color: #2d6651; background: #0b211d; }
+    .authorization-step.pass strong { color: var(--green); }
+    .authorization-step.blocked { border-color: #7f3744; background: #2a131b; }
+    .authorization-step.blocked strong { color: var(--red); }
+    .authorization-arrow {
+      display: grid;
+      place-items: center;
+      min-height: 28px;
+      color: #597482;
+      font: 900 20px/1 var(--mono);
+    }
+    .security-role-card.viewer .authorization-arrow { color: #9b4857; }
+    .security-role-card.support .authorization-arrow { color: #3d8a6d; }
+    .security-outcome {
+      display: grid;
+      align-content: center;
+      flex: 1;
+      gap: 7px;
+      min-height: 180px;
+      padding: 15px 16px;
+      border: 2px solid var(--line);
+      border-radius: 7px;
+      background: #091520;
+    }
+    .security-outcome strong { font-size: 15px; line-height: 1.45; }
+    .security-outcome pre {
+      min-height: 0;
+      margin-top: 1px;
+      padding: 8px 9px;
+      font-size: 10px;
+      line-height: 1.45;
+    }
+    .security-role-card.viewer .security-outcome { border-color: #7f3744; background: #2a131b; }
+    .security-role-card.viewer .security-outcome strong { color: #ff9cab; }
+    .security-role-card.support .security-outcome { border-color: #2d6651; background: #0b211d; }
+    .security-role-card.support .security-outcome strong { color: #78e1a7; }
+    .security-metrics .metric-result { align-items: flex-start; }
+    .security-metrics .metric strong { font-size: 17px; line-height: 1.25; }
+
     .error {
       display: none;
       margin-top: 14px;
@@ -496,6 +630,7 @@
       .rag-boundary { min-height: 156px; }
       .disclosure-boundary { grid-template-columns: 1fr; }
       .disclosure-arrow { transform: rotate(90deg); min-height: 16px; }
+      .security-role-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 520px) {
       main { width: min(100% - 24px, 1180px); padding-top: 24px; }
@@ -506,6 +641,8 @@
       .metric { min-height: 88px; }
       .card { padding: 16px; }
       .check { align-items: flex-start; }
+      .security-request-copy strong { font-size: 20px; }
+      .security-outcome { min-height: 140px; }
     }
   </style>
 </head>
@@ -526,6 +663,7 @@
             <option value="local-tool">Local Tool</option>
             <option value="rag">RAG</option>
             <option value="mcp">MCP</option>
+            <option value="security">Security</option>
           </select>
         </label>
         <div class="control">
@@ -708,6 +846,56 @@
     </section>
   </section>
 
+  <section class="scenario-panel" id="securityScenario" data-scenario="security" hidden>
+    <section class="metrics security-metrics" data-i18n-aria-label="securityEvidence" aria-label="Security and privacy evidence">
+      <div class="metric" id="securityAuthorizationMetric"><span data-i18n="security.metric.authorization">Authorization checks</span><div class="metric-result"><strong id="securityAuthorizationMeaning">—</strong><small class="metric-status" id="securityAuthorizationStatus" data-i18n="status.wait">WAIT</small></div></div>
+      <div class="metric" id="securityToolInputMetric"><span data-i18n="security.metric.toolInput">Tool input</span><div class="metric-result"><strong id="securityToolInputMeaning">—</strong><small class="metric-status" id="securityToolInputStatus" data-i18n="status.wait">WAIT</small></div></div>
+      <div class="metric" id="securityToolOutputMetric"><span data-i18n="security.metric.toolOutput">Tool output</span><div class="metric-result"><strong id="securityToolOutputMeaning">—</strong><small class="metric-status" id="securityToolOutputStatus" data-i18n="status.wait">WAIT</small></div></div>
+      <div class="metric observation" id="securityCleanupMetric"><span data-i18n="security.metric.cleanup">Execution cleanup</span><div class="metric-result"><strong id="securityCleanupMeaning">—</strong><small class="metric-status" id="securityCleanupStatus" data-i18n="status.wait">WAIT</small></div></div>
+    </section>
+    <div class="security-section-heading"><span class="security-section-index">1</span><h2 data-i18n="security.requestLabel">User request</h2></div>
+    <div class="security-comparison-context">
+      <div class="security-request-copy"><strong id="securityRequest">—</strong></div>
+    </div>
+    <div class="security-section-heading"><span class="security-section-index">2</span><h2 data-i18n="security.roleFlowLabel">Role-based execution paths</h2></div>
+    <section class="security-role-grid">
+      <article class="card security-role-card viewer">
+        <div class="security-role-heading">
+          <span class="security-stage-label" data-i18n="security.decisionLabel">Authorization decision</span>
+          <span class="role-badge" id="securityViewerRole">ROLE_EMPLOYEE</span>
+          <h2 data-i18n="security.viewerTitle">General employee: customer lookup tool hidden and blocked</h2>
+        </div>
+        <div class="authorization-path">
+          <div class="authorization-step" id="securityViewerDefinitionStep"><small data-i18n="security.visibility">Model-visible tool names</small><strong id="securityViewerDefinition">—</strong></div>
+          <span class="authorization-arrow" aria-hidden="true">↓</span>
+          <div class="authorization-step" id="securityViewerRequestStep"><small data-i18n="security.callDecision">Model tool call</small><strong id="securityViewerRequest">—</strong></div>
+          <span class="authorization-arrow" aria-hidden="true">↓</span>
+          <div class="authorization-step" id="securityViewerCallbackStep"><small data-i18n="security.actualExecution">Actual tool execution</small><strong id="securityViewerCallbackState">—</strong></div>
+          <span class="authorization-arrow" aria-hidden="true">↓</span>
+          <div class="security-outcome"><small data-i18n="security.resultLabel">Result</small><strong id="securityViewerOutcome">—</strong></div>
+        </div>
+      </article>
+
+      <article class="card security-role-card support">
+        <div class="security-role-heading">
+          <span class="security-stage-label" data-i18n="security.decisionLabel">Authorization decision</span>
+          <span class="role-badge" id="securitySupportRole">ROLE_CUSTOMER_SUPPORT</span>
+          <h2 data-i18n="security.supportTitle">Customer support: customer lookup tool exposed and authorized</h2>
+        </div>
+        <div class="authorization-path">
+          <div class="authorization-step" id="securitySupportDefinitionStep"><small data-i18n="security.visibility">Model-visible tool names</small><strong id="securitySupportDefinition">—</strong></div>
+          <span class="authorization-arrow" aria-hidden="true">↓</span>
+          <div class="authorization-step" id="securitySupportRequestStep"><small data-i18n="security.callDecision">Model tool call</small><strong id="securitySupportRequest">—</strong></div>
+          <span class="authorization-arrow" aria-hidden="true">↓</span>
+          <div class="authorization-step" id="securitySupportCallbackStep"><small data-i18n="security.actualExecution">Actual tool execution</small><strong id="securitySupportCallbackState">—</strong></div>
+          <span class="authorization-arrow" aria-hidden="true">↓</span>
+          <div class="security-outcome"><small data-i18n="security.resultLabel">Result</small><strong id="securitySupportOutcome">—</strong><pre class="protected-output" id="securityFinalResponse">—</pre></div>
+        </div>
+      </article>
+
+    </section>
+  </section>
+
   <div class="error" id="error" role="alert"></div>
 </main>
 
@@ -722,6 +910,7 @@
       "scenarioTitle.localTool": "Local Tool Privacy Boundary",
       "scenarioTitle.rag": "RAG Privacy Boundary",
       "scenarioTitle.mcp": "MCP Privacy Boundary",
+      "scenarioTitle.security": "Spring Security Tool Boundary",
       scenarioLabel: "Scenario",
       languageLabel: "Language",
       languageToggle: "Language",
@@ -729,13 +918,16 @@
       protectedExecutionFlow: "Protected execution flow",
       mcpExecutionFlow: "Streamable HTTP MCP execution flow",
       ragEvidence: "RAG evidence",
+      securityEvidence: "Security and privacy evidence",
       ragComparison: "Retrieved document to model-visible protected context",
       "lead.localTool": "Inspect the actual Local Tool privacy boundary using only evidence returned by the sample backend.",
       "lead.rag": "Compare the retrieved document with the protected context actually recorded at the RAG model boundary.",
       "lead.mcp": "Inspect the actual Streamable HTTP MCP tool loop, scoped disclosure, and result re-protection evidence.",
+      "lead.security": "Compare actual authorization decisions for the same customer lookup request under general-employee and customer-support authority.",
       "run.localTool": "Run Local Tool flow",
       "run.rag": "Run RAG flow",
       "run.mcp": "Run MCP flow",
+      "run.security": "Run Security flow",
       running: "Running…",
       "status.wait": "WAIT",
       "status.done": "DONE",
@@ -823,6 +1015,32 @@
       "mcp.boundaryDisclosure": "Least-privilege disclosure at the MCP tool boundary",
       "mcp.finalTitle": "Protected MCP result at model re-entry",
       "mcp.finalHint": "The MCP tool result is retokenized before it is sent back to the model. Below is the actual final response returned by the model after receiving the protected MCP result.",
+      "security.viewerTitle": "General employee: customer lookup tool hidden and blocked",
+      "security.supportTitle": "Customer support: customer lookup tool exposed and authorized",
+      "security.requestLabel": "User request",
+      "security.roleFlowLabel": "Role-based execution paths",
+      "security.decisionLabel": "Authorization decision",
+      "security.resultLabel": "Result",
+      "security.outcome.denied": "Permission denied: the customer lookup tool was not executed.",
+      "security.outcome.allowed": "The local model received the protected CRM result.",
+      "security.visibility": "Model-visible tool names",
+      "security.callDecision": "Model tool call",
+      "security.actualExecution": "Actual tool execution",
+      "security.metric.authorization": "Authorization checks",
+      "security.metric.authorizationMeaning": "ROLE ENFORCED",
+      "security.metric.toolInput": "Tool input",
+      "security.metric.toolInputMeaning": "ALLOWED ORIGINALS ONLY",
+      "security.metric.toolOutput": "Tool output",
+      "security.metric.toolOutputMeaning": "REPROTECTED",
+      "security.metric.cleanup": "Execution cleanup",
+      "security.metric.cleanupMeaning": "ACTIVE SESSIONS: {count}",
+      "security.hidden": "HIDDEN",
+      "security.notRequested": "NOT REQUESTED",
+      "security.denied": "DENIED",
+      "security.exposed": "EXPOSED",
+      "security.allowed": "ALLOWED",
+      "security.zeroCalls": "0 CALLS",
+      "security.oneCall": "1 CALL",
       errorPrefix: "Demo failed safely",
       "error.returnedHttp": "returned HTTP"
     },
@@ -832,6 +1050,7 @@
       "scenarioTitle.localTool": "Local Tool 개인정보 경계",
       "scenarioTitle.rag": "RAG 개인정보 경계",
       "scenarioTitle.mcp": "MCP 개인정보 경계",
+      "scenarioTitle.security": "Spring Security 도구 권한 경계",
       scenarioLabel: "시나리오",
       languageLabel: "언어",
       languageToggle: "언어",
@@ -839,13 +1058,16 @@
       protectedExecutionFlow: "보호 실행 흐름",
       mcpExecutionFlow: "Streamable HTTP MCP 실행 흐름",
       ragEvidence: "RAG 근거",
+      securityEvidence: "권한 및 개인정보 보호 근거",
       ragComparison: "검색된 문서와 모델에 노출된 보호 컨텍스트 비교",
       "lead.localTool": "샘플 백엔드가 반환한 근거만으로 실제 Local Tool 개인정보 경계를 확인합니다.",
       "lead.rag": "검색된 문서와 실제 RAG 모델 경계에 기록된 보호 컨텍스트를 비교합니다.",
       "lead.mcp": "실제 Streamable HTTP MCP 도구 루프와 범위 제한 공개, 결과 재보호 근거를 확인합니다.",
+      "lead.security": "동일한 고객정보 조회 요청에 대한 일반 직원과 고객지원 담당자의 실제 권한 판정을 비교합니다.",
       "run.localTool": "Local Tool 흐름 실행",
       "run.rag": "RAG 흐름 실행",
       "run.mcp": "MCP 흐름 실행",
+      "run.security": "Security 흐름 실행",
       running: "실행 중…",
       "status.wait": "대기",
       "status.done": "완료",
@@ -933,6 +1155,32 @@
       "mcp.boundaryDisclosure": "MCP 도구 경계의 최소 권한 공개",
       "mcp.finalTitle": "모델 재진입 시 보호된 MCP 결과",
       "mcp.finalHint": "MCP 도구 결과는 모델로 다시 전달되기 전에 재토큰화됩니다. 아래에는 보호된 MCP 결과를 받은 뒤 모델이 반환한 실제 최종 응답을 표시합니다.",
+      "security.viewerTitle": "일반 직원: 고객정보 조회 도구 숨김 및 차단",
+      "security.supportTitle": "고객지원 담당자: 고객정보 조회 도구 공개 및 허용",
+      "security.requestLabel": "사용자 요청",
+      "security.roleFlowLabel": "역할별 실행 흐름",
+      "security.decisionLabel": "권한 판정",
+      "security.resultLabel": "이후 결과",
+      "security.outcome.denied": "권한이 없어 고객정보 조회 도구를 실행할 수 없습니다.",
+      "security.outcome.allowed": "로컬 모델이 보호된 CRM 결과를 수신했습니다.",
+      "security.visibility": "모델이 받은 도구 목록",
+      "security.callDecision": "모델의 도구 호출",
+      "security.actualExecution": "실제 도구 실행",
+      "security.metric.authorization": "권한 검사",
+      "security.metric.authorizationMeaning": "ROLE별 적용",
+      "security.metric.toolInput": "도구 입력",
+      "security.metric.toolInputMeaning": "허용된 원문만",
+      "security.metric.toolOutput": "도구 출력",
+      "security.metric.toolOutputMeaning": "재보호됨",
+      "security.metric.cleanup": "실행 종료",
+      "security.metric.cleanupMeaning": "활성 세션 {count}",
+      "security.hidden": "숨김",
+      "security.notRequested": "요청되지 않음",
+      "security.denied": "거부됨",
+      "security.exposed": "공개됨",
+      "security.allowed": "허용됨",
+      "security.zeroCalls": "0회",
+      "security.oneCall": "1회",
       errorPrefix: "데모가 안전하게 실패했습니다",
       "error.returnedHttp": "반환 HTTP 상태"
     }
@@ -959,6 +1207,13 @@
       titleKey: "scenarioTitle.mcp",
       leadKey: "lead.mcp",
       runKey: "run.mcp"
+    },
+    security: {
+      panelId: "securityScenario",
+      endpoint: "/demo/security-tool-boundary",
+      titleKey: "scenarioTitle.security",
+      leadKey: "lead.security",
+      runKey: "run.security"
     }
   });
 
@@ -1230,6 +1485,133 @@
     setStageCompleted(prefix, "stageCleanup");
   }
 
+  function resetSecurityEvidence() {
+    element("securityRequest").textContent = "—";
+    ["Authorization", "ToolInput", "ToolOutput", "Cleanup"].forEach(id => {
+      const metric = element("security" + id + "Metric");
+      metric.classList.remove("pass", "fail");
+      element("security" + id + "Meaning").textContent = "—";
+      setLocalizedText(element("security" + id + "Status"), "status.wait");
+    });
+    ["ViewerDefinition", "ViewerRequest", "ViewerCallback",
+      "SupportDefinition", "SupportRequest", "SupportCallback"].forEach(id => {
+      const step = element("security" + id + "Step");
+      step.classList.remove("pass", "blocked");
+    });
+    ["ViewerDefinition", "ViewerRequest", "ViewerCallbackState",
+      "SupportDefinition", "SupportRequest", "SupportCallbackState",
+      "ViewerOutcome", "SupportOutcome",
+      "FinalResponse"].forEach(id => {
+      element("security" + id).textContent = "—";
+    });
+  }
+
+  function setAuthorizationStep(stepId, valueId, stateKey, style) {
+    const step = element("security" + stepId + "Step");
+    step.classList.remove("pass", "blocked");
+    step.classList.add(style);
+    setLocalizedText(element("security" + valueId), stateKey);
+  }
+
+  function setSecurityMetric(id, passed, meaningKey) {
+    const metric = element("security" + id + "Metric");
+    metric.classList.toggle("pass", passed);
+    metric.classList.toggle("fail", !passed);
+    setLocalizedText(element("security" + id + "Meaning"), meaningKey);
+    setTechnicalText(element("security" + id + "Status"), passed ? "PASS" : "FAIL");
+  }
+
+  function renderSecurityEvidence(security) {
+    const generalEmployee = security.generalEmployee;
+    const customerSupport = security.customerSupport;
+    const viewerHidden = generalEmployee.exposedToolNames.length === 0;
+    const viewerCallbackStopped = generalEmployee.callbackInvocations === 0;
+    const supportExposed = customerSupport.exposedToolNames.includes("customerLookup");
+    const supportCalledOnce = customerSupport.callbackInvocations === 1;
+    const authorizationEnforced = viewerHidden
+      && generalEmployee.toolCallDenied
+      && viewerCallbackStopped
+      && supportExposed
+      && !customerSupport.toolCallDenied
+      && supportCalledOnce;
+
+    setSecurityMetric("Authorization", authorizationEnforced, "security.metric.authorizationMeaning");
+    setSecurityMetric("ToolInput", customerSupport.toolReceivedOnlyAllowedOriginals, "security.metric.toolInputMeaning");
+    setSecurityMetric("ToolOutput", customerSupport.toolResultRetokenizedBeforeModel, "security.metric.toolOutputMeaning");
+    setTechnicalText(
+      element("securityCleanupMeaning"),
+      text("security.metric.cleanupMeaning").replace("{count}", security.activeSessionsAfterCall)
+    );
+    setLocalizedText(element("securityCleanupStatus"), "status.done");
+
+    element("securityViewerRole").textContent = generalEmployee.role;
+    element("securitySupportRole").textContent = customerSupport.role;
+    element("securityRequest").textContent = security.requestSummary;
+    setAuthorizationStep(
+      "ViewerDefinition",
+      "ViewerDefinition",
+      viewerHidden ? "security.hidden" : "security.exposed",
+      viewerHidden ? "blocked" : "pass"
+    );
+    setTechnicalText(
+      element("securityViewerDefinition"),
+      JSON.stringify(generalEmployee.exposedToolNames)
+    );
+    setAuthorizationStep(
+      "ViewerRequest",
+      "ViewerRequest",
+      generalEmployee.modelRequestedTool
+        ? (generalEmployee.toolCallDenied ? "security.denied" : "security.allowed")
+        : "security.notRequested",
+      generalEmployee.modelRequestedTool && generalEmployee.toolCallDenied ? "blocked" : "pass"
+    );
+    setAuthorizationStep(
+      "ViewerCallback",
+      "ViewerCallbackState",
+      viewerCallbackStopped ? "security.zeroCalls" : "security.oneCall",
+      viewerCallbackStopped ? "blocked" : "pass"
+    );
+    setAuthorizationStep(
+      "SupportDefinition",
+      "SupportDefinition",
+      supportExposed ? "security.exposed" : "security.hidden",
+      supportExposed ? "pass" : "blocked"
+    );
+    setTechnicalText(
+      element("securitySupportDefinition"),
+      JSON.stringify(customerSupport.exposedToolNames)
+    );
+    setAuthorizationStep(
+      "SupportRequest",
+      "SupportRequest",
+      customerSupport.modelRequestedTool
+        ? (customerSupport.toolCallDenied ? "security.denied" : "security.allowed")
+        : "security.notRequested",
+      customerSupport.modelRequestedTool && !customerSupport.toolCallDenied ? "pass" : "blocked"
+    );
+    setAuthorizationStep(
+      "SupportCallback",
+      "SupportCallbackState",
+      supportCalledOnce ? "security.oneCall" : "security.zeroCalls",
+      supportCalledOnce ? "pass" : "blocked"
+    );
+    setLocalizedText(
+      element("securityViewerOutcome"),
+      generalEmployee.toolCallDenied ? "security.outcome.denied" : "security.outcome.allowed"
+    );
+    setLocalizedText(
+      element("securitySupportOutcome"),
+      !customerSupport.toolCallDenied && customerSupport.finalResponse
+        ? "security.outcome.allowed"
+        : "security.outcome.denied"
+    );
+    const payloadStart = customerSupport.finalResponse.indexOf("{");
+    const protectedPayload = payloadStart >= 0
+      ? prettyJsonPayload(customerSupport.finalResponse.slice(payloadStart))
+      : customerSupport.finalResponse;
+    renderTokenEvidence("securityFinalResponse", protectedPayload);
+  }
+
   function booleanText(value) {
     return String(value).toUpperCase();
   }
@@ -1304,6 +1686,12 @@
     renderToolEvidence("mcp", tool);
   }
 
+  async function runSecurity(scenario, locale) {
+    resetSecurityEvidence();
+    const security = await json(scenario.endpoint, locale);
+    renderSecurityEvidence(security);
+  }
+
   async function run() {
     if (running) return;
     const button = element("run");
@@ -1326,8 +1714,10 @@
         await runLocalTool(scenario, locale);
       } else if (scenarioKey === "rag") {
         await runRag(scenario, locale);
-      } else {
+      } else if (scenarioKey === "mcp") {
         await runMcp(scenario, locale);
+      } else {
+        await runSecurity(scenario, locale);
       }
     } catch (failure) {
       showFailure(failure);

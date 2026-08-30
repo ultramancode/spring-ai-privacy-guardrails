@@ -65,6 +65,9 @@ class PrivacyDemoControllerTest {
                         "<option value=\"mcp\">MCP</option>"
                 )))
                 .andExpect(content().string(Matchers.containsString(
+                        "<option value=\"security\">Security</option>"
+                )))
+                .andExpect(content().string(Matchers.containsString(
                         "id=\"languageToggle\""
                 )))
                 .andExpect(content().string(Matchers.containsString(
@@ -275,6 +278,12 @@ class PrivacyDemoControllerTest {
         assertScenarioWiring(page, "local-tool", "/demo/tool-loop", "runLocalTool");
         assertScenarioWiring(page, "rag", "/demo/rag", "runRag");
         assertScenarioWiring(page, "mcp", "/demo/mcp-tool-loop", "runMcp");
+        assertScenarioWiring(
+                page,
+                "security",
+                "/demo/security-tool-boundary",
+                "runSecurity"
+        );
         assertTranslationCoverage(page);
     }
 
@@ -616,6 +625,59 @@ class PrivacyDemoControllerTest {
     }
 
     @Test
+    void securityBoundaryHidesAndBlocksTheToolForGeneralEmployeesButAllowsCustomerSupport()
+            throws Exception {
+        this.mockMvc.perform(get("/demo/security-tool-boundary")
+                        .header(HttpHeaders.ACCEPT_LANGUAGE, "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("actual-spring-security-tool-boundary"))
+                .andExpect(jsonPath("$.requestSummary").value("Look up the customer information."))
+                .andExpect(jsonPath("$.generalEmployee.role").value("ROLE_EMPLOYEE"))
+                .andExpect(jsonPath("$.generalEmployee.exposedToolNames").isEmpty())
+                .andExpect(jsonPath("$.generalEmployee.authorizationChecks[*].phase")
+                        .value(Matchers.hasItem("DEFINITION")))
+                .andExpect(jsonPath("$.generalEmployee.authorizationChecks[*].granted")
+                        .value(Matchers.everyItem(Matchers.is(false))))
+                .andExpect(jsonPath("$.generalEmployee.modelRequestedTool").value(true))
+                .andExpect(jsonPath("$.generalEmployee.toolCallDenied").value(true))
+                .andExpect(jsonPath("$.generalEmployee.denialType")
+                        .value("AuthorizationDeniedException"))
+                .andExpect(jsonPath("$.generalEmployee.callbackInvocations").value(0))
+                .andExpect(jsonPath("$.generalEmployee.deniedCallStoppedBeforeCallback")
+                        .value(true))
+                .andExpect(jsonPath("$.customerSupport.role").value("ROLE_CUSTOMER_SUPPORT"))
+                .andExpect(jsonPath("$.customerSupport.exposedToolNames[0]")
+                        .value("customerLookup"))
+                .andExpect(jsonPath("$.customerSupport.authorizationChecks[*].phase")
+                        .value(Matchers.hasItems("DEFINITION", "EXECUTION")))
+                .andExpect(jsonPath("$.customerSupport.authorizationChecks[*].granted")
+                        .value(Matchers.everyItem(Matchers.is(true))))
+                .andExpect(jsonPath("$.customerSupport.modelRequestedTool").value(true))
+                .andExpect(jsonPath("$.customerSupport.toolCallDenied").value(false))
+                .andExpect(jsonPath("$.customerSupport.callbackInvocations").value(1))
+                .andExpect(jsonPath("$.customerSupport.toolReceivedOnlyAllowedOriginals")
+                        .value(true))
+                .andExpect(jsonPath("$.customerSupport.toolResultRetokenizedBeforeModel")
+                        .value(true))
+                .andExpect(jsonPath("$.customerSupport.finalResponse").value(Matchers.containsString(
+                        "[[PII_CUSTOMER_ID_"
+                )))
+                .andExpect(jsonPath("$.activeSessionsAfterCall").value(0))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("EMP-1234"))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "test@example.com"
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "010-1234-5678"
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "CUST-123456"
+                ))));
+
+        assertThat(this.privacyService.activeSessionCount()).isZero();
+    }
+
+    @Test
     @Timeout(20)
     void repeatedMcpToolLoopCallsReuseRuntimeAndPreservePrivacyEvidence() throws Exception {
         assertMcpToolLoopEvidence(
@@ -728,7 +790,7 @@ class PrivacyDemoControllerTest {
                         + Pattern.quote(runner)
                         + "\\(scenario,\\s*locale\\)\\s*\\{[^}]*json\\(scenario\\.endpoint,\\s*locale\\)"
         ));
-        if ("mcp".equals(scenarioKey)) {
+        if ("security".equals(scenarioKey)) {
             assertThat(page).containsPattern(Pattern.compile(
                     "else\\s*\\{\\s*await\\s+" + Pattern.quote(runner)
                             + "\\(scenario,\\s*locale\\);"
@@ -758,8 +820,10 @@ class PrivacyDemoControllerTest {
         requiredKeys.addAll(Set.of(
                 "lead.rag",
                 "lead.mcp",
+                "lead.security",
                 "run.rag",
                 "run.mcp",
+                "run.security",
                 "running",
                 "errorPrefix",
                 "error.returnedHttp"

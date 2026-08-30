@@ -114,7 +114,7 @@ privacyBuild {
         module.dependsOnProject(
                 'spring-ai-privacy-guardrails-opennlp-spring-boot-starter',
                 'spring-ai-privacy-guardrails-presidio-spring-boot-starter',
-                'spring-ai-privacy-guardrails-spring-boot-starter'
+                'spring-ai-privacy-guardrails-spring-security-spring-boot-starter'
         )
     }
 

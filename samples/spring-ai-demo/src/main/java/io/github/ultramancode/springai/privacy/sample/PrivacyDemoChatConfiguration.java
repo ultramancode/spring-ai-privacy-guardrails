@@ -1,6 +1,8 @@
 package io.github.ultramancode.springai.privacy.sample;
 
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
@@ -10,9 +12,11 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authorization.AuthorizationManager;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
@@ -41,31 +45,54 @@ class PrivacyDemoChatConfiguration {
     }
 
     @Bean
+    PrivacyDemoSecurityPolicy privacyDemoSecurityPolicy() {
+        return new PrivacyDemoSecurityPolicy();
+    }
+
+    @Bean
+    AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager(
+            PrivacyDemoSecurityPolicy securityPolicy
+    ) {
+        return (authentication, context) -> securityPolicy.authorize(
+                authentication.get(),
+                context
+        );
+    }
+
+    @Bean
     PrivacyDemoToolLoop privacyDemoToolLoop(
-            PrivacyChatClientConfigurer privacyConfigurer,
+            PrivacySecurityChatClientConfigurer securityConfigurer,
             PrivacyToolCallbackFactory toolCallbackFactory,
             ToolDisclosurePolicy toolDisclosurePolicy,
+            ToolCallingManager toolCallingManager,
+            PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
         return new PrivacyDemoToolLoop(
-                privacyConfigurer,
+                securityConfigurer,
                 toolCallbackFactory,
                 toolDisclosurePolicy,
+                toolCallingManager,
+                securityPolicy,
                 objectMapper
         );
     }
 
     @Bean(destroyMethod = "close")
     PrivacyDemoMcpToolLoop privacyDemoMcpToolLoop(
-            PrivacyChatClientConfigurer privacyConfigurer,
+            PrivacySecurityChatClientConfigurer securityConfigurer,
             PrivacyToolCallbackFactory toolCallbackFactory,
             ToolDisclosurePolicy toolDisclosurePolicy,
+            ToolCallingManager toolCallingManager,
+            PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
         return new PrivacyDemoMcpToolLoop(
-                privacyConfigurer,
+                securityConfigurer,
                 toolCallbackFactory,
                 toolDisclosurePolicy,
+                toolCallingManager,
+                securityPolicy,
                 objectMapper
         );
     }

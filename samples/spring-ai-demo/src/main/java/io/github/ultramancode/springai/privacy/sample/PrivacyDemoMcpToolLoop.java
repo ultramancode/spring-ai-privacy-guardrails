@@ -1,14 +1,17 @@
 package io.github.ultramancode.springai.privacy.sample;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosureScope;
 import io.modelcontextprotocol.client.McpSyncClient;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.mcp.McpToolNamePrefixGenerator;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -38,9 +41,11 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             OpaquePiiTokenFormat.patternForEntityType("PHONE_NUMBER");
     private static final Pattern CUSTOMER_ID_TOKEN_PATTERN =
             OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID");
-    private final PrivacyChatClientConfigurer privacyConfigurer;
+    private final PrivacySecurityChatClientConfigurer securityConfigurer;
     private final PrivacyToolCallbackFactory toolCallbackFactory;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
+    private final ToolCallingManager toolCallingManager;
+    private final PrivacyDemoSecurityPolicy securityPolicy;
     private final ObjectMapper objectMapper;
     private LocalMcpCrmServer localMcpServer;
     private McpSyncClient mcpClient;
@@ -49,14 +54,18 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
     private Path serverBaseDirectory;
 
     PrivacyDemoMcpToolLoop(
-            PrivacyChatClientConfigurer privacyConfigurer,
+            PrivacySecurityChatClientConfigurer securityConfigurer,
             PrivacyToolCallbackFactory toolCallbackFactory,
             ToolDisclosurePolicy toolDisclosurePolicy,
+            ToolCallingManager toolCallingManager,
+            PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
-        this.privacyConfigurer = privacyConfigurer;
+        this.securityConfigurer = securityConfigurer;
         this.toolCallbackFactory = toolCallbackFactory;
         this.toolDisclosurePolicy = toolDisclosurePolicy;
+        this.toolCallingManager = toolCallingManager;
+        this.securityPolicy = securityPolicy;
         this.objectMapper = objectMapper;
     }
 
@@ -64,7 +73,10 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         LocalMcpCrmServer server = localMcpServer(locale);
         server.useRecords(crmRecords(locale));
         initializeMcpClient(server);
-        return runAgainstLocalServer(input, locale, server);
+        return this.securityPolicy.runAs(
+                PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT,
+                () -> runAgainstLocalServer(input, locale, server)
+        ).value();
     }
 
     @Override
@@ -117,10 +129,21 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             LocalMcpCrmServer server
     ) {
         PrivacyDemoToolLoop.DemoToolLoopModel model =
-                new PrivacyDemoToolLoop.DemoToolLoopModel(this.objectMapper, "MCP", locale);
+                new PrivacyDemoToolLoop.DemoToolLoopModel(
+                        this.objectMapper,
+                        "MCP",
+                        locale,
+                        this.toolCallingManager
+                );
 
-        ChatClient.Builder builder = ChatClient.builder(model).defaultTools(this.protectedMcpTools);
-        this.privacyConfigurer.configure(builder);
+        ChatClient.Builder builder = ChatClient.builder(
+                model,
+                ObservationRegistry.NOOP,
+                null,
+                null,
+                ToolCallingAdvisor.builder().toolCallingManager(this.toolCallingManager)
+        ).defaultTools(this.protectedMcpTools);
+        this.securityConfigurer.configure(builder);
 
         int callsBeforeRequest = server.requestEvidence().calls();
         String finalResponse = builder.build().prompt().user(input).call().content();

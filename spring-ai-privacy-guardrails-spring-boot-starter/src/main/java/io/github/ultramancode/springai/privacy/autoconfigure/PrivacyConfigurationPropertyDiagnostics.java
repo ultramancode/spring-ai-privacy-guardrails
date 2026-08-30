@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Stream;
 
 /** Warns about unrecognized names in the library-owned, fixed property surface. */
 final class PrivacyConfigurationPropertyDiagnostics {
@@ -31,6 +32,11 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "tools",
             "enabled"
     );
+    private static final String SECURITY_ROOT_PROPERTY = "security";
+    private static final List<String> DIAGNOSTIC_ROOT_PROPERTIES = Stream.concat(
+            ROOT_PROPERTIES.stream(),
+            Stream.of(SECURITY_ROOT_PROPERTY)
+    ).toList();
     static final List<String> OUTPUT_PROPERTIES = List.of(
             "enabled",
             "action",
@@ -73,6 +79,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
     );
     static final List<String> TOOLS_PROPERTIES = List.of("disclosures");
     static final Set<String> TOOLS_MAP_PROPERTIES = Set.of("disclosures");
+    private static final List<String> SECURITY_PROPERTIES = List.of("enabled");
 
     PrivacyConfigurationPropertyDiagnostics(Environment environment) {
         findDiagnostics(environment).forEach(PrivacyConfigurationPropertyDiagnostics::warn);
@@ -98,7 +105,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         Optional<SegmentMatch> rootMatchCandidate = closestSegmentMatch(
                 name,
                 ROOT_ELEMENTS,
-                ROOT_PROPERTIES,
+                DIAGNOSTIC_ROOT_PROPERTIES,
                 context.systemEnvironmentMapping()
         );
         if (rootMatchCandidate.isEmpty()) {
@@ -107,8 +114,17 @@ final class PrivacyConfigurationPropertyDiagnostics {
         SegmentMatch rootMatch = rootMatchCandidate.get();
         int propertyIndex = ROOT_ELEMENTS + rootMatch.consumedElements();
         if (!rootMatch.exact()) {
-            // Only this typo can silently leave privacy auto-configuration inactive;
-            // other near-root names may belong to provider or host extensions.
+            Optional<Diagnostic> securityRootTypo = securityRootTypoDiagnostic(
+                    name,
+                    propertyIndex,
+                    rootMatch,
+                    context
+            );
+            if (securityRootTypo.isPresent()) {
+                return securityRootTypo;
+            }
+            // A terminal global-enabled typo can silently leave privacy auto-configuration
+            // inactive. Other near-root names may belong to provider or host extensions.
             if (propertyIndex == name.getNumberOfElements()
                     && rootMatch.expected().equals("enabled")) {
                 return typoSuggestionDiagnostic(ROOT.toString(), rootMatch);
@@ -166,8 +182,48 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     Set.of(),
                     context
             );
+            case "security" -> diagnoseFixedPropertyPath(
+                    name,
+                    propertyIndex,
+                    propertyRoot,
+                    SECURITY_PROPERTIES,
+                    context
+            );
             default -> Optional.empty();
         };
+    }
+
+    private static Optional<Diagnostic> securityRootTypoDiagnostic(
+            ConfigurationPropertyName name,
+            int propertyIndex,
+            SegmentMatch rootMatch,
+            DiagnosticContext context
+    ) {
+        if (!rootMatch.expected().equals(SECURITY_ROOT_PROPERTY)
+                || propertyIndex >= name.getNumberOfElements()) {
+            return Optional.empty();
+        }
+        Optional<SegmentMatch> propertyMatchCandidate = closestSegmentMatch(
+                name,
+                propertyIndex,
+                SECURITY_PROPERTIES,
+                context.systemEnvironmentMapping()
+        );
+        if (propertyMatchCandidate.isEmpty()) {
+            return Optional.empty();
+        }
+        SegmentMatch propertyMatch = propertyMatchCandidate.get();
+        if (propertyIndex + propertyMatch.consumedElements()
+                != name.getNumberOfElements()) {
+            return Optional.empty();
+        }
+        String actualName = ROOT + "." + rootMatch.actual() + "." + propertyMatch.actual();
+        return Optional.of(new Diagnostic(
+                "Unrecognized Spring AI Privacy Guardrails configuration property '"
+                        + actualName
+                        + "'. Did you mean 'spring.ai.privacy.security.enabled'? "
+                        + "No configuration value was included in this diagnostic."
+        ));
     }
 
     /** Diagnoses a fixed property path whose known properties have no descendants. */

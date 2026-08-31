@@ -15,8 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Stores Authentication, declared callback identities, and exposed tool names in an internal
- * registry. Only an opaque handle is attached to Spring AI tool options.
+ * Stores request {@link Authentication}, declared callback identities, and exposed tool names in
+ * an internal registry. Only an opaque handle is attached to Spring AI tool options.
  */
 final class SecurityToolSessionRegistry {
 
@@ -37,7 +37,7 @@ final class SecurityToolSessionRegistry {
         return new SecurityToolSession(this, handle);
     }
 
-    State require(SecurityToolContextHandle handle) {
+    State requireActiveSessionState(SecurityToolContextHandle handle) {
         State state = this.sessions.get(Objects.requireNonNull(handle, "handle must not be null"));
         if (state == null) {
             throw denied("Tool authorization context is missing or expired");
@@ -90,31 +90,32 @@ final class SecurityToolSessionRegistry {
             return this.authentication;
         }
 
-        ToolCallback requireCurrent(
+        ToolCallback requireCurrentCallback(
                 ToolCallback callback,
                 ToolCallingChatOptions options
         ) {
             Objects.requireNonNull(callback, "callback must not be null");
             String name = callback.getToolDefinition().name();
             ToolCallback declared = this.declaredCallbacks.get(name);
-            if (declared != null) {
-                if (declared != callback) {
-                    throw denied("A tool callback was replaced after authorization");
+            if (declared == null) {
+                if (!SpringAiToolSearchSupport.isControlCallback(callback, options)) {
+                    throw denied("A tool callback was added after authorization");
                 }
-                return declared;
+                return pinToolSearchControlCallback(callback);
             }
-            if (!SpringAiToolSearchSupport.isControlCallback(callback, options)) {
-                throw denied("A tool callback was added after authorization");
+            if (declared != callback) {
+                throw denied("A tool callback was replaced after authorization");
             }
-            return pinToolSearchControlCallback(callback);
+            return declared;
         }
 
+        // Spring AI adds the Tool Search control callback after the initial callback snapshot.
+        // Pin the first instance so the callback cannot be replaced during the request.
         private synchronized ToolCallback pinToolSearchControlCallback(ToolCallback callback) {
-            if (this.toolSearchControlCallback == null) {
+            ToolCallback pinned = this.toolSearchControlCallback;
+            if (pinned == null) {
                 this.toolSearchControlCallback = callback;
-                return callback;
-            }
-            if (this.toolSearchControlCallback != callback) {
+            } else if (pinned != callback) {
                 throw denied("The Tool Search control callback changed during the request");
             }
             return callback;

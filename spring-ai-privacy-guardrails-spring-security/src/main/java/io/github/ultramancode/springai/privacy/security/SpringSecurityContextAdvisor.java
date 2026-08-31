@@ -18,14 +18,12 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 /**
- * Captures request Authentication and initial tool callbacks in a request-scoped registry, then
- * attaches only an opaque handle to Spring AI tool options.
+ * Captures request {@link Authentication} and initial tool callbacks as request-scoped state in
+ * an internal registry, then attaches only an opaque handle to Spring AI tool options.
  */
 final class SpringSecurityContextAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -71,10 +69,10 @@ final class SpringSecurityContextAdvisor implements CallAdvisor, StreamAdvisor {
         if (callbacks.isEmpty()) {
             return chain.nextStream(request);
         }
-        Authentication threadAuthentication = currentAuthentication();
-        Mono<Authentication> authentication = Mono.deferContextual(contextView -> {
+        Authentication fallbackAuthentication = currentAuthentication();
+        Mono<Authentication> requestAuthentication = Mono.deferContextual(contextView -> {
             if (!contextView.hasKey(SecurityContext.class)) {
-                return Mono.justOrEmpty(threadAuthentication);
+                return Mono.justOrEmpty(fallbackAuthentication);
             }
             return ReactiveSecurityContextHolder.getContext()
                     .flatMap(context -> {
@@ -86,10 +84,10 @@ final class SpringSecurityContextAdvisor implements CallAdvisor, StreamAdvisor {
                     })
                     .switchIfEmpty(missingAuthentication());
         });
-        return authentication
+        return requestAuthentication
                 .switchIfEmpty(missingAuthentication())
-                .flatMapMany(value -> Flux.using(
-                        () -> this.registry.open(value, callbacks),
+                .flatMapMany(authentication -> Flux.using(
+                        () -> this.registry.open(authentication, callbacks),
                         session -> chain.nextStream(attachHandle(request, session.handle())),
                         SecurityToolSession::close
                 ));
@@ -129,12 +127,9 @@ final class SpringSecurityContextAdvisor implements CallAdvisor, StreamAdvisor {
             SecurityToolContextHandle handle
     ) {
         ToolCallingChatOptions options = (ToolCallingChatOptions) request.prompt().getOptions();
-        Map<String, Object> toolContext = new HashMap<>();
-        if (options.getToolContext() != null) {
-            toolContext.putAll(options.getToolContext());
-        }
-        toolContext.put(SecurityToolSessionRegistry.TOOL_CONTEXT_HANDLE, handle);
-        ToolCallingChatOptions securedOptions = options.mutate().toolContext(toolContext).build();
+        ToolCallingChatOptions securedOptions = options.mutate()
+                .toolContext(SecurityToolSessionRegistry.TOOL_CONTEXT_HANDLE, handle)
+                .build();
         Prompt prompt = new Prompt(new ArrayList<>(request.prompt().getInstructions()), securedOptions);
         return request.mutate().prompt(prompt).build();
     }

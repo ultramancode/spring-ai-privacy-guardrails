@@ -55,7 +55,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     void fixedDiagnosticSchemaStaysInSyncWithConfigurationProperties() {
         assertDiagnosticSchemaMatches(
                 PrivacyGuardrailsProperties.class,
-                PrivacyConfigurationPropertyDiagnostics.ROOT_PROPERTIES
+                PrivacyConfigurationPropertyDiagnostics.BASE_ROOT_PROPERTIES
         );
         assertDiagnosticSchemaMatches(
                 PrivacyGuardrailsProperties.Output.class,

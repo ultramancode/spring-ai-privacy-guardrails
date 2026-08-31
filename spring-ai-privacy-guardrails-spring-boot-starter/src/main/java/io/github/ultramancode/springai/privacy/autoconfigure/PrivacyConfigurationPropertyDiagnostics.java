@@ -24,7 +24,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
             ConfigurationPropertyName.of("spring.ai.privacy");
     private static final int ROOT_ELEMENTS = ROOT.getNumberOfElements();
 
-    static final List<String> ROOT_PROPERTIES = List.of(
+    static final List<String> BASE_ROOT_PROPERTIES = List.of(
             "output",
             "response-inspection",
             "analysis",
@@ -34,7 +34,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
     );
     private static final String SECURITY_ROOT_PROPERTY = "security";
     private static final List<String> DIAGNOSTIC_ROOT_PROPERTIES = Stream.concat(
-            ROOT_PROPERTIES.stream(),
+            BASE_ROOT_PROPERTIES.stream(),
             Stream.of(SECURITY_ROOT_PROPERTY)
     ).toList();
     static final List<String> OUTPUT_PROPERTIES = List.of(

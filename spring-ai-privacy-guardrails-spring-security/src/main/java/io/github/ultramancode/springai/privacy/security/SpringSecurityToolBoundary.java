@@ -11,8 +11,9 @@ import org.springframework.security.core.context.SecurityContextHolderStrategy;
 import java.util.Objects;
 
 /**
- * Provides a manager and advisor that share one request-scoped tool authorization registry.
- * Applications must install both components to complete the boundary.
+ * Provides a {@link ToolCallingManager} and {@link Advisor} backed by a shared
+ * registry of request-scoped authorization state. Applications must install both
+ * components to complete the boundary.
  */
 public final class SpringSecurityToolBoundary {
 
@@ -35,14 +36,14 @@ public final class SpringSecurityToolBoundary {
     }
 
     /**
-     * Starts a boundary builder that decorates an existing Spring AI manager.
+     * Creates a builder that decorates an existing Spring AI tool-calling manager.
      *
-     * <p>This boundary handles tool-definition resolution and validates requested tool
-     * calls before invoking the delegate. The delegate must execute tool calls using the
-     * callbacks supplied in the prompt.</p>
+     * <p>The resulting boundary filters tool definitions and reauthorizes tool calls
+     * before execution. The delegate must execute tool calls using the callbacks
+     * supplied in the prompt.</p>
      *
-     * @param delegate manager used for tool-call execution
-     * @param authorizationManager policy evaluated for definition and execution phases
+     * @param delegate manager to decorate and use for tool-call execution
+     * @param authorizationManager policy evaluated for definition exposure and tool execution
      * @return boundary builder
      */
     public static Builder builder(
@@ -53,8 +54,9 @@ public final class SpringSecurityToolBoundary {
     }
 
     /**
-     * Returns the manager that must be shared by the {@link ChatModel} and
-     * {@link ToolCallingAdvisor}.
+     * Returns the authorization-aware manager used by {@link ChatModel} to resolve
+     * tool definitions and by {@link ToolCallingAdvisor} to execute tool calls.
+     * The same instance must be configured for both roles.
      *
      * @return authorization-aware tool-calling manager
      */
@@ -63,10 +65,10 @@ public final class SpringSecurityToolBoundary {
     }
 
     /**
-     * Returns the advisor that captures request authentication for blocking and
-     * reactive calls.
+     * Returns the advisor that captures request authentication and initial tool
+     * callbacks for blocking and reactive calls.
      *
-     * @return request authentication advisor
+     * @return request authorization context advisor
      */
     public Advisor advisor() {
         return this.advisor;
@@ -76,7 +78,7 @@ public final class SpringSecurityToolBoundary {
         return this.registry.activeSessionCount();
     }
 
-    /** Builder for a complete optional Spring Security tool boundary. */
+    /** Builder for a Spring Security tool boundary. */
     public static final class Builder {
 
         private final ToolCallingManager delegate;
@@ -97,9 +99,9 @@ public final class SpringSecurityToolBoundary {
 
         /**
          * Sets the {@link SecurityContextHolderStrategy} used to obtain request
-         * {@code Authentication} for blocking calls. For streaming calls, it supplies
-         * the thread-local fallback used only when the Reactor context has no
-         * {@code SecurityContext} entry.
+         * {@code Authentication} for blocking calls. For streaming calls, the strategy
+         * supplies a fallback {@code Authentication} that is used only when the Reactor
+         * context has no {@code SecurityContext} entry.
          *
          * @param contextHolderStrategy application-selected context holder strategy
          * @return this builder
@@ -115,7 +117,8 @@ public final class SpringSecurityToolBoundary {
         }
 
         /**
-         * Builds one manager/advisor pair backed by a private request registry.
+         * Builds one manager/advisor pair backed by a private registry of
+         * request-scoped authorization state.
          *
          * @return complete Spring Security tool boundary
          */

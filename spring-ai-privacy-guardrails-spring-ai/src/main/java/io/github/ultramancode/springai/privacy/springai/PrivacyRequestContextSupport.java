@@ -106,12 +106,7 @@ final class PrivacyRequestContextSupport {
         if (!(options instanceof ToolCallingChatOptions toolCallingOptions)) {
             return options;
         }
-        Map<String, Object> toolContext = new HashMap<>();
-        if (toolCallingOptions.getToolContext() != null) {
-            toolContext.putAll(toolCallingOptions.getToolContext());
-        }
-        toolContext.put(CONTEXT_HANDLE, handle);
-        return toolCallingOptions.mutate().toolContext(toolContext).build();
+        return toolCallingOptions.mutate().toolContext(CONTEXT_HANDLE, handle).build();
     }
 
     private static PrivacyContextHandle handleFrom(Object contextValue) {

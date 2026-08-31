@@ -73,12 +73,17 @@ class SpringSecurityToolBoundaryIntegrationTest {
         ChatClient chatClient = securedClient(service, factory, boundary, model, allowed, denied);
         useAuthentication(authentication("alice"));
 
-        String result = chatClient.prompt().user("Find Alice").call().content();
+        String result = chatClient.prompt()
+                .user("Find Alice")
+                .toolContext(Map.of("tenant", "acme"))
+                .call()
+                .content();
 
         assertThat(result).isEqualTo("done");
         assertThat(model.exposedToolNames()).containsOnly("customerLookup");
         assertThat(allowedInput.get()).isEqualTo("{\"name\":\"Alice\"}");
         assertThat(applicationContext.get())
+                .containsEntry("tenant", "acme")
                 .doesNotContainKey(SecurityToolSessionRegistry.TOOL_CONTEXT_HANDLE);
         assertThat(deniedCalls).hasValue(0);
         assertThat(definitionChecks).hasValueGreaterThanOrEqualTo(1);

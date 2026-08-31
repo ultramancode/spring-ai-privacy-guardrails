@@ -51,10 +51,10 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
         if (callbacks.isEmpty()) {
             return List.of();
         }
-        SecurityToolSessionRegistry.State state = requireState(chatOptions);
+        SecurityToolSessionRegistry.State state = requireActiveSessionState(chatOptions);
         List<ToolDefinition> authorizedDefinitions = new ArrayList<>();
         for (ToolCallback callback : callbacks) {
-            ToolCallback current = state.requireCurrent(callback, chatOptions);
+            ToolCallback current = state.requireCurrentCallback(callback, chatOptions);
             ToolDefinition definition = current.getToolDefinition();
             if (state.isToolSearchControl(current)) {
                 state.markExposed(definition.name());
@@ -78,7 +78,7 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
                     "Tool execution requires ToolCallingChatOptions"
             );
         }
-        SecurityToolSessionRegistry.State state = requireState(options);
+        SecurityToolSessionRegistry.State state = requireActiveSessionState(options);
         Map<String, ToolCallback> currentCallbacks = indexCurrentCallbacks(
                 state,
                 options,
@@ -125,7 +125,9 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
         return this.delegate.executeToolCalls(securedPrompt, chatResponse);
     }
 
-    private SecurityToolSessionRegistry.State requireState(ToolCallingChatOptions options) {
+    private SecurityToolSessionRegistry.State requireActiveSessionState(
+            ToolCallingChatOptions options
+    ) {
         Map<String, Object> context = options.getToolContext();
         Object value = context == null
                 ? null
@@ -135,7 +137,7 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
                     "Tool authorization context is missing or invalid"
             );
         }
-        return this.registry.require(handle);
+        return this.registry.requireActiveSessionState(handle);
     }
 
     private Map<String, ToolCallback> indexCurrentCallbacks(
@@ -145,7 +147,7 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
     ) {
         Map<String, ToolCallback> indexed = new LinkedHashMap<>();
         for (ToolCallback callback : callbacks) {
-            ToolCallback current = state.requireCurrent(callback, options);
+            ToolCallback current = state.requireCurrentCallback(callback, options);
             String name = current.getToolDefinition().name();
             if (indexed.putIfAbsent(name, current) != null) {
                 throw new IllegalArgumentException("tool callback names must be unique");

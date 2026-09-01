@@ -63,6 +63,7 @@ class SpringSecurityContextPropagationIntegrationTest {
                 List.of("customerLookup")
         );
         ChatClient chatClient = securedClient(service, factory, boundary, model, tool);
+        // Ensure authentication comes from Reactor Context, not a thread-local fallback.
         SecurityContextHolder.clearContext();
 
         String result = chatClient.prompt()
@@ -115,14 +116,45 @@ class SpringSecurityContextPropagationIntegrationTest {
     }
 
     @Test
-    void rejectsAnEmptyReactiveSecurityContextInsteadOfUsingThreadLocalAuthentication() {
+    void fallsBackToThreadLocalAuthenticationWhenReactiveSecurityContextIsAbsent() {
+        SpringSecurityToolBoundary boundary = boundary((authentication, context) ->
+                new AuthorizationDecision(authentication.get().getName().equals("thread-user")));
+        PrivacyService service = privacyService();
+        PrivacyToolCallbackFactory factory = privacyFactory(service, Set.of("customerLookup"));
+        AtomicReference<String> input = new AtomicReference<>();
+        ToolCallback tool = factory.wrap(tool("customerLookup", input::set));
+        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
+                boundary.toolCallingManager(),
+                List.of("customerLookup")
+        );
+        ChatClient chatClient = securedClient(service, factory, boundary, model, tool);
+        useAuthentication(authentication("thread-user"));
+
+        // Deliberately omit Reactor security context to exercise the thread-local fallback.
+        String result = chatClient.prompt()
+                .user("Find Alice")
+                .stream()
+                .content()
+                .collectList()
+                .map(parts -> String.join("", parts))
+                .block();
+
+        assertThat(result).isEqualTo("done");
+        assertThat(input.get()).isEqualTo("{\"name\":\"Alice\"}");
+        assertThat(boundary.activeSessionCount()).isZero();
+        assertThat(service.activeSessionCount()).isZero();
+    }
+
+    @Test
+    void doesNotFallBackToThreadLocalAuthenticationWhenReactiveSecurityContextHasNoAuthentication() {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
         PrivacyService service = privacyService();
         PrivacyToolCallbackFactory factory = privacyFactory(service, Set.of("customerLookup"));
-        ToolCallback tool = factory.wrap(tool("customerLookup", ignored -> {
-        }));
+        AtomicInteger toolCalls = new AtomicInteger();
+        ToolCallback tool = factory.wrap(tool("customerLookup", ignored ->
+                toolCalls.incrementAndGet()));
         ResolvingToolLoopModel model = new ResolvingToolLoopModel(
                 boundary.toolCallingManager(),
                 List.of("customerLookup")
@@ -142,12 +174,13 @@ class SpringSecurityContextPropagationIntegrationTest {
                 .block())
                 .isInstanceOf(AuthorizationDeniedException.class)
                 .hasMessage("Tool authorization requires an Authentication");
+        assertThat(toolCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
     }
 
     @Test
-    void rejectsAnEmptyReactiveSecurityContextPublisherInsteadOfUsingThreadLocalAuthentication() {
+    void doesNotFallBackToThreadLocalAuthenticationWhenReactiveSecurityContextPublisherIsEmpty() {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
@@ -195,30 +228,37 @@ class SpringSecurityContextPropagationIntegrationTest {
                 .content()
                 .subscribe();
 
-        assertThat(boundary.activeSessionCount()).isOne();
-        subscription.dispose();
+        try {
+            assertThat(boundary.activeSessionCount()).isOne();
+        }
+        finally {
+            subscription.dispose();
+        }
         assertThat(boundary.activeSessionCount()).isZero();
     }
 
     @Test
-    void failsClosedWhenNoSecurityContextIsAvailable() {
+    void failsClosedForSynchronousCallWhenNoAuthenticationIsAvailable() {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
         PrivacyService service = privacyService();
         PrivacyToolCallbackFactory factory = privacyFactory(service, Set.of("customerLookup"));
-        ToolCallback tool = factory.wrap(tool("customerLookup", ignored -> {
-        }));
+        AtomicInteger toolCalls = new AtomicInteger();
+        ToolCallback tool = factory.wrap(tool("customerLookup", ignored ->
+                toolCalls.incrementAndGet()));
         ResolvingToolLoopModel model = new ResolvingToolLoopModel(
                 boundary.toolCallingManager(),
                 List.of("customerLookup")
         );
         ChatClient chatClient = securedClient(service, factory, boundary, model, tool);
+        // Ensure the synchronous request has no thread-local authentication.
         SecurityContextHolder.clearContext();
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
                 .isInstanceOf(AuthorizationDeniedException.class)
                 .hasMessage("Tool authorization requires an Authentication");
+        assertThat(toolCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
     }
@@ -232,8 +272,9 @@ class SpringSecurityContextPropagationIntegrationTest {
         );
         PrivacyService service = privacyService();
         PrivacyToolCallbackFactory factory = privacyFactory(service, Set.of("customerLookup"));
-        ToolCallback tool = factory.wrap(tool("customerLookup", ignored -> {
-        }));
+        AtomicInteger toolCalls = new AtomicInteger();
+        ToolCallback tool = factory.wrap(tool("customerLookup", ignored ->
+                toolCalls.incrementAndGet()));
         ResolvingToolLoopModel model = new ResolvingToolLoopModel(
                 boundary.toolCallingManager(),
                 List.of("customerLookup")
@@ -254,11 +295,13 @@ class SpringSecurityContextPropagationIntegrationTest {
                     .hasRootCauseInstanceOf(AuthorizationDeniedException.class)
                     .rootCause()
                     .hasMessage("Tool authorization requires an Authentication");
+            assertThat(toolCalls).hasValue(0);
 
             Future<String> propagated = propagatedExecutor.submit(
                     () -> chatClient.prompt().user("Find Alice").call().content()
             );
             assertThat(propagated.get(5, TimeUnit.SECONDS)).isEqualTo("done");
+            assertThat(toolCalls).hasValue(1);
         }
         finally {
             rawExecutor.shutdownNow();
@@ -279,8 +322,9 @@ class SpringSecurityContextPropagationIntegrationTest {
         );
         PrivacyService service = privacyService();
         PrivacyToolCallbackFactory factory = privacyFactory(service, Set.of("customerLookup"));
-        ToolCallback tool = factory.wrap(tool("customerLookup", ignored -> {
-        }));
+        AtomicInteger toolCalls = new AtomicInteger();
+        ToolCallback tool = factory.wrap(tool("customerLookup", ignored ->
+                toolCalls.incrementAndGet()));
         ResolvingToolLoopModel model = new ResolvingToolLoopModel(
                 boundary.toolCallingManager(),
                 List.of("customerLookup")
@@ -301,11 +345,13 @@ class SpringSecurityContextPropagationIntegrationTest {
                     .hasRootCauseInstanceOf(AuthorizationDeniedException.class)
                     .rootCause()
                     .hasMessage("Tool authorization requires an Authentication");
+            assertThat(toolCalls).hasValue(0);
 
             Future<String> propagated = propagatedVirtualExecutor.submit(
                     () -> chatClient.prompt().user("Find Alice").call().content()
             );
             assertThat(propagated.get(5, TimeUnit.SECONDS)).isEqualTo("done");
+            assertThat(toolCalls).hasValue(1);
         }
         finally {
             rawVirtualExecutor.shutdownNow();
@@ -316,6 +362,8 @@ class SpringSecurityContextPropagationIntegrationTest {
         assertThat(service.activeSessionCount()).isZero();
     }
 
+    // Use reflection to keep the test compatible with the Java 17 baseline
+    // while exercising the virtual-thread executor on Java 21 or later.
     private static ExecutorService newVirtualThreadPerTaskExecutor() throws Exception {
         return (ExecutorService) Executors.class
                 .getMethod("newVirtualThreadPerTaskExecutor")

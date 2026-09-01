@@ -80,13 +80,16 @@ class SpringSecurityToolSearchIntegrationTest {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
-        ToolCallback injected = tool("toolSearchTool", ignored -> {
+        ToolCallback toolSearchNamedCallbackWithoutSessionMarker = tool("toolSearchTool", ignored -> {
         });
         DefinitionResolvingModel model = new DefinitionResolvingModel(
                 boundary.toolCallingManager()
         );
         ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(boundary.advisor(), lateToolInjectionAdvisor(injected))
+                .defaultAdvisors(
+                        boundary.advisor(),
+                        lateToolInjectionAdvisor(toolSearchNamedCallbackWithoutSessionMarker)
+                )
                 .defaultTools(tool("customerLookup", ignored -> {
                 }))
                 .build();
@@ -99,20 +102,26 @@ class SpringSecurityToolSearchIntegrationTest {
     }
 
     @Test
-    void rejectsReplacingTheToolSearchControlCallbackDuringARequest() {
+    void rejectsReplacingTheToolSearchToolCallbackDuringARequest() {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
-        ToolCallback control = tool("toolSearchTool", ignored -> {
+        ToolCallback initialToolSearchToolCallback = tool("toolSearchTool", ignored -> {
         });
-        ToolCallback replacement = tool("toolSearchTool", ignored -> {
+        ToolCallback replacementToolSearchToolCallback = tool("toolSearchTool", ignored -> {
         });
+        // The model resolves the initial callback, replaces it, and resolves again.
         ToolSearchCallbackReplacementModel model = new ToolSearchCallbackReplacementModel(
                 boundary.toolCallingManager(),
-                replacement
+                replacementToolSearchToolCallback
         );
         ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(boundary.advisor(), toolSearchControlInjectionAdvisor(control))
+                .defaultAdvisors(
+                        boundary.advisor(),
+                        toolSearchToolCallbackAndSessionMarkerInjectionAdvisor(
+                                initialToolSearchToolCallback
+                        )
+                )
                 .defaultTools(tool("customerLookup", ignored -> {
                 }))
                 .build();
@@ -120,7 +129,7 @@ class SpringSecurityToolSearchIntegrationTest {
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find customer").call().content())
                 .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("The Tool Search control callback changed during the request");
+                .hasMessage("The Tool Search tool callback changed during the request");
         assertThat(boundary.activeSessionCount()).isZero();
     }
 
@@ -128,24 +137,30 @@ class SpringSecurityToolSearchIntegrationTest {
     @SuppressWarnings("unchecked")
     void toolSearchIndexesOnlyAuthorizedDefinitionsAndKeepsPiiTokenizedUntilBusinessExecution() {
         List<String> authorizationChecks = new ArrayList<>();
-        AuthorizationManager<ToolAuthorizationContext> policy = (authentication, context) -> {
-            authorizationChecks.add(context.phase() + ":" + context.toolDefinition().name());
-            return new AuthorizationDecision(
-                    context.toolDefinition().name().equals("customerLookup")
-            );
-        };
-        SpringSecurityToolBoundary boundary = boundary(policy);
+        AuthorizationManager<ToolAuthorizationContext> customerLookupOnlyPolicy =
+                (authentication, context) -> {
+                    authorizationChecks.add(
+                            context.phase() + ":" + context.toolDefinition().name()
+                    );
+                    return new AuthorizationDecision(
+                            context.toolDefinition().name().equals("customerLookup")
+                    );
+                };
+        SpringSecurityToolBoundary boundary = boundary(customerLookupOnlyPolicy);
         PrivacyService service = privacyService();
         PrivacyToolCallbackFactory factory = privacyFactory(
                 service,
                 Set.of("customerLookup", "adminDelete")
         );
-        AtomicReference<String> allowedInput = new AtomicReference<>();
-        AtomicInteger deniedCalls = new AtomicInteger();
-        ToolCallback allowed = factory.wrap(tool("customerLookup", allowedInput::set));
-        ToolCallback denied = factory.wrap(tool(
+        AtomicReference<String> customerLookupInput = new AtomicReference<>();
+        AtomicInteger adminDeleteCalls = new AtomicInteger();
+        ToolCallback authorizedCustomerLookup = factory.wrap(tool(
+                "customerLookup",
+                customerLookupInput::set
+        ));
+        ToolCallback unauthorizedAdminDelete = factory.wrap(tool(
                 "adminDelete",
-                ignored -> deniedCalls.incrementAndGet()
+                ignored -> adminDeleteCalls.incrementAndGet()
         ));
         ToolIndex index = mock(ToolIndex.class);
         when(index.search(any())).thenReturn(ToolSearchResponse.builder()
@@ -154,11 +169,13 @@ class SpringSecurityToolSearchIntegrationTest {
                         .summary("Find a customer")
                         .build())
                 .build());
-        ToolSearchToolCallingAdvisor toolSearch = ToolSearchToolCallingAdvisor.builder()
+        ToolSearchToolCallingAdvisor toolSearchAdvisor = ToolSearchToolCallingAdvisor.builder()
                 .toolIndex(index)
                 .systemMessageSuffix("Search for tools before using them.")
                 .toolCallingManager(boundary.toolCallingManager())
                 .build();
+        // Drives three model turns: request Tool Search, request the business tool,
+        // then return the final response.
         ToolSearchLoopModel model = new ToolSearchLoopModel(
                 boundary.toolCallingManager(),
                 "customerLookup"
@@ -169,14 +186,14 @@ class SpringSecurityToolSearchIntegrationTest {
                         boundary.advisor(),
                         new PrivacyInputAdvisor(service),
                         new PrivacyToolContextAdvisor(service, factory),
-                        toolSearch,
+                        toolSearchAdvisor,
                         new PrivacyToolCallValidationAdvisor(
                                 service,
-                                toolSearch.getOrder() + 1
+                                toolSearchAdvisor.getOrder() + 1
                         ),
                         new PrivacyModelBoundaryAdvisor(service, factory)
                 )
-                .defaultTools(allowed, denied)
+                .defaultTools(authorizedCustomerLookup, unauthorizedAdminDelete)
                 .build();
         useAuthentication(authentication("alice"));
 
@@ -185,23 +202,32 @@ class SpringSecurityToolSearchIntegrationTest {
                 .user("Find Alice")
                 .call()
                 .content()).isEqualTo("done");
-        ArgumentCaptor<List<ToolReference>> references = ArgumentCaptor.forClass(List.class);
-        verify(index).indexTools(eq("alice-session"), references.capture());
-        assertThat(references.getValue())
+        // Only definition-authorized business tools may be indexed and exposed.
+        ArgumentCaptor<List<ToolReference>> indexedToolReferences =
+                ArgumentCaptor.forClass(List.class);
+        verify(index).indexTools(eq("alice-session"), indexedToolReferences.capture());
+        assertThat(indexedToolReferences.getValue())
                 .extracting(ToolReference::toolName)
-                .containsOnly("customerLookup");
-        ArgumentCaptor<ToolSearchRequest> searchRequest =
-                ArgumentCaptor.forClass(ToolSearchRequest.class);
-        verify(index).search(searchRequest.capture());
-        assertThat(searchRequest.getValue().sessionId()).isEqualTo("alice-session");
-        assertThat(searchRequest.getValue().query()).doesNotContain("Alice");
-        assertThat(PERSON_TOKEN.matcher(searchRequest.getValue().query()).find()).isTrue();
-        assertThat(model.exposedToolNames().get(0)).containsOnly("toolSearchTool");
-        assertThat(model.exposedToolNames().get(1))
+                .containsExactly("customerLookup");
+        List<Set<String>> exposedToolNamesByModelCall = model.exposedToolNames();
+        Set<String> toolsExposedBeforeSearch = exposedToolNamesByModelCall.get(0);
+        Set<String> toolsExposedAfterSearch = exposedToolNamesByModelCall.get(1);
+        assertThat(toolsExposedBeforeSearch).containsOnly("toolSearchTool");
+        assertThat(toolsExposedAfterSearch)
                 .containsOnly("toolSearchTool", "customerLookup");
-        assertThat(allowedInput.get()).isEqualTo("{\"name\":\"Alice\"}");
-        assertThat(deniedCalls).hasValue(0);
+        assertThat(adminDeleteCalls).hasValue(0);
         assertThat(authorizationChecks).noneMatch(check -> check.endsWith(":toolSearchTool"));
+
+        // PII stays tokenized through Tool Search and is restored immediately before
+        // the authorized business-tool callback executes.
+        ArgumentCaptor<ToolSearchRequest> searchRequestCaptor =
+                ArgumentCaptor.forClass(ToolSearchRequest.class);
+        verify(index).search(searchRequestCaptor.capture());
+        assertThat(searchRequestCaptor.getValue().sessionId()).isEqualTo("alice-session");
+        assertThat(searchRequestCaptor.getValue().query()).doesNotContain("Alice");
+        assertThat(PERSON_TOKEN.matcher(searchRequestCaptor.getValue().query()).find()).isTrue();
+        assertThat(customerLookupInput.get()).isEqualTo("{\"name\":\"Alice\"}");
+
         assertThat(model.callCount()).isEqualTo(3);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
@@ -210,29 +236,32 @@ class SpringSecurityToolSearchIntegrationTest {
     @Test
     @SuppressWarnings("unchecked")
     void rejectsAToolSearchResultThatWasNotDefinitionAuthorized() {
-        AuthorizationManager<ToolAuthorizationContext> policy = (authentication, context) ->
-                new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup"));
-        SpringSecurityToolBoundary boundary = boundary(policy);
+        AuthorizationManager<ToolAuthorizationContext> customerLookupOnlyPolicy =
+                (authentication, context) -> new AuthorizationDecision(
+                        context.toolDefinition().name().equals("customerLookup")
+                );
+        SpringSecurityToolBoundary boundary = boundary(customerLookupOnlyPolicy);
         PrivacyService service = privacyService();
         PrivacyToolCallbackFactory factory = privacyFactory(
                 service,
                 Set.of("customerLookup", "adminDelete")
         );
-        AtomicInteger deniedCalls = new AtomicInteger();
-        ToolCallback allowed = factory.wrap(tool("customerLookup", ignored -> {
+        AtomicInteger adminDeleteCalls = new AtomicInteger();
+        ToolCallback authorizedCustomerLookup = factory.wrap(tool("customerLookup", ignored -> {
         }));
-        ToolCallback denied = factory.wrap(tool(
+        ToolCallback unauthorizedAdminDelete = factory.wrap(tool(
                 "adminDelete",
-                ignored -> deniedCalls.incrementAndGet()
+                ignored -> adminDeleteCalls.incrementAndGet()
         ));
         ToolIndex index = mock(ToolIndex.class);
+        // Simulate a stale or compromised index returning a tool that was never authorized.
         when(index.search(any())).thenReturn(ToolSearchResponse.builder()
                 .addToolReference(ToolReference.builder()
                         .toolName("adminDelete")
                         .summary("Delete a customer")
                         .build())
                 .build());
-        ToolSearchToolCallingAdvisor toolSearch = ToolSearchToolCallingAdvisor.builder()
+        ToolSearchToolCallingAdvisor toolSearchAdvisor = ToolSearchToolCallingAdvisor.builder()
                 .toolIndex(index)
                 .systemMessageSuffix("Search for tools before using them.")
                 .toolCallingManager(boundary.toolCallingManager())
@@ -247,14 +276,14 @@ class SpringSecurityToolSearchIntegrationTest {
                         boundary.advisor(),
                         new PrivacyInputAdvisor(service),
                         new PrivacyToolContextAdvisor(service, factory),
-                        toolSearch,
+                        toolSearchAdvisor,
                         new PrivacyToolCallValidationAdvisor(
                                 service,
-                                toolSearch.getOrder() + 1
+                                toolSearchAdvisor.getOrder() + 1
                         ),
                         new PrivacyModelBoundaryAdvisor(service, factory)
                 )
-                .defaultTools(allowed, denied)
+                .defaultTools(authorizedCustomerLookup, unauthorizedAdminDelete)
                 .build();
         useAuthentication(authentication("alice"));
 
@@ -265,18 +294,24 @@ class SpringSecurityToolSearchIntegrationTest {
                 .content())
                 .isInstanceOf(AuthorizationDeniedException.class)
                 .hasMessage("A model-requested tool was not exposed by the authorization boundary");
-        ArgumentCaptor<List<ToolReference>> references = ArgumentCaptor.forClass(List.class);
-        verify(index).indexTools(eq("alice-session"), references.capture());
-        assertThat(references.getValue())
+        ArgumentCaptor<List<ToolReference>> indexedToolReferences =
+                ArgumentCaptor.forClass(List.class);
+        verify(index).indexTools(eq("alice-session"), indexedToolReferences.capture());
+        assertThat(indexedToolReferences.getValue())
                 .extracting(ToolReference::toolName)
-                .containsOnly("customerLookup");
-        assertThat(model.exposedToolNames().get(1)).containsOnly("toolSearchTool");
-        assertThat(deniedCalls).hasValue(0);
+                .containsExactly("customerLookup");
+        List<Set<String>> exposedToolNamesByModelCall = model.exposedToolNames();
+        Set<String> toolsExposedAfterUnauthorizedSearchResult =
+                exposedToolNamesByModelCall.get(1);
+        assertThat(toolsExposedAfterUnauthorizedSearchResult).containsOnly("toolSearchTool");
+        assertThat(adminDeleteCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
     }
 
-    private static CallAdvisor toolSearchControlInjectionAdvisor(ToolCallback callback) {
+    private static CallAdvisor toolSearchToolCallbackAndSessionMarkerInjectionAdvisor(
+            ToolCallback callback
+    ) {
         return new CallAdvisor() {
             @Override
             public ChatClientResponse adviseCall(
@@ -295,7 +330,7 @@ class SpringSecurityToolSearchIntegrationTest {
 
             @Override
             public String getName() {
-                return "ToolSearchControlInjectionAdvisor";
+                return "ToolSearchToolCallbackAndSessionMarkerInjectionAdvisor";
             }
 
             @Override
@@ -402,14 +437,14 @@ class SpringSecurityToolSearchIntegrationTest {
     private static final class ToolSearchCallbackReplacementModel implements ChatModel {
 
         private final ToolCallingManager manager;
-        private final ToolCallback replacement;
+        private final ToolCallback replacementToolSearchToolCallback;
 
         private ToolSearchCallbackReplacementModel(
                 ToolCallingManager manager,
-                ToolCallback replacement
+                ToolCallback replacementToolSearchToolCallback
         ) {
             this.manager = manager;
-            this.replacement = replacement;
+            this.replacementToolSearchToolCallback = replacementToolSearchToolCallback;
         }
 
         @Override
@@ -417,7 +452,7 @@ class SpringSecurityToolSearchIntegrationTest {
             ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
             this.manager.resolveToolDefinitions(options);
             ToolCallingChatOptions replaced = options.mutate()
-                    .toolCallbacks(List.of(this.replacement))
+                    .toolCallbacks(List.of(this.replacementToolSearchToolCallback))
                     .build();
             this.manager.resolveToolDefinitions(replaced);
             throw new AssertionError("Tool Search callback replacement should fail closed");

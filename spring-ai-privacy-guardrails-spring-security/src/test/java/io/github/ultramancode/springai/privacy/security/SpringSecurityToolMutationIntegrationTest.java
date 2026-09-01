@@ -26,6 +26,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
 
 import static io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.authentication;
@@ -55,10 +56,11 @@ class SpringSecurityToolMutationIntegrationTest {
                 service,
                 Set.of("customerLookup", "lateTool")
         );
-        ToolCallback declared = factory.wrap(tool("customerLookup", ignored -> {
-        }));
-        ToolCallback injected = factory.wrap(tool("lateTool", ignored -> {
-        }));
+        AtomicInteger businessToolCalls = new AtomicInteger();
+        ToolCallback declaredCustomerLookup = factory.wrap(tool("customerLookup", ignored ->
+                businessToolCalls.incrementAndGet()));
+        ToolCallback lateInjectedTool = factory.wrap(tool("lateTool", ignored ->
+                businessToolCalls.incrementAndGet()));
         ResolvingToolLoopModel model = new ResolvingToolLoopModel(
                 boundary.toolCallingManager(),
                 List.of("customerLookup")
@@ -70,7 +72,7 @@ class SpringSecurityToolMutationIntegrationTest {
                 .defaultAdvisors(
                         new PrivacyLifecycleAdvisor(service),
                         boundary.advisor(),
-                        lateToolInjectionAdvisor(injected),
+                        lateToolInjectionAdvisor(lateInjectedTool),
                         new PrivacyInputAdvisor(service),
                         new PrivacyToolContextAdvisor(service, factory),
                         toolCallingAdvisor,
@@ -80,13 +82,14 @@ class SpringSecurityToolMutationIntegrationTest {
                         ),
                         new PrivacyModelBoundaryAdvisor(service, factory)
                 )
-                .defaultTools(declared)
+                .defaultTools(declaredCustomerLookup)
                 .build();
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
                 .isInstanceOf(AuthorizationDeniedException.class)
                 .hasMessage("A tool callback was added after authorization");
+        assertThat(businessToolCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
     }
@@ -96,9 +99,9 @@ class SpringSecurityToolMutationIntegrationTest {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
-        ToolCallback retained = tool("customerLookup", ignored -> {
+        ToolCallback retainedCallback = tool("customerLookup", ignored -> {
         });
-        ToolCallback removed = tool("adminDelete", ignored -> {
+        ToolCallback callbackToRemove = tool("adminDelete", ignored -> {
         });
         DefinitionResolvingModel model = new DefinitionResolvingModel(
                 boundary.toolCallingManager()
@@ -109,11 +112,11 @@ class SpringSecurityToolMutationIntegrationTest {
                         callbackMutationAdvisor(
                                 "RemoveCallbackAdvisor",
                                 callbacks -> callbacks.stream()
-                                        .filter(callback -> callback != removed)
+                                        .filter(callback -> callback != callbackToRemove)
                                         .toList()
                         )
                 )
-                .defaultTools(retained, removed)
+                .defaultTools(retainedCallback, callbackToRemove)
                 .build();
         useAuthentication(authentication("alice"));
 
@@ -128,9 +131,9 @@ class SpringSecurityToolMutationIntegrationTest {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
-        ToolCallback first = tool("customerLookup", ignored -> {
+        ToolCallback customerLookupCallback = tool("customerLookup", ignored -> {
         });
-        ToolCallback second = tool("adminDelete", ignored -> {
+        ToolCallback adminDeleteCallback = tool("adminDelete", ignored -> {
         });
         DefinitionResolvingModel model = new DefinitionResolvingModel(
                 boundary.toolCallingManager()
@@ -143,7 +146,7 @@ class SpringSecurityToolMutationIntegrationTest {
                                 callbacks -> List.of(callbacks.get(1), callbacks.get(0))
                         )
                 )
-                .defaultTools(first, second)
+                .defaultTools(customerLookupCallback, adminDeleteCallback)
                 .build();
         useAuthentication(authentication("alice"));
 
@@ -155,13 +158,13 @@ class SpringSecurityToolMutationIntegrationTest {
     }
 
     @Test
-    void failsClosedWhenAnAdvisorReplacesACallbackAfterAuthorization() {
+    void failsClosedWhenAnAdvisorReplacesACallbackAfterTheAuthorizationBoundary() {
         SpringSecurityToolBoundary boundary = boundary(
                 (authentication, context) -> new AuthorizationDecision(true)
         );
-        ToolCallback declared = tool("customerLookup", ignored -> {
+        ToolCallback declaredCallback = tool("customerLookup", ignored -> {
         });
-        ToolCallback replacement = tool("customerLookup", ignored -> {
+        ToolCallback replacementCallback = tool("customerLookup", ignored -> {
         });
         DefinitionResolvingModel model = new DefinitionResolvingModel(
                 boundary.toolCallingManager()
@@ -171,10 +174,10 @@ class SpringSecurityToolMutationIntegrationTest {
                         boundary.advisor(),
                         callbackMutationAdvisor(
                                 "ReplaceCallbackAdvisor",
-                                ignored -> List.of(replacement)
+                                ignored -> List.of(replacementCallback)
                         )
                 )
-                .defaultTools(declared)
+                .defaultTools(declaredCallback)
                 .build();
         useAuthentication(authentication("alice"));
 

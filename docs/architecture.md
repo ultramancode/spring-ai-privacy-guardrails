@@ -277,10 +277,11 @@ the public manager interface cannot establish whether an arbitrary
 implementation honors the supplied callback and execution contracts.
 
 Spring AI Tool Search is supported as a controlled callback transition. The
-index receives only authorized definitions. The control callback is identified
-by Spring AI's reserved name and request-scoped marker, then pinned to the same
-callback instance. A selected business callback must match the callback captured
-at request entry. Other callback additions and replacements fail closed.
+index receives only authorized definitions. Spring AI's Tool Search tool callback
+is identified by its reserved name and request-scoped marker, then pinned to the
+same callback instance. It acts as control-plane infrastructure; a selected
+business callback must match the callback captured at request entry. Other
+callback additions and replacements fail closed.
 
 See [Spring Security Tool Authorization](security.md) for configuration,
 context propagation, and supported-path details.

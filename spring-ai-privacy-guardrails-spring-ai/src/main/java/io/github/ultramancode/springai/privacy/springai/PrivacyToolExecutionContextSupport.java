@@ -125,7 +125,7 @@ final class PrivacyToolExecutionContextSupport {
 
         private final boolean toolCallingOptionsPresent;
         private final List<ToolCallback> callbacks;
-        private ToolCallback toolSearchControlCallback;
+        private ToolCallback toolSearchToolCallback;
 
         private ValidatedToolCallbackSnapshot(
                 boolean toolCallingOptionsPresent,
@@ -147,7 +147,7 @@ final class PrivacyToolExecutionContextSupport {
                 return;
             }
             Set<String> currentNames = new HashSet<>();
-            boolean foundToolSearchControlCallback = false;
+            boolean foundToolSearchToolCallback = false;
             for (ToolCallback callback : currentCallbacks) {
                 String name = callback.getToolDefinition().name();
                 if (!currentNames.add(name)) {
@@ -156,14 +156,14 @@ final class PrivacyToolExecutionContextSupport {
                 if (containsOriginalCallback(callback)) {
                     continue;
                 }
-                if (!SpringAiToolSearchSupport.isControlCallback(callback, options)
-                        || foundToolSearchControlCallback) {
+                if (!SpringAiToolSearchSupport.isToolSearchToolCallback(callback, options)
+                        || foundToolSearchToolCallback) {
                     throw callbackSnapshotFailure();
                 }
-                pinToolSearchControlCallback(callback);
-                foundToolSearchControlCallback = true;
+                pinToolSearchToolCallback(callback);
+                foundToolSearchToolCallback = true;
             }
-            if (!foundToolSearchControlCallback) {
+            if (!foundToolSearchToolCallback) {
                 throw callbackSnapshotFailure();
             }
         }
@@ -184,12 +184,12 @@ final class PrivacyToolExecutionContextSupport {
             return this.callbacks.stream().anyMatch(callback -> callback == candidate);
         }
 
-        private void pinToolSearchControlCallback(ToolCallback callback) {
-            if (this.toolSearchControlCallback == null) {
-                this.toolSearchControlCallback = callback;
+        private void pinToolSearchToolCallback(ToolCallback callback) {
+            if (this.toolSearchToolCallback == null) {
+                this.toolSearchToolCallback = callback;
                 return;
             }
-            if (this.toolSearchControlCallback != callback) {
+            if (this.toolSearchToolCallback != callback) {
                 throw callbackSnapshotFailure();
             }
         }

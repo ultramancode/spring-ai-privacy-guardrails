@@ -62,7 +62,7 @@ final class SecurityToolSessionRegistry {
         private final Authentication authentication;
         private final Map<String, ToolCallback> declaredCallbacks;
         private final Set<String> exposedToolNames = ConcurrentHashMap.newKeySet();
-        private volatile ToolCallback toolSearchControlCallback;
+        private volatile ToolCallback toolSearchToolCallback;
 
         private State(Authentication authentication, List<ToolCallback> callbacks) {
             this.authentication = authentication;
@@ -98,10 +98,10 @@ final class SecurityToolSessionRegistry {
             String name = callback.getToolDefinition().name();
             ToolCallback declared = this.declaredCallbacks.get(name);
             if (declared == null) {
-                if (!SpringAiToolSearchSupport.isControlCallback(callback, options)) {
+                if (!SpringAiToolSearchSupport.isToolSearchToolCallback(callback, options)) {
                     throw denied("A tool callback was added after authorization");
                 }
-                return pinToolSearchControlCallback(callback);
+                return pinToolSearchToolCallback(callback);
             }
             if (declared != callback) {
                 throw denied("A tool callback was replaced after authorization");
@@ -109,20 +109,20 @@ final class SecurityToolSessionRegistry {
             return declared;
         }
 
-        // Spring AI adds the Tool Search control callback after the initial callback snapshot.
-        // Pin the first instance so the callback cannot be replaced during the request.
-        private synchronized ToolCallback pinToolSearchControlCallback(ToolCallback callback) {
-            ToolCallback pinned = this.toolSearchControlCallback;
+        // Spring AI adds its Tool Search tool callback after the initial callback snapshot.
+        // Pin the first instance so this control-plane callback cannot be replaced.
+        private synchronized ToolCallback pinToolSearchToolCallback(ToolCallback callback) {
+            ToolCallback pinned = this.toolSearchToolCallback;
             if (pinned == null) {
-                this.toolSearchControlCallback = callback;
+                this.toolSearchToolCallback = callback;
             } else if (pinned != callback) {
-                throw denied("The Tool Search control callback changed during the request");
+                throw denied("The Tool Search tool callback changed during the request");
             }
             return callback;
         }
 
-        boolean isToolSearchControl(ToolCallback callback) {
-            return this.toolSearchControlCallback == callback;
+        boolean isToolSearchToolCallback(ToolCallback callback) {
+            return this.toolSearchToolCallback == callback;
         }
 
         void markExposed(String toolName) {

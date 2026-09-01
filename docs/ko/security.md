@@ -3,7 +3,7 @@
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: de85b1fced6a0185bdaeb334e696168f6b1aabd8f95b5a50b11cb7cee88cb270 -->
+<!-- i18n-source-sha256: 7ae536984fbd9905e0c4a0b67ee7b51b9d81bdd1d7459a817cf85045f56ae9c3 -->
 
 선택적 Spring Security 통합은 현재 `Authentication`이 Spring AI 도구를 발견하거나
 실행할 수 있는지 통제합니다. 이 기능은 개인정보 보호 경계를 보완하며, 개인정보 탐지나
@@ -215,21 +215,21 @@ Spring Boot 스타터 없이 `spring-ai-privacy-guardrails-spring-security`를 �
 ## Tool Search
 
 Spring AI Tool Search는 도구 정의를 인덱싱하고, 모델이 요청 처리 중 필요한 비즈니스
-도구를 더 작은 목록으로 검색할 수 있도록 제어 도구를 공개합니다. Security 스타터가 Tool
-Search를 추가하거나 활성화하지는 않지만, 애플리케이션이 구성한
+도구를 더 작은 목록으로 검색할 수 있도록 Tool Search 도구 콜백을 공개합니다. Security
+스타터가 Tool Search를 추가하거나 활성화하지는 않지만, 애플리케이션이 구성한
 `ToolSearchToolCallingAdvisor`를 다음 규칙으로 지원합니다.
 
 - 정의 권한이 허용된 비즈니스 도구만 인덱스에 추가합니다.
 - Tool Search 검색 질의도 개인정보 보호 상태를 유지합니다.
-- Spring AI가 사용하는 예약 이름과 요청별 세션 표시가 모두 있는 제어 콜백만 요청 캡처
-  이후에 추가할 수 있습니다.
-- 한 번 허용한 제어 콜백은 다른 객체로 교체할 수 없습니다.
+- Spring AI가 사용하는 예약 이름과 요청별 세션 표시가 모두 있는 Tool Search 도구 콜백만
+  요청 캡처 이후에 추가할 수 있습니다.
+- 한 번 허용한 Tool Search 도구 콜백은 다른 객체로 교체할 수 없습니다.
 - 검색으로 선택된 비즈니스 콜백은 최초 권한 경계에서 캡처한 것과 같은 콜백이어야 하며,
   정의 권한 확인을 통과해야 합니다.
 
 그 밖의 요청 캡처 이후 콜백 추가·교체는 거부합니다. 콜백 제거와 순서 변경은 허용 집합을
-넓히지 않으므로 허용합니다. Tool Search 제어 콜백은 비즈니스 도구가 아니므로
-애플리케이션의 도구 권한 정책에는 전달하지 않습니다.
+넓히지 않으므로 허용합니다. Tool Search 도구 콜백은 비즈니스 도구가 아니라 Tool Search
+동작을 위한 내부 제어 구성요소이므로 애플리케이션의 도구 권한 정책에는 전달하지 않습니다.
 
 ## Blocking, Reactive와 비동기 context
 

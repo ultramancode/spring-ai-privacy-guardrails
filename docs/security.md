@@ -218,25 +218,26 @@ components are required.
 
 ## Tool Search
 
-Spring AI Tool Search indexes tool definitions and exposes a control tool that
-lets the model search for a smaller set of business tools during a request. The
-Security starter does not add or enable Tool Search, but the integration
-supports an application-configured `ToolSearchToolCallingAdvisor` under these
-rules:
+Spring AI Tool Search indexes tool definitions and exposes a Tool Search tool
+callback that lets the model search for a smaller set of business tools during
+a request. The Security starter does not add or enable Tool Search, but the
+integration supports an application-configured `ToolSearchToolCallingAdvisor`
+under these rules:
 
 - Only definition-authorized business tools are added to the index.
 - The Tool Search query remains privacy-protected.
-- Only Spring AI's control callback, identified by its reserved name and
+- Only Spring AI's Tool Search tool callback, identified by its reserved name and
   request-scoped session marker, may be added after request capture.
-- The admitted control callback cannot be replaced.
+- The admitted Tool Search tool callback cannot be replaced.
 - A selected business callback must be the same callback captured at the
   original authorization boundary and must have passed definition
   authorization.
 
 Other late callback additions or callback replacements are rejected. Callback
 removal and reordering are allowed because they cannot expand the authorized
-set. The Tool Search control callback is not a business tool and is therefore
-not passed to the application's tool authorization policy.
+set. The Tool Search tool callback is control-plane infrastructure rather than
+a business tool, so it is not passed to the application's tool authorization
+policy.
 
 ## Blocking, Reactive, and Asynchronous Context
 

@@ -3,7 +3,7 @@
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: ce32db0e2efa1eb5384f08af7e3de32bf662165ea2ab96db69c125483a98def8 -->
+<!-- i18n-source-sha256: bb9a5ba1e4ba8d1442d22ff6218b336f02a382da9bb6f9d819eccc8bcb5f08d9 -->
 
 ## 책임 범위
 
@@ -254,9 +254,10 @@ decorator를 primary로 등록합니다. 공개 manager 인터페이스만으로
 `SpringSecurityToolBoundary`를 명시적으로 제공해야 합니다.
 
 Spring AI Tool Search는 통제된 콜백 전환으로 지원합니다. 인덱스에는 허용된 도구 정의만
-들어갑니다. 제어 콜백은 Spring AI의 예약 이름과 요청별 세션 표시로 식별한 뒤 동일한
-콜백 인스턴스로 고정합니다. 검색으로 선택된 비즈니스 콜백도 요청 진입 시 캡처한 콜백과
-같아야 합니다. 그 밖의 콜백 추가와 교체는 오류로 처리합니다.
+들어갑니다. Spring AI의 Tool Search 도구 콜백은 예약 이름과 요청별 세션 표시로 식별한
+뒤 동일한 콜백 인스턴스로 고정합니다. 이 콜백은 Tool Search 동작을 위한 내부 제어
+구성요소이며, 검색으로 선택된 비즈니스 콜백은 요청 진입 시 캡처한 콜백과 같아야 합니다.
+그 밖의 콜백 추가와 교체는 오류로 처리합니다.
 
 설정과 context 전파 및 지원 경로의 자세한 내용은
 [Spring Security 도구 권한 부여](security.md)를 참고하세요.

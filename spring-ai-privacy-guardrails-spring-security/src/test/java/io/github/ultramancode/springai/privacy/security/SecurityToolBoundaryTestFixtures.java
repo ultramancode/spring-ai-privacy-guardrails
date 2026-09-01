@@ -63,6 +63,8 @@ final class SecurityToolBoundaryTestFixtures {
             ChatModel model,
             ToolCallback... callbacks
     ) {
+        // Mirror production wiring: the security advisor captures request state, while
+        // ToolCallingAdvisor uses the paired authorization-aware manager.
         ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
                 .toolCallingManager(boundary.toolCallingManager())
                 .build();
@@ -73,6 +75,7 @@ final class SecurityToolBoundaryTestFixtures {
                         new PrivacyInputAdvisor(service),
                         new PrivacyToolContextAdvisor(service, factory),
                         toolCallingAdvisor,
+                        // Validate model-generated tool calls immediately inside the tool loop.
                         new PrivacyToolCallValidationAdvisor(
                                 service,
                                 toolCallingAdvisor.getOrder() + 1
@@ -216,6 +219,7 @@ final class SecurityToolBoundaryTestFixtures {
     private record Span(int start, int end) {
     }
 
+    // Resolves and records the definitions exposed for one model call.
     static final class DefinitionResolvingModel implements ChatModel {
 
         private final ToolCallingManager manager;
@@ -249,6 +253,8 @@ final class SecurityToolBoundaryTestFixtures {
         }
     }
 
+    // Records exposed definitions, emits one batch of calls for the configured tool names,
+    // then returns a final response.
     static final class ResolvingToolLoopModel implements ChatModel {
 
         private final ToolCallingManager manager;

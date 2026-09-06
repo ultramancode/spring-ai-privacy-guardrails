@@ -3,7 +3,7 @@
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 3e33757cba7ee312a17c4bb5d2180201f1f1e7ceee070e28a2f29898703651d6 -->
+<!-- i18n-source-sha256: 1c533d9377108a991c56d9df8f370de1d04ed5fc3bc349b66752bb1fe6a7f5c2 -->
 
 ## 책임 범위
 
@@ -28,8 +28,9 @@ flowchart LR
 `PrivacySession`을 통해 관리됩니다.
 
 라이브러리는 지원하는 모델·도구·출력 경계를 통과하는 데이터를 보호합니다.
-애플리케이션 내부에서 별도로 처리하는 데이터와 사용자 접근 권한은 자동 보호 범위에
-포함되지 않습니다.
+필요한 경우 Spring Security를 연동해 모델에 공개할 도구와 실행 가능한 도구도 제한할 수 있습니다.
+애플리케이션 내부에서 별도로 처리하는 데이터와 구성한 경계 밖의 접근 제어 경로는
+계속 애플리케이션이 관리합니다.
 
 ## 모듈 구조
 
@@ -46,13 +47,16 @@ flowchart LR
     CORE --> PRES["Presidio 연동"]
     CORE --> SAI["Spring AI 연동"]
     CORE --> OPEN["OpenNLP 연동"]
+    SEC["Spring Security 연동"]
 
     PRES --> PRESBOOT["Presidio Spring Boot 스타터"]
     SAI --> BASE["기본 Spring Boot 스타터"]
     OPEN --> OPENBOOT["OpenNLP Spring Boot 스타터"]
+    SEC --> SECBOOT["Spring Security Spring Boot 스타터"]
 
     BASE --> PRESBOOT
     BASE --> OPENBOOT
+    BASE -. "두 경계를 함께 적용" .-> SECBOOT
 ```
 
 `core` 모듈은 Spring에 의존하지 않고 탐지 결과 해석, 토큰화, 세션 관리와 내장
@@ -62,6 +66,12 @@ flowchart LR
 Spring AI 연동 모듈은 `core`를 `ChatClient`, 모델 호출과 도구 실행 경계에 연결합니다.
 기본 Spring Boot 스타터는 `core`와 Spring AI 연동을 조립하고, 분석기별 Spring Boot
 스타터는 여기에 해당 분석기 연동을 추가합니다.
+
+Spring Security 연동은 Spring AI의 도구 호출 API와 `spring-security-core`를
+사용합니다. 전용 Spring Boot 스타터는 기본 스타터와 독립적으로 사용할 수 있습니다.
+개인정보 보호와 도구 권한 검사를 함께 사용할 때는 두 경계를 동일한 `ChatClient`에
+적용하는 구성을 제공합니다. `core`와 기존 개인정보 보호 모듈에는 Spring Security
+의존성이 추가되지 않습니다.
 
 테스트 지원 모듈은 애플리케이션에서 개인정보 보호 동작을 검증하기 위한 테스트 전용
 API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행 가능한 사용 예제를 위한
@@ -78,6 +88,7 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 | 분석기 확장 | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | 도구 정책 | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI 연동 | `PrivacyChatClientConfigurer` |
+| Spring Security 연동 | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `ToolAuthorizationChatClientConfigurer`, `PrivacySecurityChatClientConfigurer` |
 | 테스트 지원 | `PrivacyTestProbe`, `PrivacyTestAssertions`, `PrivacyTestProbeAssert` |
 
 이 표는 각 역할의 대표 API만 보여주며 전체 공개 API 목록은 Javadoc에서 확인할 수 있습니다.
@@ -215,6 +226,36 @@ sequenceDiagram
 
 자세한 원문 공개 규칙과 `returnDirect` 흐름은
 [도구별 원문 공개](configuration.md#도구별-원문-공개)를 참고하세요.
+
+## 도구 권한 검사 경계
+
+Spring Security 통합은 보호할 요청이 시작될 때 현재 `Authentication`을 가져옵니다.
+권한 검사를 수행하는 `ToolCallingManager`는 모델에 공개하기 전에 도구 정의를 필터링하고,
+실행 직전에 권한을 다시 확인합니다. 요청 시작 시 확보한 인증 정보는 지원하는 비동기
+도구 실행 경로에서도 유지됩니다. 도구 권한 검사만 사용하거나 개인정보 보호와 함께
+사용할 수 있습니다.
+
+```mermaid
+flowchart LR
+    A["요청 진입 시<br/>SecurityContext"] --> B["도구 권한<br/>검사 경계"]
+    B --> D["권한 검사를 수행하는<br/>ToolCallingManager"]
+    D --> E["허용된 도구 정의<br/>모델에 전달"]
+    D --> F["실행 권한 재확인"]
+    F --> G["도구 콜백<br/>원본 또는 개인정보 보호 래퍼"]
+```
+
+`AuthorizationManager`에는 요청의 `Authentication`과 도구 정의, 그리고 정의 공개 또는
+실행 단계가 전달됩니다. 도구 인자는 전달되지 않습니다. 개인정보 보호 경계도 함께
+구성했다면 실행 권한 확인이 끝난 뒤에야 개인정보 보호 래퍼가 요청의 개인정보 원문을
+복원합니다.
+
+Spring Boot 스타터는 Spring AI의 기본 `ToolCallingManager`에 권한 검사를 자동으로
+적용합니다. 사용자 정의 `ToolCallingManager`는 공개 인터페이스만으로 실행 방식을 확인할
+수 없으므로, 사용할 때는 애플리케이션이 `SpringSecurityToolBoundary`를 명시적으로
+제공해야 합니다.
+
+설정 방법, 보안 컨텍스트 전달과 지원 경로의 자세한 내용은
+[Spring Security 도구 권한 부여](security.md)를 참고하세요.
 
 ## 오류와 진단
 

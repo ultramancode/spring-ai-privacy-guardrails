@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,6 +39,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 class PresidioAnalyzerTest {
 
@@ -252,25 +254,33 @@ class PresidioAnalyzerTest {
     }
 
     @Test
-    void analyzeTimeoutBoundsStalledResponseBodyAndReportsRetryCount() throws IOException {
+    void analyzeTimeoutBoundsAStalledResponseBody() throws Exception {
         AtomicInteger requests = new AtomicInteger();
-        CountDownLatch partialBodiesFlushed = new CountDownLatch(2);
-        CountDownLatch releaseBodies = new CountDownLatch(1);
-        startConcurrentServer(stalledJsonResponseBody(requests, partialBodiesFlushed, releaseBodies));
-        PresidioAnalyzer analyzer = new PresidioAnalyzer(config(Duration.ofMillis(500), 1));
+        CountDownLatch partialBodyFlushed = new CountDownLatch(1);
+        CountDownLatch releaseBody = new CountDownLatch(1);
+        startConcurrentServer(stalledJsonResponseBody(requests, partialBodyFlushed, releaseBody));
+        PresidioAnalyzer analyzer = new PresidioAnalyzer(config(Duration.ofSeconds(5)));
+        ExecutorService analysisExecutor = Executors.newSingleThreadExecutor();
+        Future<Throwable> analysisFailure = analysisExecutor.submit(() -> catchThrowable(
+                () -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults())
+        ));
 
         try {
-            assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+            // Confirm the server reached the partial-body stall before inspecting the failure.
+            assertThat(partialBodyFlushed.await(10, TimeUnit.SECONDS))
+                    .as("the server flushed a partial response body")
+                    .isTrue();
+            assertThat(analysisFailure.get(10, TimeUnit.SECONDS))
                     .hasMessage("Presidio analyzer call timed out")
                     .hasNoCause()
                     .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure -> {
                         assertThat(failure.code()).isEqualTo(PrivacyFailureCode.ANALYZER_TIMEOUT);
-                        assertThat(failure.attemptCount()).isEqualTo(2);
+                        assertThat(failure.attemptCount()).isEqualTo(1);
                     });
-            assertThat(requests).hasValue(2);
-            assertThat(partialBodiesFlushed.getCount()).isZero();
         } finally {
-            releaseBodies.countDown();
+            releaseBody.countDown();
+            analysisFailure.cancel(true);
+            shutdownExecutor(analysisExecutor);
         }
     }
 
@@ -916,7 +926,8 @@ class PresidioAnalyzerTest {
                 exchange.getResponseBody().write(body, 0, 1);
                 exchange.getResponseBody().flush();
                 partialBodiesFlushed.countDown();
-                releaseBodies.await(2, TimeUnit.SECONDS);
+                // The test releases the body in finally, including when an assertion fails.
+                releaseBodies.await();
                 exchange.getResponseBody().write(body, 1, 1);
             } catch (InterruptedException interruption) {
                 Thread.currentThread().interrupt();

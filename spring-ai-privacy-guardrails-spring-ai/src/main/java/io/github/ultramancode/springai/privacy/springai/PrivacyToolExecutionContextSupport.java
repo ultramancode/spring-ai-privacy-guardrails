@@ -41,15 +41,14 @@ final class PrivacyToolExecutionContextSupport {
 
     static ChatClientRequest attachValidatedToolCallbackSnapshot(ChatClientRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        boolean toolCallingOptionsPresent = request.prompt().getOptions() instanceof ToolCallingChatOptions;
-        List<ToolCallback> callbacks = toolCallingOptionsPresent
-                && ((ToolCallingChatOptions) request.prompt().getOptions()).getToolCallbacks() != null
-                ? ((ToolCallingChatOptions) request.prompt().getOptions()).getToolCallbacks()
-                : List.of();
+        CurrentToolCallbacks currentCallbacks = currentToolCallbacks(request);
         Map<String, Object> context = new HashMap<>(request.context());
         context.put(
                 CONTEXT_VALIDATED_TOOL_CALLBACK_SNAPSHOT,
-                new ValidatedToolCallbackSnapshot(toolCallingOptionsPresent, List.copyOf(callbacks))
+                new ValidatedToolCallbackSnapshot(
+                        currentCallbacks.optionsPresent(),
+                        List.copyOf(currentCallbacks.callbacks())
+                )
         );
         return request.mutate().context(context).build();
     }
@@ -60,18 +59,22 @@ final class PrivacyToolExecutionContextSupport {
         if (!(snapshotValue instanceof ValidatedToolCallbackSnapshot snapshot)) {
             throw callbackSnapshotFailure();
         }
-        boolean toolCallingOptionsPresent = request.prompt().getOptions() instanceof ToolCallingChatOptions;
-        if (toolCallingOptionsPresent != snapshot.toolCallingOptionsPresent()) {
+        CurrentToolCallbacks currentCallbacks = currentToolCallbacks(request);
+        if (currentCallbacks.optionsPresent() != snapshot.toolCallingOptionsPresent()) {
             throw callbackSnapshotFailure();
         }
-        List<ToolCallback> currentCallbacks = toolCallingOptionsPresent
-                && ((ToolCallingChatOptions) request.prompt().getOptions()).getToolCallbacks() != null
-                ? ((ToolCallingChatOptions) request.prompt().getOptions()).getToolCallbacks()
-                : List.of();
-        ToolCallingChatOptions options = toolCallingOptionsPresent
-                ? (ToolCallingChatOptions) request.prompt().getOptions()
-                : null;
-        snapshot.requireCompatible(currentCallbacks, options);
+        snapshot.requireCompatible(currentCallbacks.callbacks(), currentCallbacks.options());
+    }
+
+    private static CurrentToolCallbacks currentToolCallbacks(ChatClientRequest request) {
+        if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions options)) {
+            return new CurrentToolCallbacks(null, List.of());
+        }
+        List<ToolCallback> callbacks = options.getToolCallbacks();
+        return new CurrentToolCallbacks(
+                options,
+                callbacks == null ? List.of() : callbacks
+        );
     }
 
     static Set<String> requireRegisteredToolNames(ChatClientResponse response) {
@@ -108,18 +111,28 @@ final class PrivacyToolExecutionContextSupport {
     private record RegisteredToolNames(Set<String> names) {
     }
 
+    private record CurrentToolCallbacks(
+            ToolCallingChatOptions options,
+            List<ToolCallback> callbacks
+    ) {
+
+        private boolean optionsPresent() {
+            return this.options != null;
+        }
+    }
+
     private static final class ValidatedToolCallbackSnapshot {
 
         private final boolean toolCallingOptionsPresent;
-        private final List<ToolCallback> callbacks;
-        private ToolCallback toolSearchControlCallback;
+        private final List<ToolCallback> originalCallbacks;
+        private ToolCallback toolSearchToolCallback;
 
         private ValidatedToolCallbackSnapshot(
                 boolean toolCallingOptionsPresent,
-                List<ToolCallback> callbacks
+                List<ToolCallback> originalCallbacks
         ) {
             this.toolCallingOptionsPresent = toolCallingOptionsPresent;
-            this.callbacks = callbacks;
+            this.originalCallbacks = originalCallbacks;
         }
 
         private boolean toolCallingOptionsPresent() {
@@ -134,7 +147,7 @@ final class PrivacyToolExecutionContextSupport {
                 return;
             }
             Set<String> currentNames = new HashSet<>();
-            boolean foundToolSearchControl = false;
+            boolean foundToolSearchToolCallback = false;
             for (ToolCallback callback : currentCallbacks) {
                 String name = callback.getToolDefinition().name();
                 if (!currentNames.add(name)) {
@@ -143,24 +156,24 @@ final class PrivacyToolExecutionContextSupport {
                 if (containsOriginalCallback(callback)) {
                     continue;
                 }
-                if (!SpringAiToolSearchSupport.isControlCallback(callback, options)
-                        || foundToolSearchControl) {
+                if (!SpringAiToolSearchSupport.isToolSearchToolCallback(callback, options)
+                        || foundToolSearchToolCallback) {
                     throw callbackSnapshotFailure();
                 }
-                admitToolSearchControl(callback);
-                foundToolSearchControl = true;
+                pinToolSearchToolCallback(callback);
+                foundToolSearchToolCallback = true;
             }
-            if (!foundToolSearchControl) {
+            if (!foundToolSearchToolCallback) {
                 throw callbackSnapshotFailure();
             }
         }
 
         private boolean matchesOriginalSnapshot(List<ToolCallback> currentCallbacks) {
-            if (currentCallbacks.size() != this.callbacks.size()) {
+            if (currentCallbacks.size() != this.originalCallbacks.size()) {
                 return false;
             }
             for (int index = 0; index < currentCallbacks.size(); index++) {
-                if (currentCallbacks.get(index) != this.callbacks.get(index)) {
+                if (currentCallbacks.get(index) != this.originalCallbacks.get(index)) {
                     return false;
                 }
             }
@@ -168,15 +181,15 @@ final class PrivacyToolExecutionContextSupport {
         }
 
         private boolean containsOriginalCallback(ToolCallback candidate) {
-            return this.callbacks.stream().anyMatch(callback -> callback == candidate);
+            return this.originalCallbacks.stream().anyMatch(callback -> callback == candidate);
         }
 
-        private void admitToolSearchControl(ToolCallback callback) {
-            if (this.toolSearchControlCallback == null) {
-                this.toolSearchControlCallback = callback;
+        private void pinToolSearchToolCallback(ToolCallback callback) {
+            if (this.toolSearchToolCallback == null) {
+                this.toolSearchToolCallback = callback;
                 return;
             }
-            if (this.toolSearchControlCallback != callback) {
+            if (this.toolSearchToolCallback != callback) {
                 throw callbackSnapshotFailure();
             }
         }

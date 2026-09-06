@@ -1,9 +1,12 @@
 description = 'Optional Spring Security authorization boundary for Spring AI tools.'
 
 dependencies {
-    api project(':spring-ai-privacy-guardrails-spring-ai')
+    api platform("org.springframework.ai:spring-ai-bom:${providers.gradleProperty('springAiVersion').get()}")
+    api 'org.springframework.ai:spring-ai-client-chat'
+    api 'org.springframework.ai:spring-ai-model'
     api "org.springframework.security:spring-security-core:${providers.gradleProperty('springSecurityVersion').get()}"
 
+    testImplementation project(':spring-ai-privacy-guardrails-spring-ai')
     testImplementation 'org.springframework.ai:spring-ai-tool-search-advisor'
     testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
 }

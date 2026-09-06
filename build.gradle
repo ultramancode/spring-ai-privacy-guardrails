@@ -80,7 +80,6 @@ privacyBuild {
                 'io.github.ultramancode.springai.privacy.security',
                 'Spring AI Privacy Guardrails Spring Security Integration'
         )
-        module.dependsOnProject 'spring-ai-privacy-guardrails-spring-ai'
         module.denyExternalGroup 'org.springframework.boot'
     }
 
@@ -89,10 +88,7 @@ privacyBuild {
                 'io.github.ultramancode.springai.privacy.security.autoconfigure',
                 'Spring AI Privacy Guardrails Spring Security Spring Boot Starter'
         )
-        module.dependsOnProject(
-                'spring-ai-privacy-guardrails-spring-boot-starter',
-                'spring-ai-privacy-guardrails-spring-security'
-        )
+        module.dependsOnProject 'spring-ai-privacy-guardrails-spring-security'
     }
 
     module('spring-ai-privacy-guardrails-test') { module ->

@@ -22,14 +22,12 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Copies the active opaque privacy handle into the tool options observed at this advisor's
- * configured position. Register this advisor when tools can be supplied or injected
- * dynamically. The callback list observed here is rejected unless every application
- * callback was created by {@link PrivacyToolCallbackFactory}. Spring AI's built-in Tool
- * Search control callback is accepted as a non-disclosing control tool and is pinned to
- * one request-scoped identity before the model can use it. The default order describes
- * the tested standard layout; applications using custom advisor orders or tool advisors
- * own that composition and any option mutations performed after this advisor.
+ * Makes the current privacy session available to tools and validates registered callbacks.
+ * Register this advisor when tools can be supplied or injected dynamically. Wrap application
+ * tool callbacks with {@link PrivacyToolCallbackFactory}. Spring AI Tool Search is also
+ * supported; {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
+ * When customizing advisor order, ensure that custom advisors do not mutate tool options
+ * after the final privacy check.
  */
 public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -69,7 +67,7 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
 
     /**
      * Creates a boundary that additionally accepts only wrappers created by the
-     * supplied factory. Boot uses this constructor; direct integrations may keep the
+     * supplied factory. Boot uses this constructor. Direct integrations may keep the
      * service-only constructor when multiple factories are intentional.
      *
      * @param privacyService service that owns request sessions and transformations
@@ -158,7 +156,10 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
         }
         Set<String> names = new LinkedHashSet<>(callbacks.size());
         for (ToolCallback callback : callbacks) {
-            if (SpringAiToolSearchSupport.isControlCallback(callback, toolCallingOptions)) {
+            if (SpringAiToolSearchSupport.isToolSearchToolCallback(
+                    callback,
+                    toolCallingOptions
+            )) {
                 if (!names.add(callback.getToolDefinition().name())) {
                     throw new PrivacyGuardrailException(
                             PrivacyFailureCode.TRANSFORMATION_CONFLICT,

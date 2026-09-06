@@ -1,11 +1,11 @@
 package io.github.ultramancode.springai.privacy.security;
 
-/** Authorization checkpoints enforced around one Spring AI tool. */
+/** Identifies when authorization is evaluated for a Spring AI tool. */
 public enum ToolAuthorizationPhase {
 
-    /** Determines whether the tool definition may be disclosed to the model. */
+    /** Authorization performed before exposing the tool definition to the model. */
     DEFINITION,
 
-    /** Determines whether a model-requested tool may execute. */
+    /** Authorization performed before executing a tool requested by the model. */
     EXECUTION
 }

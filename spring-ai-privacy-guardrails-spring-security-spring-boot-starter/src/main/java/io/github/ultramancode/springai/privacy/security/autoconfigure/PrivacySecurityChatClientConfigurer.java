@@ -1,52 +1,48 @@
 package io.github.ultramancode.springai.privacy.security.autoconfigure;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
 
-import java.util.List;
 import java.util.Objects;
-import java.util.WeakHashMap;
+import java.util.function.UnaryOperator;
 
-/** Applies the complete privacy bundle plus its Spring Security context boundary. */
+/**
+ * Applies the starter-managed privacy advisors and tool-authorization advisor
+ * to a supplied {@link ChatClient.Builder}.
+ */
 public final class PrivacySecurityChatClientConfigurer {
 
-    private final PrivacyChatClientConfigurer privacyConfigurer;
-    private final Advisor securityAdvisor;
-    private final WeakHashMap<ChatClient.Builder, Boolean> configuredBuilders = new WeakHashMap<>();
+    // Uses a JDK function to keep the base privacy starter optional.
+    private final UnaryOperator<ChatClient.Builder> privacyChatClientConfigurer;
+    private final ToolAuthorizationChatClientConfigurer toolAuthorizationChatClientConfigurer;
 
     PrivacySecurityChatClientConfigurer(
-            PrivacyChatClientConfigurer privacyConfigurer,
-            Advisor securityAdvisor
+            UnaryOperator<ChatClient.Builder> privacyChatClientConfigurer,
+            ToolAuthorizationChatClientConfigurer toolAuthorizationChatClientConfigurer
     ) {
-        this.privacyConfigurer = Objects.requireNonNull(
-                privacyConfigurer,
-                "privacyConfigurer must not be null"
+        this.privacyChatClientConfigurer = Objects.requireNonNull(
+                privacyChatClientConfigurer,
+                "privacyChatClientConfigurer must not be null"
         );
-        this.securityAdvisor = Objects.requireNonNull(
-                securityAdvisor,
-                "securityAdvisor must not be null"
+        this.toolAuthorizationChatClientConfigurer = Objects.requireNonNull(
+                toolAuthorizationChatClientConfigurer,
+                "toolAuthorizationChatClientConfigurer must not be null"
         );
     }
 
     /**
-     * Applies the privacy and authorization advisors to one selected builder.
+     * Applies privacy and tool authorization to the supplied builder.
      *
-     * @param builder builder whose Spring AI tool path must be protected
-     * @return the same builder
+     * @param builder ChatClient builder to configure for privacy and tool authorization
+     * @return the supplied builder after its privacy and tool-authorization advisors
+     * have been registered
+     * @throws IllegalStateException when the same builder is configured more than once
      */
     public ChatClient.Builder configure(ChatClient.Builder builder) {
-        ChatClient.Builder selected = Objects.requireNonNull(builder, "builder must not be null");
-        synchronized (this.configuredBuilders) {
-            if (this.configuredBuilders.containsKey(selected)) {
-                throw new IllegalStateException(
-                        "PrivacySecurityChatClientConfigurer cannot configure the same ChatClient.Builder more than once"
-                );
-            }
-            this.privacyConfigurer.configure(selected);
-            selected.defaultAdvisors(List.of(this.securityAdvisor));
-            this.configuredBuilders.put(selected, Boolean.TRUE);
-        }
-        return selected;
+        ChatClient.Builder selectedBuilder = Objects.requireNonNull(
+                builder,
+                "builder must not be null"
+        );
+        this.privacyChatClientConfigurer.apply(selectedBuilder);
+        return this.toolAuthorizationChatClientConfigurer.configure(selectedBuilder);
     }
 }

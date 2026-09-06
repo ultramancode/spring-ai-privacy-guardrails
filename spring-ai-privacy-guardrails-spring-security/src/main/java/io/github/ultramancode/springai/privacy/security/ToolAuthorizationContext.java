@@ -5,11 +5,10 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import java.util.Objects;
 
 /**
- * Public Spring Security authorization object for one tool checkpoint.
- * Tool arguments are intentionally excluded so authorization cannot observe raw PII.
+ * Describes a tool authorization check. Tool input and original request data are not included.
  *
- * @param toolDefinition immutable definition of the tool being considered
- * @param phase authorization checkpoint
+ * @param toolDefinition definition of the tool being authorized
+ * @param phase phase at which authorization is evaluated
  */
 public record ToolAuthorizationContext(
         ToolDefinition toolDefinition,

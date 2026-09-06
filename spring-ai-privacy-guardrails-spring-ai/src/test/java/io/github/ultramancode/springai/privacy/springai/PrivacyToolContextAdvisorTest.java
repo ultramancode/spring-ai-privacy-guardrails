@@ -343,7 +343,7 @@ class PrivacyToolContextAdvisorTest {
     }
 
     @Test
-    void toolSearchProjectionPinsTheControlCallbackIdentity() {
+    void retainsTheToolSearchToolCallbackIdentityAcrossIterations() {
         PrivacyService service = TestPrivacyServices.privacyService();
         ToolCallback declared = new PrivacyToolCallbackFactory(
                 service,

@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.springai;
+package io.github.ultramancode.springai.privacy.security;
 
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
@@ -18,13 +18,6 @@ final class SpringAiToolSearchSupport {
     private SpringAiToolSearchSupport() {
     }
 
-    /**
-     * Returns whether the callback and options match Spring AI's Tool Search convention.
-     *
-     * @param callback current callback
-     * @param options current tool-calling options
-     * @return {@code true} when the Tool Search name and session marker are present
-     */
     static boolean isToolSearchToolCallback(
             ToolCallback callback,
             ToolCallingChatOptions options

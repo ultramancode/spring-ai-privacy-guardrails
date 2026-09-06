@@ -28,41 +28,48 @@ import java.util.Set;
 final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
 
     private final AuthorizationManager<ToolAuthorizationContext> authorizationManager;
-    private final SecurityToolSessionRegistry registry;
+    private final ToolAuthorizationSessionRegistry sessionRegistry;
     private final ToolCallingManager delegate;
 
     AuthorizationAwareToolCallingManager(
             AuthorizationManager<ToolAuthorizationContext> authorizationManager,
-            SecurityToolSessionRegistry registry,
+            ToolAuthorizationSessionRegistry sessionRegistry,
             ToolCallingManager delegate
     ) {
         this.authorizationManager = Objects.requireNonNull(
                 authorizationManager,
                 "authorizationManager must not be null"
         );
-        this.registry = Objects.requireNonNull(registry, "registry must not be null");
+        this.sessionRegistry = Objects.requireNonNull(
+                sessionRegistry,
+                "sessionRegistry must not be null"
+        );
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
     }
 
     @Override
     public List<ToolDefinition> resolveToolDefinitions(ToolCallingChatOptions chatOptions) {
         Objects.requireNonNull(chatOptions, "chatOptions must not be null");
-        List<ToolCallback> callbacks = callbacks(chatOptions);
-        if (callbacks.isEmpty()) {
+        List<ToolCallback> toolCallbacks = toolCallbacks(chatOptions);
+        if (toolCallbacks.isEmpty()) {
             return List.of();
         }
-        SecurityToolSessionRegistry.State state = requireState(chatOptions);
+        ToolAuthorizationSessionRegistry.SessionState sessionState =
+                requireActiveSessionState(chatOptions);
         List<ToolDefinition> authorizedDefinitions = new ArrayList<>();
-        for (ToolCallback callback : callbacks) {
-            ToolCallback current = state.requireCurrent(callback, chatOptions);
-            ToolDefinition definition = current.getToolDefinition();
-            if (state.isToolSearchControl(current)) {
-                state.markExposed(definition.name());
+        for (ToolCallback callback : toolCallbacks) {
+            ToolCallback stableCallback = sessionState.requireStableCallback(
+                    callback,
+                    chatOptions
+            );
+            ToolDefinition definition = stableCallback.getToolDefinition();
+            if (sessionState.isToolSearchToolCallback(stableCallback)) {
+                sessionState.markDefinitionExposed(definition.name());
                 authorizedDefinitions.add(definition);
                 continue;
             }
-            if (isGranted(state, definition, ToolAuthorizationPhase.DEFINITION)) {
-                state.markExposed(definition.name());
+            if (isGranted(sessionState, definition, ToolAuthorizationPhase.DEFINITION)) {
+                sessionState.markDefinitionExposed(definition.name());
                 authorizedDefinitions.add(definition);
             }
         }
@@ -74,98 +81,120 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
         Objects.requireNonNull(prompt, "prompt must not be null");
         Objects.requireNonNull(chatResponse, "chatResponse must not be null");
         if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) {
-            throw SecurityToolSessionRegistry.denied(
+            throw ToolAuthorizationSessionRegistry.denied(
                     "Tool execution requires ToolCallingChatOptions"
             );
         }
-        SecurityToolSessionRegistry.State state = requireState(options);
-        Map<String, ToolCallback> currentCallbacks = indexCurrentCallbacks(
-                state,
+        ToolAuthorizationSessionRegistry.SessionState sessionState =
+                requireActiveSessionState(options);
+        Map<String, ToolCallback> stableCallbacksByName = buildStableCallbacksByName(
+                sessionState,
                 options,
-                callbacks(options)
+                toolCallbacks(options)
         );
-        List<AssistantMessage.ToolCall> toolCalls = requestedToolCalls(chatResponse);
-        Set<String> requestedNames = new LinkedHashSet<>();
-        for (AssistantMessage.ToolCall toolCall : toolCalls) {
+        List<AssistantMessage.ToolCall> requestedToolCalls = firstToolCallBatch(chatResponse);
+        Set<String> requestedToolNames = new LinkedHashSet<>();
+        // Preauthorize the entire model-requested batch before the delegate can execute callbacks.
+        // If any tool is denied at this stage, block the whole batch to avoid partial side effects.
+        for (AssistantMessage.ToolCall toolCall : requestedToolCalls) {
             String toolName = toolCall.name();
-            ToolCallback callback = currentCallbacks.get(toolName);
-            if (callback == null || !state.wasExposed(toolName)) {
-                throw SecurityToolSessionRegistry.denied(
+            ToolCallback callback = stableCallbacksByName.get(toolName);
+            if (callback == null || !sessionState.wasDefinitionExposed(toolName)) {
+                throw ToolAuthorizationSessionRegistry.denied(
                         "A model-requested tool was not exposed by the authorization boundary"
                 );
             }
-            if (requestedNames.add(toolName) && !state.isToolSearchControl(callback)) {
-                requireGranted(state, callback.getToolDefinition());
+            if (!requestedToolNames.add(toolName)) {
+                continue;
             }
-        }
-
-        List<ToolCallback> securedCallbacks = requestedNames.stream()
-                .map(currentCallbacks::get)
-                .map(callback -> state.isToolSearchControl(callback)
-                        ? callback
-                        : new ReauthorizingToolCallback(
-                                callback,
-                                state,
-                                this.authorizationManager
-                        ))
-                .map(ToolCallback.class::cast)
-                .toList();
-        ToolCallingChatOptions securedOptions = options.mutate()
-                .toolCallbacks(securedCallbacks)
-                .toolContext(null)
-                .toolContext(applicationToolContext(options))
-                .build();
-        Prompt securedPrompt = new Prompt(prompt.getInstructions(), securedOptions);
-        return this.delegate.executeToolCalls(securedPrompt, chatResponse);
-    }
-
-    private SecurityToolSessionRegistry.State requireState(ToolCallingChatOptions options) {
-        Map<String, Object> context = options.getToolContext();
-        Object value = context == null
-                ? null
-                : context.get(SecurityToolSessionRegistry.TOOL_CONTEXT_HANDLE);
-        if (!(value instanceof SecurityToolContextHandle handle)) {
-            throw SecurityToolSessionRegistry.denied(
-                    "Tool authorization context is missing or invalid"
+            if (sessionState.isToolSearchToolCallback(callback)) {
+                continue;
+            }
+            requireExecutionAuthorization(
+                    this.authorizationManager,
+                    sessionState,
+                    callback.getToolDefinition()
             );
         }
-        return this.registry.require(handle);
+
+        // Preserve Spring AI's pinned Tool Search tool callback. Business callbacks are
+        // wrapped so authorization is checked again immediately before their execution.
+        List<ToolCallback> executionCallbacks = requestedToolNames.stream()
+                .map(stableCallbacksByName::get)
+                .map(callback -> {
+                    if (sessionState.isToolSearchToolCallback(callback)) {
+                        return callback;
+                    }
+                    return new ReauthorizingToolCallback(
+                            callback,
+                            sessionState,
+                            this.authorizationManager
+                    );
+                })
+                .toList();
+        // mutate() copies the original tool-context entries, while toolContext(Map) merges.
+        // Clear them first, then apply a copy without the authorization-session handle.
+        ToolCallingChatOptions executionOptions = options.mutate()
+                .toolCallbacks(executionCallbacks)
+                .toolContext(null)
+                .toolContext(toolContextWithoutAuthorizationSessionHandle(options))
+                .build();
+        Prompt executionPrompt = new Prompt(prompt.getInstructions(), executionOptions);
+        return this.delegate.executeToolCalls(executionPrompt, chatResponse);
     }
 
-    private Map<String, ToolCallback> indexCurrentCallbacks(
-            SecurityToolSessionRegistry.State state,
-            ToolCallingChatOptions options,
-            List<ToolCallback> callbacks
+    private ToolAuthorizationSessionRegistry.SessionState requireActiveSessionState(
+            ToolCallingChatOptions options
     ) {
-        Map<String, ToolCallback> indexed = new LinkedHashMap<>();
-        for (ToolCallback callback : callbacks) {
-            ToolCallback current = state.requireCurrent(callback, options);
-            String name = current.getToolDefinition().name();
-            if (indexed.putIfAbsent(name, current) != null) {
+        Map<String, Object> toolContext = options.getToolContext();
+        Object sessionHandleValue = toolContext == null
+                ? null
+                : toolContext.get(
+                        ToolAuthorizationSessionRegistry.TOOL_AUTHORIZATION_SESSION_HANDLE_KEY
+                );
+        if (!(sessionHandleValue instanceof ToolAuthorizationSessionHandle handle)) {
+            throw ToolAuthorizationSessionRegistry.denied(
+                    "Tool authorization session handle is missing or invalid"
+            );
+        }
+        return this.sessionRegistry.requireActiveSessionState(handle);
+    }
+
+    private Map<String, ToolCallback> buildStableCallbacksByName(
+            ToolAuthorizationSessionRegistry.SessionState sessionState,
+            ToolCallingChatOptions options,
+            List<ToolCallback> toolCallbacks
+    ) {
+        Map<String, ToolCallback> callbacksByName = new LinkedHashMap<>();
+        for (ToolCallback callback : toolCallbacks) {
+            ToolCallback stableCallback = sessionState.requireStableCallback(callback, options);
+            String name = stableCallback.getToolDefinition().name();
+            if (callbacksByName.putIfAbsent(name, stableCallback) != null) {
                 throw new IllegalArgumentException("tool callback names must be unique");
             }
         }
-        return Map.copyOf(indexed);
+        return Map.copyOf(callbacksByName);
     }
 
     private boolean isGranted(
-            SecurityToolSessionRegistry.State state,
+            ToolAuthorizationSessionRegistry.SessionState sessionState,
             ToolDefinition definition,
             ToolAuthorizationPhase phase
     ) {
         AuthorizationResult result = this.authorizationManager.authorize(
-                state::authentication,
+                sessionState::authentication,
                 new ToolAuthorizationContext(definition, phase)
         );
         return result != null && result.isGranted();
     }
 
-    private void requireGranted(
-            SecurityToolSessionRegistry.State state,
+    private static void requireExecutionAuthorization(
+            AuthorizationManager<ToolAuthorizationContext> authorizationManager,
+            ToolAuthorizationSessionRegistry.SessionState sessionState,
             ToolDefinition definition
     ) {
-        AuthorizationResult result = this.authorizationManager.authorize(
-                state::authentication,
+        AuthorizationResult result = authorizationManager.authorize(
+                sessionState::authentication,
                 new ToolAuthorizationContext(definition, ToolAuthorizationPhase.EXECUTION)
         );
         if (result == null || !result.isGranted()) {
@@ -179,13 +208,13 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
                 : new AuthorizationDeniedException("Tool execution was not authorized", result);
     }
 
-    private static List<ToolCallback> callbacks(ToolCallingChatOptions options) {
+    private static List<ToolCallback> toolCallbacks(ToolCallingChatOptions options) {
         return options.getToolCallbacks() == null
                 ? List.of()
                 : List.copyOf(options.getToolCallbacks());
     }
 
-    private static List<AssistantMessage.ToolCall> requestedToolCalls(ChatResponse response) {
+    private static List<AssistantMessage.ToolCall> firstToolCallBatch(ChatResponse response) {
         return response.getResults().stream()
                 .map(Generation::getOutput)
                 .map(AssistantMessage::getToolCalls)
@@ -197,28 +226,32 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
                 ));
     }
 
-    private static Map<String, Object> applicationToolContext(ToolCallingChatOptions options) {
+    private static Map<String, Object> toolContextWithoutAuthorizationSessionHandle(
+            ToolCallingChatOptions options
+    ) {
         Map<String, Object> context = new HashMap<>();
         if (options.getToolContext() != null) {
             context.putAll(options.getToolContext());
         }
-        context.remove(SecurityToolSessionRegistry.TOOL_CONTEXT_HANDLE);
+        context.remove(
+                ToolAuthorizationSessionRegistry.TOOL_AUTHORIZATION_SESSION_HANDLE_KEY
+        );
         return Map.copyOf(context);
     }
 
     private static final class ReauthorizingToolCallback implements ToolCallback {
 
         private final ToolCallback delegate;
-        private final SecurityToolSessionRegistry.State state;
+        private final ToolAuthorizationSessionRegistry.SessionState sessionState;
         private final AuthorizationManager<ToolAuthorizationContext> authorizationManager;
 
         private ReauthorizingToolCallback(
                 ToolCallback delegate,
-                SecurityToolSessionRegistry.State state,
+                ToolAuthorizationSessionRegistry.SessionState sessionState,
                 AuthorizationManager<ToolAuthorizationContext> authorizationManager
         ) {
             this.delegate = delegate;
-            this.state = state;
+            this.sessionState = sessionState;
             this.authorizationManager = authorizationManager;
         }
 
@@ -245,16 +278,11 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
         }
 
         private void reauthorize() {
-            AuthorizationResult result = this.authorizationManager.authorize(
-                    this.state::authentication,
-                    new ToolAuthorizationContext(
-                            getToolDefinition(),
-                            ToolAuthorizationPhase.EXECUTION
-                    )
+            requireExecutionAuthorization(
+                    this.authorizationManager,
+                    this.sessionState,
+                    getToolDefinition()
             );
-            if (result == null || !result.isGranted()) {
-                throw denied(result);
-            }
         }
     }
 }

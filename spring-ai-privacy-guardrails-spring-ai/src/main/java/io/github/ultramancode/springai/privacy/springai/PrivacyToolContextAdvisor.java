@@ -22,12 +22,12 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Copies the active opaque privacy handle into the tool options observed at this advisor's
- * configured position. Register this advisor when tools can be supplied or injected
- * dynamically. The callback list observed here is rejected unless every entry was
- * created by {@link PrivacyToolCallbackFactory}. The default order describes the tested
- * standard layout; applications using custom advisor orders or tool advisors own that
- * composition and any option mutations performed after this advisor.
+ * Makes the current privacy session available to tools and validates registered callbacks.
+ * Register this advisor when tools can be supplied or injected dynamically. Wrap application
+ * tool callbacks with {@link PrivacyToolCallbackFactory}. Spring AI Tool Search is also
+ * supported; {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
+ * When customizing advisor order, ensure that custom advisors do not mutate tool options
+ * after the final privacy check.
  */
 public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -67,7 +67,7 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
 
     /**
      * Creates a boundary that additionally accepts only wrappers created by the
-     * supplied factory. Boot uses this constructor; direct integrations may keep the
+     * supplied factory. Boot uses this constructor. Direct integrations may keep the
      * service-only constructor when multiple factories are intentional.
      *
      * @param privacyService service that owns request sessions and transformations
@@ -156,6 +156,19 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
         }
         Set<String> names = new LinkedHashSet<>(callbacks.size());
         for (ToolCallback callback : callbacks) {
+            if (SpringAiToolSearchSupport.isToolSearchToolCallback(
+                    callback,
+                    toolCallingOptions
+            )) {
+                if (!names.add(callback.getToolDefinition().name())) {
+                    throw new PrivacyGuardrailException(
+                            PrivacyFailureCode.TRANSFORMATION_CONFLICT,
+                            PrivacyPhase.TOOL_INPUT,
+                            DUPLICATE_TOOL_MESSAGE
+                    );
+                }
+                continue;
+            }
             if (!(callback instanceof PrivacyToolCallbackWrapper wrapper)) {
                 throw new PrivacyGuardrailException(
                         PrivacyFailureCode.TRANSFORMATION_CONFLICT,

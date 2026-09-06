@@ -25,6 +25,8 @@ import java.util.Set;
  * When an outer {@link PrivacyOutputAdvisor} supplies response-inspection limits, the
  * default constructors adopt them. Limits explicitly supplied to this validator must
  * match the outer output limits for requests that register protected tools.
+ * Recognized Tool Search calls have their arguments tokenized after validation,
+ * without restoring original values.
  */
 public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -33,6 +35,7 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
 
     private final PrivacyService privacyService;
     private final PrivacyModelControlValidator modelControlValidator;
+    private final PrivacyToolSearchArgumentProtector toolSearchArgumentProtector;
     private final PrivacyResponseInspectionLimits responseInspectionLimits;
     private final boolean usesExplicitResponseInspectionLimits;
     private final int order;
@@ -103,12 +106,14 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
         this.usesExplicitResponseInspectionLimits = usesExplicitResponseInspectionLimits;
         this.order = order;
         this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
+        this.toolSearchArgumentProtector = new PrivacyToolSearchArgumentProtector(privacyService);
     }
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
         PrivacyContextHandle handle = requireActiveHandle(request);
         boolean toolExecutionPossible = hasRegisteredTools(request);
+        Set<String> toolSearchToolNames = PrivacyToolSearchArgumentProtector.toolSearchToolNames(request);
         PrivacyResponseInspectionLimits limits = toolExecutionPossible
                 ? resolveExecutionLimits(request)
                 : this.responseInspectionLimits;
@@ -116,20 +121,20 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
         if (toolExecutionPossible) {
             new PrivacyResponseInspectionGuard(limits, PrivacyPhase.TOOL_INPUT, true).accept(response);
         }
-        ChatClientResponse validated = validateResponse(handle, response);
-        return validated;
+        return validateAndProtectResponse(handle, response, toolSearchToolNames);
     }
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
         PrivacyContextHandle handle = requireActiveHandle(request);
         boolean toolExecutionPossible = hasRegisteredTools(request);
+        Set<String> toolSearchToolNames = PrivacyToolSearchArgumentProtector.toolSearchToolNames(request);
         PrivacyResponseInspectionLimits limits = toolExecutionPossible
                 ? resolveExecutionLimits(request)
                 : this.responseInspectionLimits;
         Flux<ChatClientResponse> responses = chain.nextStream(request);
         if (!toolExecutionPossible) {
-            return responses.map(response -> validateResponse(handle, response));
+            return responses.map(response -> validateAndProtectResponse(handle, response, toolSearchToolNames));
         }
         return Flux.defer(() -> {
             PrivacyResponseInspectionGuard guard = new PrivacyResponseInspectionGuard(
@@ -141,7 +146,7 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
                     .timeout(limits.streamIdleTimeout(), Flux.error(streamTimeout()))
                     .map(response -> {
                         guard.accept(response);
-                        return validateResponse(handle, response);
+                        return validateAndProtectResponse(handle, response, toolSearchToolNames);
                     });
         });
     }
@@ -182,9 +187,10 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
         return this.order;
     }
 
-    private ChatClientResponse validateResponse(
+    private ChatClientResponse validateAndProtectResponse(
             PrivacyContextHandle expectedHandle,
-            ChatClientResponse response
+            ChatClientResponse response,
+            Set<String> toolSearchToolNames
     ) {
         Objects.requireNonNull(response, "response must not be null");
         PrivacyContextHandle responseHandle = PrivacyRequestContextSupport.findHandle(response.context())
@@ -198,7 +204,7 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
                 response,
                 registeredToolNames
         );
-        return response;
+        return this.toolSearchArgumentProtector.protect(responseHandle, response, toolSearchToolNames);
     }
 
     private PrivacyContextHandle requireActiveHandle(ChatClientRequest request) {

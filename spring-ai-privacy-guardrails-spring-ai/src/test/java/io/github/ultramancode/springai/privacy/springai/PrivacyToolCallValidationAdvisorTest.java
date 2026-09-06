@@ -12,13 +12,16 @@ import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.deepseek.DeepSeekAssistantMessage;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.metadata.ToolMetadata;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
@@ -404,6 +407,160 @@ class PrivacyToolCallValidationAdvisorTest {
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasMessage("Model requested a tool outside the registered privacy boundary");
         }
+    }
+
+    @Test
+    void protectsOnlyToolSearchArgumentsAndPreservesProviderFields() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyToolCallValidationAdvisor advisor = new PrivacyToolCallValidationAdvisor(service);
+        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        String searchArguments = "{\"query\":\"Find Alice\",\"maxResults\":3,\"categoryFilter\":\"sales\"}";
+        AssistantMessage.ToolCall search = new AssistantMessage.ToolCall(
+                "search-1", "function", "toolSearchTool", searchArguments
+        );
+        AssistantMessage.ToolCall business = new AssistantMessage.ToolCall(
+                "business-1", "function", "customerLookup", "{\"name\":\"Alice\"}"
+        );
+        DeepSeekAssistantMessage message = new DeepSeekAssistantMessage.Builder()
+                .content("unchanged content")
+                .reasoningContent("unchanged reasoning")
+                .prefix(true)
+                .properties(Map.of("provider-field", "kept"))
+                .toolCalls(List.of(search, business))
+                .build();
+        ChatGenerationMetadata generationMetadata = ChatGenerationMetadata.builder()
+                .finishReason("tool_calls").build();
+
+        try (PrivacySession session = service.openSession()) {
+            ChatClientRequest request = activeToolSearchRequest(session, service, true);
+            ChatClientResponse response = validatedResponse(request,
+                    new ChatResponse(List.of(new Generation(message, generationMetadata))),
+                    Set.of("toolSearchTool", "customerLookup"));
+            when(chain.nextCall(any())).thenReturn(response);
+
+            ChatClientResponse protectedResponse = advisor.adviseCall(request, chain);
+
+            DeepSeekAssistantMessage protectedMessage = (DeepSeekAssistantMessage)
+                    protectedResponse.chatResponse().getResult().getOutput();
+            assertThat(protectedMessage.getText()).isEqualTo(message.getText());
+            assertThat(protectedMessage.getReasoningContent()).isEqualTo(message.getReasoningContent());
+            assertThat(protectedMessage.getPrefix()).isTrue();
+            assertThat(protectedMessage.getMetadata()).isEqualTo(message.getMetadata());
+            assertThat(protectedMessage.getToolCalls().get(1)).isSameAs(business);
+            AssistantMessage.ToolCall protectedCall = protectedMessage.getToolCalls().get(0);
+            assertThat(protectedCall.id()).isEqualTo(search.id());
+            assertThat(protectedCall.type()).isEqualTo(search.type());
+            assertThat(protectedCall.name()).isEqualTo(search.name());
+            assertThat(protectedCall.arguments()).doesNotContain("Alice")
+                    .contains("\"maxResults\":3", "\"categoryFilter\":\"sales\"");
+            assertThat(service.detokenize(session.handle(), protectedCall.arguments())).isEqualTo(searchArguments);
+            assertThat(protectedResponse.chatResponse().getResult().getMetadata()).isSameAs(generationMetadata);
+            assertThat(protectedResponse.chatResponse().getMetadata()).isSameAs(response.chatResponse().getMetadata());
+            assertThat(protectedResponse.context()).isEqualTo(response.context());
+            assertThat(search.arguments()).isEqualTo(searchArguments);
+        }
+    }
+
+    @Test
+    void protectsMetadataToolSearchArgumentsWithoutLosingResponseMetadata() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyToolCallValidationAdvisor advisor = new PrivacyToolCallValidationAdvisor(service);
+        StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
+        AssistantMessage.ToolCall search = new AssistantMessage.ToolCall(
+                "search-1", "function", "toolSearchTool", "{\"query\":\"Alice\"}"
+        );
+        ChatResponseMetadata metadata = ChatResponseMetadata.builder()
+                .id("response-id").model("test-model")
+                .keyValue("provider-field", "kept")
+                .keyValue("toolCalls", List.of(search))
+                .build();
+        Generation generation = new Generation(new AssistantMessage("unchanged"));
+
+        try (PrivacySession session = service.openSession()) {
+            ChatClientRequest request = activeToolSearchRequest(session, service, true);
+            ChatClientResponse response = validatedResponse(request,
+                    new ChatResponse(List.of(generation), metadata), Set.of("toolSearchTool"));
+            when(chain.nextStream(any())).thenReturn(Flux.just(response));
+
+            ChatResponse protectedResponse = advisor.adviseStream(request, chain).blockLast().chatResponse();
+
+            List<AssistantMessage.ToolCall> calls = PrivacyToolCallMetadataReader.read(
+                    protectedResponse, PrivacyPhase.TOOL_INPUT);
+            assertThat(calls).hasSize(1);
+            assertThat(calls.get(0).arguments()).doesNotContain("Alice");
+            assertThat(service.detokenize(session.handle(), calls.get(0).arguments())).isEqualTo(search.arguments());
+            assertThat(protectedResponse.getResult()).isSameAs(generation);
+            assertThat(protectedResponse.getMetadata().getId()).isEqualTo(metadata.getId());
+            assertThat(protectedResponse.getMetadata().getModel()).isEqualTo(metadata.getModel());
+            assertThat(protectedResponse.getMetadata().getUsage()).isSameAs(metadata.getUsage());
+            assertThat(protectedResponse.getMetadata().getRateLimit()).isSameAs(metadata.getRateLimit());
+            assertThat(protectedResponse.getMetadata().getPromptMetadata()).isSameAs(metadata.getPromptMetadata());
+            assertThat((String) protectedResponse.getMetadata().get("provider-field")).isEqualTo("kept");
+            assertThat(PrivacyToolCallMetadataReader.read(response.chatResponse(), PrivacyPhase.TOOL_INPUT))
+                    .containsExactly(search);
+        }
+    }
+
+    @Test
+    void preservesSafeAndAlreadyTokenizedSearchArguments() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyToolCallValidationAdvisor advisor = new PrivacyToolCallValidationAdvisor(service);
+        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+
+        try (PrivacySession session = service.openSession()) {
+            ChatClientRequest request = activeToolSearchRequest(session, service, true);
+            for (String query : List.of("customer lookup", service.tokenize(session.handle(), "Alice"))) {
+                AssistantMessage message = AssistantMessage.builder().content("")
+                        .toolCalls(List.of(new AssistantMessage.ToolCall(
+                                "search-1", "function", "toolSearchTool", "{\"query\":\"" + query + "\"}"
+                        ))).build();
+                ChatClientResponse response = validatedResponse(request,
+                        new ChatResponse(List.of(new Generation(message))), Set.of("toolSearchTool"));
+                when(chain.nextCall(any())).thenReturn(response);
+
+                assertThat(advisor.adviseCall(request, chain)).isSameAs(response);
+            }
+        }
+    }
+
+    @Test
+    void leavesAWrappedToolWithTheReservedNameToItsDisclosurePolicyWithoutTheSearchMarker() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyToolCallValidationAdvisor advisor = new PrivacyToolCallValidationAdvisor(service);
+        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+
+        try (PrivacySession session = service.openSession()) {
+            ChatClientRequest request = activeToolSearchRequest(session, service, false);
+            AssistantMessage message = AssistantMessage.builder().content("")
+                    .toolCalls(List.of(new AssistantMessage.ToolCall(
+                            "business-1", "function", "toolSearchTool", "{\"query\":\"Alice\"}"
+                    ))).build();
+            ChatClientResponse response = validatedResponse(request,
+                    new ChatResponse(List.of(new Generation(message))), Set.of("toolSearchTool"));
+            when(chain.nextCall(any())).thenReturn(response);
+
+            assertThat(advisor.adviseCall(request, chain)).isSameAs(response);
+        }
+    }
+
+    private ChatClientRequest activeToolSearchRequest(
+            PrivacySession session,
+            PrivacyService service,
+            boolean withSessionMarker
+    ) {
+        ToolCallback search = mock(ToolCallback.class);
+        when(search.getToolDefinition()).thenReturn(ToolDefinition.builder()
+                .name("toolSearchTool").description("Search tools").inputSchema("{}").build());
+        when(search.getToolMetadata()).thenReturn(ToolMetadata.builder().build());
+        if (!withSessionMarker) {
+            search = new PrivacyToolCallbackFactory(service, ToolDisclosurePolicy.denyAll()).wrap(search);
+        }
+        ToolCallingChatOptions options = ToolCallingChatOptions.builder()
+                .toolCallbacks(List.of(search))
+                .toolContext(withSessionMarker ? Map.of("toolSearchToolSessionId", "search-session") : Map.of())
+                .build();
+        return PrivacyRequestContextSupport.attachLifecycle(
+                new ChatClientRequest(new Prompt("hello", options), Map.of()), session.handle());
     }
 
     private ChatClientRequest activeRequest(PrivacySession session) {

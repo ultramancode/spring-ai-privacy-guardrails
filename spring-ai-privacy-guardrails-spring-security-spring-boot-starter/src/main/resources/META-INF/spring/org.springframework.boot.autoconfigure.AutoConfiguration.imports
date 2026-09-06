@@ -1,0 +1,2 @@
+io.github.ultramancode.springai.privacy.security.autoconfigure.ToolAuthorizationAutoConfiguration
+io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityAutoConfiguration

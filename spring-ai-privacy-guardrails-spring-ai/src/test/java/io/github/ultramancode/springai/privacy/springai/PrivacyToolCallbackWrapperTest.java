@@ -9,6 +9,8 @@ import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
@@ -210,24 +212,26 @@ class PrivacyToolCallbackWrapperTest {
     }
 
     @Test
-    void toolInputAnalyzesManyUniqueScalarsInOneCharacterBoundedBatch() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = new PiiAnalyzer() {
-            @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
-                analysisCalls.incrementAndGet();
-                return Pattern.compile("secret-\\d+")
-                        .matcher(text)
-                        .results()
-                        .map(match -> new PiiSpan("SECRET", match.start(), match.end(), 1.0))
-                        .toList();
-            }
-
-            @Override
-            public Set<String> trustedEntityTypes() {
-                return Set.of("SECRET");
-            }
-        };
+    void toolInputProtectsManyScalarsWithOneSegmentedAnalysis() {
+        AtomicInteger scalarAnalysisCalls = new AtomicInteger();
+        AtomicInteger segmentedAnalysisCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
+                scalarAnalysisCalls,
+                segmentedAnalysisCalls,
+                Set.of("SECRET"),
+                texts -> texts.stream()
+                        .map(text -> Pattern.compile("secret-\\d+")
+                                .matcher(text)
+                                .results()
+                                .map(match -> new PiiSpan(
+                                        "SECRET",
+                                        match.start(),
+                                        match.end(),
+                                        1.0
+                                ))
+                                .toList())
+                        .toList()
+        );
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         AtomicReference<String> received = new AtomicReference<>();
         PrivacyToolCallbackWrapper wrapper = wrap(
@@ -247,7 +251,34 @@ class PrivacyToolCallbackWrapperTest {
             assertThat(received.get()).doesNotContain("secret-");
             assertThat(service.detokenize(session.handle(), received.get())).isEqualTo(input);
         }
-        assertThat(analysisCalls).hasValue(1);
+        assertThat(scalarAnalysisCalls).hasValue(0);
+        assertThat(segmentedAnalysisCalls).hasValue(1);
+    }
+
+    @Test
+    void toolInputProtectsExactScalarRegexMatches() {
+        PrivacyService service = new PrivacyService(
+                List.of(new RegexPiiAnalyzer(List.of(
+                        new RegexPiiRule("EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
+                ))),
+                PiiAnalysisOptions.defaults()
+        );
+        AtomicReference<String> received = new AtomicReference<>();
+        PrivacyToolCallbackWrapper wrapper = wrap(
+                delegate(input -> {
+                    received.set(input);
+                    return " ";
+                }),
+                service
+        );
+        String input = "[\"safe\",\"EMP-1234\"]";
+
+        try (PrivacySession session = service.openSession()) {
+            wrapper.call(input, toolContext(session.handle()));
+
+            assertThat(received.get()).doesNotContain("EMP-1234");
+            assertThat(service.detokenize(session.handle(), received.get())).isEqualTo(input);
+        }
     }
 
     @Test

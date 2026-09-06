@@ -12,12 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Batches JSON scalar text for analysis and remaps results to scalar-local offsets. */
+/** Groups texts extracted from JSON for independent batched analysis. */
 final class PrivacyJsonScalarBatchAnalyzer {
 
-    // A NUL sentinel keeps adjacent JSON scalars distinct during batched analysis.
-    // Any analyzer span that still crosses the boundary is rejected before offset remapping.
-    private static final String BATCH_SEPARATOR = "\n\u0000\n";
+    static final int TARGET_BATCH_CHARACTERS = 32_768;
+    private static final int MAX_ANALYSIS_CHARACTERS = PrivacyService.MAX_TEXT_INPUT_CHARACTERS;
 
     private PrivacyJsonScalarBatchAnalyzer() {
     }
@@ -33,31 +32,24 @@ final class PrivacyJsonScalarBatchAnalyzer {
         requireAnalysisSizeWithinLimit(analysisTexts, phase);
 
         Map<String, List<PiiSpan>> spansByText = new LinkedHashMap<>();
-        StringBuilder batch = new StringBuilder();
-        List<BatchSegment> segments = new ArrayList<>();
+        List<String> batch = new ArrayList<>();
+        int batchCharacters = 0;
         AnalysisResultBudget resultBudget = new AnalysisResultBudget(phase);
         for (String text : analysisTexts) {
-            int separatorLength = segments.isEmpty() ? 0 : BATCH_SEPARATOR.length();
-            if (!segments.isEmpty()
-                    && batch.length() + separatorLength + text.length()
-                    > PrivacyJsonPayloadTransformer.ANALYSIS_BATCH_TARGET_CHARACTERS) {
-                analyzeBatch(privacyService, batch, segments, spansByText, phase, resultBudget);
-                batch.setLength(0);
-                segments.clear();
-                separatorLength = 0;
+            if (!batch.isEmpty()
+                    && batchCharacters + text.length()
+                    > TARGET_BATCH_CHARACTERS) {
+                analyzeBatch(privacyService, batch, spansByText, resultBudget);
+                batch.clear();
+                batchCharacters = 0;
             }
-            if (separatorLength > 0) {
-                batch.append(BATCH_SEPARATOR);
-            }
-            int start = batch.length();
-            batch.append(text);
-            segments.add(new BatchSegment(text, start, batch.length()));
+            batch.add(text);
+            batchCharacters += text.length();
         }
-        if (!segments.isEmpty()) {
-            analyzeBatch(privacyService, batch, segments, spansByText, phase, resultBudget);
+        if (!batch.isEmpty()) {
+            analyzeBatch(privacyService, batch, spansByText, resultBudget);
         }
 
-        spansByText.replaceAll((ignored, spans) -> List.copyOf(spans));
         return Map.copyOf(spansByText);
     }
 
@@ -66,16 +58,15 @@ final class PrivacyJsonScalarBatchAnalyzer {
             PrivacyPhase phase
     ) {
         long analysisCharacters = 0L;
-        for (int index = 0; index < analysisTexts.size(); index++) {
+        for (String analysisText : analysisTexts) {
             String text = Objects.requireNonNull(
-                    analysisTexts.get(index),
+                    analysisText,
                     "analysisTexts must not contain null values"
             );
-            analysisCharacters += index == 0 ? 0L : BATCH_SEPARATOR.length();
             analysisCharacters += text.length();
             PrivacyJsonPayloadTransformer.requireWithinLimit(
                     analysisCharacters,
-                    PrivacyJsonPayloadTransformer.MAX_ANALYSIS_CHARACTERS,
+                    MAX_ANALYSIS_CHARACTERS,
                     phase
             );
         }
@@ -83,41 +74,31 @@ final class PrivacyJsonScalarBatchAnalyzer {
 
     private static void analyzeBatch(
             PrivacyService privacyService,
-            StringBuilder batch,
-            List<BatchSegment> segments,
+            List<String> batch,
             Map<String, List<PiiSpan>> spansByText,
-            PrivacyPhase phase,
             AnalysisResultBudget resultBudget
     ) {
-        List<ResolvedPiiSpan> resolvedSpans = privacyService.analyze(batch.toString());
-        resultBudget.accept(resolvedSpans.size());
-        int segmentIndex = 0;
-        for (ResolvedPiiSpan span : resolvedSpans) {
-            while (segmentIndex < segments.size()
-                    && span.start() >= segments.get(segmentIndex).end()) {
-                segmentIndex++;
-            }
-            if (segmentIndex >= segments.size()) {
-                throw PrivacyJsonPayloadTransformer.scalarBoundaryConflict(phase);
-            }
-            BatchSegment segment = segments.get(segmentIndex);
-            if (span.start() < segment.start() || span.end() > segment.end()) {
-                throw PrivacyJsonPayloadTransformer.scalarBoundaryConflict(phase);
-            }
-            double score = span.evidence().stream()
-                    .mapToDouble(evidence -> evidence.score())
-                    .max()
-                    .orElseThrow();
-            spansByText.computeIfAbsent(segment.text(), ignored -> new ArrayList<>()).add(new PiiSpan(
-                    span.entityType(),
-                    span.start() - segment.start(),
-                    span.end() - segment.start(),
-                    score
-            ));
+        List<String> immutableBatch = List.copyOf(batch);
+        List<List<ResolvedPiiSpan>> resolvedSpansByText =
+                privacyService.analyzeSegments(immutableBatch);
+        for (int index = 0; index < immutableBatch.size(); index++) {
+            List<ResolvedPiiSpan> resolvedSpans = resolvedSpansByText.get(index);
+            resultBudget.accept(resolvedSpans.size());
+            spansByText.put(
+                    immutableBatch.get(index),
+                    resolvedSpans.stream()
+                            .map(PrivacyJsonScalarBatchAnalyzer::toPiiSpan)
+                            .toList()
+            );
         }
     }
 
-    private record BatchSegment(String text, int start, int end) {
+    private static PiiSpan toPiiSpan(ResolvedPiiSpan span) {
+        double score = span.evidence().stream()
+                .mapToDouble(evidence -> evidence.score())
+                .max()
+                .orElseThrow();
+        return new PiiSpan(span.entityType(), span.start(), span.end(), score);
     }
 
     private static final class AnalysisResultBudget {

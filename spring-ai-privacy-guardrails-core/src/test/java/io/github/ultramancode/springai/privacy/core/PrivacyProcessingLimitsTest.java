@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractList;
@@ -8,11 +9,62 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyProcessingLimitsTest {
+
+    @Test
+    void directTextInputEnforcesTheBoundaryBeforeAnalyzerInvocation() {
+        AtomicInteger analyzerCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = (text, options) -> {
+            analyzerCalls.incrementAndGet();
+            return List.of();
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        assertThat(service.analyze("x".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS)))
+                .isEmpty();
+        assertThat(analyzerCalls).hasValue(1);
+
+        assertThatThrownBy(() -> service.analyze(
+                "x".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1)
+        )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+            assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+            assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+        });
+        assertThat(analyzerCalls).hasValue(1);
+    }
+
+    @Test
+    void callerSuppliedSpansRejectOversizedSourceText() {
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        int oversizedLength = PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1;
+        // A range failure here would show that span resolution ran before the text limit check.
+        PiiSpan outOfRangeSpan = new PiiSpan("SECRET", oversizedLength, oversizedLength + 1, 1.0);
+
+        assertThatThrownBy(() -> service.redact(
+                "x".repeat(oversizedLength),
+                List.of(outOfRangeSpan)
+        )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+            assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+            assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+        });
+    }
+
+    @Test
+    void automaticTextOperationsRejectOversizedWhitespace() {
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        String oversizedWhitespace = " ".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1);
+
+        try (PrivacySession session = service.openSession()) {
+            assertAnalysisPayloadLimitExceeded(() -> service.redact(oversizedWhitespace));
+            assertAnalysisPayloadLimitExceeded(() -> service.redact(session.handle(), oversizedWhitespace));
+            assertAnalysisPayloadLimitExceeded(() -> service.containsPii(session.handle(), oversizedWhitespace));
+        }
+    }
 
     @Test
     void detokenizeScansThousandsOfMappingsWithoutSearchingForEachMapping() {
@@ -116,6 +168,22 @@ class PrivacyProcessingLimitsTest {
     }
 
     @Test
+    void defaultSegmentedAnalysisRejectsOversizedResultsBeforeSnapshottingThem() {
+        PiiAnalyzer analyzer = (text, options) -> oversizedSpanList();
+        PrivacyService service = new PrivacyService(
+                List.of(analyzer),
+                PiiAnalysisOptions.defaults()
+        );
+
+        assertThatThrownBy(() -> service.analyzeSegments(List.of("A")))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code())
+                            .isEqualTo(PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
+    }
+
+    @Test
     void coreSharesTheAnalyzerResultBoundAcrossProviders() {
         PiiSpan span = new PiiSpan("PERSON", 0, 1, 1.0);
         PiiAnalyzer first = namedAnalyzer(
@@ -141,6 +209,127 @@ class PrivacyProcessingLimitsTest {
         assertThatThrownBy(() -> service.analyze("A"))
                 .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
                     assertThat(failure.code()).isEqualTo(PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
+    }
+
+    @Test
+    void segmentedAnalysisRejectsExcessiveSegmentCountBeforeIteration() {
+        List<String> excessiveSegments = new AbstractList<>() {
+            @Override
+            public String get(int index) {
+                throw new AssertionError("segment limit must be checked before iteration");
+            }
+
+            @Override
+            public int size() {
+                return PiiAnalyzer.MAX_ANALYSIS_SEGMENTS + 1;
+            }
+        };
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+
+        assertThatThrownBy(() -> service.analyzeSegments(excessiveSegments))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
+    }
+
+    @Test
+    void segmentedAnalysisRejectsAggregateInputBeforeAnalyzerInvocation() {
+        AtomicInteger analyzerCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = (text, options) -> {
+            analyzerCalls.incrementAndGet();
+            return List.of();
+        };
+        PrivacyService service = new PrivacyService(
+                List.of(analyzer),
+                PiiAnalysisOptions.defaults()
+        );
+        int firstLength = PrivacyService.MAX_TEXT_INPUT_CHARACTERS / 2;
+        List<String> oversizedTexts = List.of(
+                "a".repeat(firstLength),
+                "b".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS - firstLength + 1)
+        );
+
+        assertThatThrownBy(() -> service.analyzeSegments(oversizedTexts))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
+        assertThat(analyzerCalls).hasValue(0);
+    }
+
+    @Test
+    void segmentedAnalysisAcceptsTheAggregateInputBoundary() {
+        AtomicInteger analyzerCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = (text, options) -> {
+            analyzerCalls.incrementAndGet();
+            return List.of();
+        };
+        PrivacyService service = new PrivacyService(
+                List.of(analyzer),
+                PiiAnalysisOptions.defaults()
+        );
+        int firstLength = PrivacyService.MAX_TEXT_INPUT_CHARACTERS / 2;
+
+        assertThat(service.analyzeSegments(List.of(
+                "a".repeat(firstLength),
+                "b".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS - firstLength)
+        ))).containsExactly(List.of(), List.of());
+        assertThat(analyzerCalls).hasValue(2);
+    }
+
+    @Test
+    void segmentedAnalysisBoundsBlankInputBeforeTheBlankShortCircuit() {
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        String oversizedBlank = " ".repeat(PrivacyService.MAX_TEXT_INPUT_CHARACTERS + 1);
+
+        assertThatThrownBy(() -> service.analyzeSegments(List.of(oversizedBlank)))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
+    }
+
+    @Test
+    void segmentedAnalysisSharesTheResultBoundAcrossSourceTexts() {
+        PiiSpan span = new PiiSpan("PERSON", 0, 1, 1.0);
+        PiiAnalyzer analyzer = new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+                return List.of();
+            }
+
+            @Override
+            public List<List<PiiSpan>> analyzeSegments(
+                    List<String> texts,
+                    PiiAnalysisOptions options
+            ) {
+                return List.of(
+                        Collections.nCopies(60_000, span),
+                        new AbstractList<>() {
+                            @Override
+                            public PiiSpan get(int index) {
+                                throw new AssertionError(
+                                        "segment overflow must be rejected before iteration"
+                                );
+                            }
+
+                            @Override
+                            public int size() {
+                                return 40_001;
+                            }
+                        }
+                );
+            }
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        assertThatThrownBy(() -> service.analyzeSegments(List.of("A", "B")))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code())
+                            .isEqualTo(PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION);
                     assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
                 });
     }
@@ -183,6 +372,14 @@ class PrivacyProcessingLimitsTest {
                 return PiiAnalyzer.MAX_RESULT_SPANS + 1;
             }
         };
+    }
+
+    private static void assertAnalysisPayloadLimitExceeded(ThrowingCallable operation) {
+        assertThatThrownBy(operation)
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
     }
 
     private static PiiAnalyzer namedAnalyzer(String providerId, PiiAnalyzer delegate) {

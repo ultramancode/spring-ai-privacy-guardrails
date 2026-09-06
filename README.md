@@ -272,6 +272,8 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 
 CI runs the full test suite on Java 17, 21, and 25. Presidio integration tests,
 which require an external service, and JMH smoke tests run as separate CI jobs.
+When Presidio analyzes structured JSON, it uses the REST array-input API
+available in Presidio Analyzer 2.2.361 and later.
 
 Spring AI maintains compatibility within the current `2.0.x` line, and `2.0.1`
 is recommended for new users.

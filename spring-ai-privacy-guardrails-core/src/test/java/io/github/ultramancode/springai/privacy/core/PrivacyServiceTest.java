@@ -2,18 +2,152 @@ package io.github.ultramancode.springai.privacy.core;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyServiceTest {
+
+    @Test
+    void analyzeSegmentsSkipsNullAndBlankTextsAndPreservesPerTextOffsets() {
+        AtomicInteger analysisCalls = new AtomicInteger();
+        List<String> analyzedTexts = new ArrayList<>();
+        PiiAnalyzer analyzer = (text, options) -> {
+            analysisCalls.incrementAndGet();
+            analyzedTexts.add(text);
+            return text.matches("^EMP-[0-9]{4}$")
+                    ? List.of(new PiiSpan("EMPLOYEE_ID", 0, text.length(), 1.0))
+                    : List.of();
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        List<List<ResolvedPiiSpan>> results = service.analyzeSegments(
+                Arrays.asList(null, "  ", "safe", "EMP-1234")
+        );
+
+        assertThat(analysisCalls).hasValue(2);
+        assertThat(analyzedTexts).containsExactly("safe", "EMP-1234");
+        assertThat(results).hasSize(4);
+        assertThat(results.get(0)).isEmpty();
+        assertThat(results.get(1)).isEmpty();
+        assertThat(results.get(2)).isEmpty();
+        assertThat(results.get(3)).singleElement().satisfies(span -> {
+            assertThat(span.start()).isZero();
+            assertThat(span.end()).isEqualTo("EMP-1234".length());
+        });
+    }
+
+    @Test
+    void analyzeSegmentsPreservesEarlierResultsWhenAnalyzerReusesItsResultList() {
+        ThreadLocal<ArrayList<PiiSpan>> resultBuffers =
+                ThreadLocal.withInitial(ArrayList::new);
+        PiiAnalyzer analyzer = (text, options) -> {
+            List<PiiSpan> reusableResults = resultBuffers.get();
+            reusableResults.clear();
+            if (text.equals("Alice")) {
+                reusableResults.add(new PiiSpan("PERSON", 0, text.length(), 1.0));
+            }
+            return reusableResults;
+        };
+        PrivacyService service = new PrivacyService(
+                List.of(analyzer),
+                PiiAnalysisOptions.defaults()
+        );
+
+        try {
+            List<List<ResolvedPiiSpan>> results = service.analyzeSegments(
+                    List.of("Alice", "safe")
+            );
+
+            assertThat(results.get(0)).singleElement().satisfies(span -> {
+                assertThat(span.entityType()).isEqualTo("PERSON");
+                assertThat(span.start()).isZero();
+                assertThat(span.end()).isEqualTo("Alice".length());
+            });
+            assertThat(results.get(1)).isEmpty();
+        } finally {
+            resultBuffers.remove();
+        }
+    }
+
+    @Test
+    void analyzeSegmentsInvokesTheSegmentOverrideOnce() {
+        AtomicInteger singleCalls = new AtomicInteger();
+        AtomicInteger segmentCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+                singleCalls.incrementAndGet();
+                return List.of();
+            }
+
+            @Override
+            public List<List<PiiSpan>> analyzeSegments(
+                    List<String> texts,
+                    PiiAnalysisOptions options
+            ) {
+                segmentCalls.incrementAndGet();
+                assertThat(texts).containsExactly("safe", "EMP-1234");
+                return List.of(
+                        List.of(),
+                        List.of(new PiiSpan("EMPLOYEE_ID", 0, 8, 1.0))
+                );
+            }
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        List<List<ResolvedPiiSpan>> results = service.analyzeSegments(
+                List.of("safe", "EMP-1234")
+        );
+
+        assertThat(singleCalls).hasValue(0);
+        assertThat(segmentCalls).hasValue(1);
+        assertThat(results.get(0)).isEmpty();
+        assertThat(results.get(1)).hasSize(1);
+    }
+
+    @Test
+    void analyzeSegmentsRejectsAnalyzerInputMutationWithoutCorruptingPositions() {
+        PiiAnalyzer analyzer = segmentedAnalyzer((texts, options) -> {
+            texts.clear();
+            return List.of();
+        });
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+        List<String> sourceTexts = new ArrayList<>(List.of("first", "second"));
+
+        assertThatThrownBy(() -> service.analyzeSegments(sourceTexts))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code())
+                            .isEqualTo(PrivacyFailureCode.ANALYZER_EXECUTION_FAILED);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
+        assertThat(sourceTexts).containsExactly("first", "second");
+    }
+
+    @Test
+    void analyzeSegmentsRejectsAnalyzerResultCountMismatch() {
+        PiiAnalyzer analyzer = segmentedAnalyzer(
+                (texts, options) -> List.of(List.of())
+        );
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        assertThatThrownBy(() -> service.analyzeSegments(List.of("first", "second")))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code())
+                            .isEqualTo(PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                });
+    }
 
     @Test
     void tokenizeUsesStableTokenForRepeatedOriginalValue() {
@@ -759,6 +893,25 @@ class PrivacyServiceTest {
         assertThatThrownBy(() -> new PrivacyService(List.of(first, second), PiiAnalysisOptions.defaults()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Duplicate PII analyzer provider CUSTOM");
+    }
+
+    private static PiiAnalyzer segmentedAnalyzer(
+            BiFunction<List<String>, PiiAnalysisOptions, List<List<PiiSpan>>> operation
+    ) {
+        return new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+                return List.of();
+            }
+
+            @Override
+            public List<List<PiiSpan>> analyzeSegments(
+                    List<String> texts,
+                    PiiAnalysisOptions options
+            ) {
+                return operation.apply(texts, options);
+            }
+        };
     }
 
     private PiiAnalyzer personAnalyzer() {

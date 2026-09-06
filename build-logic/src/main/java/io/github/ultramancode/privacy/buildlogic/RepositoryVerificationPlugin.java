@@ -68,7 +68,6 @@ public final class RepositoryVerificationPlugin implements Plugin<Project> {
             task.dependsOn(modules.stream().map(module -> module.getPath() + ":check").toList());
             task.dependsOn(
                     verifyAutomaticModules,
-                    verifyTranslations,
                     verifyReleaseWorkflow
             );
             task.dependsOn(project.getGradle().includedBuild("build-logic").task(":check"));

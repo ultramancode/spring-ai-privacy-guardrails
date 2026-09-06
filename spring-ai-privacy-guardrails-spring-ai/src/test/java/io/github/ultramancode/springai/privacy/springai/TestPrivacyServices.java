@@ -12,6 +12,9 @@ import org.springframework.ai.chat.model.Generation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 final class TestPrivacyServices {
 
@@ -54,6 +57,35 @@ final class TestPrivacyServices {
                 List.of(analyzer),
                 PiiAnalysisOptions.defaults()
         );
+    }
+
+    static PiiAnalyzer countingSegmentedAnalyzer(
+            AtomicInteger singleAnalysisCalls,
+            AtomicInteger segmentedAnalysisCalls,
+            Set<String> trustedEntityTypes,
+            Function<List<String>, List<List<PiiSpan>>> operation
+    ) {
+        return new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+                singleAnalysisCalls.incrementAndGet();
+                return List.of();
+            }
+
+            @Override
+            public List<List<PiiSpan>> analyzeSegments(
+                    List<String> texts,
+                    PiiAnalysisOptions options
+            ) {
+                segmentedAnalysisCalls.incrementAndGet();
+                return operation.apply(texts);
+            }
+
+            @Override
+            public Set<String> trustedEntityTypes() {
+                return trustedEntityTypes;
+            }
+        };
     }
 
     static ChatClientResponse response(String text) {

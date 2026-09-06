@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 284ab7a7a8c6a4049700b9b9995a4793e9e2678a35b2be383f0f3c9678d5a91a -->
+<!-- i18n-source-sha256: d1b9b3bd0b19291db03c4e057ccf20919bf2d29514c4e2d071aa1897c03c5d92 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -260,6 +260,8 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 
 CI는 Java 17, 21, 25에서 전체 테스트를 실행합니다. 외부 서비스가 필요한 Presidio 연동
 테스트와 JMH 스모크 테스트는 별도 CI 작업으로 실행합니다.
+구조화된 JSON 분석에 Presidio를 사용하는 경우, Presidio Analyzer 2.2.361 이상에서
+지원되는 REST 배열 입력 API를 사용합니다.
 
 Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자에게는 `2.0.1`을
 권장합니다.

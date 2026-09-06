@@ -10,6 +10,8 @@ import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
+import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.junit.jupiter.api.Test;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import tools.jackson.core.type.TypeReference;
@@ -368,7 +370,7 @@ class PrivacyJsonPayloadPolicyTest {
             return List.of();
         };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String scalar = "x".repeat(PrivacyJsonPayloadTransformer.ANALYSIS_BATCH_TARGET_CHARACTERS + 1);
+        String scalar = "x".repeat(PrivacyJsonScalarBatchAnalyzer.TARGET_BATCH_CHARACTERS + 1);
         String input = "\"" + scalar + "\"";
 
         try (PrivacySession session = service.openSession()) {
@@ -381,6 +383,38 @@ class PrivacyJsonPayloadPolicyTest {
         }
         assertThat(analysisCalls).hasValue(1);
         assertThat(analyzedText).hasValue(scalar);
+    }
+
+    @Test
+    void batchingPreservesScalarIsolationForBoundarySensitiveRegexRules() {
+        PrivacyService service = new PrivacyService(
+                List.of(new RegexPiiAnalyzer(List.of(
+                        new RegexPiiRule("EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0),
+                        new RegexPiiRule("API_KEY", "\\AKEY-[0-9]{4}\\z", 1.0, 0)
+                ))),
+                PiiAnalysisOptions.defaults()
+        );
+        List<String> inputs = List.of(
+                "[\"EMP-1234\",\"safe\"]",
+                "[\"safe\",\"EMP-1234\",\"other\"]",
+                "[\"safe\",\"EMP-1234\"]",
+                "{\"safe\":\"value\",\"employee\":\"EMP-1234\"}",
+                "[\"safe\",\"KEY-1234\"]"
+        );
+
+        for (String input : inputs) {
+            try (PrivacySession session = service.openSession()) {
+                String protectedPayload = PrivacyOutputPolicyExecutor.apply(
+                        service,
+                        session.handle(),
+                        input,
+                        PrivacyOutputAction.TOKENIZE
+                ).text();
+
+                assertThat(protectedPayload).doesNotContain("EMP-1234", "KEY-1234");
+                assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
+            }
+        }
     }
 
     @Test
@@ -434,24 +468,26 @@ class PrivacyJsonPayloadPolicyTest {
     }
 
     @Test
-    void moreThan256UniqueScalarsAreProtectedInOneCharacterBoundedBatch() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = new PiiAnalyzer() {
-            @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
-                analysisCalls.incrementAndGet();
-                return Pattern.compile("secret-\\d+")
-                        .matcher(text)
-                        .results()
-                        .map(match -> new PiiSpan("SECRET", match.start(), match.end(), 1.0))
-                        .toList();
-            }
-
-            @Override
-            public Set<String> trustedEntityTypes() {
-                return Set.of("SECRET");
-            }
-        };
+    void manyUniqueScalarsAreProtectedWithOneSegmentedAnalysis() {
+        AtomicInteger scalarAnalysisCalls = new AtomicInteger();
+        AtomicInteger segmentedAnalysisCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
+                scalarAnalysisCalls,
+                segmentedAnalysisCalls,
+                Set.of("SECRET"),
+                texts -> texts.stream()
+                        .map(text -> Pattern.compile("secret-\\d+")
+                                .matcher(text)
+                                .results()
+                                .map(match -> new PiiSpan(
+                                        "SECRET",
+                                        match.start(),
+                                        match.end(),
+                                        1.0
+                                ))
+                                .toList())
+                        .toList()
+        );
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         String input = IntStream.range(0, 600)
                 .mapToObj(index -> "\"secret-" + index + "\"")
@@ -468,33 +504,34 @@ class PrivacyJsonPayloadPolicyTest {
             assertThat(protectedPayload).doesNotContain("secret-");
             assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
         }
-        assertThat(analysisCalls).hasValue(1);
+        assertThat(scalarAnalysisCalls).hasValue(0);
+        assertThat(segmentedAnalysisCalls).hasValue(1);
     }
 
     @Test
-    void largeUniqueScalarSetsProtectValuesAcrossSequentialCharacterBoundedBatches() {
-        AtomicInteger analysisCalls = new AtomicInteger();
+    void largeJsonProtectsValuesAcrossMultipleAnalysisBatches() {
+        AtomicInteger scalarAnalysisCalls = new AtomicInteger();
+        AtomicInteger segmentedAnalysisCalls = new AtomicInteger();
         String firstSecret = "value-0-" + "x".repeat(80);
         String lastSecret = "value-799-" + "x".repeat(80);
-        PiiAnalyzer analyzer = new PiiAnalyzer() {
-            @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
-                analysisCalls.incrementAndGet();
-                List<PiiSpan> spans = new ArrayList<>();
-                for (String secret : List.of(firstSecret, lastSecret)) {
-                    int start = text.indexOf(secret);
-                    if (start >= 0) {
-                        spans.add(new PiiSpan("SECRET", start, start + secret.length(), 1.0));
-                    }
-                }
-                return spans;
-            }
-
-            @Override
-            public Set<String> trustedEntityTypes() {
-                return Set.of("SECRET");
-            }
-        };
+        PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
+                scalarAnalysisCalls,
+                segmentedAnalysisCalls,
+                Set.of("SECRET"),
+                texts -> texts.stream()
+                        .map(text -> {
+                            if (text.equals(firstSecret) || text.equals(lastSecret)) {
+                                return List.of(new PiiSpan(
+                                        "SECRET",
+                                        0,
+                                        text.length(),
+                                        1.0
+                                ));
+                            }
+                            return List.<PiiSpan>of();
+                        })
+                        .toList()
+        );
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         String input = IntStream.range(0, 800)
                 .mapToObj(index -> "\"value-" + index + "-" + "x".repeat(80) + "\"")
@@ -511,14 +548,29 @@ class PrivacyJsonPayloadPolicyTest {
             assertThat(protectedPayload).doesNotContain(firstSecret, lastSecret);
             assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
         }
-        assertThat(analysisCalls.get()).isGreaterThan(1).isLessThan(800);
+        assertThat(scalarAnalysisCalls).hasValue(0);
+        assertThat(segmentedAnalysisCalls.get()).isGreaterThan(1).isLessThan(800);
     }
 
     @Test
-    void analyzerSpanCrossingScalarBoundaryFailsClosed() {
-        PiiAnalyzer analyzer = (text, options) -> text.indexOf('\0') >= 0
-                ? List.of(new PiiSpan("PII", 0, text.length(), 1.0))
-                : List.of();
+    void analyzerSpanOutsideItsScalarFailsClosed() {
+        PiiAnalyzer analyzer = new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+                return List.of();
+            }
+
+            @Override
+            public List<List<PiiSpan>> analyzeSegments(
+                    List<String> texts,
+                    PiiAnalysisOptions options
+            ) {
+                return List.of(
+                        List.of(new PiiSpan("PII", 0, texts.get(0).length() + 1, 1.0)),
+                        List.of()
+                );
+            }
+        };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
@@ -528,10 +580,10 @@ class PrivacyJsonPayloadPolicyTest {
                     "[\"left\",\"right\"]",
                     PrivacyOutputAction.TOKENIZE
             )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
-                assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
-                assertThat(failure.phase()).isEqualTo(PrivacyPhase.OUTPUT_POLICY);
+                assertThat(failure.code())
+                        .isEqualTo(PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION);
+                assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
                 assertThat(failure)
-                        .hasMessage("Analyzer result crossed a structured scalar boundary")
                         .hasMessageNotContaining("left")
                         .hasMessageNotContaining("right");
             });

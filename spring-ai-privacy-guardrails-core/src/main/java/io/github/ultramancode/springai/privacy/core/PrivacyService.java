@@ -6,6 +6,9 @@ import java.util.Set;
 /** Public facade for PII analysis, transformation, and privacy session lifecycle. */
 public final class PrivacyService {
 
+    /** Hard maximum UTF-16 code units accepted for analysis or supplied-span resolution. */
+    public static final int MAX_TEXT_INPUT_CHARACTERS = 1_000_000;
+
     /** Hard maximum for text produced by a privacy transformation that changes content. */
     public static final int MAX_TRANSFORMED_TEXT_CHARACTERS = 8_000_000;
 
@@ -105,6 +108,22 @@ public final class PrivacyService {
      */
     public List<ResolvedPiiSpan> analyze(String text) {
         return this.analysisCoordinator.analyze(text);
+    }
+
+    /**
+     * Returns resolved spans for independent source texts. Each text is analyzed
+     * independently, and every span offset is relative to that text. Results
+     * preserve input order and contain one span list for each source text.
+     * {@code null} or blank elements produce empty span lists without invoking
+     * configured analyzers.
+     *
+     * @param texts independent source texts, limited to at most
+     *              {@link PiiAnalyzer#MAX_ANALYSIS_SEGMENTS} items with a combined
+     *              length no greater than {@link #MAX_TEXT_INPUT_CHARACTERS}
+     * @return immutable per-text resolved spans in input order
+     */
+    public List<List<ResolvedPiiSpan>> analyzeSegments(List<String> texts) {
+        return this.analysisCoordinator.analyzeSegments(texts);
     }
 
     /**

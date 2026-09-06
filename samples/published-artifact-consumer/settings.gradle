@@ -40,6 +40,8 @@ dependencyResolutionManagement {
                         metadataSources {
                             mavenPom()
                             artifact()
+                            // Published POMs otherwise redirect Gradle to the .module metadata.
+                            ignoreGradleMetadataRedirection()
                         }
                     }
                 }

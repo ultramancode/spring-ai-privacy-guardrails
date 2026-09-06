@@ -81,6 +81,12 @@ jobs:
           version="${RELEASE_TAG#v}"
           ./gradlew --no-daemon validateReleaseVersion -Pversion="$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          spring_ai_version=$(sed -n 's/^springAiVersion=//p' gradle.properties)
+          if [[ -z "$spring_ai_version" ]]; then
+            echo "gradle.properties must declare springAiVersion for the release consumer" >&2
+            exit 1
+          fi
+          echo "spring_ai_version=$spring_ai_version" >> "$GITHUB_OUTPUT"
 
       - name: Extract release notes from changelog
         run: |
@@ -372,6 +378,7 @@ jobs:
       - name: Run consumer against validated Central deployment
         if: steps.central_state.outputs.state == 'VALIDATED'
         env:
+          ORG_GRADLE_PROJECT_consumerSpringAiVersion: ${{ steps.release.outputs.spring_ai_version }}
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
         run: |
@@ -382,7 +389,7 @@ jobs:
           export ORG_GRADLE_PROJECT_privacyRepositoryAuthHeaderValue="Bearer $authorization"
           export ORG_GRADLE_PROJECT_privacyVersion="${{ steps.release.outputs.version }}"
           ./gradlew --no-daemon --refresh-dependencies \
-            -p samples/published-artifact-consumer clean run
+            -p samples/published-artifact-consumer clean run securityOnlyRun
 
       - name: Publish validated Maven Central deployment
         if: steps.central_state.outputs.state == 'VALIDATED'
@@ -478,12 +485,14 @@ jobs:
           done
 
       - name: Run consumer from public Maven Central
+        env:
+          ORG_GRADLE_PROJECT_consumerSpringAiVersion: ${{ steps.release.outputs.spring_ai_version }}
         run: |
           export ORG_GRADLE_PROJECT_privacyRepository="https://repo1.maven.org/maven2/"
           export ORG_GRADLE_PROJECT_privacyVersion="${{ steps.release.outputs.version }}"
           for attempt in $(seq 1 30); do
             if ./gradlew --no-daemon --refresh-dependencies \
-              -p samples/published-artifact-consumer clean run; then
+              -p samples/published-artifact-consumer clean run securityOnlyRun; then
               exit 0
             fi
             if [[ "$attempt" -eq 30 ]]; then

@@ -4,6 +4,8 @@ plugins {
 
 def consumerSpringBootVersion = providers.gradleProperty('consumerSpringBootVersion')
         .orElse('4.0.0')
+// Use the same Spring AI version as the publication under test.
+def consumerSpringAiVersion = providers.gradleProperty('consumerSpringAiVersion')
 
 java {
     toolchain {
@@ -11,14 +13,29 @@ java {
     }
 }
 
+sourceSets {
+    securityOnly {
+        java.srcDir 'src/securityOnly/java'
+    }
+}
+
 dependencies {
     implementation enforcedPlatform(
             "org.springframework.boot:spring-boot-dependencies:${consumerSpringBootVersion.get()}"
     )
+    implementation platform("org.springframework.ai:spring-ai-bom:${consumerSpringAiVersion.get()}")
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:${providers.gradleProperty('privacyVersion').get()}"
+    implementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
+
+    securityOnlyImplementation enforcedPlatform(
+            "org.springframework.boot:spring-boot-dependencies:${consumerSpringBootVersion.get()}"
+    )
+    securityOnlyImplementation platform("org.springframework.ai:spring-ai-bom:${consumerSpringAiVersion.get()}")
+    securityOnlyImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
+    securityOnlyImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
 }
 
 application {
@@ -42,6 +59,56 @@ tasks.register('verifySpringBootAlignment') {
     }
 }
 
+tasks.register('verifySpringAiAlignment') {
+    doLast {
+        [configurations.runtimeClasspath, configurations.securityOnlyRuntimeClasspath].each { configuration ->
+            Set<String> selectedVersions = configuration.incoming.resolutionResult.allComponents
+                    .collect { component -> component.moduleVersion }
+                    .findAll { module -> module != null && module.group == 'org.springframework.ai' }
+                    .collect { module -> module.version }
+                    .toSet()
+            if (selectedVersions != Set.of(consumerSpringAiVersion.get())) {
+                throw new GradleException(
+                        "Expected Spring AI ${consumerSpringAiVersion.get()} in ${configuration.name} "
+                                + "but resolved ${selectedVersions}"
+                )
+            }
+        }
+    }
+}
+
 tasks.named('run') {
     dependsOn tasks.named('verifySpringBootAlignment')
+    dependsOn tasks.named('verifySpringAiAlignment')
+}
+
+tasks.register('verifySecurityOnlyDependencies') {
+    doLast {
+        Set<String> firstPartyArtifacts = configurations.securityOnlyRuntimeClasspath.incoming
+                .resolutionResult
+                .allComponents
+                .collect { component -> component.moduleVersion }
+                .findAll { module ->
+                    module != null && module.group == 'io.github.ultramancode'
+                }
+                .collect { module -> module.name }
+                .toSet()
+        Set<String> expectedArtifacts = Set.of(
+                'spring-ai-privacy-guardrails-spring-security',
+                'spring-ai-privacy-guardrails-spring-security-spring-boot-starter'
+        )
+        if (firstPartyArtifacts != expectedArtifacts) {
+            throw new GradleException(
+                    "Expected only Security artifacts but resolved ${firstPartyArtifacts}"
+            )
+        }
+    }
+}
+
+tasks.register('securityOnlyRun', JavaExec) {
+    dependsOn tasks.named('securityOnlyClasses')
+    dependsOn tasks.named('verifySecurityOnlyDependencies')
+    dependsOn tasks.named('verifySpringAiAlignment')
+    classpath = sourceSets.securityOnly.runtimeClasspath
+    mainClass = 'example.SecurityOnlyPublishedArtifactConsumer'
 }

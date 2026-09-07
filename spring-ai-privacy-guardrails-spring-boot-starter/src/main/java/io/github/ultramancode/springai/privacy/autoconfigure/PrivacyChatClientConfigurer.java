@@ -1,30 +1,35 @@
 package io.github.ultramancode.springai.privacy.autoconfigure;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
+import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
+import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.WeakHashMap;
+import java.util.function.IntFunction;
 import java.util.function.UnaryOperator;
 
 /**
  * Applies the starter-managed privacy boundary to a {@link ChatClient.Builder}
  * explicitly selected by the application.
  *
- * <p>The configured advisors are a fixed bundle. Applications may select which
- * builders receive the bundle, but cannot use this API to omit an individual
- * mandatory boundary advisor or change its order. Output protection is included
- * only when {@code spring.ai.privacy.output.enabled=true}.</p>
+ * <p>The default entry point uses the standard tool order. The order-aware entry
+ * point positions the complete boundary around a selected tool order and checks
+ * the actual request chain. Neither entry point omits mandatory privacy advisors.
+ * Output protection is included only when {@code spring.ai.privacy.output.enabled=true}.</p>
  */
 public final class PrivacyChatClientConfigurer
-        implements UnaryOperator<ChatClient.Builder> {
+        implements UnaryOperator<ChatClient.Builder>, IntFunction<UnaryOperator<ChatClient.Builder>> {
 
-    private final List<Advisor> advisors;
+    private final IntFunction<List<Advisor>> advisorFactory;
     private final WeakHashMap<ChatClient.Builder, Boolean> configuredBuilders = new WeakHashMap<>();
 
-    PrivacyChatClientConfigurer(List<Advisor> advisors) {
-        this.advisors = List.copyOf(Objects.requireNonNull(advisors, "advisors must not be null"));
+    PrivacyChatClientConfigurer(IntFunction<List<Advisor>> advisorFactory) {
+        this.advisorFactory = Objects.requireNonNull(advisorFactory, "advisorFactory must not be null");
     }
 
     /**
@@ -35,6 +40,42 @@ public final class PrivacyChatClientConfigurer
      * @throws IllegalStateException when the same builder is configured more than once
      */
     public ChatClient.Builder configure(ChatClient.Builder builder) {
+        return configure(builder, this.advisorFactory.apply(ToolCallingAdvisor.DEFAULT_ORDER));
+    }
+
+    /**
+     * Prepares a complete privacy boundary for the given tool order. Each application
+     * creates fresh advisors; the tool advisor and application advisors keep their orders.
+     * The input and terminal model boundaries retain their default positions.
+     * @param toolOrder the order of the tool advisor that will be registered on the client
+     * @return a configurer that validates the actual call and stream advisor layouts
+     * @throws IllegalArgumentException when the relative boundaries cannot fit between input and model processing
+     */
+    public UnaryOperator<ChatClient.Builder> forToolCallingAdvisorOrder(int toolOrder) {
+        // Reserve output=T-2 and context=T-1 after input, and validation=T+1
+        // before the model boundary. Check in long arithmetic before narrowing.
+        long minimum = (long) PrivacyInputAdvisor.DEFAULT_ORDER + 3;
+        long maximum = (long) PrivacyModelBoundaryAdvisor.DEFAULT_ORDER - 2;
+        if (toolOrder < minimum || toolOrder > maximum) {
+            throw new IllegalArgumentException("Privacy tool advisor order must be between "
+                    + minimum + " and " + maximum + " to fit the input and model boundaries; received " + toolOrder);
+        }
+        return builder -> {
+            List<Advisor> boundaries = List.copyOf(this.advisorFactory.apply(toolOrder));
+            List<Advisor> advisors = new ArrayList<>(boundaries.size() + 1);
+            advisors.add(new PrivacyAdvisorChainValidator(boundaries, toolOrder));
+            advisors.addAll(boundaries);
+            return configure(builder, List.copyOf(advisors));
+        };
+    }
+
+    /** JDK-only composition contract used by optional integrations. */
+    @Override
+    public UnaryOperator<ChatClient.Builder> apply(int toolOrder) {
+        return forToolCallingAdvisorOrder(toolOrder);
+    }
+
+    private ChatClient.Builder configure(ChatClient.Builder builder, List<Advisor> advisors) {
         ChatClient.Builder selectedBuilder = Objects.requireNonNull(builder, "builder must not be null");
         synchronized (this.configuredBuilders) {
             if (this.configuredBuilders.containsKey(selectedBuilder)) {
@@ -42,7 +83,7 @@ public final class PrivacyChatClientConfigurer
                         "PrivacyChatClientConfigurer cannot configure the same ChatClient.Builder more than once"
                 );
             }
-            selectedBuilder.defaultAdvisors(this.advisors);
+            selectedBuilder.defaultAdvisors(advisors);
             this.configuredBuilders.put(selectedBuilder, Boolean.TRUE);
         }
         return selectedBuilder;

@@ -9,13 +9,11 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
-import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
 import io.github.ultramancode.springai.privacy.test.ToolCallSnapshot;
-import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
@@ -97,7 +95,7 @@ public class PublishedArtifactConsumer {
         context.getBean(PrivacyGuardrailsAutoConfiguration.class);
         context.getBean(RegexPiiAnalyzer.class);
         context.getBean(PrivacyChatClientConfigurer.class);
-        context.getBean(PrivacySecurityChatClientConfigurer.class);
+        context.getBean(PrivacySecurityChatClientFactory.class);
         PrivacyService privacyService = context.getBean(PrivacyService.class);
 
         String tokenized;
@@ -122,10 +120,10 @@ public class PublishedArtifactConsumer {
         SpringSecurityToolBoundary toolBoundary = context.getBean(
                 SpringSecurityToolBoundary.class
         );
-        ToolCallingManager authorizationAwareManager = context.getBean(ToolCallingManager.class);
-        if (authorizationAwareManager != toolBoundary.toolCallingManager()) {
+        ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
+        if (upstreamManager == toolBoundary.toolCallingManager()) {
             throw new IllegalStateException(
-                    "Published Security starter did not select its authorization-aware manager"
+                    "Published Security starter replaced the shared application manager"
             );
         }
         PublishedAuthorizationChecks authorizationChecks = context.getBean(
@@ -139,16 +137,10 @@ public class PublishedArtifactConsumer {
                     toolCallbackFactory
             );
             ChatModel model = probe.wrapModel(
-                    new PublishedToolLoopModel(authorizationAwareManager)
+                    new PublishedToolLoopModel(upstreamManager)
             );
-            ChatClient.Builder builder = ChatClient.builder(
-                    model,
-                    ObservationRegistry.NOOP,
-                    null,
-                    null,
-                    ToolCallingAdvisor.builder().toolCallingManager(authorizationAwareManager)
-            ).defaultTools(protectedTool, deniedTool);
-            context.getBean(PrivacySecurityChatClientConfigurer.class).configure(builder);
+            ChatClient.Builder builder = context.getBean(PrivacySecurityChatClientFactory.class)
+                    .builder(model).defaultTools(protectedTool, deniedTool);
             SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
             securityContext.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
                     "published-consumer",

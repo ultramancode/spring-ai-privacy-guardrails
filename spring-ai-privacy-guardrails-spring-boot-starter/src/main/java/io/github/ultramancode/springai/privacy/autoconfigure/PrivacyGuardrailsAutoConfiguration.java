@@ -14,6 +14,7 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
+import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
@@ -205,30 +206,38 @@ public class PrivacyGuardrailsAutoConfiguration {
         PrivacyGuardrailsProperties.Output outputProperties = properties.getOutput();
         PrivacyResponseInspectionLimits responseInspectionLimits =
                 properties.getResponseInspection().limits();
-        List<Advisor> advisors = new ArrayList<>();
-        advisors.add(new PrivacyLifecycleAdvisor(privacyService));
-        advisors.add(new PrivacyInputAdvisor(privacyService));
-        if (outputProperties.isEnabled()) {
-            advisors.add(new PrivacyOutputAdvisor(
+        // Capture settings once, but create a separate boundary for each selected builder.
+        boolean outputEnabled = outputProperties.isEnabled();
+        PrivacyOutputAction outputAction = outputProperties.getAction();
+        String outputBlockMessage = outputProperties.getBlockExceptionMessage();
+        return new PrivacyChatClientConfigurer(toolOrder -> {
+            List<Advisor> advisors = new ArrayList<>();
+            advisors.add(new PrivacyLifecycleAdvisor(privacyService));
+            advisors.add(new PrivacyInputAdvisor(privacyService));
+            if (outputEnabled) {
+                advisors.add(new PrivacyOutputAdvisor(
+                        privacyService,
+                        outputAction,
+                        outputBlockMessage,
+                        responseInspectionLimits,
+                        configuredEnforcementObserver,
+                        toolOrder - 2
+                ));
+            }
+            advisors.add(new PrivacyToolContextAdvisor(privacyService, toolCallbackFactory, toolOrder - 1));
+            advisors.add(new PrivacyToolCallValidationAdvisor(
                     privacyService,
-                    outputProperties.getAction(),
-                    outputProperties.getBlockExceptionMessage(),
                     responseInspectionLimits,
-                    configuredEnforcementObserver
+                    toolOrder + 1
             ));
-        }
-        advisors.add(new PrivacyToolContextAdvisor(privacyService, toolCallbackFactory));
-        advisors.add(new PrivacyToolCallValidationAdvisor(
-                privacyService,
-                responseInspectionLimits
-        ));
-        advisors.add(new PrivacyModelBoundaryAdvisor(
-                privacyService,
-                toolCallbackFactory,
-                configuredEnforcementObserver,
-                PrivacyModelBoundaryAdvisor.DEFAULT_ORDER
-        ));
-        return new PrivacyChatClientConfigurer(advisors);
+            advisors.add(new PrivacyModelBoundaryAdvisor(
+                    privacyService,
+                    toolCallbackFactory,
+                    configuredEnforcementObserver,
+                    PrivacyModelBoundaryAdvisor.DEFAULT_ORDER
+            ));
+            return List.copyOf(advisors);
+        });
     }
 
     @Bean

@@ -34,6 +34,7 @@ final class PrivacyDemoCrmTool implements ToolCallback {
     private boolean lookupSucceededWithRestoredCustomerId;
     private int deniedRawValueCount;
     private int allowedRawValueCount;
+    private int calls;
 
     PrivacyDemoCrmTool(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -46,6 +47,7 @@ final class PrivacyDemoCrmTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
+        this.calls++;
         CrmLookupArguments arguments = this.objectMapper.readValue(toolInput, CrmLookupArguments.class);
         this.deniedRawValueCount = countContainedValues(toolInput, DENIED_VALUES);
         this.allowedRawValueCount = countContainedValues(toolInput, ALLOWED_VALUES);
@@ -79,6 +81,10 @@ final class PrivacyDemoCrmTool implements ToolCallback {
 
     int allowedRawValueCount() {
         return this.allowedRawValueCount;
+    }
+
+    int calls() {
+        return this.calls;
     }
 
     private static int countContainedValues(String text, List<String> values) {

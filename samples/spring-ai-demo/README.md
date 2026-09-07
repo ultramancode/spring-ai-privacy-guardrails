@@ -29,7 +29,7 @@ The demo binds only to `http://127.0.0.1:8080`.
 ### Privacy Boundary Inspector
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
-Inspector**. Use the `Local Tool | RAG | MCP` selector to run the demos from one
+Inspector**. Use the `Local Tool | RAG | MCP | Security` selector to run the demos from one
 page. Each view displays results returned by its demo endpoints.
 
 <p align="center">
@@ -43,6 +43,7 @@ page. Each view displays results returned by its demo endpoints.
 | `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Check the localized example input, detection positions (`detectedSpans`), tokens sent to the model, restoration of only the customer ID for the tool, and protection of the tool result. |
 | `RAG` | `GET /demo/rag` | Compare the original retrieved document (`retrievedDocument`) with the complete protected prompt sent to the model (`modelVisibleContext`). |
 | `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | Check that a local Streamable HTTP MCP call also protects model input, restores only the customer ID for the tool, and protects the tool result. |
+| `Security` | `GET /demo/security-tool-boundary` | Backend-recorded definition and execution decisions for the same customer lookup request as a general employee and a customer-support employee, callback counts, and privacy evidence from the allowed run. |
 
 The `EN | 한국어` toggle sends `Accept-Language: en` or `ko` with these
 requests and reruns the selected flow. This changes the UI labels, example
@@ -50,6 +51,15 @@ input, RAG query and prompt template, and CRM result text.
 
 These runtime demonstrations complement the reproducible automated coverage in
 the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
+
+### Inspector Rendering Tests
+
+The Security view's rendering tests use Node.js's built-in test runner. They run
+separately from Gradle and require no npm packages.
+
+```bash
+node --test samples/spring-ai-demo/src/test/javascript/security-evidence.test.cjs
+```
 
 ## ChatClient With The Explicit Privacy Configurer
 
@@ -161,11 +171,32 @@ showing that this request leaked a session.
 
 Set the PII types each tool may receive as original values in
 `spring.ai.privacy.tools.disclosures`. The sample wraps tools with
-`PrivacyToolCallbackFactory` and applies privacy protection to the client with
-`PrivacyChatClientConfigurer`.
+`PrivacyToolCallbackFactory` and creates the client with
+`PrivacySecurityChatClientFactory` to apply both privacy protection and tool
+authorization.
 
 The `/demo/tool-loop` endpoint calls a local CRM tool included in the sample,
 so no external CRM service is required.
+
+## Spring Security Tool Boundary Demo
+
+```bash
+curl "http://127.0.0.1:8080/demo/security-tool-boundary" \
+  -H 'Accept-Language: en'
+```
+
+This endpoint runs the same deterministic customer lookup request twice. For a
+general employee (`ROLE_EMPLOYEE`), `customerLookup` is absent from the
+model-visible definitions and the forced request is denied before the callback
+runs. For a customer-support employee (`ROLE_CUSTOMER_SUPPORT`), the tool is
+exposed and executed once; the existing disclosure policy restores only
+`CUSTOMER_ID`, and the result is protected again before model re-entry. The
+sample installs a fixed in-process authorization policy and requires no login,
+token issuer, external model, or external service.
+
+<p align="center">
+  <img src="../../docs/images/privacy-boundary-inspector-security.png" alt="Security Inspector comparing a blocked general employee with an authorized customer-support employee" width="960">
+</p>
 
 ## Streamable HTTP MCP Tool Loop Demo
 

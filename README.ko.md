@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: d1b9b3bd0b19291db03c4e057ccf20919bf2d29514c4e2d071aa1897c03c5d92 -->
+<!-- i18n-source-sha256: 92408a30a30fc719b05f21f4c8da13e25dd4a4a4f90d7eab5f7fbd7227633085 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -90,35 +90,56 @@ Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 
 단계별 설정 방법은 [시작하기](docs/ko/getting-started.md)를 참고하세요.
 
-다음 예제는 `ChatModel`과 `ChatClient.Builder`가 이미 구성된 Spring AI 애플리케이션에
-개인정보 보호 경계를 추가합니다.
+다음 내용은 `ChatModel`과 `ChatClient.Builder`가 이미 구성된 Spring AI 애플리케이션에서
+선택할 수 있는 보호 기능을 설명합니다.
+
+### PII 분석기 선택
+
+PII 분석기는 **무엇이 민감한 정보인지** 판별합니다. Privacy Guardrails는 탐지한 원문
+값이 모델, RAG, 메모리, 도구, MCP 및 출력 경계 중 **어디까지 전달될 수 있는지**
+제어합니다.
+
+| 분석기 | 적합한 경우 |
+| --- | --- |
+| Microsoft Presidio | 자연어에 포함된 다양한 PII 유형을 탐지할 때 |
+| 내장 Regex 또는 사용자 정의 `PiiAnalyzer` | 형식이 일정한 애플리케이션 고유 식별자를 탐지할 때 |
+| Apache OpenNLP | 애플리케이션이 보유한 호환 NER 모델을 JVM 안에서 실행할 때 |
+
+다양한 PII 유형을 탐지하려면 Microsoft Presidio를 기본 선택지로 권장합니다. 형식이
+일정한 애플리케이션 고유 식별자에는 내장 Regex 분석기나 사용자 정의 `PiiAnalyzer`를
+사용할 수 있습니다.
+
+Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니다. OpenNLP는 JVM
+안에서 실행되며, 애플리케이션이 호환되는 모델을 제공해야 합니다.
 
 ### 스타터 선택
 
-사용할 분석기에 맞는 스타터를 선택하세요.
+애플리케이션에 필요한 기능에 맞는 스타터를 선택하세요.
 
-| 사용 사례 | 추가할 스타터 |
+| 필요한 기능 | 추가할 스타터 |
 | --- | --- |
-| 다양한 PII 유형 탐지 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` (권장) |
 | 정규식(Regex) 규칙 또는 사용자 정의 분석기 사용 | `spring-ai-privacy-guardrails-spring-boot-starter` |
-| 호환되는 OpenNLP 모델을 보유한 JVM 전용 환경 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
+| Microsoft Presidio 연동 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
+| Apache OpenNLP 연동 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
+| 사용자별 도구 공개·실행 권한 검사 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
 
-다양한 PII 유형 탐지가 필요한 경우 Presidio를 기본 선택지로 권장합니다. 정규식으로
-정의한 애플리케이션 고유 형식은 내장 Regex 분석기를 사용할 수 있습니다.
+Presidio와 OpenNLP 스타터에는 기본 Privacy Guardrails 스타터가 이미 포함되어 있으므로
+별도로 추가하지 마세요. 도구 권한 검사만 사용하려면 Spring Security 스타터만 추가하고,
+개인정보 보호도 필요하면 개인정보 보호 스타터를 함께 추가하세요.
 
-Presidio 스타터에는 외부 Presidio Analyzer 서비스가 필요합니다. Presidio와 OpenNLP
-스타터에는 Privacy Guardrails 기본 스타터가 이미 포함되어 있으므로 이를 별도로 추가하지
-마세요. 스타터 의존성을 추가하는 것만으로는 개인정보 보호 기능이나 분석기가 자동으로
-활성화되지 않습니다.
+스타터 의존성을 추가하는 것만으로는 보호 기능이 적용되지 않습니다. 아래 예제와 각
+가이드를 참고해 필요한 설정을 완료하세요.
 
 ### 의존성과 기본 설정
 
-아래 예제는 버전 `0.2.1`을 사용합니다. 외부 분석 서비스 없이 시작하려면 기본
-스타터와 애플리케이션 전용 정규식 규칙을 사용할 수 있습니다.
+아래 예제는 버전 `0.3.0`을 사용합니다.
+
+외부 분석 서비스 없이 시작하려면 기본 스타터와 애플리케이션 전용 정규식 규칙을
+사용할 수 있습니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
 }
 ```
 
@@ -198,9 +219,33 @@ ToolCallback protectedCustomerLookup =
 MCP처럼 실행 중에 도구 목록이 달라지는 `ToolCallbackProvider`는 `wrapProvider(...)`로
 감쌀 수 있고, 여러 `ToolCallbackProvider`는 `wrapProviders(...)`로 결합할 수 있습니다.
 
-사용자 정의 `ToolCallingManager`나 `ToolCallbackResolver`를 사용하는 별도 실행 경로는
-애플리케이션이 보호해야 합니다. 자세한 규칙은
+Spring AI의 표준 도구 등록 경로가 아닌 사용자 정의 실행 경로에는 별도의 보호 구성이
+필요합니다. 자세한 규칙은
 [도구별 원문 공개](docs/ko/configuration.md#도구별-원문-공개)를 참고하세요.
+
+## Spring Security 도구 권한
+
+`0.3.0`부터 Spring Security 스타터를 별도로 추가해 권한 없는 도구 명세(이름·설명·입력
+형식)를 모델에 노출하지 않고, 허용된 개인정보 원문을 복원하기 전에 도구 실행 권한을
+다시 확인할 수 있습니다.
+
+```gradle
+dependencies {
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0"
+}
+```
+
+Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 수 있습니다.
+애플리케이션에서 도구 권한 정책을 제공하고, 도구를 사용하는 모든 `ChatClient`에 권한
+검사를 적용해야 합니다. 사용자 인증은 애플리케이션이 담당합니다.
+
+개인정보 보호와 함께 사용해도 도구 권한과 개인정보 원문 공개 범위는 서로 다른 정책으로
+관리합니다. 권한 정책은 현재 사용자에게 공개하고 실행할 도구를 결정하고, 원문 공개
+정책은 권한 검사를 통과한 도구에 어떤 개인정보 원문 값을 제공할지 결정합니다. 함께
+사용하는 Privacy Guardrails 모듈의 버전은 모두 같아야 합니다.
+
+전체 설정 방법과 필요한 API 및 지원 범위는
+[Spring Security 도구 권한](docs/ko/security.md)을 참고하세요.
 
 ## 핵심 보호 동작
 
@@ -241,6 +286,8 @@ MCP처럼 실행 중에 도구 목록이 달라지는 `ToolCallbackProvider`는 
 | `spring-ai-privacy-guardrails-spring-ai` | Advisor와 도구별 원문 공개 경계 |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP 어댑터 |
 | `spring-ai-privacy-guardrails-opennlp` | 사용자 제공 OpenNLP 모델용 JVM 전용 어댑터 |
+| `spring-ai-privacy-guardrails-spring-security` | Spring AI 도구를 위한 Spring Security 권한 부여 경계 |
+| `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Spring Security 도구 권한 경계를 자동 구성하는 스타터 |
 | `spring-ai-privacy-guardrails-test` | 선택형 모델·도구 프로브와 AssertJ 검증 API |
 
 모듈의 책임과 의존성 구조는 [아키텍처](docs/ko/architecture.md)를 참고하세요. 저장소 전용
@@ -254,6 +301,7 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 | Java | 17 |
 | Spring AI | 2.0.1 |
 | Spring Boot | 4.1.1 |
+| Spring Security | 7.1.1 |
 | Presidio Analyzer | 2.2.364 |
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
@@ -270,6 +318,8 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 
 - [시작하기](docs/ko/getting-started.md): 단계별 스타터 선택과 개인정보 보호 경계 설정
 - [설정과 사용법](docs/ko/configuration.md): 스타터, 분석기, 도구와 출력 정책
+- [Spring Security 도구 권한](docs/ko/security.md): 도구 권한 정책, 고급 도구
+  구성, Tool Search와 보안 컨텍스트 전달
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역
 - [평가와 벤치마크](docs/ko/evaluation.md): 검증 항목과 해석 범위
@@ -285,7 +335,7 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 
 애플리케이션은 다음 영역을 별도로 관리해야 합니다.
 
-- 인증·인가 및 로깅 정책
+- 인증, 권한 정책 설계, 애플리케이션 자체 실행 경로와 로깅 정책
 - 저장된 `ChatMemory`·벡터 저장소·데이터베이스의 접근 제어 및 데이터 보존 정책
 - 운영 환경에 맞는 분석기 품질 검증과 조정
 - 라이브러리가 명시적으로 지원하는 추론 텍스트 외의 응답 메타데이터와 비텍스트 미디어

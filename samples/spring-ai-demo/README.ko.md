@@ -3,12 +3,12 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: c2019204d0aa1a19365683cddd1b060b830be000638d5188c733117e578c03b9 -->
+<!-- i18n-source-sha256: 0fb42bf284bcd00484b83d63ed58b23f8c6401c21f18833364bb5f3d434b09ce -->
 
 이 실행 가능한 샘플은 외부 LLM API 키 없이 항상 같은 결과를 반환하는 로컬
 `ChatModel`로 개인정보 보호 Advisor 경로를 검증합니다. 샘플에서 보호할
-`ChatClient.Builder`에 스타터의 `PrivacyChatClientConfigurer`를 명시적으로
-적용합니다.
+`ChatClient.Builder`에 스타터의 개인정보 보호 configurer를 적용하고, 도구를 사용하는
+클라이언트에는 통합 `PrivacySecurityChatClientConfigurer`를 적용합니다.
 
 ```text
 사용자 원문 입력 -> 모델 프롬프트 토큰화 -> 기능 범위가 제한된 도구 공개
@@ -32,7 +32,7 @@
 ### Privacy Boundary Inspector
 
 브라우저에서 이 주소를 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
-있습니다. `Local Tool | RAG | MCP` 선택기로 한 페이지에서 기존 런타임 데모를
+있습니다. `Local Tool | RAG | MCP | Security` 선택기로 한 페이지에서 기존 런타임 데모를
 실행할 수 있습니다. `EN | 한국어` 토글은 선택한 로케일을 데모 엔드포인트에 전달하고
 선택한 고정 시나리오를 다시 실행하므로 UI 문구, 예제 입력, 런타임 결과가
 일치합니다. 각 화면은 데모 엔드포인트가 반환한 근거만 렌더링하며, Inspector는 토큰
@@ -49,6 +49,7 @@
 | `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | 언어별 고정 입력과 `detectedSpans`, 불투명 토큰 상태의 모델 입력 및 도구 인자, 범위가 제한된 `CUSTOMER_ID` 복원, 다시 보호된 도구 결과 |
 | `RAG` | `GET /demo/rag` | 원문 `retrievedDocument`, 실제 `modelVisibleContext`, 두 단계의 원문 및 토큰화 개인정보를 비교하는 백엔드 불리언 필드 |
 | `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | 실제 로컬 Streamable HTTP MCP 실행 모드, 보호된 모델 및 도구 호출 값, 범위가 제한된 공개, 결과 재보호 |
+| `Security` | `GET /demo/security-tool-boundary` | 동일한 고객정보 조회 요청을 일반 직원과 고객지원 담당자로 실행해 백엔드가 기록한 정의·실행 권한 판정, 도구 실행 횟수, 허용된 실행의 개인정보 보호 근거 |
 
 Inspector는 이 요청들에 `Accept-Language: en` 또는 `ko`를 보내고 선택한 흐름을 다시
 실행합니다. 백엔드 로케일은 고정 입력, RAG 질의와 프롬프트 템플릿, CRM 결과 문구를
@@ -58,6 +59,15 @@ Inspector는 이 요청들에 `Accept-Language: en` 또는 `ko`를 보내고 선
 이 런타임 데모에 대응하는 재현 가능한 자동 검증 범위는
 [개인정보 보호 경계 검증 매트릭스](../../docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
 참고하세요.
+
+### Inspector 화면 표시 테스트
+
+Security 화면의 표시 로직은 Node.js 내장 테스트 러너로 검증합니다. Gradle과 별도로
+실행하며, npm 패키지를 설치할 필요는 없습니다.
+
+```bash
+node --test samples/spring-ai-demo/src/test/javascript/security-evidence.test.cjs
+```
 
 ## 명시적 Privacy Configurer를 사용하는 ChatClient
 
@@ -163,9 +173,28 @@ curl "http://127.0.0.1:8080/demo/tool-loop" \
 
 공개 범위는 `spring.ai.privacy.tools.disclosures`에서 가져옵니다. 데모는 별도 정책을
 만들지 않고 자동 구성된 `PrivacyToolCallbackFactory`와 명시적
-`PrivacyChatClientConfigurer`를 사용합니다.
+`PrivacySecurityChatClientConfigurer`를 사용합니다.
 
 `/demo/tool-loop` 엔드포인트는 프로세스 내부 CRM 구현체를 사용합니다.
+
+## Spring Security 도구 권한 경계 데모
+
+```bash
+curl "http://127.0.0.1:8080/demo/security-tool-boundary" \
+  -H 'Accept-Language: ko'
+```
+
+이 엔드포인트는 동일한 예제 입력으로 고객정보 조회를 두 번 실행합니다. 일반 직원
+(`ROLE_EMPLOYEE`)의 요청에서는 `customerLookup`을 모델에 제공하는 도구 목록에서
+제외하며, 모델이 이 도구의 호출을 요청해도 콜백 실행 전에 거부합니다. 고객지원 담당자
+(`ROLE_CUSTOMER_SUPPORT`)의 요청에서는 도구를 공개하고 한 번 실행합니다. 기존 원문 공개
+정책에 따라 `CUSTOMER_ID`만 복원하며, 결과는 모델에 다시 전달하기 전에 보호합니다. 샘플은
+프로세스 내부의 고정 권한 정책을 사용하므로 로그인, 토큰 발급 서비스, 외부 모델 또는 외부
+서비스가 필요하지 않습니다.
+
+<p align="center">
+  <img src="../../docs/images/privacy-boundary-inspector-security-ko.png" alt="일반 직원의 도구 호출 거부와 고객지원 담당자의 도구 호출 허용을 비교하는 Security Inspector" width="960">
+</p>
 
 ## Streamable HTTP MCP 도구 루프 데모
 

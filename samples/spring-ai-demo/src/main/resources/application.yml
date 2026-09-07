@@ -8,6 +8,8 @@ spring:
   ai:
     privacy:
       enabled: true
+      security:
+        enabled: true
       output:
         enabled: true
         action: tokenize

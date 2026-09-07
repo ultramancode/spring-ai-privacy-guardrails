@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.core.PiiTokenizationResult;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -109,8 +110,37 @@ public class PrivacyDemoController {
         return toolLoopResponse("actual-streamable-http-mcp-tool-loop", toolLoopResult);
     }
 
+    @GetMapping("/security-tool-boundary")
+    public SecurityBoundaryResponse securityToolBoundary(Locale locale) {
+        PrivacyDemoLocale demoLocale = PrivacyDemoLocale.from(locale);
+        String input = PrivacyDemoScenario.forLocale(demoLocale).input();
+        PrivacyDemoToolLoop.SecurityRun generalEmployee = this.toolLoop.runSecurity(
+                input,
+                demoLocale,
+                PrivacyDemoSecurityPolicy.Role.GENERAL_EMPLOYEE
+        );
+        PrivacyDemoToolLoop.SecurityRun customerSupport = this.toolLoop.runSecurity(
+                input,
+                demoLocale,
+                PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT
+        );
+        return new SecurityBoundaryResponse(
+                "actual-spring-security-tool-boundary",
+                securityRequestSummary(demoLocale),
+                SecurityRoleEvidence.from(generalEmployee),
+                SecurityRoleEvidence.from(customerSupport),
+                this.privacyService.activeSessionCount()
+        );
+    }
+
     private static PrivacyDemoScenario scenarioFor(Locale locale) {
         return PrivacyDemoScenario.forLocale(locale);
+    }
+
+    private static String securityRequestSummary(PrivacyDemoLocale locale) {
+        return locale == PrivacyDemoLocale.KO
+                ? "고객정보를 조회해 주세요."
+                : "Look up the customer information.";
     }
 
     private ToolLoopResponse toolLoopResponse(
@@ -206,6 +236,59 @@ public class PrivacyDemoController {
             String finalResponse,
             int activeSessionsAfterCall
     ) {
+    }
+
+    public record SecurityBoundaryResponse(
+            String mode,
+            String requestSummary,
+            SecurityRoleEvidence generalEmployee,
+            SecurityRoleEvidence customerSupport,
+            int activeSessionsAfterCall
+    ) {
+    }
+
+    public record SecurityRoleEvidence(
+            String role,
+            List<String> exposedToolNames,
+            List<AuthorizationCheck> authorizationChecks,
+            boolean modelRequestedTool,
+            boolean toolCallDenied,
+            String denialType,
+            int callbackInvocations,
+            boolean deniedCallStoppedBeforeCallback,
+            boolean toolReceivedOnlyAllowedOriginals,
+            boolean toolResultRetokenizedBeforeModel,
+            String finalResponse
+    ) {
+
+        private static SecurityRoleEvidence from(PrivacyDemoToolLoop.SecurityRun run) {
+            return new SecurityRoleEvidence(
+                    run.role(),
+                    run.exposedToolNames(),
+                    run.authorizationChecks().stream().map(AuthorizationCheck::from).toList(),
+                    run.modelRequestedTool(),
+                    run.toolCallDenied(),
+                    run.denialType(),
+                    run.callbackInvocations(),
+                    run.deniedCallStoppedBeforeCallback(),
+                    run.toolReceivedOnlyAllowedOriginals(),
+                    run.toolResultRetokenizedBeforeModel(),
+                    run.finalResponse()
+            );
+        }
+    }
+
+    public record AuthorizationCheck(
+            String toolName,
+            ToolAuthorizationPhase phase,
+            boolean granted
+    ) {
+
+        private static AuthorizationCheck from(
+                PrivacyDemoSecurityPolicy.AuthorizationCheck check
+        ) {
+            return new AuthorizationCheck(check.toolName(), check.phase(), check.granted());
+        }
     }
 
     public record BoundaryEvidence(

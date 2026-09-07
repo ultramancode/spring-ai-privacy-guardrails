@@ -223,7 +223,7 @@ Spring AI의 표준 도구 등록 경로가 아닌 사용자 정의 실행 경�
 필요합니다. 자세한 규칙은
 [도구별 원문 공개](docs/ko/configuration.md#도구별-원문-공개)를 참고하세요.
 
-## Spring Security 도구 권한 부여
+## Spring Security 도구 권한
 
 `0.3.0`부터 Spring Security 스타터를 별도로 추가해 권한 없는 도구 명세(이름·설명·입력
 형식)를 모델에 노출하지 않고, 허용된 개인정보 원문을 복원하기 전에 도구 실행 권한을
@@ -245,7 +245,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 사용하는 Privacy Guardrails 모듈의 버전은 모두 같아야 합니다.
 
 전체 설정 방법과 필요한 API 및 지원 범위는
-[Spring Security 도구 권한 부여](docs/ko/security.md)를 참고하세요.
+[Spring Security 도구 권한](docs/ko/security.md)을 참고하세요.
 
 ## 핵심 보호 동작
 
@@ -318,7 +318,7 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 
 - [시작하기](docs/ko/getting-started.md): 단계별 스타터 선택과 개인정보 보호 경계 설정
 - [설정과 사용법](docs/ko/configuration.md): 스타터, 분석기, 도구와 출력 정책
-- [Spring Security 도구 권한 부여](docs/ko/security.md): 도구 권한 정책, 고급 도구
+- [Spring Security 도구 권한](docs/ko/security.md): 도구 권한 정책, 고급 도구
   구성, Tool Search와 보안 컨텍스트 전달
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역

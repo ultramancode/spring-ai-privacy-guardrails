@@ -255,7 +255,7 @@ Spring Boot 스타터는 Spring AI의 기본 `ToolCallingManager`에 권한 검�
 제공해야 합니다.
 
 설정 방법, 보안 컨텍스트 전달과 지원 경로의 자세한 내용은
-[Spring Security 도구 권한 부여](security.md)를 참고하세요.
+[Spring Security 도구 권한](security.md)을 참고하세요.
 
 ## 오류와 진단
 

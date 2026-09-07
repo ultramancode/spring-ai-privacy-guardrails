@@ -51,7 +51,7 @@ spring:
 `spring.ai.privacy.security.enabled=true`가 필요합니다. 개인정보 보호와 함께 사용하려면
 개인정보 보호 스타터를 추가하고 `spring.ai.privacy.enabled=true`도 활성화하세요. 함께
 사용하는 모든 Privacy Guardrails 모듈의 버전은 `0.3.0`으로 맞춰야 합니다. 전체
-설정은 [Spring Security 도구 권한 부여](security.md)를 참고하세요.
+설정은 [Spring Security 도구 권한](security.md)을 참고하세요.
 
 ## ChatClient에 보호 적용
 
@@ -525,7 +525,7 @@ Spring Security 연동을 활성화하면 원문 공개 정책을 적용하기 �
 확인합니다. 권한 정책은 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한
 도구를 결정합니다. `tools.disclosures`는 권한 검사를 통과한 도구에 어떤 개인정보
 유형의 값을 원문으로 제공할지 결정합니다. 자세한 내용은
-[Spring Security 도구 권한 부여](security.md#보장-범위)를 참고하세요.
+[Spring Security 도구 권한](security.md#보장-범위)을 참고하세요.
 
 이 기능은 Spring AI의 표준 `ToolCallback`과 `ToolCallbackProvider` 등록 경로를
 대상으로 합니다. 사용자 정의 도구 실행 경로는 자동 개인정보 보호 경계에 포함되지

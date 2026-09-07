@@ -1,40 +1,38 @@
-# Spring Security 도구 권한 부여
+# Spring Security 도구 권한
 
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: d36b89eca9b33d497f5521b974c534a0cf86d870076f600def7192ea801b79e2 -->
+<!-- i18n-source-sha256: 972ed48c0446bc994555a37ad8bf2853ba843cff6c3b4bc861bae3917d9a03d0 -->
 
-필요한 경우 Spring Security 연동 모듈을 추가해 현재 사용자(`Authentication`)의 권한에 따라
-모델에 공개할 Spring AI 도구와 실행 가능한 도구를 제어할 수 있습니다. 도구 권한 검사만
-사용할 수도 있고 개인정보 보호와 함께 사용할 수도 있습니다. 개인정보 탐지와 도구별
-원문 공개는 개인정보 보호 경계가 담당합니다.
+Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
+도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
+보호 기능과 함께 적용할 수 있습니다.
 
-현재 사용자의 권한에 따라 도구 목록과 실행 여부를 달리해야 할 때 사용하세요. 사용자별
-도구 권한 부여가 필요하지 않은 애플리케이션은 Spring Security를 추가하지 않고 기존처럼
-`PrivacyChatClientConfigurer`를 사용할 수 있습니다.
+두 기능을 함께 사용하면 Spring Security는 도구의 공개·실행 권한을 확인하고, 개인정보
+보호 기능은 개인정보를 탐지해 각 도구에 전달할 원문의 범위를 제어합니다.
 
 ## 보장 범위
 
-지원 경로에서는 다음 시점에 권한을 확인합니다.
+이 연동을 적용한 도구 호출 경로에서는 다음 단계마다 권한을 확인합니다.
 
-| 확인 시점 | 동작 |
+| 단계 | 보장 |
 | --- | --- |
-| 모델 공개 | 모델에 도구 목록을 전달하기 전에 권한 정책을 확인합니다. 거부된 도구는 목록에서 제외합니다. |
-| 모델이 요청한 호출 | 모델이 숨겨진 도구 이름을 생성하거나 Spring AI의 이름 기반 조회가 해당 도구를 찾을 수 있어도, 모델에 공개하지 않은 도구는 거부합니다. |
-| 한 응답의 여러 호출 | 같은 응답에서 요청한 모든 도구의 권한을 확인한 뒤에야 첫 번째 콜백을 실행합니다. |
-| 콜백 호출 | 각 도구 콜백을 호출하기 직전에 다시 권한을 확인합니다. 개인정보 보호 경계도 구성했다면 허용된 개인정보 원문을 복원하기 전에 이 검사를 수행합니다. |
+| 도구 목록 제공 전 | 권한 정책을 확인하고, 허용되지 않은 도구는 모델에 제공할 목록에서 제외합니다. |
+| 모델의 도구 요청 시 | 모델이 목록에 없던 도구를 이름으로 요청하더라도 실행하지 않습니다. |
+| 여러 도구 요청 시 | 한 응답에서 여러 도구를 요청한 경우, 요청된 도구 전체의 권한을 확인한 후 실행을 시작합니다. |
+| 도구 실행 직전 | 각 도구의 권한을 다시 확인합니다. 개인정보 보호도 함께 적용했다면, 허용된 원문을 복원하기 전에 확인합니다. |
 
-두 경계를 함께 사용하면 도구 사용 권한과 개인정보 원문 공개 범위를 별도의 정책으로
-설정합니다.
+도구 권한과 개인정보 원문 공개 범위는 서로 독립적으로 설정합니다.
 
 - `AuthorizationManager<ToolAuthorizationContext>`는 현재 사용자의 권한에 따라 모델에
-  공개할 도구와 실행 가능한 도구를 결정합니다.
-- `tools.disclosures`로 구성하는 `ToolDisclosurePolicy`는 권한 검사를 통과한 도구에
-  어떤 개인정보 유형의 값을 원문으로 제공할지 결정합니다.
+  보여 줄 도구와 실행을 허용할 도구를 결정합니다.
+- `tools.disclosures`는 권한이 허용된 도구에 어떤 유형의 개인정보를 원문으로 전달할지
+  결정합니다.
 
-개인정보 보호 래퍼는 도구가 권한 검사를 통과한 뒤에만 허용된 원문 값을 복원합니다.
-도구 실행 권한을 허용해도 모든 개인정보 유형이 자동으로 공개되지는 않습니다.
+도구 실행 권한이 있어도 개인정보 원문이 자동으로 전달되지는 않습니다. 권한 정책이
+도구 실행을 허용하고 `tools.disclosures`에 해당 개인정보 유형을 설정한 경우에만 원문을
+전달합니다.
 
 ## Spring Boot 스타터 추가
 
@@ -58,11 +56,13 @@ dependencies {
 </dependency>
 ```
 
-Security 스타터는 기본 Privacy Guardrails 스타터와 독립적입니다. 애플리케이션의 기존
-Spring Security 설정으로 생성된 `Authentication`을 사용하며, 보호할 요청에 도구 콜백이
-포함되어 있다면 요청 시작 시 해당 인증 정보를 사용할 수 있어야 합니다.
+Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 수 있습니다. 도구 권한
+검사는 애플리케이션의 기존 Spring Security 구성이 제공하는 `Authentication`을 사용하므로,
+도구를 사용하는 요청이 시작될 때 해당 인증 정보를 사용할 수 있어야 합니다.
 
-도구 권한 검사만 사용할 때는 다음 설정을 활성화합니다.
+### 도구 권한 검사만 사용
+
+다음 설정을 활성화합니다.
 
 ```yaml
 spring:
@@ -72,9 +72,13 @@ spring:
         enabled: true
 ```
 
-도구 권한과 개인정보 보호를 함께 사용하려면 기본 Privacy Guardrails 스타터 또는 이를
-포함하는 분석기 스타터를 추가하세요. 모든 Privacy Guardrails 모듈의 버전을 `0.3.0`으로
-맞추고 두 경계를 모두 활성화합니다.
+이 구성에는 개인정보 분석기나 `spring.ai.privacy.enabled=true`가 필요하지 않습니다.
+
+### 개인정보 보호와 함께 사용
+
+기본 Privacy Guardrails 스타터 또는 이를 포함하는 분석기 스타터를 추가하고, 사용하는
+모든 Privacy Guardrails 모듈의 버전을 `0.3.0`으로 맞추세요. 그런 다음 두 기능을 모두
+활성화합니다.
 
 ```yaml
 spring:
@@ -85,29 +89,34 @@ spring:
         enabled: true
 ```
 
-개인정보 보호를 함께 사용할 때는 분석기를 하나 이상 설정하거나 `PiiAnalyzer` Bean을
-제공해야 합니다. 도구 권한 검사만 사용할 때는 분석기나
-`spring.ai.privacy.enabled=true`가 필요하지 않습니다.
+개인정보 보호를 함께 사용하려면 Regex, Presidio, OpenNLP 또는 사용자 정의
+`PiiAnalyzer` 중 하나를 구성해야 합니다.
 
 ## 권한 정책 정의
 
-`AuthorizationManager<ToolAuthorizationContext>` Bean을 하나 제공해 애플리케이션의
-도구 권한 정책을 정의합니다. `AuthorizationManager`는 Spring Security의 표준 확장
-인터페이스입니다.
+도구 권한 정책을 `AuthorizationManager<ToolAuthorizationContext>` Bean으로 등록합니다.
+`AuthorizationManager`는 Spring Security의 표준 확장 인터페이스입니다.
+
+`ToolAuthorizationContext`는 검사할 도구의 명세(`ToolDefinition`)와 권한 확인 단계를
+제공합니다. 도구 인자와 요청 원문은 포함하지 않습니다.
+
+다음은 `ROLE_SUPPORT` 권한이 있는 사용자에게 `customerLookup` 도구만 허용하는 예시입니다.
+다른 도구는 모두 거부합니다.
 
 ```java
 @Bean
 AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
     return (authentication, context) -> {
-        Authentication current = authentication.get();
-        boolean supportUser = current != null
-                && current.isAuthenticated()
-                && current.getAuthorities().stream()
-                        .anyMatch(authority ->
-                                authority.getAuthority().equals("ROLE_SUPPORT"));
+        Authentication currentAuthentication = authentication.get();
+        if (currentAuthentication == null || !currentAuthentication.isAuthenticated()) {
+            return new AuthorizationDecision(false);
+        }
+
+        boolean hasSupportRole = currentAuthentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_SUPPORT"));
 
         boolean granted = switch (context.toolDefinition().name()) {
-            case "customerLookup" -> supportUser;
+            case "customerLookup" -> hasSupportRole;
             default -> false;
         };
         return new AuthorizationDecision(granted);
@@ -115,15 +124,14 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 }
 ```
 
-권한 정책은 모델에 제공할 도구 목록을 구성할 때와 모델이 요청한 도구를 실행할 때
-적용됩니다. 단계별 규칙이 다르면 `context.phase()`를 확인할 수 있습니다. `null`이나
-거부 결과를 반환하면 정의 확인 단계에서는 도구를 숨기고, 실행 단계에서는 호출을
-거부합니다.
+단계별로 다른 규칙이 필요하면 `context.phase()`를 사용하세요. 모델에 제공할 도구 목록을
+구성할 때는 `ToolAuthorizationPhase.DEFINITION`, 도구 실행 권한을 확인할 때는
+`ToolAuthorizationPhase.EXECUTION`입니다.
 
-`ToolAuthorizationContext`는 정책에 `ToolDefinition`과 현재 권한 확인 단계를
-제공합니다. 도구 인자와 요청의 개인정보는 포함하지 않습니다.
+정책이 `null`이나 거부 결과를 반환하면 도구 목록 구성 단계에서는 해당 도구를 제외하고,
+실행 단계에서는 호출을 거부합니다.
 
-모든 도구를 의도적으로 허용하려면 다음 Bean을 명시적으로 제공할 수 있습니다.
+다음은 모든 도구를 허용하는 예시입니다.
 
 ```java
 @Bean
@@ -132,13 +140,18 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 }
 ```
 
-모든 도구를 허용해도 경계 검증은 유지되지만, 사용자별 도구 접근은 제한하지 않습니다.
-도구 콜백이 포함된 요청에는 `Authentication`이 여전히 필요합니다.
+도구 권한 연동은 요청의 사용자 정보를 확보한 뒤 권한 정책을 평가합니다.
+따라서 모든 도구를 허용하는 경우에도 `Authentication`이 필요합니다.
 
 ## ChatClient 구성
 
-도구 권한 검사만 사용할 때는 도구 콜백을 포함할 수 있는 각 `ChatClient.Builder`에
-`ToolAuthorizationChatClientConfigurer`를 적용합니다.
+Security 스타터의 기본 구성에서는 도구를 사용하는 각 `ChatClient`에 아래 구성 중
+하나를 적용해야 합니다. 적용하지 않으면 도구 호출이 거부됩니다. 도구가 없는
+`ChatClient`에는 권한 검사 구성이 필요하지 않습니다.
+
+### 도구 권한 검사만 적용
+
+도구 권한 검사만 사용할 때는 다음과 같이 `ChatClient`를 구성합니다.
 
 ```java
 @Bean
@@ -150,8 +163,10 @@ ChatClient authorizedToolClient(
 }
 ```
 
+### 개인정보 보호와 함께 적용
+
 개인정보 보호도 활성화했다면 `PrivacySecurityChatClientConfigurer`를 사용하세요.
-이 클래스가 두 경계를 필요한 순서로 적용합니다.
+도구 권한 검사와 개인정보 보호를 함께 적용합니다.
 
 ```java
 @Bean
@@ -163,8 +178,11 @@ ChatClient securedChatClient(
 }
 ```
 
-도구 콜백은 계속 `PrivacyToolCallbackFactory`로 감싸고, 해당 도구에 필요한 엔티티
-유형만 `tools.disclosures`에 설정합니다.
+`PrivacySecurityChatClientConfigurer`를 적용했다면 같은 builder에 개인정보 보호 전용
+또는 권한 검사 전용 configurer를 추가로 적용하지 마세요.
+
+개인정보 보호를 함께 사용할 때는 `PrivacyToolCallbackFactory`로 도구 콜백을 감쌉니다.
+도구에 원문으로 전달할 개인정보 유형만 `tools.disclosures`에 설정합니다.
 
 ```java
 ToolCallback protectedCustomerLookup =
@@ -181,16 +199,6 @@ spring:
             - CUSTOMER_ID
 ```
 
-하나의 builder에는 개인정보 보호 전용, 권한 검사 전용, 두 기능을 함께 적용하는 구성 중
-하나만 사용하세요. `PrivacySecurityChatClientConfigurer`를 사용한다면 각 기능의
-configurer를 별도로 적용하지 마세요.
-
-도구 콜백이 없는 `ChatClient`에는 권한 검사 구성이 필요하지 않습니다. 도구 콜백이 있는
-`ChatClient`에는 권한 검사 전용 또는 두 기능을 함께 적용하는 구성을 사용해야 하며,
-적용하지 않으면 도구 호출이 거부됩니다. Security 스타터를 활성화한 상태에서 개인정보
-보호만 적용하는 별도 도구 경로가 필요하다면 이 권한 경계 밖의 `ToolCallingManager`를
-해당 경로에 명시적으로 연결하세요.
-
 ## ToolCallingManager 선택
 
 스타터는 Spring AI ChatModel과 자동 구성된 도구 호출 Advisor가 사용할
@@ -199,6 +207,10 @@ configurer를 별도로 적용하지 마세요.
 없거나 후보가 여러 개이면 애플리케이션 시작이 실패합니다.
 
 Spring AI의 이름 기반 도구 조회가 활성화되어 있어도 거부된 도구는 사용할 수 없습니다.
+
+Security 스타터를 활성화한 상태에서 개인정보 보호만 적용하는 별도 도구 경로가
+필요하다면, 권한 검사가 적용되지 않은 `ToolCallingManager`를 해당 경로에 명시적으로
+연결하세요. 이 경로에는 이 연동의 도구 권한 검사가 적용되지 않습니다.
 
 ### 사용자 정의 ToolCallingManager
 

@@ -45,7 +45,7 @@ Presidio와 OpenNLP 스타터에는 기본 스타터가 이미 포함되어 있�
 
 도구 권한 검사는 별도의 Spring Security 스타터를 사용합니다. 단독으로 사용하거나
 개인정보 보호 스타터와 함께 사용할 수 있습니다. 의존성과 설정 방법은
-[Spring Security 도구 권한 부여](security.md)를 참고하세요.
+[Spring Security 도구 권한](security.md)을 참고하세요.
 
 ## 2. Regex로 빠르게 시작
 
@@ -273,7 +273,7 @@ MCP 도구 제공자가 이름에 접두사를 추가하는 경우에는 `tools.
 왕복에서도 적용되는 과정은
 [샘플 / 데모 가이드](sample.md#mcp)를 참고하세요.
 
-### Spring Security 도구 권한 부여
+### Spring Security 도구 권한
 
 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한 도구를 제한하려면
 `0.3.0`부터 제공되는 Spring Security 스타터를 추가합니다.
@@ -287,7 +287,7 @@ MCP 도구 제공자가 이름에 접두사를 추가하는 경우에는 `tools.
 사용하세요. 함께 사용하는 모든 Privacy Guardrails 모듈의 버전은 `0.3.0`으로
 맞춰야 합니다. 두 기능을 함께 사용하면 개인정보 보호 래퍼가 허용된 원문 값을 복원하기 전에
 실행 권한을 다시 확인합니다. 전체 설정과 고급 구성은
-[Spring Security 도구 권한 부여](security.md)를 참고하세요.
+[Spring Security 도구 권한](security.md)을 참고하세요.
 
 ## 5. Presidio로 다양한 PII 유형 탐지
 

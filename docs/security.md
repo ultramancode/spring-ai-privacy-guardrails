@@ -2,36 +2,37 @@
 
 **English** | [한국어](ko/security.md)
 
-The optional Spring Security integration controls which Spring AI tools the
-model can discover and execute for the current principal (`Authentication`).
-It can be used on its own or together with the privacy boundary. PII detection
-and per-tool original-value disclosure are provided by the privacy boundary.
+The optional Spring Security integration limits which Spring AI tools the model
+can see and which tools it may execute for the current principal
+(`Authentication`). Tool authorization can be used on its own or together with
+privacy protection.
 
-Use this integration when tool availability depends on the current principal.
-Applications that do not need identity-aware tool authorization can continue to
-use `PrivacyChatClientConfigurer` without adding Spring Security.
+When both are used, Spring Security authorizes tool exposure and execution,
+while privacy protection detects PII and controls which original values each
+tool may receive.
 
 ## Guarantees
 
-On the supported path, the integration enforces the following checkpoints.
+The integration checks authorization at the following stages of a protected
+tool-calling path.
 
-| Checkpoint | Behavior |
+| Stage | Guarantee |
 | --- | --- |
-| Model exposure | The authorization policy is evaluated before the model receives the available tool definitions. Denied tools are omitted from that list. |
-| Model-requested call | A tool that was not exposed is rejected even if the model names it or Spring AI's fallback lookup could otherwise find it. |
-| Multiple calls in one response | Every requested tool is authorized before the first callback in that response starts. |
-| Callback invocation | Each tool callback is authorized again immediately before invocation. When the privacy boundary is also configured, this check occurs before any allowed original PII is restored. |
+| Before tools are shown to the model | The authorization policy is evaluated, and denied tools are omitted from the list provided to the model. |
+| When the model requests a tool | A tool that was not included in the model's list is not executed, even if the model requests it by name. |
+| When one response requests multiple tools | Authorization is checked for the complete set of requested tools before execution begins. |
+| Immediately before tool execution | Authorization is checked again for each tool. When privacy protection is also enabled, this happens before any allowed original PII is restored. |
 
-When both boundaries are configured, tool authorization and PII disclosure are
-controlled by separate policies:
+Tool authorization and original PII disclosure are configured independently:
 
 - `AuthorizationManager<ToolAuthorizationContext>` decides whether the current
   principal may discover or execute a tool.
-- `ToolDisclosurePolicy`, configured through `tools.disclosures`, decides which
-  original PII values an authorized tool may receive, based on their entity types.
+- `tools.disclosures` decides which PII entity types an authorized tool may
+  receive as original values.
 
-A tool must pass authorization before the privacy wrapper can restore an allowed
-original value. Authorizing a tool does not grant it every PII type.
+Authorizing a tool does not automatically disclose original PII. An original
+value is provided only when the authorization policy allows execution and its
+entity type is configured under `tools.disclosures`.
 
 ## Add the Spring Boot Starter
 
@@ -55,12 +56,14 @@ dependencies {
 </dependency>
 ```
 
-The Security starter is independent of the base Privacy Guardrails starter. It
-uses the `Authentication` established by the application's existing Spring
-Security configuration. An `Authentication` must be available when a protected
-request containing tool callbacks begins.
+The Security starter can be used without the base Privacy Guardrails starter.
+Tool authorization uses the `Authentication` established by the application's
+existing Spring Security configuration, so it must be available when a request
+that uses tools begins.
 
-Enable the authorization boundary for Security-only use:
+### Tool Authorization Only
+
+Enable the following property:
 
 ```yaml
 spring:
@@ -70,9 +73,14 @@ spring:
         enabled: true
 ```
 
-To combine tool authorization with PII protection, add the base Privacy
-Guardrails starter or an analyzer starter that includes it. Keep all Privacy
-Guardrails artifacts on version `0.3.0`, then enable both boundaries:
+This configuration does not require a privacy analyzer or
+`spring.ai.privacy.enabled=true`.
+
+### With Privacy Protection
+
+Add the base Privacy Guardrails starter or an analyzer starter that includes
+it, and keep all Privacy Guardrails artifacts on version `0.3.0`. Then enable
+both features:
 
 ```yaml
 spring:
@@ -83,29 +91,36 @@ spring:
         enabled: true
 ```
 
-PII protection also requires at least one configured analyzer or a `PiiAnalyzer`
-bean. Tool authorization alone does not require an analyzer or
-`spring.ai.privacy.enabled=true`.
+To use privacy protection, configure at least one analyzer: Regex, Presidio,
+OpenNLP, or a custom `PiiAnalyzer`.
 
 ## Define the Authorization Policy
 
-Provide one `AuthorizationManager<ToolAuthorizationContext>` bean to define your
-application's tool authorization policy. `AuthorizationManager` is a standard
-Spring Security extension interface.
+Register your tool authorization policy as an
+`AuthorizationManager<ToolAuthorizationContext>` bean. `AuthorizationManager`
+is a standard Spring Security extension interface.
+
+`ToolAuthorizationContext` provides the tool's specification (`ToolDefinition`)
+and the authorization phase. It does not contain tool arguments or original
+request data.
+
+The following example allows only users with the `ROLE_SUPPORT` authority to
+use `customerLookup`. All other tools are denied.
 
 ```java
 @Bean
 AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
     return (authentication, context) -> {
-        Authentication current = authentication.get();
-        boolean supportUser = current != null
-                && current.isAuthenticated()
-                && current.getAuthorities().stream()
-                        .anyMatch(authority ->
-                                authority.getAuthority().equals("ROLE_SUPPORT"));
+        Authentication currentAuthentication = authentication.get();
+        if (currentAuthentication == null || !currentAuthentication.isAuthenticated()) {
+            return new AuthorizationDecision(false);
+        }
+
+        boolean hasSupportRole = currentAuthentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_SUPPORT"));
 
         boolean granted = switch (context.toolDefinition().name()) {
-            case "customerLookup" -> supportUser;
+            case "customerLookup" -> hasSupportRole;
             default -> false;
         };
         return new AuthorizationDecision(granted);
@@ -113,17 +128,16 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 }
 ```
 
-The authorization policy applies when building the tool list for the model and
-when executing a tool requested by the model. It can inspect `context.phase()`
-when those phases need different rules. Returning `null` or a denied result
-hides the definition during the definition phase and rejects the call during
-the execution phase.
+Use `context.phase()` if you need different rules for each phase. Its value is
+`ToolAuthorizationPhase.DEFINITION` when building the tool list for the model
+and `ToolAuthorizationPhase.EXECUTION` when checking permission to execute a
+tool.
 
-`ToolAuthorizationContext` exposes the `ToolDefinition` and the current
-authorization phase to the policy. It does not contain tool arguments or request
-PII.
+If the policy returns `null` or a denied result, the integration omits the tool
+from the list during the definition phase and rejects the call during the
+execution phase.
 
-For a deliberate allow-all policy, provide the bean explicitly:
+The following example allows all tools:
 
 ```java
 @Bean
@@ -132,14 +146,19 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 }
 ```
 
-An allow-all policy preserves the boundary checks but does not restrict tools
-by principal. It still requires an `Authentication` when a request
-containing tool callbacks enters the boundary.
+The tool authorization integration captures the request's `Authentication`
+before evaluating the policy. This is required even when the policy allows
+all tools.
 
 ## Configure the ChatClient
 
-For Security-only use, apply `ToolAuthorizationChatClientConfigurer` to each
-`ChatClient.Builder` that can carry tool callbacks:
+With the Security starter's default setup, apply one of the configurations
+below to each `ChatClient` that uses tools. Otherwise, its tool calls are
+rejected. A `ChatClient` without tools does not need authorization configuration.
+
+### Apply Tool Authorization Only
+
+To use tool authorization on its own, configure the `ChatClient` as follows:
 
 ```java
 @Bean
@@ -151,9 +170,11 @@ ChatClient authorizedToolClient(
 }
 ```
 
+### Combine with Privacy Protection
+
 When privacy protection is also enabled, use
-`PrivacySecurityChatClientConfigurer`. It applies both boundaries in the
-supported order:
+`PrivacySecurityChatClientConfigurer`. It applies tool authorization and privacy
+protection together:
 
 ```java
 @Bean
@@ -165,8 +186,12 @@ ChatClient securedChatClient(
 }
 ```
 
-Continue to wrap tool callbacks with `PrivacyToolCallbackFactory` and configure
-`tools.disclosures` only for the entity types that a tool needs:
+After applying `PrivacySecurityChatClientConfigurer`, do not also apply the
+privacy-only or authorization-only configurer to the same builder.
+
+When using privacy protection, wrap tool callbacks with
+`PrivacyToolCallbackFactory`. Configure `tools.disclosures` only for the PII
+types that should be passed to the tool as original values:
 
 ```java
 ToolCallback protectedCustomerLookup =
@@ -183,15 +208,6 @@ spring:
             - CUSTOMER_ID
 ```
 
-Apply exactly one configuration to a builder: privacy-only, authorization-only,
-or combined. When using `PrivacySecurityChatClientConfigurer`, do not also apply
-either individual configurer. A `ChatClient` without tool callbacks does not
-need authorization configuration. A `ChatClient` with tool callbacks must use
-either authorization-only or combined configuration, or its tool calls are
-rejected. To keep a separate privacy-only tool path while the Security starter
-is enabled, wire that path explicitly to a `ToolCallingManager` outside this
-authorization boundary.
-
 ## ToolCallingManager Selection
 
 The starter installs an authorization-aware `ToolCallingManager` as the primary
@@ -200,6 +216,11 @@ The default setup requires exactly one Spring AI `DefaultToolCallingManager`.
 Startup fails when that manager is missing or multiple candidates are present.
 
 Denied tools remain unavailable even when Spring AI resolver fallback is enabled.
+
+To keep a separate privacy-only tool path while the Security starter is
+enabled, explicitly wire that path to a `ToolCallingManager` without tool
+authorization. This integration's tool authorization checks do not apply to
+that path.
 
 ### Custom ToolCallingManager
 

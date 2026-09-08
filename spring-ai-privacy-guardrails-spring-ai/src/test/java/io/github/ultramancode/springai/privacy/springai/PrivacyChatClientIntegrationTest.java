@@ -18,6 +18,7 @@ import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -586,7 +587,7 @@ class PrivacyChatClientIntegrationTest {
             @Override
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
                 List<Message> messages = new ArrayList<>(request.prompt().getInstructions());
-                messages.add(new org.springframework.ai.chat.messages.UserMessage("Retrieved owner: Alice"));
+                messages.add(new UserMessage("Retrieved owner: Alice"));
                 return chain.nextCall(request.mutate()
                         .prompt(new Prompt(messages, request.prompt().getOptions()))
                         .build());

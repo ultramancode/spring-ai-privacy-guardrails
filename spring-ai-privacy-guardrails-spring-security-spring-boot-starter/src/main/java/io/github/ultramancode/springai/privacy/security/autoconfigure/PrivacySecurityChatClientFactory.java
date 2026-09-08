@@ -3,12 +3,18 @@ package io.github.ultramancode.springai.privacy.security.autoconfigure;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.core.PriorityOrdered;
 
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 import java.util.function.IntFunction;
 
-/** Creates ChatClients with the starter-managed privacy and tool authorization boundaries. */
+/**
+ * Creates ChatClients with the starter-managed privacy and tool authorization boundaries.
+ * Tool advisor templates follow the ordering restrictions documented by
+ * {@link ToolAuthorizationChatClientFactory}, including rejection of
+ * {@link PriorityOrdered} tool advisors at request creation.
+ */
 public final class PrivacySecurityChatClientFactory {
 
     // Keep the base privacy starter optional by referring to its JDK function contract.

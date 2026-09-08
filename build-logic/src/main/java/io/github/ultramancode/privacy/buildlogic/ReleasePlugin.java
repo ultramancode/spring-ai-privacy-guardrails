@@ -16,6 +16,7 @@ import io.github.ultramancode.privacy.buildlogic.tasks.ValidateReleaseVersion;
 import io.github.ultramancode.privacy.buildlogic.tasks.VerifyCentralStagingRepository;
 import io.github.ultramancode.privacy.buildlogic.tasks.VerifyPublishedModuleBoundaries;
 import org.cyclonedx.Version;
+import org.cyclonedx.exception.ParseException;
 import org.cyclonedx.generators.BomGeneratorFactory;
 import org.cyclonedx.gradle.CyclonedxAggregateTask;
 import org.cyclonedx.gradle.CyclonedxDirectTask;
@@ -376,7 +377,7 @@ public final class ReleasePlugin implements Plugin<Project> {
             String normalized = BomGeneratorFactory.createJson(Version.VERSION_16, bom)
                     .toJsonString(true);
             Files.writeString(sbomFile.toPath(), normalized + "\n", StandardCharsets.UTF_8);
-            List<org.cyclonedx.exception.ParseException> schemaViolations =
+            List<ParseException> schemaViolations =
                     new JsonParser().validate(sbomFile, Version.VERSION_16);
             if (!schemaViolations.isEmpty()) {
                 throw new GradleException(

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -77,7 +78,7 @@ class PrivacyToolCallbackWrapperTest {
             assertThat(protectedResult)
                     .isInstanceOf(String.class)
                     .asString()
-                    .containsPattern(io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat
+                    .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("PHONE_NUMBER"))
                     .doesNotContain("821012345678");
             assertThat(service.detokenizeValueTree(session.handle(), protectedResult))
@@ -127,7 +128,7 @@ class PrivacyToolCallbackWrapperTest {
                     .contains("\"precise\":0.1234567890123456789012345")
                     .contains("\"scientific\":1e3")
                     .doesNotContain("8.21012345678e11", "821012345678")
-                    .containsPattern(io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat
+                    .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("PHONE_NUMBER"));
         }
     }
@@ -348,7 +349,7 @@ class PrivacyToolCallbackWrapperTest {
             String emailToken = service.tokenize(
                     session.handle(),
                     email,
-                    List.of(new io.github.ultramancode.springai.privacy.core.PiiSpan(
+                    List.of(new PiiSpan(
                             "EMAIL_ADDRESS",
                             0,
                             email.length(),
@@ -379,9 +380,9 @@ class PrivacyToolCallbackWrapperTest {
                     .doesNotContain("Alice");
             assertThat(result)
                     .doesNotContain("Alice", email)
-                    .containsPattern(io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat
+                    .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("PERSON"))
-                    .containsPattern(io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat
+                    .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("EMAIL_ADDRESS"));
         }
     }
@@ -410,7 +411,7 @@ class PrivacyToolCallbackWrapperTest {
 
             assertThat(received.get())
                     .contains("alice@example.com")
-                    .containsPattern(io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat
+                    .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("PERSON"))
                     .doesNotContain("Alice");
         }
@@ -454,7 +455,7 @@ class PrivacyToolCallbackWrapperTest {
 
             assertThat(received.get())
                     .doesNotContain("821012345678")
-                    .containsPattern(io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat
+                    .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("PHONE_NUMBER"));
         }
     }

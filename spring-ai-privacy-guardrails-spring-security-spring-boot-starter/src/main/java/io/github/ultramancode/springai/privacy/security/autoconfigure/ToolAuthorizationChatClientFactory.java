@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.observation.AdvisorObservationConvention;
 import org.springframework.ai.chat.client.observation.ChatClientObservationConvention;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.core.PriorityOrdered;
 
 import java.util.Objects;
 import java.util.function.IntConsumer;
@@ -21,6 +22,11 @@ import java.util.function.UnaryOperator;
  * <p>Supply a tool-advisor builder to customize the loop, including Tool Search. Do not
  * register a separate ToolAdvisor. Requests with tools require automatic registration;
  * missing or foreign tool advisors are rejected before standard tool loops run.</p>
+ *
+ * <p>Tool advisors implementing {@link PriorityOrdered} are
+ * unsupported because they run before the authorization lifecycle regardless of their
+ * numeric order. They are rejected when Spring AI builds the request's tool advisor,
+ * before any model call or tool execution.</p>
  */
 public final class ToolAuthorizationChatClientFactory {
 

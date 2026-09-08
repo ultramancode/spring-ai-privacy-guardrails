@@ -203,24 +203,27 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         });
     }
 
-    @Test void priorityTemplateMustBeRejectedBeforeLoopEntry() throws IOException {
-        verifyPriorityTemplate(false);
-    }
-
-    @Test void streamingPriorityTemplateMustBeRejectedBeforeLoopEntry() throws IOException {
-        verifyPriorityTemplate(true);
-    }
-
-    private void verifyPriorityTemplate(boolean streaming) throws IOException {
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void priorityTemplateMustBeRejectedBeforeLoopEntry(boolean streaming, boolean privacyEnabled) throws IOException {
         startModelServer(finalResponse());
-        privacyContextRunner().run(context -> {
+        var runner = privacyEnabled ? privacyContextRunner() : contextRunner();
+        runner.run(context -> {
             AtomicInteger started = new AtomicInteger();
+            AtomicInteger executions = new AtomicInteger();
             var template = new PriorityToolAdvisorBuilder(started).advisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
             authenticate();
             Throwable rejection = catchThrowable(() -> {
-                var client = protectedBuilder(context, template)
-                        .defaultTools(context.getBean(PrivacyToolCallbackFactory.class)
-                                .wrap(tool("customerLookup", new AtomicInteger()))).build();
+                var callback = tool("customerLookup", executions);
+                ChatClient.Builder builder;
+                if (privacyEnabled) {
+                    builder = protectedBuilder(context, template);
+                    callback = context.getBean(PrivacyToolCallbackFactory.class).wrap(callback);
+                } else {
+                    builder = context.getBean(ToolAuthorizationChatClientFactory.class)
+                            .builder(context.getBean(OpenAiChatModel.class), template);
+                }
+                var client = builder.defaultTools(callback).build();
                 var request = client.prompt().user("Lookup");
                 if (streaming) {
                     request.stream().content().collectList().block(Duration.ofSeconds(10));
@@ -228,9 +231,10 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                     request.call().content();
                 }
             });
-            assertThat(rejection).isInstanceOf(PrivacyGuardrailException.class)
-                    .hasMessageContaining("advisor");
+            assertThat(rejection).isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("PriorityOrdered", "authorization lifecycle");
             assertThat(started).as("Reject unsupported priority semantics before entering the tool loop").hasValue(0);
+            assertThat(executions).hasValue(0);
             assertThat(this.modelRequests).isEmpty();
         });
     }

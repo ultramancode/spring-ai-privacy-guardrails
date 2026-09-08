@@ -20,6 +20,7 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -276,7 +277,7 @@ class PrivacyInputAdvisorTest {
         when(chain.nextStream(any())).thenReturn(Flux.never());
 
         try (var session = service.openSession()) {
-            reactor.core.Disposable subscription = advisor.adviseStream(
+            Disposable subscription = advisor.adviseStream(
                     PrivacyRequestContextSupport.attachLifecycle(
                             new ChatClientRequest(new Prompt("Alice hello"), Map.of()),
                             session.handle()

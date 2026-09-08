@@ -961,7 +961,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
     private PiiAnalyzer namedAnalyzer(String providerId, PiiAnalyzer delegate) {
         return new PiiAnalyzer() {
             @Override
-            public List<io.github.ultramancode.springai.privacy.core.PiiSpan> analyze(
+            public List<PiiSpan> analyze(
                     String text,
                     PiiAnalysisOptions options
             ) {

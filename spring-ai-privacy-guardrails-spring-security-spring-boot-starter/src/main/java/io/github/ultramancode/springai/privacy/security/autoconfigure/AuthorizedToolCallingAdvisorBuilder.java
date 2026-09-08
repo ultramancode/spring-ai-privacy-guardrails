@@ -3,6 +3,7 @@ package io.github.ultramancode.springai.privacy.security.autoconfigure;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionEligibilityChecker;
+import org.springframework.core.PriorityOrdered;
 
 import java.util.function.IntConsumer;
 
@@ -69,6 +70,12 @@ final class AuthorizedToolCallingAdvisorBuilder
     @Override
     public ToolCallingAdvisor build() {
         ToolCallingAdvisor advisor = this.delegate.copy().toolCallingManager(this.manager).build();
+        // PriorityOrdered bypasses the numeric order and runs before the authorization lifecycle.
+        if (advisor instanceof PriorityOrdered) {
+            throw new IllegalArgumentException(
+                    "PriorityOrdered tool advisors are incompatible with tool authorization; "
+                            + "use standard advisor ordering so the authorization lifecycle runs before the tool loop");
+        }
         this.validateOrder.accept(advisor.getOrder());
         this.guard.register(advisor);
         return advisor;

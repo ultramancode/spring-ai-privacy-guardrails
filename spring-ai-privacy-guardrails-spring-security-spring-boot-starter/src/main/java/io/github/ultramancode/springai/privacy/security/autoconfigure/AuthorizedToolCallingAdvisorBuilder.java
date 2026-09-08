@@ -7,27 +7,31 @@ import org.springframework.core.PriorityOrdered;
 
 import java.util.function.IntConsumer;
 
-/** Lets Spring AI configure each loop without losing the supplied builder's subtype. */
+/**
+ * Preserves the supplied builder's advisor subtype during Spring AI's automatic
+ * registration while enforcing this client's tool manager and order checks.
+ */
 final class AuthorizedToolCallingAdvisorBuilder
         extends ToolCallingAdvisor.Builder<AuthorizedToolCallingAdvisorBuilder> {
 
     private final ToolCallingAdvisor.Builder<?> delegate;
-    private final ToolCallingManager manager;
-    private final ToolAuthorizationChainAdvisor guard;
-    private final IntConsumer validateOrder;
+    private final ToolCallingManager toolCallingManager;
+    private final ToolAuthorizationChainAdvisor chainValidator;
+    private final IntConsumer orderValidator;
 
-    AuthorizedToolCallingAdvisorBuilder(ToolCallingAdvisor.Builder<?> template, ToolCallingManager manager,
-            ToolAuthorizationChainAdvisor guard, IntConsumer validateOrder) {
-        this.delegate = template.copy().toolCallingManager(manager);
-        this.manager = manager;
-        this.guard = guard;
-        this.validateOrder = validateOrder;
-        validateOrder.accept(this.delegate.getAdvisorOrder());
+    AuthorizedToolCallingAdvisorBuilder(ToolCallingAdvisor.Builder<?> template, ToolCallingManager toolCallingManager,
+            ToolAuthorizationChainAdvisor chainValidator, IntConsumer orderValidator) {
+        this.delegate = template.copy().toolCallingManager(toolCallingManager);
+        this.toolCallingManager = toolCallingManager;
+        this.chainValidator = chainValidator;
+        this.orderValidator = orderValidator;
+        orderValidator.accept(this.delegate.getAdvisorOrder());
     }
 
     @Override
     public AuthorizedToolCallingAdvisorBuilder copy() {
-        return new AuthorizedToolCallingAdvisorBuilder(this.delegate, this.manager, this.guard, this.validateOrder);
+        return new AuthorizedToolCallingAdvisorBuilder(
+                this.delegate, this.toolCallingManager, this.chainValidator, this.orderValidator);
     }
 
     @Override
@@ -36,8 +40,8 @@ final class AuthorizedToolCallingAdvisorBuilder
     }
 
     @Override
-    public AuthorizedToolCallingAdvisorBuilder toolCallingManager(ToolCallingManager manager) {
-        if (manager != this.manager) {
+    public AuthorizedToolCallingAdvisorBuilder toolCallingManager(ToolCallingManager toolCallingManager) {
+        if (toolCallingManager != this.toolCallingManager) {
             throw new IllegalArgumentException("The secured template's tool manager cannot be replaced");
         }
         return this;
@@ -45,7 +49,7 @@ final class AuthorizedToolCallingAdvisorBuilder
 
     @Override
     public AuthorizedToolCallingAdvisorBuilder advisorOrder(int order) {
-        this.validateOrder.accept(order);
+        this.orderValidator.accept(order);
         this.delegate.advisorOrder(order);
         return this;
     }
@@ -69,15 +73,15 @@ final class AuthorizedToolCallingAdvisorBuilder
 
     @Override
     public ToolCallingAdvisor build() {
-        ToolCallingAdvisor advisor = this.delegate.copy().toolCallingManager(this.manager).build();
+        ToolCallingAdvisor advisor = this.delegate.copy().toolCallingManager(this.toolCallingManager).build();
         // PriorityOrdered bypasses the numeric order and runs before the authorization lifecycle.
         if (advisor instanceof PriorityOrdered) {
             throw new IllegalArgumentException(
                     "PriorityOrdered tool advisors are incompatible with tool authorization; "
                             + "use standard advisor ordering so the authorization lifecycle runs before the tool loop");
         }
-        this.validateOrder.accept(advisor.getOrder());
-        this.guard.register(advisor);
+        this.orderValidator.accept(advisor.getOrder());
+        this.chainValidator.register(advisor);
         return advisor;
     }
 }

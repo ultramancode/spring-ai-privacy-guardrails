@@ -47,6 +47,9 @@ public final class PrivacyChatClientConfigurer
      * Prepares a complete privacy boundary for the given tool order. Each application
      * creates fresh advisors; the tool advisor and application advisors keep their orders.
      * The input and terminal model boundaries retain their default positions.
+     * The final chain is checked for each call or stream subscription, including
+     * advisors added to individual requests.
+     *
      * @param toolOrder the order of the tool advisor that will be registered on the client
      * @return a configurer that validates the actual call and stream advisor layouts
      * @throws IllegalArgumentException when the relative boundaries cannot fit between input and model processing
@@ -54,17 +57,18 @@ public final class PrivacyChatClientConfigurer
     public UnaryOperator<ChatClient.Builder> forToolCallingAdvisorOrder(int toolOrder) {
         // Reserve output=T-2 and context=T-1 after input, and validation=T+1
         // before the model boundary. Check in long arithmetic before narrowing.
-        long minimum = (long) PrivacyInputAdvisor.DEFAULT_ORDER + 3;
-        long maximum = (long) PrivacyModelBoundaryAdvisor.DEFAULT_ORDER - 2;
-        if (toolOrder < minimum || toolOrder > maximum) {
+        long minimumToolOrder = (long) PrivacyInputAdvisor.DEFAULT_ORDER + 3;
+        long maximumToolOrder = (long) PrivacyModelBoundaryAdvisor.DEFAULT_ORDER - 2;
+        if (toolOrder < minimumToolOrder || toolOrder > maximumToolOrder) {
             throw new IllegalArgumentException("Privacy tool advisor order must be between "
-                    + minimum + " and " + maximum + " to fit the input and model boundaries; received " + toolOrder);
+                    + minimumToolOrder + " and " + maximumToolOrder
+                    + " to fit the input and model boundaries; received " + toolOrder);
         }
         return builder -> {
-            List<Advisor> boundaries = List.copyOf(this.advisorFactory.apply(toolOrder));
-            List<Advisor> advisors = new ArrayList<>(boundaries.size() + 1);
-            advisors.add(new PrivacyAdvisorChainValidator(boundaries, toolOrder));
-            advisors.addAll(boundaries);
+            List<Advisor> managedAdvisors = List.copyOf(this.advisorFactory.apply(toolOrder));
+            List<Advisor> advisors = new ArrayList<>(managedAdvisors.size() + 1);
+            advisors.add(new PrivacyAdvisorChainValidator(managedAdvisors, toolOrder));
+            advisors.addAll(managedAdvisors);
             return configure(builder, List.copyOf(advisors));
         };
     }

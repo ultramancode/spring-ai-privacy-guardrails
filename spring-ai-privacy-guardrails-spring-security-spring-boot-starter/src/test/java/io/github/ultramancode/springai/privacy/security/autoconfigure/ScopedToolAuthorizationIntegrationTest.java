@@ -58,9 +58,9 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
 
         contextRunner().run(context -> {
             assertThat(context).hasNotFailed();
-            ToolAuthorizationChatClientFactory configurer = context.getBean(
+            ToolAuthorizationChatClientFactory factory = context.getBean(
                     ToolAuthorizationChatClientFactory.class);
-            ChatClient protectedClient = configurer.builder(context.getBean(OpenAiChatModel.class))
+            ChatClient protectedClient = factory.builder(context.getBean(OpenAiChatModel.class))
                     .defaultTools(customer, admin).build();
             ChatClient ordinaryClient = context.getBean(ChatClient.Builder.class)
                     .defaultTools(customer, admin).build();

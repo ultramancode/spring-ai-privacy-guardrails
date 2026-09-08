@@ -49,12 +49,12 @@ public final class PrivacySecurityChatClientFactory {
     public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder) {
         ToolCallingAdvisor.Builder<?> template = Objects.requireNonNull(
                 toolAdvisorBuilder, "toolAdvisorBuilder must not be null").copy();
-        int plannedOrder = template.getAdvisorOrder();
-        UnaryOperator<ChatClient.Builder> privacyBoundary = this.privacyConfigurer.apply(plannedOrder);
-        return this.authorizationFactory.createBuilder(model, template, privacyBoundary, actualOrder -> {
-            if (actualOrder != plannedOrder) {
+        int plannedToolOrder = template.getAdvisorOrder();
+        UnaryOperator<ChatClient.Builder> privacyAdvisorConfigurer = this.privacyConfigurer.apply(plannedToolOrder);
+        return this.authorizationFactory.createBuilder(model, template, privacyAdvisorConfigurer, actualToolOrder -> {
+            if (actualToolOrder != plannedToolOrder) {
                 throw new IllegalArgumentException("Tool advisor order changed after planning the privacy boundary: "
-                        + plannedOrder + " to " + actualOrder);
+                        + plannedToolOrder + " to " + actualToolOrder);
             }
         });
     }

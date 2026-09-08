@@ -209,9 +209,9 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         startModelServer(finalResponse());
         var runner = privacyEnabled ? privacyContextRunner() : contextRunner();
         runner.run(context -> {
-            AtomicInteger started = new AtomicInteger();
+            AtomicInteger toolLoopStarts = new AtomicInteger();
             AtomicInteger executions = new AtomicInteger();
-            var template = new PriorityToolAdvisorBuilder(started).advisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
+            var template = new PriorityToolAdvisorBuilder(toolLoopStarts).advisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
             authenticate();
             Throwable rejection = catchThrowable(() -> {
                 var callback = tool("customerLookup", executions);
@@ -233,41 +233,43 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
             });
             assertThat(rejection).isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("PriorityOrdered", "authorization lifecycle");
-            assertThat(started).as("Reject unsupported priority semantics before entering the tool loop").hasValue(0);
+            assertThat(toolLoopStarts).as("Reject unsupported priority semantics before entering the tool loop").hasValue(0);
             assertThat(executions).hasValue(0);
             assertThat(this.modelRequests).isEmpty();
         });
     }
 
     private static final class PriorityToolAdvisorBuilder extends ToolCallingAdvisor.Builder<PriorityToolAdvisorBuilder> {
-        private final AtomicInteger started;
-        PriorityToolAdvisorBuilder(AtomicInteger started) { this.started = started; }
-        @Override protected ToolCallingAdvisor.Builder<?> newCopy() { return new PriorityToolAdvisorBuilder(this.started); }
+        private final AtomicInteger toolLoopStarts;
+        PriorityToolAdvisorBuilder(AtomicInteger toolLoopStarts) { this.toolLoopStarts = toolLoopStarts; }
+        @Override protected ToolCallingAdvisor.Builder<?> newCopy() {
+            return new PriorityToolAdvisorBuilder(this.toolLoopStarts);
+        }
         @Override public ToolCallingAdvisor build() {
             return new PriorityToolAdvisor(getToolCallingManager(), getToolExecutionEligibilityChecker(),
-                    getAdvisorOrder(), isConversationHistoryEnabled(), this.started);
+                    getAdvisorOrder(), isConversationHistoryEnabled(), this.toolLoopStarts);
         }
     }
 
     private static final class PriorityToolAdvisor extends ToolCallingAdvisor
             implements PriorityOrdered {
-        private final AtomicInteger started;
+        private final AtomicInteger toolLoopStarts;
         PriorityToolAdvisor(ToolCallingManager manager,
                 ToolExecutionEligibilityChecker checker,
-                int order, boolean history, AtomicInteger started) {
+                int order, boolean history, AtomicInteger toolLoopStarts) {
             super(manager, checker, order, history);
-            this.started = started;
+            this.toolLoopStarts = toolLoopStarts;
         }
         @Override public ChatClientResponse adviseCall(
                 ChatClientRequest request,
                 CallAdvisorChain chain) {
-            this.started.incrementAndGet();
+            this.toolLoopStarts.incrementAndGet();
             return super.adviseCall(request, chain);
         }
         @Override public Flux<ChatClientResponse> adviseStream(
                 ChatClientRequest request,
                 StreamAdvisorChain chain) {
-            this.started.incrementAndGet();
+            this.toolLoopStarts.incrementAndGet();
             return super.adviseStream(request, chain);
         }
     }

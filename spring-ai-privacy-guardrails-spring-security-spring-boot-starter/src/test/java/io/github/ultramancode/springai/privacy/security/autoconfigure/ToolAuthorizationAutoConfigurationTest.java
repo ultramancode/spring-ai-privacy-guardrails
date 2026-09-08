@@ -89,9 +89,9 @@ class ToolAuthorizationAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(ToolCallingAdvisor.Builder.class);
-                    ToolAuthorizationChatClientFactory configurer = context.getBean(
+                    ToolAuthorizationChatClientFactory factory = context.getBean(
                             ToolAuthorizationChatClientFactory.class);
-                    assertThat(configurer.builder(context.getBean(ChatModel.class)).build()).isNotNull();
+                    assertThat(factory.builder(context.getBean(ChatModel.class)).build()).isNotNull();
                 });
     }
 

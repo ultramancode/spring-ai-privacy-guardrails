@@ -20,15 +20,20 @@ import reactor.core.publisher.Flux;
 
 import java.util.List;
 
-/** Validates the managed boundaries in the chain Spring AI actually sorted for this request. */
+/**
+ * Validates starter-managed privacy advisors and tool advisor placement in the sorted request chain.
+ *
+ * <p>Validation runs for each call or stream subscription so advisors added to individual
+ * requests are included. Priority ordering places this check before the managed privacy advisors.</p>
+ */
 final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, PriorityOrdered {
 
-    private final List<Advisor> boundaries;
-    private final int toolOrder;
+    private final List<Advisor> managedAdvisors;
+    private final int expectedToolOrder;
 
-    PrivacyAdvisorChainValidator(List<Advisor> boundaries, int toolOrder) {
-        this.boundaries = List.copyOf(boundaries);
-        this.toolOrder = toolOrder;
+    PrivacyAdvisorChainValidator(List<Advisor> managedAdvisors, int expectedToolOrder) {
+        this.managedAdvisors = List.copyOf(managedAdvisors);
+        this.expectedToolOrder = expectedToolOrder;
     }
 
     @Override
@@ -45,37 +50,37 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
         });
     }
 
-    private void validate(ChatClientRequest request, List<? extends Advisor> advisors) {
-        int previous = -1;
-        int toolContext = -1;
-        int toolValidation = -1;
-        for (Advisor boundary : this.boundaries) {
-            int position = managedPosition(advisors, boundary);
-            if (position <= previous) {
-                throw conflict("Privacy advisor order changed: " + boundary.getName()
+    private void validate(ChatClientRequest request, List<? extends Advisor> requestAdvisors) {
+        int previousAdvisorIndex = -1;
+        int toolContextIndex = -1;
+        int toolCallValidationIndex = -1;
+        for (Advisor managedAdvisor : this.managedAdvisors) {
+            int advisorIndex = requireManagedAdvisorIndex(requestAdvisors, managedAdvisor);
+            if (advisorIndex <= previousAdvisorIndex) {
+                throw conflict("Privacy advisor order changed: " + managedAdvisor.getName()
                         + " must follow the preceding managed privacy boundary");
             }
-            previous = position;
-            if (boundary instanceof PrivacyToolContextAdvisor) {
-                toolContext = position;
+            previousAdvisorIndex = advisorIndex;
+            if (managedAdvisor instanceof PrivacyToolContextAdvisor) {
+                toolContextIndex = advisorIndex;
             }
-            if (boundary instanceof PrivacyToolCallValidationAdvisor) {
-                toolValidation = position;
+            if (managedAdvisor instanceof PrivacyToolCallValidationAdvisor) {
+                toolCallValidationIndex = advisorIndex;
             }
         }
 
-        int toolPosition = -1;
-        for (int i = 0; i < advisors.size(); i++) {
-            Advisor advisor = advisors.get(i);
+        int toolAdvisorIndex = -1;
+        for (int i = 0; i < requestAdvisors.size(); i++) {
+            Advisor advisor = requestAdvisors.get(i);
             if (advisor instanceof ToolAdvisor) {
-                if (toolPosition >= 0 || advisor.getOrder() != this.toolOrder) {
+                if (toolAdvisorIndex >= 0 || advisor.getOrder() != this.expectedToolOrder) {
                     throw conflict("Privacy advisor layout requires one tool advisor at the planned order "
-                            + this.toolOrder);
+                            + this.expectedToolOrder);
                 }
-                toolPosition = i;
+                toolAdvisorIndex = i;
             }
         }
-        if (toolPosition < 0) {
+        if (toolAdvisorIndex < 0) {
             boolean hasTools = request.prompt().getOptions() instanceof ToolCallingChatOptions options
                     && options.getToolCallbacks() != null && !options.getToolCallbacks().isEmpty();
             if (hasTools) {
@@ -83,28 +88,30 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
             }
             return;
         }
-        if (!(toolContext < toolPosition && toolPosition < toolValidation)) {
+        if (!(toolContextIndex < toolAdvisorIndex && toolAdvisorIndex < toolCallValidationIndex)) {
             throw conflict("Privacy advisor order must place tool context before the tool advisor "
                     + "and response validation after it; priority ordering is included in this check");
         }
     }
 
-    private int managedPosition(List<? extends Advisor> advisors, Advisor boundary) {
-        int count = 0;
-        int position = -1;
-        for (int i = 0; i < advisors.size(); i++) {
-            Advisor advisor = advisors.get(i);
-            if (advisor.getClass() == boundary.getClass()) {
-                count++;
+    private int requireManagedAdvisorIndex(List<? extends Advisor> requestAdvisors, Advisor managedAdvisor) {
+        int sameClassCount = 0;
+        int advisorIndex = -1;
+        // A same-class replacement may have different configuration; require the
+        // registered instance and reject duplicate advisors of that class.
+        for (int i = 0; i < requestAdvisors.size(); i++) {
+            Advisor advisor = requestAdvisors.get(i);
+            if (advisor.getClass() == managedAdvisor.getClass()) {
+                sameClassCount++;
             }
-            if (advisor == boundary) {
-                position = i;
+            if (advisor == managedAdvisor) {
+                advisorIndex = i;
             }
         }
-        if (count != 1 || position < 0) {
-            throw conflict("Privacy advisor layout requires exactly one managed " + boundary.getName());
+        if (sameClassCount != 1 || advisorIndex < 0) {
+            throw conflict("Privacy advisor layout requires exactly one managed " + managedAdvisor.getName());
         }
-        return position;
+        return advisorIndex;
     }
 
     private static PrivacyGuardrailException conflict(String message) {

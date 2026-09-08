@@ -79,30 +79,30 @@ public final class ToolAuthorizationChatClientFactory {
     }
 
     ChatClient.Builder createBuilder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
-            UnaryOperator<ChatClient.Builder> additionalBoundary, IntConsumer additionalOrderValidation) {
+            UnaryOperator<ChatClient.Builder> additionalAdvisorConfigurer, IntConsumer additionalOrderValidator) {
         Objects.requireNonNull(model, "model must not be null");
         Objects.requireNonNull(toolAdvisorBuilder, "toolAdvisorBuilder must not be null");
-        IntConsumer validateOrder = order -> {
+        IntConsumer orderValidator = order -> {
             if (order <= this.boundary.toolAuthorizationAdvisor().getOrder()
                     || order >= this.boundary.toolDefinitionAuthorizationAdvisor().getOrder()) {
                 throw new IllegalArgumentException(
                         "Tool-calling advisor must run after authorization lifecycle and before definition authorization");
             }
-            additionalOrderValidation.accept(order);
+            additionalOrderValidator.accept(order);
         };
-        ToolAuthorizationChainAdvisor guard = new ToolAuthorizationChainAdvisor();
+        ToolAuthorizationChainAdvisor chainValidator = new ToolAuthorizationChainAdvisor();
         AuthorizedToolCallingAdvisorBuilder securedTemplate = new AuthorizedToolCallingAdvisorBuilder(
-                toolAdvisorBuilder, this.boundary.toolCallingManager(), guard, validateOrder);
+                toolAdvisorBuilder, this.boundary.toolCallingManager(), chainValidator, orderValidator);
         ChatClient.Builder builder = ChatClient.builder(model, this.observationRegistry,
                 this.chatClientObservationConvention, this.advisorObservationConvention, securedTemplate)
-                .defaultAdvisors(guard);
+                .defaultAdvisors(chainValidator);
         if (!this.automaticToolCalling) {
             builder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
         }
         this.customize.apply(builder);
         // The privacy model boundary must validate the original callbacks before the
         // definition advisor filters them. Their terminal order is intentionally equal.
-        additionalBoundary.apply(builder);
+        additionalAdvisorConfigurer.apply(builder);
         return builder.defaultAdvisors(this.boundary.toolAuthorizationAdvisor(),
                 this.boundary.toolDefinitionAuthorizationAdvisor());
     }

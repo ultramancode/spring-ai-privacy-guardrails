@@ -21,26 +21,27 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Rejects tool loops that bypass this client's secured automatic-registration template. */
+/** Rejects tool advisors not registered by this client's secured builder. */
 final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor, PriorityOrdered {
 
-    private final ReferenceQueue<ToolCallingAdvisor> collected = new ReferenceQueue<>();
-    private final Set<AdvisorReference> authorizedAdvisors = new HashSet<>();
+    // Track advisor identity without retaining advisors after their requests complete.
+    private final ReferenceQueue<ToolCallingAdvisor> collectedAdvisorReferences = new ReferenceQueue<>();
+    private final Set<AdvisorReference> registeredAdvisors = new HashSet<>();
 
     synchronized void register(ToolCallingAdvisor advisor) {
         removeCollectedAdvisors();
-        this.authorizedAdvisors.add(new AdvisorReference(advisor, this.collected));
+        this.registeredAdvisors.add(new AdvisorReference(advisor, this.collectedAdvisorReferences));
     }
 
-    private synchronized boolean isAuthorized(Advisor advisor) {
+    private synchronized boolean isRegistered(Advisor advisor) {
         removeCollectedAdvisors();
         return advisor instanceof ToolCallingAdvisor toolAdvisor
-                && this.authorizedAdvisors.contains(new AdvisorReference(toolAdvisor, null));
+                && this.registeredAdvisors.contains(new AdvisorReference(toolAdvisor, null));
     }
 
     private void removeCollectedAdvisors() {
-        for (Object reference; (reference = this.collected.poll()) != null;) {
-            this.authorizedAdvisors.remove(reference);
+        for (Object reference; (reference = this.collectedAdvisorReferences.poll()) != null;) {
+            this.registeredAdvisors.remove(reference);
         }
     }
 
@@ -58,15 +59,15 @@ final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor,
         });
     }
 
-    private void validate(ChatClientRequest request, List<? extends Advisor> advisors) {
-        List<? extends Advisor> toolAdvisors = advisors.stream()
+    private void validate(ChatClientRequest request, List<? extends Advisor> requestAdvisors) {
+        List<? extends Advisor> toolAdvisors = requestAdvisors.stream()
                 .filter(ToolAdvisor.class::isInstance).toList();
         boolean hasTools = request.prompt().getOptions() instanceof ToolCallingChatOptions options
                 && options.getToolCallbacks() != null && !options.getToolCallbacks().isEmpty();
         if (toolAdvisors.isEmpty() && !hasTools) {
             return;
         }
-        if (toolAdvisors.size() != 1 || !isAuthorized(toolAdvisors.get(0))) {
+        if (toolAdvisors.size() != 1 || !isRegistered(toolAdvisors.get(0))) {
             throw new AuthorizationDeniedException(
                     "Tool authorization requires this client's managed tool advisor; "
                             + "do not disable automatic registration or register a separate ToolAdvisor");

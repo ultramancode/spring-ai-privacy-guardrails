@@ -242,15 +242,15 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
         startModelServer(finalResponse());
         contextRunner().run(context -> {
             for (boolean streaming : new boolean[]{false, true}) {
-                AtomicInteger started = new AtomicInteger();
+                AtomicInteger toolLoopStarts = new AtomicInteger();
                 ChatClient client = context.getBean(ToolAuthorizationChatClientFactory.class)
                         .builder(context.getBean(OpenAiChatModel.class))
-                        .defaultAdvisors(new PriorityToolAdvisor(started))
+                        .defaultAdvisors(new PriorityToolAdvisor(toolLoopStarts))
                         .defaultTools(tool("customerLookup", new AtomicInteger())).build();
                 authenticate();
                 assertThatThrownBy(() -> invoke(client.prompt().user("Lookup"), streaming))
                         .isInstanceOf(AuthorizationDeniedException.class);
-                assertThat(started).hasValue(0);
+                assertThat(toolLoopStarts).hasValue(0);
             }
             assertThat(this.modelRequests).isEmpty();
         });
@@ -258,19 +258,19 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
 
     private static final class PriorityToolAdvisor extends ToolCallingAdvisor
             implements PriorityOrdered {
-        private final AtomicInteger started;
+        private final AtomicInteger toolLoopStarts;
 
-        PriorityToolAdvisor(AtomicInteger started) {
+        PriorityToolAdvisor(AtomicInteger toolLoopStarts) {
             super(ToolCallingManager.builder().build(), response -> response != null && response.hasToolCalls(),
                     Ordered.HIGHEST_PRECEDENCE + 1, true);
-            this.started = started;
+            this.toolLoopStarts = toolLoopStarts;
         }
 
         @Override
         public ChatClientResponse adviseCall(
                 ChatClientRequest request,
                 CallAdvisorChain chain) {
-            this.started.incrementAndGet();
+            this.toolLoopStarts.incrementAndGet();
             return super.adviseCall(request, chain);
         }
 
@@ -278,7 +278,7 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
         public Flux<ChatClientResponse> adviseStream(
                 ChatClientRequest request,
                 StreamAdvisorChain chain) {
-            this.started.incrementAndGet();
+            this.toolLoopStarts.incrementAndGet();
             return super.adviseStream(request, chain);
         }
     }

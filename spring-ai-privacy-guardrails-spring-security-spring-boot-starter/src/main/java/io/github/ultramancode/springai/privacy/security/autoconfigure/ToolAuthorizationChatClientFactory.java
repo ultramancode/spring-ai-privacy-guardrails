@@ -16,12 +16,14 @@ import java.util.function.UnaryOperator;
 
 /**
  * Creates selected ChatClients with request-scoped tool authorization. The shared model
- * retains its own manager. Spring AI creates each tool loop and adjusts conversation
- * history for the request's memory advisors.
+ * retains its own manager. Spring AI adjusts the tool advisor's conversation history
+ * handling based on the request's memory advisors.
  *
- * <p>Supply a tool-advisor builder to customize the loop, including Tool Search. Do not
- * register a separate ToolAdvisor. Requests with tools require automatic registration;
- * missing or foreign tool advisors are rejected before standard tool loops run.</p>
+ * <p>Supply a tool advisor builder to customize the loop, including Tool Search.
+ * By default, Spring AI builds and registers the advisor for each call or stream chain,
+ * even for requests without tools. Requests with tools require automatic registration.
+ * Tool advisors registered separately from this client's secured builder are rejected
+ * before standard tool loops run.</p>
  *
  * <p>Tool advisors implementing {@link PriorityOrdered} are
  * unsupported because they run before the authorization lifecycle regardless of their
@@ -62,11 +64,13 @@ public final class ToolAuthorizationChatClientFactory {
     }
 
     /**
-     * Creates a fresh builder using a copy of the supplied tool-loop template. Spring AI
-     * determines conversation history handling from the final request advisor chain.
-     * Custom templates must honor the standard copy, manager and build contracts.
+     * Creates a fresh builder using a copy of the supplied tool advisor builder.
+     * Accepts {@link ToolCallingAdvisor.Builder} and subclass builders, including
+     * {@code ToolSearchToolCallingAdvisor.Builder}. The copy retains the advisor subtype.
+     * Spring AI determines conversation history handling from the final request advisor chain.
+     * Custom builders must honor the standard copy, manager and build contracts.
      * @param model the shared model to call
-     * @param toolAdvisorBuilder template for a standard or Tool Search loop
+     * @param toolAdvisorBuilder builder for a standard or custom tool loop, including Tool Search
      * @return a new builder with scoped tool authorization
      * @throws IllegalArgumentException when the tool order is outside the authorization boundaries
      */
@@ -86,7 +90,7 @@ public final class ToolAuthorizationChatClientFactory {
             if (order <= this.boundary.toolAuthorizationAdvisor().getOrder()
                     || order >= this.boundary.toolDefinitionAuthorizationAdvisor().getOrder()) {
                 throw new IllegalArgumentException(
-                        "Tool-calling advisor must run after authorization lifecycle and before definition authorization");
+                        "Tool advisor must run after authorization lifecycle and before definition authorization");
             }
             additionalOrderValidator.accept(order);
         };

@@ -17,9 +17,10 @@ import java.util.function.UnaryOperator;
  * Applies the starter-managed privacy boundary to a {@link ChatClient.Builder}
  * explicitly selected by the application.
  *
- * <p>The default entry point uses the standard tool order. The order-aware entry
- * point positions the complete boundary around a selected tool order and checks
- * the actual request chain. Neither entry point omits mandatory privacy advisors.
+ * <p>{@link #configure(ChatClient.Builder)} uses {@link ToolCallingAdvisor#DEFAULT_ORDER}.
+ * {@link #forToolCallingAdvisorOrder(int)} positions the complete boundary around
+ * the supplied tool order and checks the actual request chain.
+ * Both entry points include all mandatory privacy advisors.
  * Output protection is included only when {@code spring.ai.privacy.output.enabled=true}.</p>
  */
 public final class PrivacyChatClientConfigurer
@@ -33,7 +34,8 @@ public final class PrivacyChatClientConfigurer
     }
 
     /**
-     * Applies the complete configured privacy boundary and returns the same builder.
+     * Applies the complete privacy boundary using {@link ToolCallingAdvisor#DEFAULT_ORDER}
+     * as the tool order for relative positioning and returns the same builder.
      *
      * @param builder ChatClient builder to configure for privacy protection
      * @return the supplied builder after the privacy advisors have been registered
@@ -44,19 +46,30 @@ public final class PrivacyChatClientConfigurer
     }
 
     /**
-     * Prepares a complete privacy boundary for the given tool order. Each application
-     * creates fresh advisors; the tool advisor and application advisors keep their orders.
+     * Prepares a complete privacy boundary for the given tool order. Applying the returned
+     * configurer creates fresh advisors. The tool advisor and application advisors keep their orders.
      * The input and terminal model boundaries retain their default positions.
      * The final chain is checked for each call or stream subscription, including
      * advisors added to individual requests.
      *
-     * @param toolOrder the order of the tool advisor that will be registered on the client
+     * @param toolOrder the planned order of the client's tool advisor
      * @return a configurer that validates the actual call and stream advisor layouts
      * @throws IllegalArgumentException when the relative boundaries cannot fit between input and model processing
      */
     public UnaryOperator<ChatClient.Builder> forToolCallingAdvisorOrder(int toolOrder) {
-        // Reserve output=T-2 and context=T-1 after input, and validation=T+1
-        // before the model boundary. Check in long arithmetic before narrowing.
+        // Required order from input to model (T = toolOrder, lower order values enter first):
+        // PrivacyInputAdvisor < PrivacyOutputAdvisor(T-2, optional) < PrivacyToolContextAdvisor(T-1)
+        //                     < ToolAdvisor(T) < PrivacyToolCallValidationAdvisor(T+1)
+        //                     < PrivacyModelBoundaryAdvisor.
+        // PrivacyOutputAdvisor is included only when spring.ai.privacy.output.enabled=true.
+        // The other privacy advisors are mandatory.
+        // ChatClient auto-registers a ToolAdvisor by default, even for requests without tools.
+        // If it is absent, only requests without tools are allowed. T still determines the privacy layout.
+        // ToolAdvisor examples include ToolCallingAdvisor and ToolSearchToolCallingAdvisor.
+        // PrivacyOutputAdvisor prepares protection. PrivacyLifecycleAdvisor applies it to the returning response.
+        // Reserve two positions between input and tool, so T >= input+3, even when output protection is disabled.
+        // Reserve one position between tool and model, so T <= model-2.
+        // Compute the bounds in long to avoid overflow if the boundary constants change.
         long minimumToolOrder = (long) PrivacyInputAdvisor.DEFAULT_ORDER + 3;
         long maximumToolOrder = (long) PrivacyModelBoundaryAdvisor.DEFAULT_ORDER - 2;
         if (toolOrder < minimumToolOrder || toolOrder > maximumToolOrder) {
@@ -73,7 +86,10 @@ public final class PrivacyChatClientConfigurer
         };
     }
 
-    /** JDK-only composition contract used by optional integrations. */
+    /**
+     * Exposes {@link #forToolCallingAdvisorOrder(int)} through {@link IntFunction}
+     * so optional integrations can use this configurer without referencing its concrete class.
+     */
     @Override
     public UnaryOperator<ChatClient.Builder> apply(int toolOrder) {
         return forToolCallingAdvisorOrder(toolOrder);

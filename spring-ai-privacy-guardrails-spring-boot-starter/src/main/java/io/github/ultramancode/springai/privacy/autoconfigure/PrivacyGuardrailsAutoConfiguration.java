@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/** Auto-configures core privacy services and the fixed Spring AI privacy boundary. */
+/** Auto-configures core privacy services and the starter-managed Spring AI privacy boundary. */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "spring.ai.privacy", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(PrivacyGuardrailsProperties.class)

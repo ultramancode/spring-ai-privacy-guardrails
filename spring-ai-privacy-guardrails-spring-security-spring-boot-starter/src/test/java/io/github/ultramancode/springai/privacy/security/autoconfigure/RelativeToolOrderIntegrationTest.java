@@ -59,6 +59,46 @@ import static org.mockito.Mockito.when;
 class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestSupport {
 
     @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void springAiRejectsMultipleToolAdvisorsBeforeExecution(boolean streaming, boolean privacyEnabled)
+            throws IOException {
+        startModelServer(finalResponse());
+        ToolIndex index = mock(ToolIndex.class);
+        AtomicInteger calls = new AtomicInteger();
+        var runner = privacyEnabled ? privacyContextRunner() : contextRunner();
+        runner.run(context -> {
+            var template = ToolCallingAdvisor.builder().advisorOrder(0);
+            var callback = tool("customerLookup", calls);
+            ChatClient.Builder builder;
+            if (privacyEnabled) {
+                builder = protectedBuilder(context, template);
+                callback = context.getBean(PrivacyToolCallbackFactory.class).wrap(callback);
+            } else {
+                builder = context.getBean(ToolAuthorizationChatClientFactory.class)
+                        .builder(context.getBean(OpenAiChatModel.class), template);
+            }
+            ChatClient client = builder.defaultTools(callback)
+                    .defaultAdvisors(ToolCallingAdvisor.builder().advisorOrder(0).build()).build();
+            authenticate();
+            var request = client.prompt().user("Run lookup")
+                    .advisors(ToolSearchToolCallingAdvisor.builder().toolIndex(index).advisorOrder(0)
+                            .systemMessageSuffix("Search for tools before using them.").build());
+
+            assertThatThrownBy(() -> {
+                if (streaming) {
+                    request.stream().content().collectList().block(Duration.ofSeconds(10));
+                } else {
+                    request.call().content();
+                }
+            }).isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("At most one ToolAdvisor is allowed", "found 2");
+            verifyNoInteractions(index);
+            assertThat(calls).hasValue(0);
+            assertThat(this.modelRequests).isEmpty();
+        });
+    }
+
+    @ParameterizedTest
     @CsvSource({
             "false, 0", "true, 0", "false, 100", "true, 100",
             "false, -2147483395", "true, -2147483395", "false, 2147483644", "true, 2147483644"

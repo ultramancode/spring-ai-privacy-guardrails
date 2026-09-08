@@ -24,7 +24,7 @@ import java.util.Set;
 /** Rejects tool advisors not registered by this client's secured builder. */
 final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor, PriorityOrdered {
 
-    // Track advisor identity without retaining advisors after their requests complete.
+    // Track advisor identity with weak references so this registry does not prevent garbage collection.
     private final ReferenceQueue<ToolCallingAdvisor> collectedAdvisorReferences = new ReferenceQueue<>();
     private final Set<AdvisorReference> registeredAdvisors = new HashSet<>();
 
@@ -60,6 +60,7 @@ final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor,
     }
 
     private void validate(ChatClientRequest request, List<? extends Advisor> requestAdvisors) {
+        // Spring AI rejects multiple ToolAdvisors when it builds the request chain.
         List<? extends Advisor> toolAdvisors = requestAdvisors.stream()
                 .filter(ToolAdvisor.class::isInstance).toList();
         boolean hasTools = request.prompt().getOptions() instanceof ToolCallingChatOptions options
@@ -67,7 +68,7 @@ final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor,
         if (toolAdvisors.isEmpty() && !hasTools) {
             return;
         }
-        if (toolAdvisors.size() != 1 || !isRegistered(toolAdvisors.get(0))) {
+        if (toolAdvisors.isEmpty() || !isRegistered(toolAdvisors.get(0))) {
             throw new AuthorizationDeniedException(
                     "Tool authorization requires this client's managed tool advisor; "
                             + "do not disable automatic registration or register a separate ToolAdvisor");

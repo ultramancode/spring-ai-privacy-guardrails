@@ -69,12 +69,13 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
             }
         }
 
+        // Spring AI rejects multiple ToolAdvisors when it builds the request chain.
         int toolAdvisorIndex = -1;
         for (int i = 0; i < requestAdvisors.size(); i++) {
             Advisor advisor = requestAdvisors.get(i);
             if (advisor instanceof ToolAdvisor) {
-                if (toolAdvisorIndex >= 0 || advisor.getOrder() != this.expectedToolOrder) {
-                    throw conflict("Privacy advisor layout requires one tool advisor at the planned order "
+                if (advisor.getOrder() != this.expectedToolOrder) {
+                    throw conflict("Privacy advisor layout requires the tool advisor at the planned order "
                             + this.expectedToolOrder);
                 }
                 toolAdvisorIndex = i;
@@ -97,8 +98,8 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
     private int requireManagedAdvisorIndex(List<? extends Advisor> requestAdvisors, Advisor managedAdvisor) {
         int sameClassCount = 0;
         int advisorIndex = -1;
-        // A same-class replacement may have different configuration; require the
-        // registered instance and reject duplicate advisors of that class.
+        // An advisor of the same class may have different configuration.
+        // Require the registered instance and reject duplicates of that class.
         for (int i = 0; i < requestAdvisors.size(); i++) {
             Advisor advisor = requestAdvisors.get(i);
             if (advisor.getClass() == managedAdvisor.getClass()) {

@@ -74,7 +74,8 @@ final class AuthorizedToolCallingAdvisorBuilder
     @Override
     public ToolCallingAdvisor build() {
         ToolCallingAdvisor advisor = this.delegate.copy().toolCallingManager(this.toolCallingManager).build();
-        // PriorityOrdered bypasses the numeric order and runs before the authorization lifecycle.
+        // PriorityOrdered tool advisors run before the ordinary Ordered authorization lifecycle,
+        // regardless of their numeric order values.
         if (advisor instanceof PriorityOrdered) {
             throw new IllegalArgumentException(
                     "PriorityOrdered tool advisors are incompatible with tool authorization; "

@@ -13,7 +13,7 @@ import java.util.function.IntFunction;
  * Creates ChatClients with the starter-managed privacy and tool authorization boundaries.
  * Tool advisor templates follow the ordering restrictions documented by
  * {@link ToolAuthorizationChatClientFactory}, including rejection of
- * {@link PriorityOrdered} tool advisors at request creation.
+ * {@link PriorityOrdered} tool advisors when Spring AI builds the call or stream advisor chain.
  */
 public final class PrivacySecurityChatClientFactory {
 
@@ -37,12 +37,14 @@ public final class PrivacySecurityChatClientFactory {
     }
 
     /**
-     * Creates a fresh builder with both boundaries and a copied tool-loop template.
-     * Privacy advisors are positioned around the selected tool order without changing
+     * Creates a fresh builder with both boundaries and a copy of the supplied tool advisor builder.
+     * Accepts {@link ToolCallingAdvisor.Builder} and subclass builders, including
+     * {@code ToolSearchToolCallingAdvisor.Builder}. The copy retains the advisor subtype.
+     * Privacy advisors are positioned around the supplied builder's order without changing
      * application advisor orders. Orders that cannot fit the privacy boundaries are
-     * rejected before client customization; the actual request layout is also checked.
+     * rejected before client customization. The actual request layout is also checked.
      * @param model the shared model to call
-     * @param toolAdvisorBuilder standard or Tool Search template with the desired tool order
+     * @param toolAdvisorBuilder tool advisor builder whose order determines the privacy layout
      * @return a new builder with privacy and tool authorization
      * @throws IllegalArgumentException when the template's tool order is incompatible with privacy
      */

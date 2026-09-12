@@ -61,6 +61,7 @@ class PrivacyJsonPayloadPolicyTest {
     @Test
     void jsonTransformerUsesLosslessNumbersWithoutWideningOrdinaryIntegers() {
         List<Class<?>> numberTypes = new ArrayList<>();
+        // An ordinary int, Integer.MAX_VALUE + 1, Long.MAX_VALUE + 1, and a high-precision decimal.
         String input = "[2,2147483648,9223372036854775808,0.1234567890123456789012345]";
 
         String result = PrivacyJsonPayloadTransformer.transformJsonOrText(

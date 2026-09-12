@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
 import java.util.function.UnaryOperator;
+import java.util.function.IntFunction;
 
 /** Composes the independently configured privacy and tool-authorization boundaries. */
 @AutoConfiguration(
@@ -17,7 +18,7 @@ import java.util.function.UnaryOperator;
 )
 @ConditionalOnBean(
         name = "privacyChatClientConfigurer",
-        value = ToolAuthorizationChatClientConfigurer.class
+        value = ToolAuthorizationChatClientFactory.class
 )
 @ConditionalOnProperty(
         prefix = "spring.ai.privacy.security",
@@ -27,14 +28,14 @@ import java.util.function.UnaryOperator;
 public class PrivacySecurityAutoConfiguration {
 
     @Bean
-    PrivacySecurityChatClientConfigurer privacySecurityChatClientConfigurer(
+    PrivacySecurityChatClientFactory privacySecurityChatClientFactory(
             @Qualifier("privacyChatClientConfigurer")
-            UnaryOperator<ChatClient.Builder> privacyChatClientConfigurer,
-            ToolAuthorizationChatClientConfigurer toolAuthorizationChatClientConfigurer
+            IntFunction<UnaryOperator<ChatClient.Builder>> privacyChatClientConfigurer,
+            ToolAuthorizationChatClientFactory toolAuthorizationChatClientFactory
     ) {
-        return new PrivacySecurityChatClientConfigurer(
+        return new PrivacySecurityChatClientFactory(
                 privacyChatClientConfigurer,
-                toolAuthorizationChatClientConfigurer
+                toolAuthorizationChatClientFactory
         );
     }
 }

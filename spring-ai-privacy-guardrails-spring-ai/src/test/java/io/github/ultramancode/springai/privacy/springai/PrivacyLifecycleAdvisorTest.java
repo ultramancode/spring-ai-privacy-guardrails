@@ -12,7 +12,9 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.prompt.Prompt;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -114,10 +116,15 @@ class PrivacyLifecycleAdvisorTest {
                     ));
         });
 
-        List<ChatClientResponse> results = lifecycle.adviseStream(request(), chain).collectList().block();
+        StepVerifier.withVirtualTime(() -> lifecycle.adviseStream(request(), chain).collectList())
+                .thenAwait(Duration.ofMillis(300))
+                .assertNext(results -> {
+                    assertThat(results).hasSize(10);
+                    assertThat(results).allSatisfy(result -> assertThat(result.context()).isEmpty());
+                })
+                .expectComplete()
+                .verify(Duration.ofSeconds(30));
 
-        assertThat(results).hasSize(10);
-        assertThat(results).allSatisfy(result -> assertThat(result.context()).isEmpty());
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -140,7 +147,7 @@ class PrivacyLifecycleAdvisorTest {
         StreamAdvisorChain chain = streamChain(service, lifecycle, null);
         when(chain.nextStream(any())).thenReturn(Flux.never());
 
-        reactor.core.Disposable subscription = lifecycle.adviseStream(request(), chain).subscribe();
+        Disposable subscription = lifecycle.adviseStream(request(), chain).subscribe();
         assertThat(service.activeSessionCount()).isOne();
 
         subscription.dispose();
@@ -175,7 +182,7 @@ class PrivacyLifecycleAdvisorTest {
         });
         List<ChatClientResponse> subscriberResponses = new ArrayList<>();
 
-        reactor.core.Disposable subscription = lifecycle.adviseStream(request(), chain)
+        Disposable subscription = lifecycle.adviseStream(request(), chain)
                 .subscribe(subscriberResponses::add);
 
         assertThat(upstreamFrameEmitted).isTrue();

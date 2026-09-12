@@ -24,7 +24,6 @@ import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class ToolAuthorizationAutoConfigurationTest {
@@ -40,17 +39,18 @@ class ToolAuthorizationAutoConfigurationTest {
             .withPropertyValues("spring.ai.privacy.security.enabled=true");
 
     @Test
-    void decoratesTheSpringAiManagerAndContributesTheAuthorizationConfigurer() {
+    void preparesAuthorizationWithoutReplacingTheSpringAiManager() {
         this.contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(SpringSecurityToolBoundary.class);
-            assertThat(context.getBeansOfType(ToolCallingManager.class)).hasSize(2);
-            assertThat(context).hasSingleBean(ToolAuthorizationChatClientConfigurer.class);
+            assertThat(context).hasSingleBean(ToolCallingManager.class);
+            assertThat(context).hasSingleBean(ToolAuthorizationChatClientFactory.class);
             assertThat(context).hasSingleBean(ToolCallingAdvisor.Builder.class);
             assertThat(context.getBean(ChatClient.Builder.class)).isNotNull();
             SpringSecurityToolBoundary boundary = context.getBean(SpringSecurityToolBoundary.class);
             assertThat(context.getBean(ToolCallingManager.class))
-                    .isSameAs(boundary.toolCallingManager());
+                    .isInstanceOf(DefaultToolCallingManager.class)
+                    .isNotSameAs(boundary.toolCallingManager());
             assertThat(context.getBeansOfType(ToolCallingManager.class).values())
                     .filteredOn(DefaultToolCallingManager.class::isInstance)
                     .singleElement()
@@ -59,20 +59,11 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Test
-    void rejectsConfiguringTheSameBuilderMoreThanOnce() {
+    void createsIndependentBuildersForTheSameModel() {
         this.contextRunner.run(context -> {
-            ToolAuthorizationChatClientConfigurer configurer = context.getBean(
-                    ToolAuthorizationChatClientConfigurer.class
-            );
-            ChatClient.Builder builder = mock(ChatClient.Builder.class);
-
-            assertThat(configurer.configure(builder)).isSameAs(builder);
-            assertThatThrownBy(() -> configurer.configure(builder))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessage(
-                            "ToolAuthorizationChatClientConfigurer cannot configure the same "
-                                    + "ChatClient.Builder more than once"
-                    );
+            ToolAuthorizationChatClientFactory factory = context.getBean(ToolAuthorizationChatClientFactory.class);
+            ChatModel model = context.getBean(ChatModel.class);
+            assertThat(factory.builder(model)).isNotSameAs(factory.builder(model));
         });
     }
 
@@ -87,13 +78,38 @@ class ToolAuthorizationAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(SpringSecurityToolBoundary.class);
-                    assertThat(context).hasSingleBean(ToolAuthorizationChatClientConfigurer.class);
-                    assertThat(context).doesNotHaveBean(PrivacySecurityChatClientConfigurer.class);
+                    assertThat(context).hasSingleBean(ToolAuthorizationChatClientFactory.class);
+                    assertThat(context).doesNotHaveBean(PrivacySecurityChatClientFactory.class);
                 });
     }
 
     @Test
-    void keepsTheAuthorizationAwarePrimaryForBothResolverFallbackSettings() {
+    void supportsManuallyBuiltClientsWhenChatClientAutoConfigurationIsDisabled() {
+        this.contextRunner.withPropertyValues("spring.ai.chat.client.enabled=false")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(ToolCallingAdvisor.Builder.class);
+                    ToolAuthorizationChatClientFactory factory = context.getBean(
+                            ToolAuthorizationChatClientFactory.class);
+                    assertThat(factory.builder(context.getBean(ChatModel.class)).build()).isNotNull();
+                });
+    }
+
+    @Test
+    void configuringAClientDoesNotMutateTheSharedToolAdvisorBuilder() {
+        this.contextRunner.run(context -> {
+            ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = context.getBean(ToolCallingAdvisor.Builder.class);
+            ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
+
+            context.getBean(ToolAuthorizationChatClientFactory.class)
+                    .builder(context.getBean(ChatModel.class));
+
+            assertThat(ReflectionTestUtils.getField(toolAdvisorBuilder, "toolCallingManager")).isSameAs(upstreamManager);
+        });
+    }
+
+    @Test
+    void leavesTheApplicationManagerUnchangedForBothResolverFallbackSettings() {
         for (boolean enabled : new boolean[]{false, true}) {
             this.contextRunner
                     .withPropertyValues(
@@ -105,7 +121,7 @@ class ToolAuthorizationAutoConfigurationTest {
                                 SpringSecurityToolBoundary.class
                         );
                         assertThat(context.getBean(ToolCallingManager.class))
-                                .isSameAs(boundary.toolCallingManager());
+                                .isNotSameAs(boundary.toolCallingManager());
                         assertThat(context.getBeansOfType(ToolCallingManager.class).values())
                                 .filteredOn(DefaultToolCallingManager.class::isInstance)
                                 .hasSize(1);
@@ -132,7 +148,7 @@ class ToolAuthorizationAutoConfigurationTest {
                             SpringSecurityToolBoundary.class
                     );
                     assertThat(context.getBean(ToolCallingManager.class))
-                            .isSameAs(boundary.toolCallingManager());
+                            .isNotSameAs(boundary.toolCallingManager());
                     assertThat(context.getBean(
                             "renamedUpstreamManager",
                             ToolCallingManager.class
@@ -169,12 +185,13 @@ class ToolAuthorizationAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(ToolCallingManager.class))
-                            .isSameAs(explicitBoundary.toolCallingManager());
+                            .isSameAs(customManager)
+                            .isNotSameAs(explicitBoundary.toolCallingManager());
                 });
     }
 
     @Test
-    void injectsThePrimaryDecoratorIntoActualSpringAiModelAndAdvisorAutoConfiguration() {
+    void leavesTheActualOpenAiModelAndDefaultToolAdvisorOnTheUpstreamManager() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         ToolAuthorizationAutoConfiguration.class,
@@ -192,21 +209,22 @@ class ToolAuthorizationAutoConfigurationTest {
                     SpringSecurityToolBoundary boundary = context.getBean(
                             SpringSecurityToolBoundary.class
                     );
-                    ToolCallingManager authorizationAwareManager = boundary.toolCallingManager();
+                    ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
+                    assertThat(upstreamManager).isNotSameAs(boundary.toolCallingManager());
                     OpenAiChatModel chatModel = context.getBean(OpenAiChatModel.class);
                     ToolCallingAdvisor.Builder<?> advisorBuilder = context.getBean(
                             ToolCallingAdvisor.Builder.class
                     );
 
                     assertThat(ReflectionTestUtils.getField(chatModel, "toolCallingManager"))
-                            .isSameAs(authorizationAwareManager);
+                            .isSameAs(upstreamManager);
                     assertThat(ReflectionTestUtils.getField(advisorBuilder, "toolCallingManager"))
-                            .isSameAs(authorizationAwareManager);
+                            .isSameAs(upstreamManager);
                 });
     }
 
     @Test
-    void startsAnActualNonOpenAiProviderWithTheAuthorizationAwarePrimaryManager() {
+    void leavesTheActualAnthropicModelOnTheUpstreamManager() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         ToolAuthorizationAutoConfiguration.class,
@@ -226,7 +244,10 @@ class ToolAuthorizationAutoConfigurationTest {
                             SpringSecurityToolBoundary.class
                     );
                     assertThat(context.getBean(ToolCallingManager.class))
-                            .isSameAs(boundary.toolCallingManager());
+                            .isNotSameAs(boundary.toolCallingManager());
+                    assertThat(ReflectionTestUtils.getField(
+                            context.getBean(AnthropicChatModel.class), "toolCallingManager"))
+                            .isSameAs(context.getBean(ToolCallingManager.class));
                 });
     }
 
@@ -236,7 +257,7 @@ class ToolAuthorizationAutoConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(ToolAuthorizationAutoConfiguration.class))
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(SpringSecurityToolBoundary.class);
-                    assertThat(context).doesNotHaveBean(ToolAuthorizationChatClientConfigurer.class);
+                    assertThat(context).doesNotHaveBean(ToolAuthorizationChatClientFactory.class);
                 });
     }
 

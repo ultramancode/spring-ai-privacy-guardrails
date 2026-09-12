@@ -3,9 +3,8 @@ package example;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
-import io.github.ultramancode.springai.privacy.security.autoconfigure.ToolAuthorizationChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.ToolAuthorizationChatClientFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -72,12 +71,12 @@ public class SecurityOnlyPublishedArtifactConsumer {
 
     private static void verifyToolAuthorization(ConfigurableApplicationContext context) {
         SpringSecurityToolBoundary boundary = context.getBean(SpringSecurityToolBoundary.class);
-        ToolCallingManager authorizationAwareManager = context.getBean(
+        ToolCallingManager upstreamManager = context.getBean(
                 ToolCallingManager.class
         );
-        if (authorizationAwareManager != boundary.toolCallingManager()) {
+        if (upstreamManager == boundary.toolCallingManager()) {
             throw new IllegalStateException(
-                    "Security starter did not select its authorization-aware manager"
+                    "Security starter replaced the shared application ToolCallingManager"
             );
         }
 
@@ -85,14 +84,9 @@ public class SecurityOnlyPublishedArtifactConsumer {
         AtomicInteger deniedToolCalls = new AtomicInteger();
         ToolCallback customerLookup = customerLookup(customerLookupInput);
         ToolCallback adminDelete = adminDelete(deniedToolCalls);
-        PublishedToolLoopModel model = new PublishedToolLoopModel(authorizationAwareManager);
-        ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-                .toolCallingManager(authorizationAwareManager)
-                .build();
-        ChatClient.Builder builder = ChatClient.builder(model)
-                .defaultAdvisors(toolCallingAdvisor)
-                .defaultTools(customerLookup, adminDelete);
-        context.getBean(ToolAuthorizationChatClientConfigurer.class).configure(builder);
+        PublishedToolLoopModel model = new PublishedToolLoopModel(upstreamManager);
+        ChatClient.Builder builder = context.getBean(ToolAuthorizationChatClientFactory.class)
+                .builder(model).defaultTools(customerLookup, adminDelete);
 
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(

@@ -28,6 +28,7 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -148,17 +149,21 @@ class PrivacyOutputAdvisorStreamTest {
                 new PrivacyResponseInspectionLimits(20, 1000, 1000, Duration.ofMillis(200))
         );
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
-        when(chain.nextStream(any())).thenReturn(Flux.interval(Duration.ofMillis(30))
+        when(chain.nextStream(any())).thenAnswer(invocation -> Flux.interval(Duration.ofMillis(30))
                 .take(10)
                 .map(index -> response("safe-" + index)));
 
         try (PrivacySession session = service.openSession()) {
-            List<ChatClientResponse> responses = protectStreamAtApplicationBoundary(
-                    advisor, session.handle(), chain
-            ).collectList().block();
-
-            assertThat(responses).hasSize(10);
+            StepVerifier.withVirtualTime(() -> protectStreamAtApplicationBoundary(
+                            advisor, session.handle(), chain
+                    ).collectList())
+                    .thenAwait(Duration.ofMillis(300))
+                    .assertNext(responses -> assertThat(responses).hasSize(10))
+                    .expectComplete()
+                    .verify(Duration.ofSeconds(30));
         }
+
+        assertThat(service.activeSessionCount()).isZero();
     }
 
     @Test

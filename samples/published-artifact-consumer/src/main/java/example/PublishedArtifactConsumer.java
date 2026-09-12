@@ -123,7 +123,7 @@ public class PublishedArtifactConsumer {
         ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
         if (upstreamManager == toolBoundary.toolCallingManager()) {
             throw new IllegalStateException(
-                    "Published Security starter replaced the shared application manager"
+                    "Published Security starter replaced the shared application ToolCallingManager"
             );
         }
         PublishedAuthorizationChecks authorizationChecks = context.getBean(

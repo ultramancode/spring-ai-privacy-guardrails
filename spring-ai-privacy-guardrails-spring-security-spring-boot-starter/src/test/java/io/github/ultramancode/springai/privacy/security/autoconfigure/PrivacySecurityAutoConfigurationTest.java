@@ -50,7 +50,7 @@ class PrivacySecurityAutoConfigurationTest {
     }
 
     @Test
-    void createsIndependentBuildersWithBothBoundaries() {
+    void createsIndependentBuildersForTheSameModel() {
         this.contextRunner.run(context -> {
             PrivacySecurityChatClientFactory factory = context.getBean(PrivacySecurityChatClientFactory.class);
             ChatModel model = context.getBean(ChatModel.class);

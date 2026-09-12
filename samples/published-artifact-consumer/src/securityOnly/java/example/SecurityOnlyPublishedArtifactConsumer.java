@@ -76,7 +76,7 @@ public class SecurityOnlyPublishedArtifactConsumer {
         );
         if (upstreamManager == boundary.toolCallingManager()) {
             throw new IllegalStateException(
-                    "Security starter replaced the shared application manager"
+                    "Security starter replaced the shared application ToolCallingManager"
             );
         }
 

@@ -96,15 +96,15 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Test
-    void configuringAClientDoesNotMutateTheSharedToolAdvisorTemplate() {
+    void configuringAClientDoesNotMutateTheSharedToolAdvisorBuilder() {
         this.contextRunner.run(context -> {
-            ToolCallingAdvisor.Builder<?> template = context.getBean(ToolCallingAdvisor.Builder.class);
+            ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = context.getBean(ToolCallingAdvisor.Builder.class);
             ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
 
             context.getBean(ToolAuthorizationChatClientFactory.class)
                     .builder(context.getBean(ChatModel.class));
 
-            assertThat(ReflectionTestUtils.getField(template, "toolCallingManager")).isSameAs(upstreamManager);
+            assertThat(ReflectionTestUtils.getField(toolAdvisorBuilder, "toolCallingManager")).isSameAs(upstreamManager);
         });
     }
 

@@ -8,8 +8,10 @@ import org.springframework.core.PriorityOrdered;
 import java.util.function.IntConsumer;
 
 /**
- * Preserves the supplied builder's advisor subtype during Spring AI's automatic
- * registration while enforcing this client's tool manager and order checks.
+ * Configures tool advisors created by Spring AI's automatic registration with
+ * the authorization-aware {@link ToolCallingManager}. Preserves the supplied
+ * builder's advisor subtype. Builder copies retain checks against replacing
+ * the tool-calling manager or using an incompatible advisor order.
  */
 final class AuthorizedToolCallingAdvisorBuilder
         extends ToolCallingAdvisor.Builder<AuthorizedToolCallingAdvisorBuilder> {
@@ -19,9 +21,9 @@ final class AuthorizedToolCallingAdvisorBuilder
     private final ToolAuthorizationChainAdvisor chainValidator;
     private final IntConsumer orderValidator;
 
-    AuthorizedToolCallingAdvisorBuilder(ToolCallingAdvisor.Builder<?> template, ToolCallingManager toolCallingManager,
+    AuthorizedToolCallingAdvisorBuilder(ToolCallingAdvisor.Builder<?> toolAdvisorBuilder, ToolCallingManager toolCallingManager,
             ToolAuthorizationChainAdvisor chainValidator, IntConsumer orderValidator) {
-        this.delegate = template.copy().toolCallingManager(toolCallingManager);
+        this.delegate = toolAdvisorBuilder.copy().toolCallingManager(toolCallingManager);
         this.toolCallingManager = toolCallingManager;
         this.chainValidator = chainValidator;
         this.orderValidator = orderValidator;
@@ -42,7 +44,8 @@ final class AuthorizedToolCallingAdvisorBuilder
     @Override
     public AuthorizedToolCallingAdvisorBuilder toolCallingManager(ToolCallingManager toolCallingManager) {
         if (toolCallingManager != this.toolCallingManager) {
-            throw new IllegalArgumentException("The secured template's tool manager cannot be replaced");
+            throw new IllegalArgumentException(
+                    "The authorized tool advisor builder's ToolCallingManager cannot be replaced");
         }
         return this;
     }

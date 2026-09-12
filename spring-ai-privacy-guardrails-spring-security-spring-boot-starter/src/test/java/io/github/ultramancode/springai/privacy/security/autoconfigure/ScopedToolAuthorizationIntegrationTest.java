@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -239,58 +238,12 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
 
     @Test
     void combinedToolSearchProtectsPiiAcrossSearchAndBusinessToolCalls() throws IOException {
-        verifyCombinedToolSearch(false);
+        verifyToolSearchWithPrivacyAndAuthorization(false);
     }
 
     @Test
     void streamingCombinedToolSearchProtectsPiiAcrossSearchAndBusinessToolCalls() throws IOException {
-        verifyCombinedToolSearch(true);
-    }
-
-    private void verifyCombinedToolSearch(boolean streaming) throws IOException {
-        String searchArguments = "{\\\"SEARCH_QUERY_PARAMETER\\\":\\\"Find EMP-0042\\\"}";
-        String lookupArguments = "{\\\"id\\\":\\\"EMP-0042\\\"}";
-        if (streaming) {
-            startModelServer(toolStreamResponse("toolSearchTool", searchArguments),
-                    toolStreamResponse("customerLookup", lookupArguments), finalStreamResponse());
-        } else {
-            startModelServer(toolResponse("toolSearchTool", searchArguments),
-                    toolResponse("customerLookup", lookupArguments), finalResponse());
-        }
-        ToolIndex index = mock(ToolIndex.class);
-        when(index.search(any())).thenReturn(ToolSearchResponse.builder()
-                .addToolReference(ToolReference.builder().toolName("customerLookup")
-                        .summary("Find customer").build()).build());
-        AtomicReference<String> customerInput = new AtomicReference<>();
-
-        privacyContextRunner().run(context -> {
-            PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
-            ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
-                    .builder(context.getBean(OpenAiChatModel.class),
-                            ToolSearchToolCallingAdvisor.builder().toolIndex(index)
-                                    .systemMessageSuffix("Search for tools before using them."))
-                    .defaultTools(factory.wrap(tool("customerLookup", customerInput::set)),
-                            factory.wrap(tool("adminDelete", new AtomicInteger()))).build();
-            authenticate();
-            ChatClient.ChatClientRequestSpec request = client.prompt().user("Find EMP-0042")
-                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "combined-session"));
-
-            String response = streaming
-                    ? request.stream().content().collectList().map(parts -> String.join("", parts))
-                            .block(Duration.ofSeconds(10))
-                    : request.call().content();
-            assertThat(response).isEqualTo("done");
-            assertThat(customerInput).hasValue("{\"id\":\"EMP-0042\"}");
-            verify(index).indexTools(eq("combined-session"), argThat(references ->
-                    references.stream().map(ToolReference::toolName).toList().equals(List.of("customerLookup"))));
-            ArgumentCaptor<ToolSearchRequest> searchRequest = ArgumentCaptor.forClass(ToolSearchRequest.class);
-            verify(index).search(searchRequest.capture());
-            assertThat(searchRequest.getValue().query()).contains("Find ").doesNotContain("EMP-0042");
-            assertThat(OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID")
-                    .matcher(searchRequest.getValue().query()).find()).isTrue();
-            assertThat(this.modelRequests).hasSize(3).allSatisfy(modelRequest ->
-                    assertThat(modelRequest).doesNotContain("EMP-0042", "adminDelete"));
-        });
+        verifyToolSearchWithPrivacyAndAuthorization(true);
     }
 
     @Test
@@ -318,7 +271,6 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
         });
     }
 
-
     @Test
     void downstreamMemoryDoesNotDuplicateTheCurrentTurnInTheToolLoop() throws IOException {
         verifyDownstreamMemory(false);
@@ -327,6 +279,69 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
     @Test
     void downstreamMemoryDoesNotDuplicateTheCurrentTurnInAStreamingToolLoop() throws IOException {
         verifyDownstreamMemory(true);
+    }
+
+    @Test
+    void oversizedToolResponsesAreRejectedBeforeAnyBusinessToolExecutes() throws IOException {
+        startModelServer(toolResponse("customerLookup", "{\\\"payload\\\":\\\"" + "x".repeat(200) + "\\\"}"), finalResponse());
+        AtomicInteger calls = new AtomicInteger();
+        privacyContextRunner().withPropertyValues("spring.ai.privacy.response-inspection.max-characters=64")
+                .run(context -> {
+                    PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
+                    ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
+                            .builder(context.getBean(OpenAiChatModel.class))
+                            .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
+                    authenticate();
+
+                    assertThatThrownBy(() -> client.prompt().user("Run lookup").call().content())
+                            .hasMessageContaining("inspection limit");
+                    assertThat(calls).hasValue(0);
+                    assertThat(this.modelRequests).hasSize(1);
+                });
+    }
+
+    private void verifyToolSearchWithPrivacyAndAuthorization(boolean streaming) throws IOException {
+        String searchArguments = "{\\\"SEARCH_QUERY_PARAMETER\\\":\\\"Find EMP-0042\\\"}";
+        String lookupArguments = "{\\\"id\\\":\\\"EMP-0042\\\"}";
+        if (streaming) {
+            startModelServer(toolStreamResponse("toolSearchTool", searchArguments),
+                    toolStreamResponse("customerLookup", lookupArguments), finalStreamResponse());
+        } else {
+            startModelServer(toolResponse("toolSearchTool", searchArguments),
+                    toolResponse("customerLookup", lookupArguments), finalResponse());
+        }
+        ToolIndex index = mock(ToolIndex.class);
+        when(index.search(any())).thenReturn(ToolSearchResponse.builder()
+                .addToolReference(ToolReference.builder().toolName("customerLookup")
+                        .summary("Find customer").build()).build());
+        AtomicReference<String> customerInput = new AtomicReference<>();
+
+        privacyContextRunner().run(context -> {
+            PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
+            ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
+                    .builder(context.getBean(OpenAiChatModel.class),
+                            ToolSearchToolCallingAdvisor.builder().toolIndex(index)
+                                    .systemMessageSuffix("Search for tools before using them."))
+                    .defaultTools(factory.wrap(tool("customerLookup", customerInput::set)),
+                            factory.wrap(tool("adminDelete", new AtomicInteger()))).build();
+            authenticate();
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Find EMP-0042")
+                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "combined-session"));
+
+            String response = executeRequest(request, streaming);
+            assertThat(response).isEqualTo("done");
+            assertThat(customerInput).hasValue("{\"id\":\"EMP-0042\"}");
+            verify(index).indexTools(eq("combined-session"), argThat(references ->
+                    references.stream().map(ToolReference::toolName).toList().equals(List.of("customerLookup"))));
+            ArgumentCaptor<ToolSearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(ToolSearchRequest.class);
+            verify(index).search(searchRequestCaptor.capture());
+            String searchQuery = searchRequestCaptor.getValue().query();
+            assertThat(searchQuery).contains("Find ").doesNotContain("EMP-0042");
+            assertThat(OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID")
+                    .matcher(searchQuery).find()).isTrue();
+            assertThat(this.modelRequests).hasSize(3).allSatisfy(modelRequest ->
+                    assertThat(modelRequest).doesNotContain("EMP-0042", "adminDelete"));
+        });
     }
 
     private void verifyDownstreamMemory(boolean streaming) throws IOException {
@@ -347,41 +362,21 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
 
             var request = client.prompt().user("Run current lookup")
                     .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "memory-session"));
-            String response = streaming ? request.stream().content().collectList()
-                    .map(parts -> String.join("", parts)).block(Duration.ofSeconds(10)) : request.call().content();
+            String response = executeRequest(request, streaming);
             assertThat(response).isEqualTo("done");
 
             JsonNode messages = JsonMapper.builder().build().readTree(this.modelRequests.get(1)).path("messages");
-            int currentUsers = 0;
-            int toolCalls = 0;
+            int currentQuestionCount = 0;
+            int toolCallCount = 0;
             for (JsonNode message : messages) {
                 if ("Run current lookup".equals(message.path("content").asString())) {
-                    currentUsers++;
+                    currentQuestionCount++;
                 }
-                toolCalls += message.path("tool_calls").size();
+                toolCallCount += message.path("tool_calls").size();
             }
-            assertThat(currentUsers).isEqualTo(1);
-            assertThat(toolCalls).isEqualTo(1);
+            assertThat(currentQuestionCount).isEqualTo(1);
+            assertThat(toolCallCount).isEqualTo(1);
         });
-    }
-
-    @Test
-    void oversizedToolResponsesAreRejectedBeforeAnyBusinessToolExecutes() throws IOException {
-        startModelServer(toolResponse("customerLookup", "{\\\"payload\\\":\\\"" + "x".repeat(200) + "\\\"}"), finalResponse());
-        AtomicInteger calls = new AtomicInteger();
-        privacyContextRunner().withPropertyValues("spring.ai.privacy.response-inspection.max-characters=64")
-                .run(context -> {
-                    PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
-                    ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
-                            .builder(context.getBean(OpenAiChatModel.class))
-                            .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
-                    authenticate();
-
-                    assertThatThrownBy(() -> client.prompt().user("Run lookup").call().content())
-                            .hasMessageContaining("inspection limit");
-                    assertThat(calls).hasValue(0);
-                    assertThat(this.modelRequests).hasSize(1);
-                });
     }
 
 }

@@ -24,7 +24,10 @@ import org.springframework.security.authorization.AuthorizationManager;
 import java.util.Arrays;
 import java.util.List;
 
-/** Prepares tool authorization for explicitly configured ChatClients without replacing the application manager. */
+/**
+ * Prepares tool authorization for explicitly configured ChatClients without
+ * replacing the application's existing {@link ToolCallingManager}.
+ */
 @AutoConfiguration(
         afterName = {
                 "org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration",
@@ -66,10 +69,12 @@ public class ToolAuthorizationAutoConfiguration {
             ObjectProvider<ChatClientBuilderCustomizer> customizers,
             Environment environment
     ) {
-        ToolCallingAdvisor.Builder<?> template = toolCallingAdvisorBuilder.getIfAvailable(() ->
-                ToolCallingAdvisor.builder().advisorOrder(environment.getProperty(
-                        "spring.ai.chat.client.tool-calling.advisor-order", Integer.class, ToolCallingAdvisor.DEFAULT_ORDER)));
-        return new ToolAuthorizationChatClientFactory(boundary, template,
+        ToolCallingAdvisor.Builder<?> defaultToolAdvisorBuilder = toolCallingAdvisorBuilder.getIfAvailable(() -> {
+            int toolOrder = environment.getProperty(
+                    "spring.ai.chat.client.tool-calling.advisor-order", Integer.class, ToolCallingAdvisor.DEFAULT_ORDER);
+            return ToolCallingAdvisor.builder().advisorOrder(toolOrder);
+        });
+        return new ToolAuthorizationChatClientFactory(boundary, defaultToolAdvisorBuilder,
                 observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP),
                 chatClientObservationConvention.getIfUnique(), advisorObservationConvention.getIfUnique(),
                 builder -> {

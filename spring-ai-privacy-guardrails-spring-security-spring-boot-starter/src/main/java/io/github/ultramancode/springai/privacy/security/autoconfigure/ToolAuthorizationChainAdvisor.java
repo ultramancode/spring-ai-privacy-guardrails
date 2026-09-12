@@ -40,7 +40,8 @@ final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor,
     }
 
     private void removeCollectedAdvisors() {
-        for (Object reference; (reference = this.collectedAdvisorReferences.poll()) != null;) {
+        Object reference;
+        while ((reference = this.collectedAdvisorReferences.poll()) != null) {
             this.registeredAdvisors.remove(reference);
         }
     }
@@ -64,10 +65,13 @@ final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor,
         List<? extends Advisor> toolAdvisors = requestAdvisors.stream()
                 .filter(ToolAdvisor.class::isInstance).toList();
         boolean hasTools = request.prompt().getOptions() instanceof ToolCallingChatOptions options
-                && options.getToolCallbacks() != null && !options.getToolCallbacks().isEmpty();
+                && options.getToolCallbacks() != null
+                && !options.getToolCallbacks().isEmpty();
         if (toolAdvisors.isEmpty() && !hasTools) {
             return;
         }
+        // A separately registered ToolAdvisor may bypass the authorization-aware manager,
+        // including when tools are added later in the chain.
         if (toolAdvisors.isEmpty() || !isRegistered(toolAdvisors.get(0))) {
             throw new AuthorizationDeniedException(
                     "Tool authorization requires this client's managed tool advisor; "
@@ -100,8 +104,15 @@ final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor,
 
         @Override
         public boolean equals(Object other) {
-            return this == other || other instanceof AdvisorReference reference
-                    && get() != null && get() == reference.get();
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof AdvisorReference reference)) {
+                return false;
+            }
+
+            ToolCallingAdvisor advisor = get();
+            return advisor != null && advisor == reference.get();
         }
     }
 }

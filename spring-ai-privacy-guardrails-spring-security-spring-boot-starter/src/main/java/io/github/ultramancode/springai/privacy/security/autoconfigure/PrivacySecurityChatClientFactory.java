@@ -11,7 +11,7 @@ import java.util.function.IntFunction;
 
 /**
  * Creates ChatClients with the starter-managed privacy and tool authorization boundaries.
- * Tool advisor templates follow the ordering restrictions documented by
+ * Tool advisor builders follow the ordering restrictions documented by
  * {@link ToolAuthorizationChatClientFactory}, including rejection of
  * {@link PriorityOrdered} tool advisors when Spring AI builds the call or stream advisor chain.
  */
@@ -28,12 +28,12 @@ public final class PrivacySecurityChatClientFactory {
     }
 
     /**
-     * Creates a fresh builder with both boundaries and the starter-managed tool template.
+     * Creates a fresh builder with both boundaries and the starter-managed tool advisor builder.
      * @param model the shared model to call
      * @return a new builder with privacy and tool authorization
      */
     public ChatClient.Builder builder(ChatModel model) {
-        return builder(model, this.authorizationFactory.toolAdvisorTemplate());
+        return builder(model, this.authorizationFactory.defaultToolAdvisorBuilder());
     }
 
     /**
@@ -46,14 +46,14 @@ public final class PrivacySecurityChatClientFactory {
      * @param model the shared model to call
      * @param toolAdvisorBuilder tool advisor builder whose order determines the privacy layout
      * @return a new builder with privacy and tool authorization
-     * @throws IllegalArgumentException when the template's tool order is incompatible with privacy
+     * @throws IllegalArgumentException when the supplied tool advisor order is incompatible with privacy
      */
     public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder) {
-        ToolCallingAdvisor.Builder<?> template = Objects.requireNonNull(
+        ToolCallingAdvisor.Builder<?> toolAdvisorBuilderCopy = Objects.requireNonNull(
                 toolAdvisorBuilder, "toolAdvisorBuilder must not be null").copy();
-        int plannedToolOrder = template.getAdvisorOrder();
+        int plannedToolOrder = toolAdvisorBuilderCopy.getAdvisorOrder();
         UnaryOperator<ChatClient.Builder> privacyAdvisorConfigurer = this.privacyConfigurer.apply(plannedToolOrder);
-        return this.authorizationFactory.createBuilder(model, template, privacyAdvisorConfigurer, actualToolOrder -> {
+        return this.authorizationFactory.createBuilder(model, toolAdvisorBuilderCopy, privacyAdvisorConfigurer, actualToolOrder -> {
             if (actualToolOrder != plannedToolOrder) {
                 throw new IllegalArgumentException("Tool advisor order changed after planning the privacy boundary: "
                         + plannedToolOrder + " to " + actualToolOrder);

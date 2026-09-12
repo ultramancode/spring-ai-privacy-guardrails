@@ -65,7 +65,7 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
                         request.advisors(foreign);
                     }
                     authenticate();
-                    assertThatThrownBy(() -> invoke(request, streaming))
+                    assertThatThrownBy(() -> executeRequest(request, streaming))
                             .isInstanceOf(AuthorizationDeniedException.class)
                             .hasMessageContaining("managed tool advisor");
                 }
@@ -98,19 +98,19 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
     @Test
     void rejectsDisablingAutomaticRegistrationForProtectedTools() throws IOException {
         startModelServer(finalResponse());
-        for (boolean property : new boolean[]{false, true}) {
-            contextRunner().withPropertyValues("spring.ai.chat.client.tool-calling.enabled=" + !property)
+        for (boolean disableViaProperty : new boolean[]{false, true}) {
+            contextRunner().withPropertyValues("spring.ai.chat.client.tool-calling.enabled=" + !disableViaProperty)
                     .run(context -> {
                         ChatClient client = context.getBean(ToolAuthorizationChatClientFactory.class)
                                 .builder(context.getBean(OpenAiChatModel.class))
                                 .defaultTools(tool("customerLookup", new AtomicInteger())).build();
                         for (boolean streaming : new boolean[]{false, true}) {
                             var request = client.prompt().user("Run lookup");
-                            if (!property) {
+                            if (!disableViaProperty) {
                                 request.advisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
                             }
                             authenticate();
-                            assertThatThrownBy(() -> invoke(request, streaming))
+                            assertThatThrownBy(() -> executeRequest(request, streaming))
                                     .isInstanceOf(AuthorizationDeniedException.class);
                         }
                         assertThat(this.modelRequests).isEmpty();
@@ -139,17 +139,17 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
     }
 
     @Test
-    void preservesTheCopiedTemplatesExecutionChecker() throws IOException {
+    void preservesTheCopiedBuildersExecutionChecker() throws IOException {
         startModelServer(toolResponse("customerLookup"));
         AtomicInteger calls = new AtomicInteger();
         contextRunner().run(context -> {
-            ToolCallingAdvisor.Builder<?> template = ToolCallingAdvisor.builder()
+            ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder()
                     .toolExecutionEligibilityChecker(response -> false);
             ChatClient client = context.getBean(ToolAuthorizationChatClientFactory.class)
-                    .builder(context.getBean(OpenAiChatModel.class), template)
+                    .builder(context.getBean(OpenAiChatModel.class), toolAdvisorBuilder)
                     .defaultTools(tool("customerLookup", calls)).build();
             // Later changes to the caller-owned builder must not affect the client.
-            template.toolExecutionEligibilityChecker(response -> true);
+            toolAdvisorBuilder.toolExecutionEligibilityChecker(response -> true);
             authenticate();
             assertThat(client.prompt().user("Lookup").call().chatResponse().hasToolCalls()).isTrue();
             assertThat(calls).hasValue(0);
@@ -248,7 +248,7 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
                         .defaultAdvisors(new PriorityToolAdvisor(toolLoopStarts))
                         .defaultTools(tool("customerLookup", new AtomicInteger())).build();
                 authenticate();
-                assertThatThrownBy(() -> invoke(client.prompt().user("Lookup"), streaming))
+                assertThatThrownBy(() -> executeRequest(client.prompt().user("Lookup"), streaming))
                         .isInstanceOf(AuthorizationDeniedException.class);
                 assertThat(toolLoopStarts).hasValue(0);
             }
@@ -281,11 +281,6 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
             this.toolLoopStarts.incrementAndGet();
             return super.adviseStream(request, chain);
         }
-    }
-
-    private static String invoke(ChatClient.ChatClientRequestSpec request, boolean streaming) {
-        return streaming ? request.stream().content().collectList().map(parts -> String.join("", parts))
-                .block(Duration.ofSeconds(10)) : request.call().content();
     }
 
     private record OrderedCustomizer(int order, String name, List<String> calls)

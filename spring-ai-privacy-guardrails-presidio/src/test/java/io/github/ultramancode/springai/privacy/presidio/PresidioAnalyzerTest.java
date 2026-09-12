@@ -470,6 +470,7 @@ class PresidioAnalyzerTest {
                 "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":5.0,\"score\":0.9}]",
                 "[{\"entity_type\":\"PERSON\",\"start\":\"0\",\"end\":5,\"score\":0.9}]",
                 "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":\"5\",\"score\":0.9}]",
+                // Integer.MAX_VALUE + 1 cannot be represented as an int offset.
                 "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":2147483648,\"score\":0.9}]"
         );
         AtomicInteger responseIndex = new AtomicInteger();

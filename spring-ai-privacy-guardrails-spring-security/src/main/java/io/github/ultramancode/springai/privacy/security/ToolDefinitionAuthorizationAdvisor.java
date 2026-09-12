@@ -20,11 +20,16 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Filters callbacks before each model call without replacing the model's own manager. */
+/**
+ * Removes unauthorized tool callbacks before each model call without replacing
+ * the model's existing {@link ToolCallingManager}.
+ * Uses the authorization-aware ToolCallingManager supplied by
+ * {@link SpringSecurityToolBoundary#toolCallingManager()}.
+ */
 final class ToolDefinitionAuthorizationAdvisor implements CallAdvisor, StreamAdvisor {
 
-    // The combined factory registers privacy first. At the same terminal order,
-    // privacy validates the original callback snapshot before authorization filters it.
+    // The combined factory registers the privacy model boundary first at this same order.
+    // Privacy validates the callback snapshot before this advisor removes unauthorized callbacks.
     static final int DEFAULT_ORDER = Ordered.LOWEST_PRECEDENCE - 1;
 
     private final ToolCallingManager toolCallingManager;

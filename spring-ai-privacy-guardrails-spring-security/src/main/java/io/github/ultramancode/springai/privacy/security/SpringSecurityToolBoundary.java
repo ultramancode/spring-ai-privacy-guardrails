@@ -13,7 +13,8 @@ import java.util.Objects;
 /**
  * Provides request-scoped authorization for Spring AI tools. For selected ChatClients,
  * install the lifecycle and definition advisors together with a {@link ToolCallingAdvisor}
- * using this boundary's manager. The shared {@link ChatModel} keeps its original manager.
+ * using {@link #toolCallingManager()}. The shared {@link ChatModel} keeps its existing
+ * {@link ToolCallingManager}.
  */
 public final class SpringSecurityToolBoundary {
 
@@ -49,7 +50,7 @@ public final class SpringSecurityToolBoundary {
      * before execution. The delegate must execute tool calls using the callbacks
      * supplied in the prompt.</p>
      *
-     * @param delegate manager to decorate and use for tool-call execution
+     * @param delegate tool-calling manager to decorate and use for tool execution
      * @param authorizationManager policy evaluated for definition exposure and tool execution
      * @return boundary builder
      */
@@ -61,12 +62,13 @@ public final class SpringSecurityToolBoundary {
     }
 
     /**
-     * Returns the manager that filters definitions and reauthorizes tool execution.
+     * Returns the authorization-aware {@link ToolCallingManager} that filters definitions
+     * and reauthorizes tool execution.
      * Use it in the tool-calling advisor, including {@code ToolSearchToolCallingAdvisor}
-     * where it also filters definitions before indexing. A ChatModel may keep its
-     * original manager when {@link #toolDefinitionAuthorizationAdvisor()} is installed.
-     * Alternatively, install this manager directly in the model and tool-calling
-     * advisor together with {@link #toolAuthorizationAdvisor()}.
+     * where it also filters definitions before indexing. A {@link ChatModel} may keep its
+     * existing {@link ToolCallingManager} when {@link #toolDefinitionAuthorizationAdvisor()} is installed.
+     * Alternatively, configure both the model and the tool-calling advisor with
+     * the returned ToolCallingManager, and register {@link #toolAuthorizationAdvisor()}.
      *
      * @return authorization-aware tool-calling manager
      */
@@ -87,7 +89,7 @@ public final class SpringSecurityToolBoundary {
     /**
      * Returns the advisor that filters tool callbacks before each model call.
      * Use it with the lifecycle advisor and a tool-calling advisor configured with
-     * this boundary's manager when the model keeps its original manager.
+     * {@link #toolCallingManager()} when the model keeps its existing {@link ToolCallingManager}.
      * When privacy advisors are also used, register this advisor after the privacy
      * model boundary so callback snapshot validation precedes definition filtering.
      * Advisors that mutate tools must run before this advisor.
@@ -141,7 +143,8 @@ public final class SpringSecurityToolBoundary {
         }
 
         /**
-         * Builds the authorization manager and advisors that share request state.
+         * Builds the authorization-aware tool-calling manager and advisors
+         * that share request-scoped authorization state.
          *
          * @return complete Spring Security tool boundary
          */

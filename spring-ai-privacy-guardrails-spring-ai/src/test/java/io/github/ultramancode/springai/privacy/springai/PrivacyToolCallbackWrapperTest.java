@@ -534,12 +534,6 @@ class PrivacyToolCallbackWrapperTest {
         }
     }
 
-    private static ExecutorService virtualThreadExecutor() throws ReflectiveOperationException {
-        return (ExecutorService) Executors.class
-                .getMethod("newVirtualThreadPerTaskExecutor")
-                .invoke(null);
-    }
-
     @Test
     void toolWithoutSessionFailsClosedBeforeDelegateExecution() {
         PrivacyService service = TestPrivacyServices.privacyService();
@@ -573,6 +567,12 @@ class PrivacyToolCallbackWrapperTest {
                     .hasMessage("Tool execution failed")
                     .hasCauseInstanceOf(PrivacyGuardrailException.class);
         }
+    }
+
+    private static ExecutorService virtualThreadExecutor() throws ReflectiveOperationException {
+        return (ExecutorService) Executors.class
+                .getMethod("newVirtualThreadPerTaskExecutor")
+                .invoke(null);
     }
 
     private ToolContext toolContext(PrivacyContextHandle handle) {

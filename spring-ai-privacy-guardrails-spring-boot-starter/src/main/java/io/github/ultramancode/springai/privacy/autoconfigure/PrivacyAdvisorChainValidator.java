@@ -83,13 +83,14 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
         }
         if (toolAdvisorIndex < 0) {
             boolean hasTools = request.prompt().getOptions() instanceof ToolCallingChatOptions options
-                    && options.getToolCallbacks() != null && !options.getToolCallbacks().isEmpty();
+                    && options.getToolCallbacks() != null
+                    && !options.getToolCallbacks().isEmpty();
             if (hasTools) {
                 throw conflict("Privacy advisor layout requires a tool advisor for requests with tools");
             }
             return;
         }
-        if (!(toolContextIndex < toolAdvisorIndex && toolAdvisorIndex < toolCallValidationIndex)) {
+        if (toolAdvisorIndex <= toolContextIndex || toolAdvisorIndex >= toolCallValidationIndex) {
             throw conflict("Privacy advisor order must place tool context before the tool advisor "
                     + "and response validation after it; priority ordering is included in this check");
         }

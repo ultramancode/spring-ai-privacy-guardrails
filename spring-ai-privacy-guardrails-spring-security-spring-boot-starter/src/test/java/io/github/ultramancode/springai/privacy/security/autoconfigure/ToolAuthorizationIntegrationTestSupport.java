@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAu
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
@@ -30,6 +31,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -81,13 +83,18 @@ abstract class ToolAuthorizationIntegrationTestSupport {
                 String request = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 this.modelRequests.add(request);
                 String response = queuedResponses.poll();
-                if (response != null && response.contains("SEARCH_QUERY_PARAMETER")) {
+                int statusCode = 200;
+                if (response == null) {
+                    response = "{}";
+                    statusCode = 500;
+                }
+                if (response.contains("SEARCH_QUERY_PARAMETER")) {
                     response = response.replace("SEARCH_QUERY_PARAMETER", toolSearchQueryParameter(request));
                 }
-                byte[] body = (response == null ? "{}" : response).getBytes(StandardCharsets.UTF_8);
-                exchange.getResponseHeaders().set("Content-Type",
-                        response != null && response.startsWith("data:") ? "text/event-stream" : "application/json");
-                exchange.sendResponseHeaders(response == null ? 500 : 200, body.length);
+                String contentType = response.startsWith("data:") ? "text/event-stream" : "application/json";
+                byte[] body = response.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", contentType);
+                exchange.sendResponseHeaders(statusCode, body.length);
                 exchange.getResponseBody().write(body);
             }
         });
@@ -135,6 +142,15 @@ abstract class ToolAuthorizationIntegrationTestSupport {
     protected static void authenticate() {
         SecurityContextHolder.getContext().setAuthentication(
                 UsernamePasswordAuthenticationToken.authenticated("alice", "unused", List.of()));
+    }
+
+    protected static String executeRequest(ChatClient.ChatClientRequestSpec request, boolean streaming) {
+        if (streaming) {
+            return request.stream().content().collectList()
+                    .map(parts -> String.join("", parts))
+                    .block(Duration.ofSeconds(10));
+        }
+        return request.call().content();
     }
 
     protected static String toolResponse(String toolName) {

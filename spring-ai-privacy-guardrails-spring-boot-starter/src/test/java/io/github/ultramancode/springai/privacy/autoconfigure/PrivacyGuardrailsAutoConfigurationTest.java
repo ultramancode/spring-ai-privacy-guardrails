@@ -838,6 +838,42 @@ class PrivacyGuardrailsAutoConfigurationTest {
         )));
     }
 
+    private ToolCallback customerLookup(AtomicReference<String> delegateToolInput) {
+        return new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder()
+                        .name("customerLookup")
+                        .description("Returns one synthetic customer")
+                        .inputSchema("{\"type\":\"object\"}")
+                        .build();
+            }
+
+            @Override
+            public String call(String toolInput) {
+                delegateToolInput.set(toolInput);
+                return "owner CUST-9000 result@example.test";
+            }
+        };
+    }
+
+    private PiiAnalyzer namedAnalyzer(String providerId, PiiAnalyzer delegate) {
+        return new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options
+            ) {
+                return delegate.analyze(text, options);
+            }
+
+            @Override
+            public String providerId() {
+                return providerId;
+            }
+        };
+    }
+
     private static final class CapturingChatModel implements ChatModel {
 
         private final List<String> prompts = new CopyOnWriteArrayList<>();
@@ -865,25 +901,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
         List<String> prompts() {
             return List.copyOf(this.prompts);
         }
-    }
-
-    private ToolCallback customerLookup(AtomicReference<String> delegateToolInput) {
-        return new ToolCallback() {
-            @Override
-            public ToolDefinition getToolDefinition() {
-                return ToolDefinition.builder()
-                        .name("customerLookup")
-                        .description("Returns one synthetic customer")
-                        .inputSchema("{\"type\":\"object\"}")
-                        .build();
-            }
-
-            @Override
-            public String call(String toolInput) {
-                delegateToolInput.set(toolInput);
-                return "owner CUST-9000 result@example.test";
-            }
-        };
     }
 
     private static final class StarterToolLoopModel implements ChatModel {
@@ -956,22 +973,5 @@ class PrivacyGuardrailsAutoConfigurationTest {
         String secondToolResult() {
             return this.secondToolResult;
         }
-    }
-
-    private PiiAnalyzer namedAnalyzer(String providerId, PiiAnalyzer delegate) {
-        return new PiiAnalyzer() {
-            @Override
-            public List<io.github.ultramancode.springai.privacy.core.PiiSpan> analyze(
-                    String text,
-                    PiiAnalysisOptions options
-            ) {
-                return delegate.analyze(text, options);
-            }
-
-            @Override
-            public String providerId() {
-                return providerId;
-            }
-        };
     }
 }

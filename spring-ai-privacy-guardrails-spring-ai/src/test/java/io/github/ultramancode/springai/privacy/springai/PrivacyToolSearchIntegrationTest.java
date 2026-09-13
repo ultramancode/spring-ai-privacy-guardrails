@@ -4,6 +4,8 @@ import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.toolsearch.ToolSearchToolCallingAdvisor;
@@ -57,19 +59,18 @@ class PrivacyToolSearchIntegrationTest {
         verifyProtectedLoop(true, ResponseMode.METADATA);
     }
 
-    @Test
-    void rejectsIncompleteSearchArgumentsBeforeTheIndexIsCalled() {
-        for (boolean streaming : List.of(false, true)) {
-            Scenario scenario = scenario(ResponseMode.INCOMPLETE_ARGUMENTS);
+    @ParameterizedTest(name = "streaming={0}")
+    @ValueSource(booleans = {false, true})
+    void rejectsIncompleteSearchArgumentsBeforeTheIndexIsCalled(boolean streaming) {
+        Scenario scenario = scenario(ResponseMode.INCOMPLETE_ARGUMENTS);
 
-            assertThatThrownBy(() -> invoke(scenario.client(), streaming))
-                    .isInstanceOf(PrivacyGuardrailException.class)
-                    .hasMessage("Structured JSON payload is invalid")
-                    .hasMessageNotContaining("Alice");
-            verify(scenario.index(), never()).search(any());
-            assertThat(scenario.businessInput()).hasValue(null);
-            assertThat(scenario.service().activeSessionCount()).isZero();
-        }
+        assertThatThrownBy(() -> invoke(scenario.client(), streaming))
+                .isInstanceOf(PrivacyGuardrailException.class)
+                .hasMessage("Structured JSON payload is invalid")
+                .hasMessageNotContaining("Alice");
+        verify(scenario.index(), never()).search(any());
+        assertThat(scenario.businessInput()).hasValue(null);
+        assertThat(scenario.service().activeSessionCount()).isZero();
     }
 
     @Test

@@ -16,5 +16,6 @@ dependencies {
     testImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-openai'
     testImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
     testImplementation 'org.springframework.ai:spring-ai-openai'
+    testImplementation 'org.springframework.ai:spring-ai-tool-search-advisor'
     testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
 }

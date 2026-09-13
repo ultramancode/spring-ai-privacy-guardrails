@@ -174,18 +174,21 @@ class SpringSecurityToolSearchIntegrationTest {
                 .build();
         useAuthentication(authentication("alice"));
 
-        assertThat(chatClient.prompt()
+        var request = chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "alice-session"))
-                .user("Find Alice")
-                .call()
-                .content()).isEqualTo("done");
+                .user("Find Alice");
+        String response = request.call().content();
+
+        assertThat(response).isEqualTo("done");
         ArgumentCaptor<List<ToolReference>> indexedToolReferences =
                 ArgumentCaptor.forClass(List.class);
         verify(index).indexTools(eq("alice-session"), indexedToolReferences.capture());
         assertThat(indexedToolReferences.getValue())
                 .extracting(ToolReference::toolName)
                 .containsExactly("customerLookup");
+        // The first model call exposes only toolSearchTool.
         assertThat(model.exposedToolNames().get(0)).containsOnly("toolSearchTool");
+        // After tool discovery, the second model call also exposes customerLookup.
         assertThat(model.exposedToolNames().get(1))
                 .containsOnly("toolSearchTool", "customerLookup");
         assertThat(customerLookupInput).hasValue("{\"name\":\"Alice\"}");

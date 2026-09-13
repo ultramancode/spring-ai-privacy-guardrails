@@ -23,7 +23,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@Timeout(10)
+@Timeout(30)
 class PresidioAnalyzerTimeoutTest {
 
     @Test

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -147,7 +148,7 @@ class PrivacyToolCallbackContractTest {
             String result = wrap(direct, service).call("{}", toolContext(session.handle()));
 
             assertThat(result)
-                    .containsPattern(io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat
+                    .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("PERSON"))
                     .doesNotContain("Alice");
         }

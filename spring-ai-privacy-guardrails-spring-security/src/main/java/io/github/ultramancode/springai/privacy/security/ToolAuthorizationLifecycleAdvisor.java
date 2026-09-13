@@ -28,6 +28,7 @@ import java.util.Objects;
  */
 final class ToolAuthorizationLifecycleAdvisor implements CallAdvisor, StreamAdvisor {
 
+    // Run inside the default privacy lifecycle (HIGHEST_PRECEDENCE) when both protections are enabled.
     static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE + 1;
 
     private final ToolAuthorizationSessionRegistry sessionRegistry;

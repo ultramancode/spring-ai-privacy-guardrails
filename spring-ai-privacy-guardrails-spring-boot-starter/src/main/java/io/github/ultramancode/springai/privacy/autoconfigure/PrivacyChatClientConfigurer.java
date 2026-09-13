@@ -27,10 +27,12 @@ public final class PrivacyChatClientConfigurer
         implements UnaryOperator<ChatClient.Builder>, IntFunction<UnaryOperator<ChatClient.Builder>> {
 
     private final IntFunction<List<Advisor>> advisorFactory;
+    private final boolean outputEnabled;
     private final WeakHashMap<ChatClient.Builder, Boolean> configuredBuilders = new WeakHashMap<>();
 
-    PrivacyChatClientConfigurer(IntFunction<List<Advisor>> advisorFactory) {
+    PrivacyChatClientConfigurer(boolean outputEnabled, IntFunction<List<Advisor>> advisorFactory) {
         this.advisorFactory = Objects.requireNonNull(advisorFactory, "advisorFactory must not be null");
+        this.outputEnabled = outputEnabled;
     }
 
     /**
@@ -67,10 +69,11 @@ public final class PrivacyChatClientConfigurer
         // If it is absent, only requests without tools are allowed. T still determines the privacy layout.
         // ToolAdvisor examples include ToolCallingAdvisor and ToolSearchToolCallingAdvisor.
         // PrivacyOutputAdvisor prepares protection. PrivacyLifecycleAdvisor applies it to the returning response.
-        // Reserve two positions between input and tool, so T >= input+3, even when output protection is disabled.
+        // PrivacyToolContextAdvisor(T-1) must follow input, so T >= input+2.
+        // With output protection enabled, PrivacyOutputAdvisor(T-2) must also follow input, so T >= input+3.
         // Reserve one position between tool and model, so T <= model-2.
         // Compute the bounds in long to avoid overflow if the boundary constants change.
-        long minimumToolOrder = (long) PrivacyInputAdvisor.DEFAULT_ORDER + 3;
+        long minimumToolOrder = (long) PrivacyInputAdvisor.DEFAULT_ORDER + (this.outputEnabled ? 3 : 2);
         long maximumToolOrder = (long) PrivacyModelBoundaryAdvisor.DEFAULT_ORDER - 2;
         if (toolOrder < minimumToolOrder || toolOrder > maximumToolOrder) {
             throw new IllegalArgumentException("Privacy tool advisor order must be between "

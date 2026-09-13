@@ -210,7 +210,7 @@ public class PrivacyGuardrailsAutoConfiguration {
         boolean outputEnabled = outputProperties.isEnabled();
         PrivacyOutputAction outputAction = outputProperties.getAction();
         String outputBlockMessage = outputProperties.getBlockExceptionMessage();
-        return new PrivacyChatClientConfigurer(toolOrder -> {
+        return new PrivacyChatClientConfigurer(outputEnabled, toolOrder -> {
             List<Advisor> advisors = new ArrayList<>();
             advisors.add(new PrivacyLifecycleAdvisor(privacyService));
             advisors.add(new PrivacyInputAdvisor(privacyService));

@@ -79,12 +79,17 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                 builder = context.getBean(ToolAuthorizationChatClientFactory.class)
                         .builder(context.getBean(OpenAiChatModel.class), toolAdvisorBuilder);
             }
+            ToolCallingAdvisor clientToolAdvisor = ToolCallingAdvisor.builder().advisorOrder(0).build();
             ChatClient client = builder.defaultTools(callback)
-                    .defaultAdvisors(ToolCallingAdvisor.builder().advisorOrder(0).build()).build();
+                    .defaultAdvisors(clientToolAdvisor).build();
             authenticate();
+            ToolSearchToolCallingAdvisor requestToolSearchAdvisor = ToolSearchToolCallingAdvisor.builder()
+                    .toolIndex(index)
+                    .advisorOrder(0)
+                    .systemMessageSuffix("Search for tools before using them.")
+                    .build();
             var request = client.prompt().user("Run lookup")
-                    .advisors(ToolSearchToolCallingAdvisor.builder().toolIndex(index).advisorOrder(0)
-                            .systemMessageSuffix("Search for tools before using them.").build());
+                    .advisors(requestToolSearchAdvisor);
 
             assertThatThrownBy(() -> executeRequest(request, streaming))
                     .isInstanceOf(IllegalStateException.class)
@@ -97,15 +102,20 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
 
     @ParameterizedTest
     @CsvSource({
-            "false, 0", "true, 0", "false, 100", "true, 100",
-            // Minimum: PrivacyInputAdvisor.DEFAULT_ORDER + 3 leaves room for
+            "false, false, 0", "true, false, 0", "false, true, 0", "true, true, 0",
+            "false, false, 100", "true, false, 100", "false, true, 100", "true, true, 100",
+            // Without output protection, PrivacyInputAdvisor.DEFAULT_ORDER + 2 leaves room for
+            // PrivacyToolContextAdvisor.
+            "false, false, -2147483396", "true, false, -2147483396",
+            // With output protection, PrivacyInputAdvisor.DEFAULT_ORDER + 3 leaves room for
             // PrivacyOutputAdvisor and PrivacyToolContextAdvisor.
-            "false, -2147483395", "true, -2147483395",
+            "false, true, -2147483395", "true, true, -2147483395",
             // Maximum: PrivacyModelBoundaryAdvisor.DEFAULT_ORDER - 2 leaves room for
             // PrivacyToolCallValidationAdvisor.
-            "false, 2147483644", "true, 2147483644"
+            "false, false, 2147483644", "true, false, 2147483644",
+            "false, true, 2147483644", "true, true, 2147483644"
     })
-    void toolSearchProtectsPiiAtSupportedOrders(boolean streaming, int toolOrder) throws IOException {
+    void toolSearchProtectsPiiAtSupportedOrders(boolean streaming, boolean outputEnabled, int toolOrder) throws IOException {
         String searchArguments = "{\\\"SEARCH_QUERY_PARAMETER\\\":\\\"Find EMP-0042\\\"}";
         String lookupArguments = "{\\\"id\\\":\\\"EMP-0042\\\"}";
         if (streaming) {
@@ -121,7 +131,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                         .summary("Find customer").build()).build());
         AtomicReference<String> customerInput = new AtomicReference<>();
 
-        privacyContextRunner().run(context -> {
+        privacyContextRunner().withPropertyValues("spring.ai.privacy.output.enabled=" + outputEnabled).run(context -> {
             PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
             ChatClient client = protectedBuilder(context,
                             ToolSearchToolCallingAdvisor.builder().toolIndex(index).advisorOrder(toolOrder)
@@ -143,6 +153,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
             assertThat(searchQuery).contains("Find ").doesNotContain("EMP-0042");
             assertThat(OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID")
                     .matcher(searchQuery).find()).isTrue();
+            // Three model calls: request toolSearchTool, request customerLookup, then return the final answer.
             assertThat(this.modelRequests).hasSize(3).allSatisfy(modelRequest ->
                     assertThat(modelRequest).doesNotContain("EMP-0042", "adminDelete"));
         });
@@ -173,6 +184,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
             String response = executeRequest(request, streaming);
             assertThat(response).isEqualTo("done");
 
+            // Check for duplicate history in the second model request, after tool execution.
             JsonNode messages = JsonMapper.builder().build().readTree(this.modelRequests.get(1)).path("messages");
             int currentQuestionCount = 0;
             int toolCallCount = 0;
@@ -271,38 +283,42 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
     }
 
     // T is the ToolAdvisor order supplied to the factory.
+    // PrivacyChatClientConfigurer keeps the library's default orders for these advisors:
+    // PrivacyInputAdvisor.DEFAULT_ORDER = -2_147_483_398
+    // PrivacyModelBoundaryAdvisor.DEFAULT_ORDER = Integer.MAX_VALUE - 1
     @ParameterizedTest
     @ValueSource(ints = {
-            // PrivacyOutputAdvisor (T - 2) and PrivacyToolContextAdvisor (T - 1)
-            // would have orders below Integer.MIN_VALUE.
+            // PrivacyToolContextAdvisor (T - 1) would have an order below Integer.MIN_VALUE.
             Integer.MIN_VALUE,
-            // One below the minimum allowed tool order: PrivacyOutputAdvisor (T - 2)
-            // would have the same order as PrivacyInputAdvisor (DEFAULT_ORDER = -2_147_483_398).
-            -2_147_483_396,
-            // One above the maximum allowed tool order: PrivacyToolCallValidationAdvisor (T + 1)
-            // would have the same order as PrivacyModelBoundaryAdvisor (DEFAULT_ORDER = Integer.MAX_VALUE - 1).
+            // PrivacyToolContextAdvisor (T - 1) must have a greater order value than
+            // PrivacyInputAdvisor (DEFAULT_ORDER). This value would make their orders equal.
+            -2_147_483_397,
+            // PrivacyToolCallValidationAdvisor (T + 1) must have a smaller order value than
+            // PrivacyModelBoundaryAdvisor (DEFAULT_ORDER). This value would make their orders equal.
             Integer.MAX_VALUE - 2,
-            // ToolAdvisor (T) would have the same order as
-            // PrivacyModelBoundaryAdvisor (DEFAULT_ORDER = Integer.MAX_VALUE - 1).
+            // ToolAdvisor (T) must have a smaller order value than PrivacyModelBoundaryAdvisor (DEFAULT_ORDER).
+            // This value would make their orders equal.
             Integer.MAX_VALUE - 1,
             // The order of PrivacyToolCallValidationAdvisor (T + 1) would exceed Integer.MAX_VALUE.
             Integer.MAX_VALUE
     })
     void rejectsUnplaceableOrdersBeforeApplyingClientCustomizers(int order) throws IOException {
         startModelServer(finalResponse());
-        AtomicInteger customizations = new AtomicInteger();
-        privacyContextRunner().withBean(ChatClientBuilderCustomizer.class,
-                () -> builder -> customizations.incrementAndGet()).run(context -> {
-            assertThatThrownBy(() -> protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(order)))
-                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("order");
-            assertThat(customizations).hasValue(0);
-            assertThat(this.modelRequests).isEmpty();
-        });
+        assertToolOrderRejectedBeforeCustomization(order, false);
+        assertToolOrderRejectedBeforeCustomization(order, true);
+    }
+
+    @Test
+    void rejectsToolOrderWithoutRoomForEnabledOutputProtection() throws IOException {
+        startModelServer(finalResponse());
+        // With output protection enabled, PrivacyOutputAdvisor (T - 2) must have a greater order value than
+        // PrivacyInputAdvisor.DEFAULT_ORDER (-2_147_483_398). This value would make the two orders equal.
+        assertToolOrderRejectedBeforeCustomization(-2_147_483_396, true);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void rejectsDuplicateRequestBoundariesBeforeToolSearchInitialization(boolean streaming) throws IOException {
+    void rejectsDuplicatePrivacyToolCallValidationAdvisor(boolean streaming) throws IOException {
         startModelServer(finalResponse());
         ToolIndex index = mock(ToolIndex.class);
         privacyContextRunner().run(context -> {
@@ -314,7 +330,8 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
             var request = client.prompt().user("Lookup").advisors(
                     new PrivacyToolCallValidationAdvisor(context.getBean(PrivacyService.class), 1));
             assertThatThrownBy(() -> executeRequest(request, streaming))
-                    .isInstanceOf(PrivacyGuardrailException.class);
+                    .isInstanceOf(PrivacyGuardrailException.class)
+                    .hasMessageContaining("exactly one managed PrivacyToolCallValidationAdvisor");
             verifyNoInteractions(index);
             assertThat(this.modelRequests).isEmpty();
         });
@@ -325,9 +342,11 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         startModelServer(finalResponse());
         privacyContextRunner().run(context -> {
             var client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0)).build();
-            assertThat(client.prompt().user("Hello").advisors(
-                    AdvisorParams.toolCallingAdvisorAutoRegister(false))
-                    .call().content()).isEqualTo("done");
+            var request = client.prompt().user("Hello")
+                    .advisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
+            String response = request.call().content();
+
+            assertThat(response).isEqualTo("done");
         });
     }
 
@@ -337,12 +356,15 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         privacyContextRunner().withPropertyValues("spring.ai.chat.client.tool-calling.advisor-order=100")
                 .run(context -> {
                     AtomicInteger calls = new AtomicInteger();
+                    List<Integer> toolOrders = new ArrayList<>();
                     var client = context.getBean(PrivacySecurityChatClientFactory.class)
                             .builder(context.getBean(OpenAiChatModel.class))
+                            .defaultAdvisors(new ToolOrderRecordingAdvisor(toolOrders))
                             .defaultTools(context.getBean(PrivacyToolCallbackFactory.class)
                                     .wrap(tool("customerLookup", calls))).build();
                     authenticate();
                     assertThat(client.prompt().user("Lookup").call().content()).isEqualTo("done");
+                    assertThat(toolOrders).containsExactly(100);
                     assertThat(calls).hasValue(1);
                 });
     }
@@ -359,11 +381,24 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                     .defaultTools(context.getBean(PrivacyToolCallbackFactory.class)
                             .wrap(tool("customerLookup", executions))).build();
             authenticate();
-            var request = client.prompt().user("Lookup").advisors(new CountingAdvisor(observations));
+            // Match PrivacyToolCallValidationAdvisor's order: tool order 0 + 1.
+            var request = client.prompt().user("Lookup").advisors(new CountingAdvisor(observations, 1));
             String result = executeRequest(request, streaming);
             assertThat(result).isEqualTo("done");
             assertThat(executions).hasValue(1);
             assertThat(observations).hasValue(2);
+        });
+    }
+
+    private void assertToolOrderRejectedBeforeCustomization(int toolOrder, boolean outputEnabled) {
+        AtomicInteger customizations = new AtomicInteger();
+        ChatClientBuilderCustomizer customizer = builder -> customizations.incrementAndGet();
+        privacyContextRunner().withPropertyValues("spring.ai.privacy.output.enabled=" + outputEnabled)
+                .withBean(ChatClientBuilderCustomizer.class, () -> customizer).run(context -> {
+            assertThatThrownBy(() -> protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(toolOrder)))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("order");
+            assertThat(customizations).hasValue(0);
+            assertThat(this.modelRequests).isEmpty();
         });
     }
 
@@ -441,7 +476,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         }
     }
 
-    private record CountingAdvisor(AtomicInteger calls) implements CallAdvisor, StreamAdvisor {
+    private record CountingAdvisor(AtomicInteger calls, int order) implements CallAdvisor, StreamAdvisor {
         @Override
         public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
             this.calls.incrementAndGet();
@@ -456,7 +491,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
 
         @Override
         public int getOrder() {
-            return 1;
+            return this.order;
         }
 
         @Override

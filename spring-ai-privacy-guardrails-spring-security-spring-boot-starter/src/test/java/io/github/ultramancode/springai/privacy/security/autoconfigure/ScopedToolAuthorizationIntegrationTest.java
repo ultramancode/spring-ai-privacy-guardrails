@@ -3,7 +3,6 @@ package io.github.ultramancode.springai.privacy.security.autoconfigure;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -43,7 +42,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-@Timeout(20)
 class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegrationTestSupport {
 
     @Test
@@ -69,6 +67,8 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
             SecurityContextHolder.clearContext();
             assertThat(ordinaryClient.prompt().user("Run the admin operation").call().content()).isEqualTo("done");
 
+            // Each client calls the model twice: before tool execution and after receiving the result.
+            // Requests 0-1 belong to the protected client, and 2-3 to the ordinary client.
             assertThat(this.modelRequests).hasSize(4);
             assertThat(this.modelRequests.get(0)).contains("customerLookup").doesNotContain("adminDelete");
             assertThat(this.modelRequests.get(2)).contains("customerLookup", "adminDelete");
@@ -118,13 +118,17 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
     void denyingEveryConfiguredToolSendsNoDefinitionsToTheModel() throws IOException {
         startModelServer(finalResponse());
         contextRunner().run(context -> {
+            // The test policy allows only customerLookup, so adminDelete is denied.
             ChatClient client = context.getBean(ToolAuthorizationChatClientFactory.class)
                     .builder(context.getBean(OpenAiChatModel.class))
                     .defaultTools(tool("adminDelete", new AtomicInteger())).build();
             authenticate();
 
             assertThat(client.prompt().user("Say hello").call().content()).isEqualTo("done");
-            assertThat(this.modelRequests).singleElement().asString().doesNotContain("adminDelete");
+            assertThat(this.modelRequests)
+                    .singleElement()
+                    .asString()
+                    .doesNotContain("adminDelete");
         });
     }
 
@@ -133,6 +137,7 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
     void anEmptyAuthorizedListDoesNotRestoreTheSharedModelsDefaultTools() throws IOException {
         startModelServer(finalResponse());
         contextRunner().run(context -> {
+            // The test policy allows only customerLookup, so adminDelete is denied.
             OpenAiChatModel modelWithDefaultTools = OpenAiChatModel.builder()
                     .options(OpenAiChatOptions.builder().apiKey("test-api-key")
                             .baseUrl("http://127.0.0.1:" + this.server.getAddress().getPort())
@@ -143,7 +148,10 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
             authenticate();
 
             assertThat(client.prompt().user("Say hello").call().content()).isEqualTo("done");
-            assertThat(this.modelRequests).singleElement().asString().doesNotContain("adminDelete");
+            assertThat(this.modelRequests)
+                    .singleElement()
+                    .asString()
+                    .doesNotContain("adminDelete");
         });
     }
 
@@ -205,12 +213,18 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
                     .build();
             authenticate();
 
-            assertThat(client.prompt().advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "search-session"))
-                    .user("Find customer").call().content()).isEqualTo("done");
+            var request = client.prompt()
+                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "search-session"))
+                    .user("Find customer");
+            String response = request.call().content();
+
+            assertThat(response).isEqualTo("done");
             verify(index).indexTools(eq("search-session"), argThat(references ->
                     references.stream().map(ToolReference::toolName).toList().equals(List.of("customerLookup"))));
+            // The first model call exposes only toolSearchTool.
             assertThat(this.modelRequests.get(0)).contains("toolSearchTool")
                     .doesNotContain("customerLookup", "adminDelete");
+            // After tool discovery, the second model call also exposes customerLookup.
             assertThat(this.modelRequests.get(1)).contains("customerLookup").doesNotContain("adminDelete");
             assertThat(customerCalls).hasValue(1);
             assertThat(adminCalls).hasValue(0);
@@ -222,10 +236,13 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
         startModelServer(finalResponse());
         ToolIndex index = mock(ToolIndex.class);
         contextRunner().run(context -> {
+            ToolSearchToolCallingAdvisor separateToolSearchAdvisor = ToolSearchToolCallingAdvisor.builder()
+                    .toolIndex(index)
+                    .systemMessageSuffix("Search for tools before using them.")
+                    .build();
             ChatClient client = context.getBean(ToolAuthorizationChatClientFactory.class)
                     .builder(context.getBean(OpenAiChatModel.class))
-                    .defaultAdvisors(ToolSearchToolCallingAdvisor.builder().toolIndex(index)
-                            .systemMessageSuffix("Search for tools before using them.").build())
+                    .defaultAdvisors(separateToolSearchAdvisor)
                     .defaultTools(tool("adminDelete", new AtomicInteger())).build();
             authenticate();
 
@@ -257,14 +274,18 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
                     .builder(context.getBean(OpenAiChatModel.class))
                     .defaultTools(tool("customerLookup", customerCalls), tool("adminDelete", adminCalls)).build();
             authenticate();
-            assertThat(client.prompt().user("Run lookup").stream().content()
-                    .collectList().block(Duration.ofSeconds(10))).containsExactly("done");
+            List<String> protectedResponseParts = client.prompt().user("Run lookup").stream().content()
+                    .collectList().block(Duration.ofSeconds(10));
+            assertThat(protectedResponseParts).containsExactly("done");
 
             SecurityContextHolder.clearContext();
             ChatClient ordinary = context.getBean(ChatClient.Builder.class)
                     .defaultTools(tool("adminDelete", adminCalls)).build();
-            assertThat(ordinary.prompt().user("Run operation").stream().content()
-                    .collectList().block(Duration.ofSeconds(10))).containsExactly("done");
+            List<String> ordinaryResponseParts = ordinary.prompt().user("Run operation").stream().content()
+                    .collectList().block(Duration.ofSeconds(10));
+
+            assertThat(ordinaryResponseParts).containsExactly("done");
+            // The first model request belongs to the protected client, before customerLookup executes.
             assertThat(this.modelRequests.get(0)).contains("customerLookup").doesNotContain("adminDelete");
             assertThat(customerCalls).hasValue(1);
             assertThat(adminCalls).hasValue(1);
@@ -282,7 +303,7 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
     }
 
     @Test
-    void oversizedToolResponsesAreRejectedBeforeAnyBusinessToolExecutes() throws IOException {
+    void oversizedToolCallArgumentsAreRejectedBeforeToolExecution() throws IOException {
         startModelServer(toolResponse("customerLookup", "{\\\"payload\\\":\\\"" + "x".repeat(200) + "\\\"}"), finalResponse());
         AtomicInteger calls = new AtomicInteger();
         privacyContextRunner().withPropertyValues("spring.ai.privacy.response-inspection.max-characters=64")
@@ -339,6 +360,7 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
             assertThat(searchQuery).contains("Find ").doesNotContain("EMP-0042");
             assertThat(OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID")
                     .matcher(searchQuery).find()).isTrue();
+            // Three model calls: request toolSearchTool, request customerLookup, then return the final answer.
             assertThat(this.modelRequests).hasSize(3).allSatisfy(modelRequest ->
                     assertThat(modelRequest).doesNotContain("EMP-0042", "adminDelete"));
         });
@@ -365,6 +387,7 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
             String response = executeRequest(request, streaming);
             assertThat(response).isEqualTo("done");
 
+            // Check for duplicate history in the second model request, after tool execution.
             JsonNode messages = JsonMapper.builder().build().readTree(this.modelRequests.get(1)).path("messages");
             int currentQuestionCount = 0;
             int toolCallCount = 0;

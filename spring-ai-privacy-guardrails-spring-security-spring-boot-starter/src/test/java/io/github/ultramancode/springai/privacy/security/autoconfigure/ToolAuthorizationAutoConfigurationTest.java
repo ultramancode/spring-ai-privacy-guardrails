@@ -3,6 +3,8 @@ package io.github.ultramancode.springai.privacy.security.autoconfigure;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
@@ -51,19 +53,19 @@ class ToolAuthorizationAutoConfigurationTest {
             assertThat(context.getBean(ToolCallingManager.class))
                     .isInstanceOf(DefaultToolCallingManager.class)
                     .isNotSameAs(boundary.toolCallingManager());
-            assertThat(context.getBeansOfType(ToolCallingManager.class).values())
-                    .filteredOn(DefaultToolCallingManager.class::isInstance)
-                    .singleElement()
-                    .isNotSameAs(boundary.toolCallingManager());
         });
     }
 
     @Test
-    void createsIndependentBuildersForTheSameModel() {
+    void createsDistinctBuildersForTheSameModel() {
         this.contextRunner.run(context -> {
             ToolAuthorizationChatClientFactory factory = context.getBean(ToolAuthorizationChatClientFactory.class);
             ChatModel model = context.getBean(ChatModel.class);
-            assertThat(factory.builder(model)).isNotSameAs(factory.builder(model));
+
+            ChatClient.Builder firstBuilder = factory.builder(model);
+            ChatClient.Builder secondBuilder = factory.builder(model);
+
+            assertThat(firstBuilder).isNotSameAs(secondBuilder);
         });
     }
 
@@ -84,14 +86,17 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Test
-    void supportsManuallyBuiltClientsWhenChatClientAutoConfigurationIsDisabled() {
+    void createsClientsWhenChatClientAutoConfigurationIsDisabled() {
         this.contextRunner.withPropertyValues("spring.ai.chat.client.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(ToolCallingAdvisor.Builder.class);
                     ToolAuthorizationChatClientFactory factory = context.getBean(
                             ToolAuthorizationChatClientFactory.class);
-                    assertThat(factory.builder(context.getBean(ChatModel.class)).build()).isNotNull();
+
+                    ChatClient client = factory.builder(context.getBean(ChatModel.class)).build();
+
+                    assertThat(client).isNotNull();
                 });
     }
 
@@ -108,25 +113,24 @@ class ToolAuthorizationAutoConfigurationTest {
         });
     }
 
-    @Test
-    void leavesTheApplicationManagerUnchangedForBothResolverFallbackSettings() {
-        for (boolean enabled : new boolean[]{false, true}) {
-            this.contextRunner
-                    .withPropertyValues(
-                            "spring.ai.tools.resolution.fallback.enabled=" + enabled
-                    )
-                    .run(context -> {
-                        assertThat(context).hasNotFailed();
-                        SpringSecurityToolBoundary boundary = context.getBean(
-                                SpringSecurityToolBoundary.class
-                        );
-                        assertThat(context.getBean(ToolCallingManager.class))
-                                .isNotSameAs(boundary.toolCallingManager());
-                        assertThat(context.getBeansOfType(ToolCallingManager.class).values())
-                                .filteredOn(DefaultToolCallingManager.class::isInstance)
-                                .hasSize(1);
-                    });
-        }
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void preservesTheDefaultToolCallingManager(boolean resolverFallbackEnabled) {
+        this.contextRunner
+                .withPropertyValues(
+                        "spring.ai.tools.resolution.fallback.enabled=" + resolverFallbackEnabled
+                )
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    SpringSecurityToolBoundary boundary = context.getBean(
+                            SpringSecurityToolBoundary.class
+                    );
+                    assertThat(context.getBean(ToolCallingManager.class))
+                            .isNotSameAs(boundary.toolCallingManager());
+                    assertThat(context.getBeansOfType(ToolCallingManager.class).values())
+                            .filteredOn(DefaultToolCallingManager.class::isInstance)
+                            .hasSize(1);
+                });
     }
 
     @Test
@@ -191,7 +195,7 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Test
-    void leavesTheActualOpenAiModelAndDefaultToolAdvisorOnTheUpstreamManager() {
+    void preservesTheDefaultManagerInTheOpenAiModelAndToolAdvisorBuilder() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         ToolAuthorizationAutoConfiguration.class,

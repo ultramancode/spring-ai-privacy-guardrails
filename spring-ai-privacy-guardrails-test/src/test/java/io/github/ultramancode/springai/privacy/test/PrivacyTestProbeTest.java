@@ -77,6 +77,7 @@ class PrivacyTestProbeTest {
                 .toolInputsContain("customerLookup", "Alice")
                 .toolOutputsContain("customerLookup", "Bob")
                 .hasNoActivePrivacySessions();
+        // The first model request contains the user's input, before customerLookup runs.
         assertThat(probe.modelRequests().get(0).toString())
                 .doesNotContain("Alice", "PII_PERSON");
         assertThat(probe.modelRequests()).allSatisfy(snapshot -> assertThat(snapshot.toolDefinitions())
@@ -86,6 +87,7 @@ class PrivacyTestProbeTest {
                         "Looks up a synthetic customer",
                         "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}"
                 )));
+        // The second model request includes customerLookup's call and result.
         assertThat(probe.modelRequests().get(1).toolControlFields())
                 .containsExactly(
                         new ToolControlFieldSnapshot(

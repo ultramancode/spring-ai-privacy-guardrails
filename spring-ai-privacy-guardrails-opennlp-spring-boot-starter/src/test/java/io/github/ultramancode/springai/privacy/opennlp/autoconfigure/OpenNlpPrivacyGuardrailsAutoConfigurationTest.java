@@ -49,7 +49,7 @@ class OpenNlpPrivacyGuardrailsAutoConfigurationTest {
             .withConfiguration(AUTO_CONFIGURATIONS);
 
     @Test
-    void autoConfigurationDoesNotCreateAnalyzerByDefault() {
+    void autoConfigurationDoesNotCreateOpenNlpAnalyzerByDefault() {
         PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)

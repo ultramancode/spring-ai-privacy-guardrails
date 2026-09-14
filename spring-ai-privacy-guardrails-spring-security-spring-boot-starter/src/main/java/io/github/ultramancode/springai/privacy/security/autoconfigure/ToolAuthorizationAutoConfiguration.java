@@ -80,6 +80,7 @@ public class ToolAuthorizationAutoConfiguration {
 
     private static ToolCallingManager resolveDefaultToolCallingManager(
             ObjectProvider<ToolCallingManager> toolCallingManagers) {
+        // Use the injected provider to include parent beans and respect autowire candidate settings.
         List<ToolCallingManager> defaultManagerCandidates = toolCallingManagers.stream()
                 .filter(DefaultToolCallingManager.class::isInstance)
                 .toList();

@@ -105,12 +105,12 @@ class ToolAuthorizationAutoConfigurationTest {
     void configuringAClientDoesNotMutateTheSharedToolAdvisorBuilder() {
         this.contextRunner.run(context -> {
             ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = context.getBean(ToolCallingAdvisor.Builder.class);
-            ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
+            ToolCallingManager defaultManager = context.getBean(ToolCallingManager.class);
 
             context.getBean(ToolAuthorizationChatClientFactory.class)
                     .builder(context.getBean(ChatModel.class));
 
-            assertThat(ReflectionTestUtils.getField(toolAdvisorBuilder, "toolCallingManager")).isSameAs(upstreamManager);
+            assertThat(ReflectionTestUtils.getField(toolAdvisorBuilder, "toolCallingManager")).isSameAs(defaultManager);
         });
     }
 
@@ -143,7 +143,7 @@ class ToolAuthorizationAutoConfigurationTest {
                 ))
                 .withUserConfiguration(
                         TestPolicyConfiguration.class,
-                        RenamedDefaultManagerConfiguration.class
+                        DefaultManagerWithCustomBeanNameConfiguration.class
                 )
                 .withBean(ChatModel.class, () -> mock(ChatModel.class))
                 .run(context -> {
@@ -154,7 +154,7 @@ class ToolAuthorizationAutoConfigurationTest {
                     assertThat(context.getBean(ToolCallingManager.class))
                             .isNotSameAs(boundary.toolCallingManager());
                     assertThat(context.getBean(
-                            "renamedUpstreamManager",
+                            "customNamedDefaultManager",
                             ToolCallingManager.class
                     )).isInstanceOf(DefaultToolCallingManager.class);
                 });
@@ -212,22 +212,22 @@ class ToolAuthorizationAutoConfigurationTest {
                     SpringSecurityToolBoundary boundary = context.getBean(
                             SpringSecurityToolBoundary.class
                     );
-                    ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
-                    assertThat(upstreamManager).isNotSameAs(boundary.toolCallingManager());
+                    ToolCallingManager defaultManager = context.getBean(ToolCallingManager.class);
+                    assertThat(defaultManager).isNotSameAs(boundary.toolCallingManager());
                     OpenAiChatModel chatModel = context.getBean(OpenAiChatModel.class);
                     ToolCallingAdvisor.Builder<?> advisorBuilder = context.getBean(
                             ToolCallingAdvisor.Builder.class
                     );
 
                     assertThat(ReflectionTestUtils.getField(chatModel, "toolCallingManager"))
-                            .isSameAs(upstreamManager);
+                            .isSameAs(defaultManager);
                     assertThat(ReflectionTestUtils.getField(advisorBuilder, "toolCallingManager"))
-                            .isSameAs(upstreamManager);
+                            .isSameAs(defaultManager);
                 });
     }
 
     @Test
-    void leavesTheActualAnthropicModelOnTheUpstreamManager() {
+    void preservesTheDefaultManagerInTheAnthropicModel() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         ToolAuthorizationAutoConfiguration.class,
@@ -290,8 +290,10 @@ class ToolAuthorizationAutoConfigurationTest {
 
     @ParameterizedTest
     @ValueSource(classes = {
-            NonAutowireCandidatePolicyConfiguration.class, NonDefaultCandidatePolicyConfiguration.class,
-            NonAutowireCandidateScopedPolicyConfiguration.class, NonDefaultCandidateScopedPolicyConfiguration.class
+            NonAutowireCandidatePolicyConfiguration.class,
+            NonDefaultCandidatePolicyConfiguration.class,
+            NonAutowireCandidateScopedProxyPolicyConfiguration.class,
+            NonDefaultCandidateScopedProxyPolicyConfiguration.class
     })
     void ignoresToolPoliciesExcludedFromInjection(Class<?> policyConfiguration) {
         new ApplicationContextRunner()
@@ -306,8 +308,10 @@ class ToolAuthorizationAutoConfigurationTest {
 
     @ParameterizedTest
     @ValueSource(classes = {
-            NonAutowireCandidatePolicyConfiguration.class, NonDefaultCandidatePolicyConfiguration.class,
-            NonAutowireCandidateScopedPolicyConfiguration.class, NonDefaultCandidateScopedPolicyConfiguration.class
+            NonAutowireCandidatePolicyConfiguration.class,
+            NonDefaultCandidatePolicyConfiguration.class,
+            NonAutowireCandidateScopedProxyPolicyConfiguration.class,
+            NonDefaultCandidateScopedProxyPolicyConfiguration.class
     })
     void ignoresParentToolPoliciesExcludedFromInjection(Class<?> policyConfiguration) {
         new ApplicationContextRunner().withUserConfiguration(policyConfiguration).run(parent ->
@@ -337,7 +341,7 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Test
-    void preparesAuthorizationFromParentPolicyWithLocalManager() {
+    void preparesAuthorizationFromParentPolicyWithManagerInCurrentContext() {
         new ApplicationContextRunner().withUserConfiguration(TestPolicyConfiguration.class).run(parent ->
                 new ApplicationContextRunner()
                         .withParent(parent)
@@ -350,11 +354,11 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Test
-    void preparesAuthorizationFromAScopedPolicyProxy() {
+    void preparesAuthorizationFromAScopedProxyPolicy() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         ToolAuthorizationAutoConfiguration.class, ToolCallingAutoConfiguration.class))
-                .withUserConfiguration(ScopedPolicyConfiguration.class)
+                .withUserConfiguration(ScopedProxyPolicyConfiguration.class)
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .hasSingleBean(SpringSecurityToolBoundary.class)
@@ -362,8 +366,8 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Test
-    void preparesAuthorizationFromAParentScopedPolicyProxy() {
-        new ApplicationContextRunner().withUserConfiguration(ScopedPolicyConfiguration.class).run(parent ->
+    void preparesAuthorizationFromAParentScopedProxyPolicy() {
+        new ApplicationContextRunner().withUserConfiguration(ScopedProxyPolicyConfiguration.class).run(parent ->
                 new ApplicationContextRunner()
                         .withParent(parent)
                         .withConfiguration(AutoConfigurations.of(
@@ -375,7 +379,7 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Configuration(proxyBeanMethods = false)
-    static class ScopedPolicyConfiguration {
+    static class ScopedProxyPolicyConfiguration {
 
         @Bean
         @Scope(value = "prototype", proxyMode = ScopedProxyMode.INTERFACES)
@@ -385,7 +389,7 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Configuration(proxyBeanMethods = false)
-    static class NonAutowireCandidateScopedPolicyConfiguration {
+    static class NonAutowireCandidateScopedProxyPolicyConfiguration {
 
         @Bean(autowireCandidate = false)
         @Scope(value = "prototype", proxyMode = ScopedProxyMode.INTERFACES)
@@ -395,7 +399,7 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Configuration(proxyBeanMethods = false)
-    static class NonDefaultCandidateScopedPolicyConfiguration {
+    static class NonDefaultCandidateScopedProxyPolicyConfiguration {
 
         @Bean(defaultCandidate = false)
         @Scope(value = "prototype", proxyMode = ScopedProxyMode.INTERFACES)
@@ -441,10 +445,10 @@ class ToolAuthorizationAutoConfigurationTest {
     }
 
     @Configuration(proxyBeanMethods = false)
-    static class RenamedDefaultManagerConfiguration {
+    static class DefaultManagerWithCustomBeanNameConfiguration {
 
-        @Bean("renamedUpstreamManager")
-        ToolCallingManager renamedUpstreamManager() {
+        @Bean("customNamedDefaultManager")
+        ToolCallingManager customNamedDefaultManager() {
             return ToolCallingManager.builder().build();
         }
     }

@@ -15,7 +15,8 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.security.authorization.AuthorizationManager;
 
 /**
- * Matches when an {@code AuthorizationManager<ToolAuthorizationContext>} bean is eligible for injection.
+ * Matches when an {@code AuthorizationManager<ToolAuthorizationContext>} policy is an injection candidate,
+ * either directly or through a scoped proxy.
  */
 final class ToolAuthorizationPolicyCondition extends SpringBootCondition {
 
@@ -38,29 +39,40 @@ final class ToolAuthorizationPolicyCondition extends SpringBootCondition {
     }
 
     private static boolean isPolicyCandidate(ConfigurableListableBeanFactory beanFactory, String beanName) {
-        if (beanFactory.containsBeanDefinition(beanName)) {
-            BeanDefinition definition = beanFactory.getMergedBeanDefinition(beanName);
-            if (isInjectionCandidate(definition)) {
-                return true;
-            }
-            // Scoped targets are excluded from injection; the proxy's flags determine eligibility.
-            if (ScopedProxyUtils.isScopedTarget(beanName)) {
-                String proxyBeanName = ScopedProxyUtils.getOriginalBeanName(beanName);
-                return beanFactory.containsBeanDefinition(proxyBeanName)
-                        && isInjectionCandidate(beanFactory.getMergedBeanDefinition(proxyBeanName));
-            }
-            return false;
+        if (beanFactory.containsLocalBean(beanName)) {
+            return isPolicyCandidateInCurrentFactory(beanFactory, beanName);
         }
         BeanFactory parent = beanFactory.getParentBeanFactory();
-        if (!beanFactory.containsLocalBean(beanName)
-                && parent instanceof ConfigurableListableBeanFactory parentBeanFactory) {
+        if (parent instanceof ConfigurableListableBeanFactory parentBeanFactory) {
             return isPolicyCandidate(parentBeanFactory, beanName);
         }
-        // The type lookup already found this bean. Keep candidates without an inspectable definition,
-        // such as directly registered singletons.
+        // The parent does not expose bean definitions for this type-matched policy.
+        // Keep it as a candidate, consistent with Spring's autowiring behavior.
         return true;
     }
 
+    private static boolean isPolicyCandidateInCurrentFactory(
+            ConfigurableListableBeanFactory beanFactory, String beanName) {
+        if (!beanFactory.containsBeanDefinition(beanName)) {
+            // A singleton registered in the current factory can exist without a BeanDefinition to inspect.
+            return true;
+        }
+        BeanDefinition mergedDefinition = beanFactory.getMergedBeanDefinition(beanName);
+        if (isInjectionCandidate(mergedDefinition)) {
+            return true;
+        }
+        if (!ScopedProxyUtils.isScopedTarget(beanName)) {
+            return false;
+        }
+        // Spring excludes scoped targets from autowiring, so check the proxy's candidate settings.
+        // Example: beanName = "scopedTarget.toolAuthorizationManager" (target)
+        //          proxyBeanName = "toolAuthorizationManager" (proxy)
+        String proxyBeanName = ScopedProxyUtils.getOriginalBeanName(beanName);
+        return beanFactory.containsBeanDefinition(proxyBeanName)
+                && isInjectionCandidate(beanFactory.getMergedBeanDefinition(proxyBeanName));
+    }
+
+    /** Checks whether the definition allows injection by type without a qualifier. */
     private static boolean isInjectionCandidate(BeanDefinition definition) {
         if (!definition.isAutowireCandidate()) {
             return false;

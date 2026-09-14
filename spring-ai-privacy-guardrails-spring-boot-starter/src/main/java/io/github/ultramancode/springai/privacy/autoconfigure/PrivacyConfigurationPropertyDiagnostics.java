@@ -23,7 +23,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
             ConfigurationPropertyName.of("spring.ai.privacy");
     private static final int ROOT_ELEMENTS = ROOT.getNumberOfElements();
 
-    static final List<String> BASE_ROOT_PROPERTIES = List.of(
+    static final List<String> ROOT_PROPERTIES = List.of(
             "output",
             "response-inspection",
             "analysis",
@@ -97,7 +97,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         Optional<SegmentMatch> rootMatchCandidate = closestSegmentMatch(
                 name,
                 ROOT_ELEMENTS,
-                BASE_ROOT_PROPERTIES,
+                ROOT_PROPERTIES,
                 context.systemEnvironmentMapping()
         );
         if (rootMatchCandidate.isEmpty()) {

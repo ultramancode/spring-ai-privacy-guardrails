@@ -174,7 +174,7 @@ class SpringSecurityToolSearchIntegrationTest {
                 .build();
         useAuthentication(authentication("alice"));
 
-        var request = chatClient.prompt()
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "alice-session"))
                 .user("Find Alice");
         String response = request.call().content();

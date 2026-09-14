@@ -213,7 +213,7 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
                     .build();
             authenticate();
 
-            var request = client.prompt()
+            ChatClient.ChatClientRequestSpec request = client.prompt()
                     .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "search-session"))
                     .user("Find customer");
             String response = request.call().content();
@@ -382,7 +382,7 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
                     .defaultTools(tool("customerLookup", new AtomicInteger())).build();
             authenticate();
 
-            var request = client.prompt().user("Run current lookup")
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Run current lookup")
                     .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "memory-session"));
             String response = executeRequest(request, streaming);
             assertThat(response).isEqualTo("done");

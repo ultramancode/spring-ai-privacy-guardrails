@@ -54,7 +54,7 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
         startModelServer(finalResponse());
         AtomicInteger calls = new AtomicInteger();
         contextRunner().run(context -> {
-            var factory = context.getBean(ToolAuthorizationChatClientFactory.class);
+            ToolAuthorizationChatClientFactory factory = context.getBean(ToolAuthorizationChatClientFactory.class);
             // Use the earliest allowed tool order to verify rejection before tool loop entry.
             ToolCallingAdvisor separateToolAdvisor = ToolCallingAdvisor.builder()
                     .toolCallingManager(context.getBean(ToolCallingManager.class))
@@ -118,7 +118,7 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
                     ChatClient client = context.getBean(ToolAuthorizationChatClientFactory.class)
                             .builder(context.getBean(OpenAiChatModel.class))
                             .defaultTools(tool("customerLookup", new AtomicInteger())).build();
-                    var request = client.prompt().user("Run lookup");
+                    ChatClient.ChatClientRequestSpec request = client.prompt().user("Run lookup");
                     if (!disableViaProperty) {
                         request.advisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
                     }
@@ -236,7 +236,7 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
                     .builder(context.getBean(OpenAiChatModel.class))
                     .defaultTools(tool("customerLookup", calls)).build();
             SecurityContextHolder.clearContext();
-            var authentication = UsernamePasswordAuthenticationToken
+            UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken
                     .authenticated("reactive-user", "unused", List.of());
             List<String> responseParts = client.prompt().user("Lookup").stream().content().collectList()
                     .contextWrite(ReactiveSecurityContextHolder

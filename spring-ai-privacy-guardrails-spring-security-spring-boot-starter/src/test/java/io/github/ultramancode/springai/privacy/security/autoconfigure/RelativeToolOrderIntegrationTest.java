@@ -30,11 +30,13 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionEligibilityChecker;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.toolsearch.ToolIndex;
 import org.springframework.ai.tool.toolsearch.ToolReference;
 import org.springframework.ai.tool.toolsearch.ToolSearchRequest;
 import org.springframework.ai.tool.toolsearch.ToolSearchResponse;
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.Ordered;
 import org.springframework.core.PriorityOrdered;
 import reactor.core.publisher.Flux;
@@ -67,10 +69,10 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         startModelServer(finalResponse());
         ToolIndex index = mock(ToolIndex.class);
         AtomicInteger calls = new AtomicInteger();
-        var runner = privacyEnabled ? privacyContextRunner() : contextRunner();
+        ApplicationContextRunner runner = privacyEnabled ? privacyContextRunner() : contextRunner();
         runner.run(context -> {
-            var toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(0);
-            var callback = tool("customerLookup", calls);
+            ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(0);
+            ToolCallback callback = tool("customerLookup", calls);
             ChatClient.Builder builder;
             if (privacyEnabled) {
                 builder = protectedBuilder(context, toolAdvisorBuilder);
@@ -88,7 +90,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                     .advisorOrder(0)
                     .systemMessageSuffix("Search for tools before using them.")
                     .build();
-            var request = client.prompt().user("Run lookup")
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Run lookup")
                     .advisors(requestToolSearchAdvisor);
 
             assertThatThrownBy(() -> executeRequest(request, streaming))
@@ -179,7 +181,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                     .build();
             authenticate();
 
-            var request = client.prompt().user("Run current lookup")
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Run current lookup")
                     .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "memory-session"));
             String response = executeRequest(request, streaming);
             assertThat(response).isEqualTo("done");
@@ -215,7 +217,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                             .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
                     authenticate();
 
-                    var request = client.prompt().user("Run lookup");
+                    ChatClient.ChatClientRequestSpec request = client.prompt().user("Run lookup");
                     assertThatThrownBy(() -> executeRequest(request, streaming))
                             .hasMessageContaining("inspection limit");
                     assertThat(calls).hasValue(0);
@@ -231,13 +233,13 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
             AtomicInteger calls = new AtomicInteger();
             List<Integer> firstToolOrders = new ArrayList<>();
             List<Integer> secondToolOrders = new ArrayList<>();
-            var callback = context.getBean(PrivacyToolCallbackFactory.class).wrap(tool("customerLookup", calls));
-            var toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(0);
-            var first = protectedBuilder(context, toolAdvisorBuilder)
+            ToolCallback callback = context.getBean(PrivacyToolCallbackFactory.class).wrap(tool("customerLookup", calls));
+            ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(0);
+            ChatClient first = protectedBuilder(context, toolAdvisorBuilder)
                     .defaultAdvisors(new ToolOrderRecordingAdvisor(firstToolOrders))
                     .defaultTools(callback).build();
             toolAdvisorBuilder.advisorOrder(100);
-            var second = protectedBuilder(context, toolAdvisorBuilder)
+            ChatClient second = protectedBuilder(context, toolAdvisorBuilder)
                     .defaultAdvisors(new ToolOrderRecordingAdvisor(secondToolOrders))
                     .defaultTools(callback).build();
             authenticate();
@@ -254,14 +256,15 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
     void priorityToolAdvisorMustBeRejectedBeforeLoopEntry(boolean streaming, boolean privacyEnabled) throws IOException {
         startModelServer(finalResponse());
-        var runner = privacyEnabled ? privacyContextRunner() : contextRunner();
+        ApplicationContextRunner runner = privacyEnabled ? privacyContextRunner() : contextRunner();
         runner.run(context -> {
             AtomicInteger toolLoopStarts = new AtomicInteger();
             AtomicInteger executions = new AtomicInteger();
-            var toolAdvisorBuilder = new PriorityToolAdvisorBuilder(toolLoopStarts).advisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
+            PriorityToolAdvisorBuilder toolAdvisorBuilder = new PriorityToolAdvisorBuilder(toolLoopStarts)
+                    .advisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
             authenticate();
             Throwable rejection = catchThrowable(() -> {
-                var callback = tool("customerLookup", executions);
+                ToolCallback callback = tool("customerLookup", executions);
                 ChatClient.Builder builder;
                 if (privacyEnabled) {
                     builder = protectedBuilder(context, toolAdvisorBuilder);
@@ -270,8 +273,8 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                     builder = context.getBean(ToolAuthorizationChatClientFactory.class)
                             .builder(context.getBean(OpenAiChatModel.class), toolAdvisorBuilder);
                 }
-                var client = builder.defaultTools(callback).build();
-                var request = client.prompt().user("Lookup");
+                ChatClient client = builder.defaultTools(callback).build();
+                ChatClient.ChatClientRequestSpec request = client.prompt().user("Lookup");
                 executeRequest(request, streaming);
             });
             assertThat(rejection).isInstanceOf(IllegalArgumentException.class)
@@ -322,12 +325,12 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         startModelServer(finalResponse());
         ToolIndex index = mock(ToolIndex.class);
         privacyContextRunner().run(context -> {
-            var client = protectedBuilder(context, ToolSearchToolCallingAdvisor.builder()
+            ChatClient client = protectedBuilder(context, ToolSearchToolCallingAdvisor.builder()
                     .toolIndex(index).systemMessageSuffix("Find tools.").advisorOrder(0))
                     .defaultTools(context.getBean(PrivacyToolCallbackFactory.class)
                             .wrap(tool("customerLookup", new AtomicInteger()))).build();
             authenticate();
-            var request = client.prompt().user("Lookup").advisors(
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Lookup").advisors(
                     new PrivacyToolCallValidationAdvisor(context.getBean(PrivacyService.class), 1));
             assertThatThrownBy(() -> executeRequest(request, streaming))
                     .isInstanceOf(PrivacyGuardrailException.class)
@@ -341,8 +344,8 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
     void noToolRequestsCanDisableAutomaticRegistration() throws IOException {
         startModelServer(finalResponse());
         privacyContextRunner().run(context -> {
-            var client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0)).build();
-            var request = client.prompt().user("Hello")
+            ChatClient client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0)).build();
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello")
                     .advisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
             String response = request.call().content();
 
@@ -357,7 +360,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                 .run(context -> {
                     AtomicInteger calls = new AtomicInteger();
                     List<Integer> toolOrders = new ArrayList<>();
-                    var client = context.getBean(PrivacySecurityChatClientFactory.class)
+                    ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
                             .builder(context.getBean(OpenAiChatModel.class))
                             .defaultAdvisors(new ToolOrderRecordingAdvisor(toolOrders))
                             .defaultTools(context.getBean(PrivacyToolCallbackFactory.class)
@@ -377,12 +380,12 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         privacyContextRunner().run(context -> {
             AtomicInteger executions = new AtomicInteger();
             AtomicInteger observations = new AtomicInteger();
-            var client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0))
+            ChatClient client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0))
                     .defaultTools(context.getBean(PrivacyToolCallbackFactory.class)
                             .wrap(tool("customerLookup", executions))).build();
             authenticate();
             // Match PrivacyToolCallValidationAdvisor's order: tool order 0 + 1.
-            var request = client.prompt().user("Lookup").advisors(new CountingAdvisor(observations, 1));
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Lookup").advisors(new CountingAdvisor(observations, 1));
             String result = executeRequest(request, streaming);
             assertThat(result).isEqualTo("done");
             assertThat(executions).hasValue(1);

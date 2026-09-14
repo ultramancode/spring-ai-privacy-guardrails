@@ -1,6 +1,7 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.core.PiiTokenizationResult;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -350,7 +351,7 @@ final class PrivacyJsonPayloadTransformer {
                     yield text;
                 }
                 case DISCLOSE -> {
-                    var tokenization = privacyService.analyzeAndTokenize(handle, text);
+                    PiiTokenizationResult tokenization = privacyService.analyzeAndTokenize(handle, text);
                     String disclosed = privacyService.detokenize(
                             handle,
                             tokenization.tokenizedText(),

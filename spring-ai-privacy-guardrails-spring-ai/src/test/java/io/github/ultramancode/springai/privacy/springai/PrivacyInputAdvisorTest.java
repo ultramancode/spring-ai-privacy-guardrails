@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.junit.jupiter.api.Test;
@@ -42,7 +43,7 @@ class PrivacyInputAdvisorTest {
         PrivacyService service = privacyService();
         PrivacyInputAdvisor advisor = new PrivacyInputAdvisor(service);
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = new ChatClientRequest(
                     new Prompt("Alice hello"),
                     Map.of(PrivacyRequestContextSupport.CONTEXT_HANDLE, session.handle())
@@ -80,7 +81,7 @@ class PrivacyInputAdvisorTest {
             return new ChatClientResponse(response("ok").chatResponse(), updated.context());
         });
 
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = PrivacyRequestContextSupport.attachLifecycle(
                     new ChatClientRequest(new Prompt("Alice hello"), Map.of()),
                     session.handle()
@@ -115,7 +116,7 @@ class PrivacyInputAdvisorTest {
             return new ChatClientResponse(response("ok").chatResponse(), updated.context());
         });
 
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = PrivacyRequestContextSupport.attachLifecycle(
                     new ChatClientRequest(new Prompt(input), Map.of()),
                     session.handle()
@@ -160,7 +161,7 @@ class PrivacyInputAdvisorTest {
                         .build()
         ));
 
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             advisor.adviseCall(
                     PrivacyRequestContextSupport.attachLifecycle(
                             new ChatClientRequest(prompt, Map.of()),
@@ -189,7 +190,7 @@ class PrivacyInputAdvisorTest {
         ToolCallingChatOptions options = ToolCallingChatOptions.builder()
                 .toolContext("tenant", "acme")
                 .build();
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             advisor.adviseCall(
                     PrivacyRequestContextSupport.attachLifecycle(
                             new ChatClientRequest(
@@ -233,7 +234,7 @@ class PrivacyInputAdvisorTest {
             return Flux.just(new ChatClientResponse(response("ok").chatResponse(), updated.context()));
         });
 
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             List<ChatClientResponse> result = advisor.adviseStream(
                     PrivacyRequestContextSupport.attachLifecycle(
                             new ChatClientRequest(new Prompt("Alice hello"), Map.of()),
@@ -257,7 +258,7 @@ class PrivacyInputAdvisorTest {
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
         when(chain.nextCall(any())).thenThrow(new IllegalStateException("model failed"));
 
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = PrivacyRequestContextSupport.attachLifecycle(
                     new ChatClientRequest(new Prompt("Alice hello"), Map.of()),
                     session.handle()
@@ -276,7 +277,7 @@ class PrivacyInputAdvisorTest {
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
         when(chain.nextStream(any())).thenReturn(Flux.never());
 
-        try (var session = service.openSession()) {
+        try (PrivacySession session = service.openSession()) {
             Disposable subscription = advisor.adviseStream(
                     PrivacyRequestContextSupport.attachLifecycle(
                             new ChatClientRequest(new Prompt("Alice hello"), Map.of()),

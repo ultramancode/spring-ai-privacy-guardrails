@@ -21,6 +21,8 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
+import org.springframework.context.annotation.ScopedProxyMode;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -167,7 +169,7 @@ class ToolAuthorizationAutoConfigurationTest {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasMessageContaining(
-                                    "Tool authorization requires Spring AI's auto-configured"
+                                    "Tool authorization auto-configuration requires a DefaultToolCallingManager bean"
                             );
                 });
     }
@@ -286,21 +288,138 @@ class ToolAuthorizationAutoConfigurationTest {
                         .hasSingleBean(ToolAuthorizationChatClientFactory.class));
     }
 
-    @Test
-    void legacyFalseStillDisablesAuthorizationWithAConfiguredPolicy() {
-        this.contextRunner.withPropertyValues("spring.ai.privacy.security.enabled=false")
+    @ParameterizedTest
+    @ValueSource(classes = {
+            NonAutowireCandidatePolicyConfiguration.class, NonDefaultCandidatePolicyConfiguration.class,
+            NonAutowireCandidateScopedPolicyConfiguration.class, NonDefaultCandidateScopedPolicyConfiguration.class
+    })
+    void ignoresToolPoliciesExcludedFromInjection(Class<?> policyConfiguration) {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        ToolAuthorizationAutoConfiguration.class, ToolCallingAutoConfiguration.class))
+                .withUserConfiguration(policyConfiguration)
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .doesNotHaveBean(SpringSecurityToolBoundary.class)
                         .doesNotHaveBean(ToolAuthorizationChatClientFactory.class));
     }
 
+    @ParameterizedTest
+    @ValueSource(classes = {
+            NonAutowireCandidatePolicyConfiguration.class, NonDefaultCandidatePolicyConfiguration.class,
+            NonAutowireCandidateScopedPolicyConfiguration.class, NonDefaultCandidateScopedPolicyConfiguration.class
+    })
+    void ignoresParentToolPoliciesExcludedFromInjection(Class<?> policyConfiguration) {
+        new ApplicationContextRunner().withUserConfiguration(policyConfiguration).run(parent ->
+                new ApplicationContextRunner()
+                        .withParent(parent)
+                        .withConfiguration(AutoConfigurations.of(
+                                ToolAuthorizationAutoConfiguration.class, ToolCallingAutoConfiguration.class))
+                        .run(context -> assertThat(context)
+                                .hasNotFailed()
+                                .doesNotHaveBean(SpringSecurityToolBoundary.class)
+                                .doesNotHaveBean(ToolAuthorizationChatClientFactory.class)));
+    }
+
     @Test
-    void legacyTrueStillPreparesAuthorizationWithAConfiguredPolicy() {
-        this.contextRunner.withPropertyValues("spring.ai.privacy.security.enabled=true")
+    void preparesAuthorizationFromParentPolicyAndManagerBeans() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(ToolCallingAutoConfiguration.class))
+                .withUserConfiguration(TestPolicyConfiguration.class)
+                .run(parent -> new ApplicationContextRunner()
+                        .withParent(parent)
+                        .withConfiguration(AutoConfigurations.of(
+                                ToolAuthorizationAutoConfiguration.class, ToolCallingAutoConfiguration.class))
+                        .run(context -> assertThat(context)
+                                .hasNotFailed()
+                                .hasSingleBean(SpringSecurityToolBoundary.class)
+                                .hasSingleBean(ToolAuthorizationChatClientFactory.class)));
+    }
+
+    @Test
+    void preparesAuthorizationFromParentPolicyWithLocalManager() {
+        new ApplicationContextRunner().withUserConfiguration(TestPolicyConfiguration.class).run(parent ->
+                new ApplicationContextRunner()
+                        .withParent(parent)
+                        .withConfiguration(AutoConfigurations.of(
+                                ToolAuthorizationAutoConfiguration.class, ToolCallingAutoConfiguration.class))
+                        .run(context -> assertThat(context)
+                                .hasNotFailed()
+                                .hasSingleBean(SpringSecurityToolBoundary.class)
+                                .hasSingleBean(ToolAuthorizationChatClientFactory.class)));
+    }
+
+    @Test
+    void preparesAuthorizationFromAScopedPolicyProxy() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        ToolAuthorizationAutoConfiguration.class, ToolCallingAutoConfiguration.class))
+                .withUserConfiguration(ScopedPolicyConfiguration.class)
                 .run(context -> assertThat(context)
                         .hasNotFailed()
+                        .hasSingleBean(SpringSecurityToolBoundary.class)
                         .hasSingleBean(ToolAuthorizationChatClientFactory.class));
+    }
+
+    @Test
+    void preparesAuthorizationFromAParentScopedPolicyProxy() {
+        new ApplicationContextRunner().withUserConfiguration(ScopedPolicyConfiguration.class).run(parent ->
+                new ApplicationContextRunner()
+                        .withParent(parent)
+                        .withConfiguration(AutoConfigurations.of(
+                                ToolAuthorizationAutoConfiguration.class, ToolCallingAutoConfiguration.class))
+                        .run(context -> assertThat(context)
+                                .hasNotFailed()
+                                .hasSingleBean(SpringSecurityToolBoundary.class)
+                                .hasSingleBean(ToolAuthorizationChatClientFactory.class)));
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class ScopedPolicyConfiguration {
+
+        @Bean
+        @Scope(value = "prototype", proxyMode = ScopedProxyMode.INTERFACES)
+        AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+            return (authentication, context) -> new AuthorizationDecision(true);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class NonAutowireCandidateScopedPolicyConfiguration {
+
+        @Bean(autowireCandidate = false)
+        @Scope(value = "prototype", proxyMode = ScopedProxyMode.INTERFACES)
+        AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+            return (authentication, context) -> new AuthorizationDecision(true);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class NonDefaultCandidateScopedPolicyConfiguration {
+
+        @Bean(defaultCandidate = false)
+        @Scope(value = "prototype", proxyMode = ScopedProxyMode.INTERFACES)
+        AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+            return (authentication, context) -> new AuthorizationDecision(true);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class NonAutowireCandidatePolicyConfiguration {
+
+        @Bean(autowireCandidate = false)
+        AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+            return (authentication, context) -> new AuthorizationDecision(true);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class NonDefaultCandidatePolicyConfiguration {
+
+        @Bean(defaultCandidate = false)
+        AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+            return (authentication, context) -> new AuthorizationDecision(true);
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

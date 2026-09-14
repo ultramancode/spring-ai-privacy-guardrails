@@ -50,18 +50,18 @@ class OpenNlpPrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void autoConfigurationDoesNotCreateAnalyzerByDefault() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> assertThat(context)
                         .hasSingleBean(PrivacyService.class)
                         .doesNotHaveBean(OpenNlpPiiAnalyzer.class));
     }
 
     @Test
-    void legacyGlobalOptOutStillDisablesAnEnabledProvider() {
-        new ApplicationContextRunner()
-                .withConfiguration(AUTO_CONFIGURATIONS)
-                .withPropertyValues("spring.ai.privacy.opennlp.enabled=true", "spring.ai.privacy.enabled=false")
+    void doesNotAutoConfigureAnalyzerWhenProviderIsDisabled() {
+        this.contextRunner
+                .withPropertyValues("spring.ai.privacy.opennlp.enabled=false")
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .doesNotHaveBean(OpenNlpPiiAnalyzer.class)

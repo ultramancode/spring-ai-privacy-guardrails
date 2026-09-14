@@ -14,7 +14,6 @@ import org.springframework.context.annotation.Configuration;
 
 /** Auto-configures the Presidio analyzer provider. */
 @AutoConfiguration(before = PrivacyGuardrailsAutoConfiguration.class)
-@ConditionalOnProperty(prefix = "spring.ai.privacy", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(PresidioPrivacyGuardrailsProperties.class)
 public class PresidioPrivacyGuardrailsAutoConfiguration {
 

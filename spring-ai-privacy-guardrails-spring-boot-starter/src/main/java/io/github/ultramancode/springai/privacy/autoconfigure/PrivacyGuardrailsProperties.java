@@ -9,7 +9,6 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,11 +21,6 @@ import java.util.Objects;
 @ConfigurationProperties("spring.ai.privacy")
 public class PrivacyGuardrailsProperties {
 
-    /**
-     * Legacy opt-out for privacy auto-configuration. Infrastructure is prepared when a
-     * PiiAnalyzer or PrivacyService is available; clients still select their boundary explicitly.
-     */
-    private boolean enabled = true;
     /** Optional output-boundary settings. */
     private final Output output = new Output();
     /** Model-response inspection limits shared by call, stream, and tool-execution boundaries. */
@@ -37,20 +31,6 @@ public class PrivacyGuardrailsProperties {
     private final Regex regex = new Regex();
     /** Tool boundary policy settings. */
     private final Tools tools = new Tools();
-
-    /** @deprecated Omit this property and select privacy on each ChatClient. Existing false values still opt out. */
-    @Deprecated(since = "0.3.0", forRemoval = true)
-    @DeprecatedConfigurationProperty(reason = "Privacy infrastructure is prepared from available analyzers or a "
-            + "PrivacyService. Select privacy on each ChatClient; false remains a compatibility opt-out.")
-    public boolean isEnabled() {
-        return this.enabled;
-    }
-
-    /** @deprecated Retained for the legacy auto-configuration opt-out. */
-    @Deprecated(since = "0.3.0", forRemoval = true)
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
 
     public Output getOutput() {
         return this.output;

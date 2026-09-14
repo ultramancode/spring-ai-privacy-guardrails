@@ -4,7 +4,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
 import java.util.function.UnaryOperator;
@@ -19,12 +18,6 @@ import java.util.function.IntFunction;
 @ConditionalOnBean(
         name = "privacyChatClientConfigurer",
         value = ToolAuthorizationChatClientFactory.class
-)
-@ConditionalOnProperty(
-        prefix = "spring.ai.privacy.security",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
 )
 public class PrivacySecurityAutoConfiguration {
 

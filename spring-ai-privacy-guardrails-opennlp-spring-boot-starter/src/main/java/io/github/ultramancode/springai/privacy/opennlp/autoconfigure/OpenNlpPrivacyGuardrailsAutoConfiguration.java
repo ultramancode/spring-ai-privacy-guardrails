@@ -19,10 +19,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /** Auto-configures the Apache OpenNLP analyzer provider and model resources. */
 @AutoConfiguration(before = PrivacyGuardrailsAutoConfiguration.class)
-@ConditionalOnProperty(prefix = "spring.ai.privacy", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(OpenNlpPrivacyGuardrailsProperties.class)
 public class OpenNlpPrivacyGuardrailsAutoConfiguration {
 
@@ -48,7 +48,7 @@ public class OpenNlpPrivacyGuardrailsAutoConfiguration {
         }
 
         List<OpenNlpEntityModel> entityModels = new ArrayList<>();
-        for (var modelEntry : properties.getEntityModels().entrySet()) {
+        for (Map.Entry<String, String> modelEntry : properties.getEntityModels().entrySet()) {
             entityModels.add(loadEntityModel(resourceLoader, modelEntry.getKey(), modelEntry.getValue()));
         }
         TokenizerModel tokenizerModel = tokenizerModelLocation == null

@@ -6,8 +6,6 @@ dependencies {
     api 'org.springframework.boot:spring-boot-starter'
     api 'org.springframework.security:spring-security-core'
 
-    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${providers.gradleProperty('springBootVersion').get()}"
-
     testImplementation project(':spring-ai-privacy-guardrails-spring-boot-starter')
     testImplementation 'org.springframework.boot:spring-boot-test'
     testImplementation 'org.springframework.ai:spring-ai-anthropic'

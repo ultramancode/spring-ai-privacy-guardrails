@@ -48,8 +48,9 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void autoConfigurationDoesNotCreatePresidioAnalyzerByDefault() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> assertThat(context)
                         .doesNotHaveBean(PresidioAnalyzer.class)
                         .doesNotHaveBean(PresidioAnalyzerConfig.class)
@@ -57,13 +58,9 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void legacyGlobalOptOutStillDisablesAnEnabledProvider() {
-        new ApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        PresidioPrivacyGuardrailsAutoConfiguration.class,
-                        PrivacyGuardrailsAutoConfiguration.class
-                ))
-                .withPropertyValues("spring.ai.privacy.presidio.enabled=true", "spring.ai.privacy.enabled=false")
+    void doesNotAutoConfigureAnalyzerWhenProviderIsDisabled() {
+        this.contextRunner
+                .withPropertyValues("spring.ai.privacy.presidio.enabled=false")
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .doesNotHaveBean(PresidioAnalyzer.class)

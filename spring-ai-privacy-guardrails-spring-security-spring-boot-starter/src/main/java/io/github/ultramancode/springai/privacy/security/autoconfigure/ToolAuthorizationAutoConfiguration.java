@@ -11,19 +11,15 @@ import io.micrometer.observation.ObservationRegistry;
 import org.springframework.core.env.Environment;
 import org.springframework.ai.model.tool.DefaultToolCallingManager;
 import org.springframework.ai.model.tool.ToolCallingManager;
-import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.security.authorization.AuthorizationManager;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -37,13 +33,6 @@ import java.util.List;
         }
 )
 @ConditionalOnClass({AuthorizationManager.class, ToolCallingManager.class})
-@ConditionalOnProperty(
-        prefix = "spring.ai.privacy.security",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
-@EnableConfigurationProperties(PrivacySecurityProperties.class)
 public class ToolAuthorizationAutoConfiguration {
 
     @Bean
@@ -51,10 +40,10 @@ public class ToolAuthorizationAutoConfiguration {
     @ConditionalOnMissingBean
     SpringSecurityToolBoundary springSecurityToolBoundary(
             AuthorizationManager<ToolAuthorizationContext> authorizationManager,
-            ListableBeanFactory beanFactory
+            ObjectProvider<ToolCallingManager> toolCallingManagers
     ) {
         return SpringSecurityToolBoundary.builder(
-                resolveDefaultToolCallingManager(beanFactory),
+                resolveDefaultToolCallingManager(toolCallingManagers),
                 authorizationManager
         ).build();
     }
@@ -89,17 +78,15 @@ public class ToolAuthorizationAutoConfiguration {
                 }, environment.getProperty("spring.ai.chat.client.tool-calling.enabled", Boolean.class, true));
     }
 
-    private static ToolCallingManager resolveDefaultToolCallingManager(ListableBeanFactory beanFactory) {
-        List<ToolCallingManager> defaultManagerCandidates = Arrays.stream(
-                        beanFactory.getBeanNamesForType(ToolCallingManager.class, false, false)
-                )
-                .map(name -> beanFactory.getBean(name, ToolCallingManager.class))
+    private static ToolCallingManager resolveDefaultToolCallingManager(
+            ObjectProvider<ToolCallingManager> toolCallingManagers) {
+        List<ToolCallingManager> defaultManagerCandidates = toolCallingManagers.stream()
                 .filter(DefaultToolCallingManager.class::isInstance)
                 .toList();
         if (defaultManagerCandidates.isEmpty()) {
             throw new IllegalStateException(
-                    "Tool authorization requires Spring AI's auto-configured "
-                            + "ToolCallingManager and does not create a fallback manager"
+                    "Tool authorization auto-configuration requires a DefaultToolCallingManager bean. "
+                            + "Provide an explicit SpringSecurityToolBoundary to use another ToolCallingManager"
             );
         }
         if (defaultManagerCandidates.size() > 1) {

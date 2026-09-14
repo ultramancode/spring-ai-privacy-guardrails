@@ -33,15 +33,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ExtendWith(OutputCaptureExtension.class)
 class PrivacyConfigurationPropertyDiagnosticsTest {
 
+    private final PiiAnalyzer emptyAnalyzer = (text, options) -> List.of();
+
     private final ApplicationContextRunner diagnosticsRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
-                    PrivacyConfigurationDiagnosticsAutoConfiguration.class,
-                    PrivacyGuardrailsAutoConfiguration.class
-            ))
-            .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of());
+                    PrivacyConfigurationDiagnosticsAutoConfiguration.class
+            ));
+
+    private final ApplicationContextRunner privacyRunner = this.diagnosticsRunner
+            .withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
+            .withBean(PiiAnalyzer.class, () -> this.emptyAnalyzer);
 
     @Test
-    void diagnosticsAreRegisteredIndependentlyOfTheEnabledAutoConfiguration() throws Exception {
+    void diagnosticsAreRegisteredIndependentlyOfThePrivacyAutoConfiguration() throws Exception {
         try (InputStream input = PrivacyConfigurationPropertyDiagnosticsTest.class.getResourceAsStream(
                 "/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports"
         )) {
@@ -55,7 +59,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     void fixedDiagnosticSchemaStaysInSyncWithConfigurationProperties() {
         assertDiagnosticSchemaMatches(
                 PrivacyGuardrailsProperties.class,
-                PrivacyConfigurationPropertyDiagnostics.BASE_ROOT_PROPERTIES
+                PrivacyConfigurationPropertyDiagnostics.ROOT_PROPERTIES
         );
         assertDiagnosticSchemaMatches(
                 PrivacyGuardrailsProperties.Output.class,
@@ -109,9 +113,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void suggestsTheCanonicalNameForALikelyFixedPropertyTypo(CapturedOutput output) {
-        this.diagnosticsRunner
+        this.privacyRunner
                 .withPropertyValues(
-                        "spring.ai.privacy.enabled=true",
                         "spring.ai.privacy.output.enabledddd=synthetic-sensitive-value"
                 )
                 .run(context -> {
@@ -188,16 +191,16 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
-    void warnsAboutTheGlobalEnabledTypoEvenWhenPrivacyAutoConfigurationIsInactive(
+    void warnsAboutAnOutputEnabledTypoWithoutPrivacyAutoConfiguration(
             CapturedOutput output
     ) {
         this.diagnosticsRunner
-                .withPropertyValues("spring.ai.privacy.enabledddd=synthetic-sensitive-value")
+                .withPropertyValues("spring.ai.privacy.output.enabledddd=synthetic-sensitive-value")
                 .run(context -> {
                     assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
                     assertThat(output).contains(
-                            "'spring.ai.privacy.enabledddd'. Did you mean "
-                                    + "'spring.ai.privacy.enabled'?"
+                            "'spring.ai.privacy.output.enabledddd'. Did you mean "
+                                    + "'spring.ai.privacy.output.enabled'?"
                     ).doesNotContain("synthetic-sensitive-value");
                 });
     }
@@ -210,21 +213,20 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 .withInitializer(context -> context.addBeanFactoryPostProcessor(
                         new LazyInitializationBeanFactoryPostProcessor()
                 ))
-                .withPropertyValues("spring.ai.privacy.enabledddd=synthetic-sensitive-value")
+                .withPropertyValues("spring.ai.privacy.output.enabledddd=synthetic-sensitive-value")
                 .run(context -> {
                     assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
                     assertThat(output)
-                            .contains("'spring.ai.privacy.enabledddd'. Did you mean ")
-                            .contains("'spring.ai.privacy.enabled'?")
+                            .contains("'spring.ai.privacy.output.enabledddd'. Did you mean ")
+                            .contains("'spring.ai.privacy.output.enabled'?")
                             .doesNotContain("synthetic-sensitive-value");
                 });
     }
 
     @Test
     void recognizesCamelCaseFixedPropertyNames(CapturedOutput output) {
-        this.diagnosticsRunner
+        this.privacyRunner
                 .withPropertyValues(
-                        "spring.ai.privacy.enabled=true",
                         "spring.ai.privacy.responseInspection.maxCharacters=8",
                         "spring.ai.privacy.analysis.minimumScore=0.5",
                         "spring.ai.privacy.output.blockExceptionMessage=safe-message",
@@ -257,8 +259,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void recognizesCanonicalSystemEnvironmentNames(CapturedOutput output) {
-        withSystemEnvironment(Map.of(
-                "SPRING_AI_PRIVACY_ENABLED", "true",
+        withPrivacySystemEnvironment(Map.of(
+                "SPRING_AI_PRIVACY_OUTPUT_ENABLED", "true",
                 "SPRING_AI_PRIVACY_RESPONSEINSPECTION_MAXCHARACTERS", "8",
                 "SPRING_AI_PRIVACY_ANALYSIS_MINIMUMSCORE", "0.5",
                 "SPRING_AI_PRIVACY_ANALYSIS_INCLUDEDENTITYTYPES_0", "EMAIL_ADDRESS",
@@ -373,8 +375,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void recognizesLegacyCompatibleSystemEnvironmentNames(CapturedOutput output) {
-        withSystemEnvironment(Map.of(
-                "SPRING_AI_PRIVACY_ENABLED", "true",
+        withPrivacySystemEnvironment(Map.of(
+                "SPRING_AI_PRIVACY_OUTPUT_ENABLED", "true",
                 "SPRING_AI_PRIVACY_RESPONSE_INSPECTION_MAX_CHARACTERS", "8",
                 "SPRING_AI_PRIVACY_ANALYSIS_MINIMUM_SCORE", "0.5",
                 "SPRING_AI_PRIVACY_ANALYSIS_INCLUDED_ENTITY_TYPES_0", "EMAIL_ADDRESS",
@@ -404,8 +406,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     void recognizesStandardAndLegacyEnvironmentNamesInTheSameSource(
             CapturedOutput output
     ) {
-        withSystemEnvironment(Map.of(
-                "SPRING_AI_PRIVACY_ENABLED", "true",
+        withPrivacySystemEnvironment(Map.of(
+                "SPRING_AI_PRIVACY_OUTPUT_ENABLED", "true",
                 "SPRING_AI_PRIVACY_RESPONSEINSPECTION_MAXCHARACTERS", "8",
                 "SPRING_AI_PRIVACY_RESPONSE_INSPECTION_MAX_MEDIA_BYTES", "9"
         )).run(context -> {
@@ -423,8 +425,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void warnsWhenStandardRootAndLegacyPropertyFormsAreMixed(CapturedOutput output) {
-        withSystemEnvironment(Map.of(
-                "SPRING_AI_PRIVACY_ENABLED", "true",
+        withPrivacySystemEnvironment(Map.of(
+                "SPRING_AI_PRIVACY_OUTPUT_ENABLED", "true",
                 "SPRING_AI_PRIVACY_RESPONSEINSPECTION_MAX_CHARACTERS", "87654321"
         )).run(context -> {
             assertThat(context).hasNotFailed().hasSingleBean(PrivacyService.class);
@@ -442,8 +444,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void validAliasDoesNotHideAnInvalidEnvironmentName(CapturedOutput output) {
-        withSystemEnvironment(Map.of(
-                "SPRING_AI_PRIVACY_ENABLED", "true",
+        withPrivacySystemEnvironment(Map.of(
+                "SPRING_AI_PRIVACY_OUTPUT_ENABLED", "true",
                 "SPRING_AI_PRIVACY_RESPONSE__INSPECTION_MAX_CHARACTERS", "87654321",
                 "SPRING_AI_PRIVACY_RESPONSE_INSPECTION_MAX_CHARACTERS", "8"
         )).run(context -> {
@@ -460,11 +462,11 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void doesNotWarnWhenRepeatedSeparatorStillBinds(CapturedOutput output) {
-        withSystemEnvironment(Map.of(
-                "SPRING_AI_PRIVACY__ENABLED", "true"
+        withPrivacySystemEnvironment(Map.of(
+                "SPRING_AI_PRIVACY_OUTPUT__ENABLED", "true"
         )).run(context -> {
             assertThat(context).hasNotFailed().hasSingleBean(PrivacyService.class);
-            assertThat(context.getBean(PrivacyGuardrailsProperties.class).isEnabled()).isTrue();
+            assertThat(context.getBean(PrivacyGuardrailsProperties.class).getOutput().isEnabled()).isTrue();
             assertThat(output).doesNotContain(
                     "Unrecognized Spring AI Privacy Guardrails configuration property"
             );
@@ -476,7 +478,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
             CapturedOutput output
     ) {
         withSystemEnvironment(Map.of(
-                "SPRING_AI_PRIVACY_ENABLEDDDD", "true",
+                "SPRING_AI_PRIVACY_OUTPUT_ENABLEDDDD", "true",
                 "SPRING_AI_PRIVACY_RESPONSE_INSPECTION_MAX_CHARACTERSS", "8",
                 "SPRING_AI_PRIVACY_OUTPUT_BLOCK_EXCEPTION_MESAGE", "synthetic-sensitive-value",
                 "SPRING_AI_PRIVACY_REGEX_RULES_0_CAPTURE_GROPU", "0"
@@ -486,8 +488,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                     .contains("'spring.ai.privacy.response-inspection.max-characters'")
                     .contains("'spring.ai.privacy.output.block-exception-message'")
                     .contains("'spring.ai.privacy.regex.rules[0].capture-group'")
-                    .contains("'spring.ai.privacy.enabledddd'")
-                    .contains("'spring.ai.privacy.enabled'")
+                    .contains("'spring.ai.privacy.output.enabledddd'")
+                    .contains("'spring.ai.privacy.output.enabled'")
                     .doesNotContain(
                             "'spring.ai.privacy.response-inspection.max-characterss'"
                     )
@@ -568,12 +570,12 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
                         new ThrowingEnumerablePropertySource()
                 ))
-                .withPropertyValues("spring.ai.privacy.enabledddd=true")
+                .withPropertyValues("spring.ai.privacy.output.enabledddd=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
                     assertThat(output)
-                            .contains("'spring.ai.privacy.enabledddd'. Did you mean ")
-                            .contains("'spring.ai.privacy.enabled'?")
+                            .contains("'spring.ai.privacy.output.enabledddd'. Did you mean ")
+                            .contains("'spring.ai.privacy.output.enabled'?")
                             .doesNotContain(ThrowingEnumerablePropertySource.SENSITIVE_MESSAGE);
                 });
     }
@@ -584,12 +586,12 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
                         new ThrowingAdaptationPropertySource()
                 ))
-                .withPropertyValues("spring.ai.privacy.enabledddd=true")
+                .withPropertyValues("spring.ai.privacy.output.enabledddd=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
                     assertThat(output)
-                            .contains("'spring.ai.privacy.enabledddd'. Did you mean ")
-                            .contains("'spring.ai.privacy.enabled'?")
+                            .contains("'spring.ai.privacy.output.enabledddd'. Did you mean ")
+                            .contains("'spring.ai.privacy.output.enabled'?")
                             .doesNotContain(ThrowingAdaptationPropertySource.SENSITIVE_MESSAGE);
                 });
     }
@@ -601,7 +603,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                         new PrefixedSystemEnvironmentPropertySource(
                                 "privacy-app",
                                 Map.of(
-                                        "PRIVACYAPP_SPRING_AI_PRIVACY_ENABLEDDDD",
+                                        "PRIVACYAPP_SPRING_AI_PRIVACY_OUTPUT_ENABLEDDDD",
                                         "synthetic-sensitive-value"
                                 )
                         )
@@ -617,8 +619,17 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 });
     }
 
+    private ApplicationContextRunner withPrivacySystemEnvironment(Map<String, Object> environment) {
+        return withSystemEnvironment(this.privacyRunner, environment);
+    }
+
     private ApplicationContextRunner withSystemEnvironment(Map<String, Object> environment) {
-        return this.diagnosticsRunner.withInitializer(context ->
+        return withSystemEnvironment(this.diagnosticsRunner, environment);
+    }
+
+    private ApplicationContextRunner withSystemEnvironment(
+            ApplicationContextRunner runner, Map<String, Object> environment) {
+        return runner.withInitializer(context ->
                 context.getEnvironment().getPropertySources().addFirst(
                         new SystemEnvironmentPropertySource(
                                 StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
@@ -819,7 +830,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
         @Override
         public String[] getPropertyNames() {
-            return new String[] {"spring.ai.privacy.enabled"};
+            return new String[] {"spring.ai.privacy.output.enabled"};
         }
 
         @Override

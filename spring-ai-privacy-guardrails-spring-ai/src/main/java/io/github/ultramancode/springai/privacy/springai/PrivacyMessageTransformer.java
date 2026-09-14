@@ -15,6 +15,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
@@ -79,7 +80,7 @@ final class PrivacyMessageTransformer {
         String content = tokenizeText(handle, message.getText(), false);
         String providerSpecificText = PrivacyAssistantMessageSupport.providerSpecificText(message);
         String tokenizedProviderSpecificText = tokenizeText(handle, providerSpecificText, false);
-        var metadata = PrivacyProviderTextMetadataTransformer.transformMessageMetadata(
+        Map<String, Object> metadata = PrivacyProviderTextMetadataTransformer.transformMessageMetadata(
                 message.getMetadata(),
                 text -> tokenizeText(handle, text, false)
         );
@@ -119,7 +120,7 @@ final class PrivacyMessageTransformer {
         String transformedProviderSpecificText = providerSpecificText == null
                 ? null
                 : textTransformer.apply(providerSpecificText);
-        var metadata = PrivacyProviderTextMetadataTransformer.transformMessageMetadata(
+        Map<String, Object> metadata = PrivacyProviderTextMetadataTransformer.transformMessageMetadata(
                 message.getMetadata(),
                 textTransformer
         );

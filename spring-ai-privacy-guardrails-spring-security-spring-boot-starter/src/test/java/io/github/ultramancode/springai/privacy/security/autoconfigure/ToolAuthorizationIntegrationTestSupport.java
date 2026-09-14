@@ -59,16 +59,14 @@ abstract class ToolAuthorizationIntegrationTestSupport {
                         ToolCallingAutoConfiguration.class, OpenAiChatAutoConfiguration.class,
                         ChatClientAutoConfiguration.class))
                 .withUserConfiguration(PolicyConfiguration.class)
-                .withPropertyValues("spring.ai.privacy.security.enabled=true",
-                        "spring.ai.openai.api-key=test-api-key",
+                .withPropertyValues("spring.ai.openai.api-key=test-api-key",
                         "spring.ai.openai.base-url=http://127.0.0.1:" + this.server.getAddress().getPort());
     }
 
     protected ApplicationContextRunner privacyContextRunner() {
         return contextRunner().withConfiguration(AutoConfigurations.of(
                         PrivacyGuardrailsAutoConfiguration.class, PrivacySecurityAutoConfiguration.class))
-                .withPropertyValues("spring.ai.privacy.enabled=true",
-                        "spring.ai.privacy.regex.enabled=true",
+                .withPropertyValues("spring.ai.privacy.regex.enabled=true",
                         "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
                         "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
                         "spring.ai.privacy.regex.rules[0].score=0.9",

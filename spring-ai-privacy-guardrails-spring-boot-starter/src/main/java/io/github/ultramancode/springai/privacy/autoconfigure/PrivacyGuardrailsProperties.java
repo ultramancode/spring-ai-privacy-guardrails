@@ -21,11 +21,6 @@ import java.util.Objects;
 @ConfigurationProperties("spring.ai.privacy")
 public class PrivacyGuardrailsProperties {
 
-    /**
-     * Whether privacy infrastructure and the selectable ChatClient configurer are enabled.
-     * Enabling this property does not apply the boundary to every ChatClient automatically.
-     */
-    private boolean enabled = false;
     /** Optional output-boundary settings. */
     private final Output output = new Output();
     /** Model-response inspection limits shared by call, stream, and tool-execution boundaries. */
@@ -36,14 +31,6 @@ public class PrivacyGuardrailsProperties {
     private final Regex regex = new Regex();
     /** Tool boundary policy settings. */
     private final Tools tools = new Tools();
-
-    public boolean isEnabled() {
-        return this.enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
 
     public Output getOutput() {
         return this.output;
@@ -195,7 +182,10 @@ public class PrivacyGuardrailsProperties {
 
         /** Language code passed to analyzers. */
         private String language = PiiAnalysisOptions.DEFAULT_LANGUAGE;
-        /** Detection allowlist only; empty includes every supported type and values never register trusted types. */
+        /**
+         * Entity types to include in detection. An empty list includes every supported type.
+         * Listing a type does not register it as trusted.
+         */
         private List<String> includedEntityTypes = new ArrayList<>();
         /** Global minimum analyzer confidence score. */
         private double minimumScore = PiiAnalysisOptions.DEFAULT_MINIMUM_SCORE;
@@ -207,7 +197,10 @@ public class PrivacyGuardrailsProperties {
         private List<String> supplementalProviders = new ArrayList<>();
         /** Sole policy controlling whether analyzer failures stop processing. */
         private PiiAnalyzerFailurePolicy failurePolicy = PiiResolutionPolicy.DEFAULT_FAILURE_POLICY;
-        /** Additional per-provider confidence floors; the effective threshold is the greater of global and provider values. */
+        /**
+         * Minimum confidence scores for individual providers.
+         * The effective threshold is the greater of the global and provider scores.
+         */
         private Map<String, Double> providerMinimumScores = new LinkedHashMap<>();
         /** Entity aliases mapped to canonical entity types. */
         private Map<String, String> entityAliases = new LinkedHashMap<>();

@@ -23,6 +23,7 @@ import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -37,7 +38,6 @@ import java.util.regex.Pattern;
 
 /** Auto-configures core privacy services and the starter-managed Spring AI privacy boundary. */
 @AutoConfiguration
-@ConditionalOnProperty(prefix = "spring.ai.privacy", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(PrivacyGuardrailsProperties.class)
 public class PrivacyGuardrailsAutoConfiguration {
 
@@ -168,6 +168,7 @@ public class PrivacyGuardrailsAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(PiiAnalyzer.class)
     @ConditionalOnMissingBean
     PrivacyService privacyService(
             ObjectProvider<PiiAnalyzer> analyzers,
@@ -195,6 +196,7 @@ public class PrivacyGuardrailsAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(PrivacyService.class)
     PrivacyChatClientConfigurer privacyChatClientConfigurer(
             PrivacyService privacyService,
             PrivacyToolCallbackFactory toolCallbackFactory,
@@ -247,6 +249,7 @@ public class PrivacyGuardrailsAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(PrivacyService.class)
     @ConditionalOnMissingBean
     PrivacyToolCallbackFactory privacyToolCallbackFactory(
             PrivacyService privacyService,

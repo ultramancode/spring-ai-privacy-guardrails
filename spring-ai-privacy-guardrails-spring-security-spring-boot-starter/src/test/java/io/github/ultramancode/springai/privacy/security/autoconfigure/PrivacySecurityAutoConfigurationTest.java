@@ -5,6 +5,9 @@ import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAu
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration;
 import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration;
@@ -23,6 +26,8 @@ import static org.mockito.Mockito.mock;
 
 class PrivacySecurityAutoConfigurationTest {
 
+    private final PiiAnalyzer emptyAnalyzer = (text, options) -> List.of();
+
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     PrivacyGuardrailsAutoConfiguration.class,
@@ -32,22 +37,8 @@ class PrivacySecurityAutoConfigurationTest {
                     ChatClientAutoConfiguration.class
             ))
             .withUserConfiguration(TestPolicyConfiguration.class)
-            .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
-            .withBean(ChatModel.class, () -> mock(ChatModel.class))
-            .withPropertyValues(
-                    "spring.ai.privacy.enabled=true",
-                    "spring.ai.privacy.security.enabled=true"
-            );
-
-    @Test
-    void contributesTheCombinedConfigurerWhenBothBoundariesAreAvailable() {
-        this.contextRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context).hasSingleBean(PrivacyChatClientConfigurer.class);
-            assertThat(context).hasSingleBean(ToolAuthorizationChatClientFactory.class);
-            assertThat(context).hasSingleBean(PrivacySecurityChatClientFactory.class);
-        });
-    }
+            .withBean(PiiAnalyzer.class, () -> this.emptyAnalyzer)
+            .withBean(ChatModel.class, () -> mock(ChatModel.class));
 
     @Test
     void createsIndependentBuildersForTheSameModel() {
@@ -58,25 +49,31 @@ class PrivacySecurityAutoConfigurationTest {
         });
     }
 
-    @Test
-    void keepsToolAuthorizationActiveWhenPrivacyIsDisabled() {
-        new ApplicationContextRunner()
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+    void preparesOnlyTheBoundariesWhoseDependenciesExist(boolean analyzerPresent, boolean policyPresent) {
+        ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         PrivacyGuardrailsAutoConfiguration.class,
                         ToolAuthorizationAutoConfiguration.class,
                         PrivacySecurityAutoConfiguration.class,
                         ToolCallingAutoConfiguration.class,
-                        ChatClientAutoConfiguration.class
-                ))
-                .withUserConfiguration(TestPolicyConfiguration.class)
-                .withBean(ChatModel.class, () -> mock(ChatModel.class))
-                .withPropertyValues("spring.ai.privacy.security.enabled=true")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(PrivacyChatClientConfigurer.class);
-                    assertThat(context).hasSingleBean(ToolAuthorizationChatClientFactory.class);
-                    assertThat(context).doesNotHaveBean(PrivacySecurityChatClientFactory.class);
-                });
+                        ChatClientAutoConfiguration.class))
+                .withBean(ChatModel.class, () -> mock(ChatModel.class));
+        if (analyzerPresent) {
+            PiiAnalyzer analyzer = (text, options) -> List.of();
+            runner = runner.withBean(PiiAnalyzer.class, () -> analyzer);
+        }
+        if (policyPresent) {
+            runner = runner.withUserConfiguration(TestPolicyConfiguration.class);
+        }
+        runner.run(context -> {
+            assertThat(context).hasNotFailed().hasSingleBean(ChatClient.Builder.class);
+            assertThat(context.getBeansOfType(PrivacyChatClientConfigurer.class)).hasSize(analyzerPresent ? 1 : 0);
+            assertThat(context.getBeansOfType(ToolAuthorizationChatClientFactory.class)).hasSize(policyPresent ? 1 : 0);
+            assertThat(context.getBeansOfType(PrivacySecurityChatClientFactory.class))
+                    .hasSize(analyzerPresent && policyPresent ? 1 : 0);
+        });
     }
 
     @Test
@@ -86,7 +83,6 @@ class PrivacySecurityAutoConfigurationTest {
                 .withClassLoader(new FilteredClassLoader(
                         "io.github.ultramancode.springai.privacy.autoconfigure"
                 ))
-                .withPropertyValues("spring.ai.privacy.security.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PrivacySecurityChatClientFactory.class);

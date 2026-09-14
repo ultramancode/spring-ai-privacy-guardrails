@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.github.ultramancode.springai.privacy.core.EntityTypeRegistry;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiAnalysisResult;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailure;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureMetadata;
@@ -14,6 +15,7 @@ import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
@@ -215,7 +217,7 @@ class PresidioAnalyzerTest {
                 PiiResolutionPolicy.defaults()
         );
 
-        var spans = service.analyze("123-45-6789");
+        List<ResolvedPiiSpan> spans = service.analyze("123-45-6789");
 
         assertThat(spans).singleElement().satisfies(span -> {
             assertThat(span.entityType()).isEqualTo("NATIONAL_ID");
@@ -750,7 +752,7 @@ class PresidioAnalyzerTest {
                 observed::set
         );
 
-        var result = service.analyzeDetailed("Alice");
+        PiiAnalysisResult result = service.analyzeDetailed("Alice");
 
         PiiAnalyzerFailure expected = new PiiAnalyzerFailure(
                 PresidioAnalyzer.PROVIDER_ID,

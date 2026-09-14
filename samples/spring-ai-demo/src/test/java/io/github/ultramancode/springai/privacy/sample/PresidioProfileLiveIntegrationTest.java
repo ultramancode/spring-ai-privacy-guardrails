@@ -1,12 +1,16 @@
 package io.github.ultramancode.springai.privacy.sample;
 
+import io.github.ultramancode.springai.privacy.core.PiiAnalysisResult;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,7 +30,7 @@ class PresidioProfileLiveIntegrationTest {
     @Test
     void profileProtectsStockEnglishPersonAndEmailDetection() {
         String input = "John Smith can be reached at john.smith@example.com";
-        var spans = this.privacyService.analyzeDetailed(input).spans();
+        List<ResolvedPiiSpan> spans = this.privacyService.analyzeDetailed(input).spans();
 
         assertThat(spans)
                 .filteredOn(span -> "PERSON".equals(span.entityType()))
@@ -51,7 +55,7 @@ class PresidioProfileLiveIntegrationTest {
     void canonicalNationalIdFilterDoesNotBecomeAnInvalidPresidioNativeRequestFilter() {
         String input = "SSN: 212-45-6789";
 
-        var result = this.privacyService.analyzeDetailed(input);
+        PiiAnalysisResult result = this.privacyService.analyzeDetailed(input);
 
         assertThat(result.successfulProviders()).contains("PRESIDIO");
         assertThat(result.failures()).isEmpty();

@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.nio.charset.StandardCharsets;
@@ -119,7 +120,7 @@ public abstract class VerifyCentralStagingRepository extends DefaultTask {
 
     static List<String> findForbiddenChecksums(File repository) {
         Path root = repository.toPath();
-        try (var paths = Files.walk(root)) {
+        try (Stream<Path> paths = Files.walk(root)) {
             return paths
                     .filter(Files::isRegularFile)
                     .map(root::relativize)

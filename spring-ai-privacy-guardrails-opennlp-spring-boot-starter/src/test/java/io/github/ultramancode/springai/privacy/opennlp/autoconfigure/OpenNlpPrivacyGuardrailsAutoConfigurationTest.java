@@ -46,24 +46,24 @@ class OpenNlpPrivacyGuardrailsAutoConfigurationTest {
     );
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AUTO_CONFIGURATIONS)
-            .withPropertyValues("spring.ai.privacy.enabled=true");
+            .withConfiguration(AUTO_CONFIGURATIONS);
 
     @Test
-    void autoConfigurationDoesNotCreateAnalyzerByDefault() {
+    void autoConfigurationDoesNotCreateOpenNlpAnalyzerByDefault() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> assertThat(context)
                         .hasSingleBean(PrivacyService.class)
                         .doesNotHaveBean(OpenNlpPiiAnalyzer.class));
     }
 
     @Test
-    void autoConfigurationRequiresGlobalOptInEvenWhenProviderIsEnabled() {
-        new ApplicationContextRunner()
-                .withConfiguration(AUTO_CONFIGURATIONS)
-                .withPropertyValues("spring.ai.privacy.opennlp.enabled=true")
+    void doesNotAutoConfigureAnalyzerWhenProviderIsDisabled() {
+        this.contextRunner
+                .withPropertyValues("spring.ai.privacy.opennlp.enabled=false")
                 .run(context -> assertThat(context)
+                        .hasNotFailed()
                         .doesNotHaveBean(OpenNlpPiiAnalyzer.class)
                         .doesNotHaveBean(PrivacyService.class));
     }
@@ -240,8 +240,7 @@ class OpenNlpPrivacyGuardrailsAutoConfigurationTest {
                 }
                 return super.getResource(location);
             }
-        }).withConfiguration(AUTO_CONFIGURATIONS)
-                .withPropertyValues("spring.ai.privacy.enabled=true");
+        }).withConfiguration(AUTO_CONFIGURATIONS);
     }
 
     private ResourceLoader trackingResourceLoader(AtomicBoolean resourceRequested) {

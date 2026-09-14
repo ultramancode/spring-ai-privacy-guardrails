@@ -7,7 +7,6 @@ spring:
     name: spring-ai-privacy-guardrails-demo
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize

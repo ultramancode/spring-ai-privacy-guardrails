@@ -11,6 +11,7 @@ import io.github.ultramancode.springai.privacy.core.PiiResolutionMode;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
@@ -72,15 +73,13 @@ import static org.mockito.Mockito.verify;
 class PrivacyGuardrailsAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
-            .withPropertyValues("spring.ai.privacy.enabled=true");
+            .withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class));
 
     private final ApplicationContextRunner bootChatClientContextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     ChatClientAutoConfiguration.class,
                     PrivacyGuardrailsAutoConfiguration.class
-            ))
-            .withPropertyValues("spring.ai.privacy.enabled=true");
+            ));
 
     @Test
     void configurationMetadataPublishesTheCanonicalPropertySurface() throws Exception {
@@ -105,23 +104,12 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationIsInactiveUntilGloballyEnabled() {
-        new ApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
-                .run(context -> assertThat(context)
-                        .doesNotHaveBean(PrivacyService.class)
-                        .doesNotHaveBean(PrivacyToolCallbackFactory.class)
-                        .doesNotHaveBean(PrivacyChatClientConfigurer.class));
-
-        assertThat(new PrivacyGuardrailsProperties().isEnabled()).isFalse();
-    }
-
-    @Test
     void autoConfigurationCreatesCoreServiceAndExplicitConfigurerWithoutPublicAdvisorBeans() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> assertThat(context)
+                        .hasNotFailed()
                         .hasSingleBean(PrivacyService.class)
                         .hasSingleBean(PrivacyToolCallbackFactory.class)
                         .hasSingleBean(PrivacyChatClientConfigurer.class)
@@ -136,14 +124,12 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationFailsClosedWhenNoAnalyzerIsConfigured() {
-        this.contextRunner.run(context -> {
-            assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure())
-                    .hasRootCauseMessage(
-                            "No PiiAnalyzer is configured. Enable regex, OpenNLP, Presidio, or provide a custom analyzer"
-                    );
-        });
+    void startsWithoutPrivacyInfrastructureWhenNoAnalyzerIsConfigured() {
+        this.contextRunner.run(context -> assertThat(context)
+                .hasNotFailed()
+                .doesNotHaveBean(PrivacyService.class)
+                .doesNotHaveBean(PrivacyToolCallbackFactory.class)
+                .doesNotHaveBean(PrivacyChatClientConfigurer.class));
     }
 
     @Test
@@ -250,8 +236,9 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void responseInspectionPropertiesBindIndependentlyOfTheOptionalOutputPolicy() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues(
                         "spring.ai.privacy.output.enabled=false",
                         "spring.ai.privacy.response-inspection.max-stream-frames=7",
@@ -277,10 +264,11 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void configuredEntityAliasesFeedTheServiceWithoutExposingABaseRegistryBean() {
+        PiiAnalyzer analyzer = (text, options) -> List.of(
+                new PiiSpan("PER", 0, text.length(), 0.95)
+        );
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of(
-                        new PiiSpan("PER", 0, text.length(), 0.95)
-                ))
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues("spring.ai.privacy.analysis.entity-aliases[PER]=CUSTOMER_ID")
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(EntityTypeRegistry.class);
@@ -293,8 +281,9 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void configuredEntityAliasesRejectNonCanonicalTypesAtStartup() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues("spring.ai.privacy.analysis.entity-aliases[PER]=customer-id")
                 .run(context -> {
                     assertThat(context).hasFailed();
@@ -307,13 +296,14 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void applicationProvidedEntityRegistryRemainsTheExplicitOverridePath() {
+        PiiAnalyzer analyzer = (text, options) -> List.of(
+                new PiiSpan("PER", 0, text.length(), 0.95)
+        );
         this.contextRunner
                 .withBean(EntityTypeRegistry.class, () -> new EntityTypeRegistry(
                         Map.of("PER", "CUSTOMER_ID")
                 ))
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of(
-                        new PiiSpan("PER", 0, text.length(), 0.95)
-                ))
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> {
                     assertThat(context).hasSingleBean(EntityTypeRegistry.class);
                     assertThat(context.getBean(PrivacyService.class).analyze("Alice"))
@@ -354,25 +344,21 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationGlobalSwitchDisablesEveryPrivacyBoundary() {
-        this.contextRunner
-                .withPropertyValues("spring.ai.privacy.enabled=false")
+    void disablingRegexSkipsItsCreationWithoutAMissingAnalyzerFailure() {
+        this.contextRunner.withPropertyValues("spring.ai.privacy.regex.enabled=false")
                 .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .doesNotHaveBean(RegexPiiAnalyzer.class)
                         .doesNotHaveBean(PrivacyService.class)
-                        .doesNotHaveBean(PrivacyLifecycleAdvisor.class)
-                        .doesNotHaveBean(PrivacyInputAdvisor.class)
-                        .doesNotHaveBean(PrivacyModelBoundaryAdvisor.class)
-                        .doesNotHaveBean(PrivacyToolContextAdvisor.class)
-                        .doesNotHaveBean(PrivacyToolCallValidationAdvisor.class)
-                        .doesNotHaveBean(PrivacyOutputAdvisor.class)
                         .doesNotHaveBean(PrivacyToolCallbackFactory.class)
                         .doesNotHaveBean(PrivacyChatClientConfigurer.class));
     }
 
     @Test
     void explicitConfigurerRegistersTheCompleteEnabledAdvisorBundle() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues("spring.ai.privacy.output.enabled=true")
                 .run(context -> {
                     ChatClient.Builder builder = mock(ChatClient.Builder.class);
@@ -399,8 +385,9 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void explicitConfigurerRejectsApplyingTheBoundaryTwiceToTheSameBuilder() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> {
                     ChatClient.Builder builder = mock(ChatClient.Builder.class);
                     PrivacyChatClientConfigurer configurer = context.getBean(PrivacyChatClientConfigurer.class);
@@ -571,8 +558,9 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void explicitlyConfiguredBoundaryRejectsWrappersFromAnotherFactoryEvenWithTheSameService() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> {
                     PrivacyService service = context.getBean(PrivacyService.class);
                     PrivacyToolCallbackFactory foreignFactory = new PrivacyToolCallbackFactory(
@@ -609,7 +597,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     assertThat(context).hasSingleBean(RegexPiiAnalyzer.class);
 
                     PrivacyService privacyService = context.getBean(PrivacyService.class);
-                    try (var session = privacyService.openSession()) {
+                    try (PrivacySession session = privacyService.openSession()) {
                         assertThat(privacyService.tokenize(session.handle(), "Owner EMP-1234"))
                                 .matches("Owner "
                                         + OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID").pattern());
@@ -752,7 +740,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     assertThat(context).doesNotHaveBean(EntityTypeRegistry.class);
 
                     PrivacyService privacyService = context.getBean(PrivacyService.class);
-                    try (var session = privacyService.openSession()) {
+                    try (PrivacySession session = privacyService.openSession()) {
                         assertThat(privacyService.tokenize(session.handle(), "Owner CUST-1234"))
                                 .matches("Owner "
                                         + OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID").pattern());
@@ -762,21 +750,22 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void autoConfigurationBindsResolutionAndToolDisclosurePolicies() {
-        this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> new PiiAnalyzer() {
-                    @Override
-                    public List<PiiSpan> analyze(
-                            String text,
-                            PiiAnalysisOptions options
-                    ) {
-                        return List.of();
-                    }
+        PiiAnalyzer analyzer = new PiiAnalyzer() {
+            @Override
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options
+            ) {
+                return List.of();
+            }
 
-                    @Override
-                    public String providerId() {
-                        return "PRESIDIO";
-                    }
-                })
+            @Override
+            public String providerId() {
+                return "PRESIDIO";
+            }
+        };
+        this.contextRunner
+                .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues(
                         "spring.ai.privacy.analysis.mode=primary",
                         "spring.ai.privacy.analysis.primary-provider=presidio",

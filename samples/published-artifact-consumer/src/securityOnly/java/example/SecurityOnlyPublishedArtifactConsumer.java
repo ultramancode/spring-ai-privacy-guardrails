@@ -60,8 +60,7 @@ public class SecurityOnlyPublishedArtifactConsumer {
                 .web(WebApplicationType.NONE)
                 .properties(
                         "spring.main.banner-mode=off",
-                        "logging.level.root=ERROR",
-                        "spring.ai.privacy.security.enabled=true"
+                        "logging.level.root=ERROR"
                 )
                 .run(args)) {
             verifyToolAuthorization(context);

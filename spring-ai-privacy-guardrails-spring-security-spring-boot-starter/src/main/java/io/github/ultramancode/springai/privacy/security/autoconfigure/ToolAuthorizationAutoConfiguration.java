@@ -14,11 +14,13 @@ import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.security.authorization.AuthorizationManager;
 
 import java.util.Arrays;
@@ -38,12 +40,14 @@ import java.util.List;
 @ConditionalOnProperty(
         prefix = "spring.ai.privacy.security",
         name = "enabled",
-        havingValue = "true"
+        havingValue = "true",
+        matchIfMissing = true
 )
 @EnableConfigurationProperties(PrivacySecurityProperties.class)
 public class ToolAuthorizationAutoConfiguration {
 
     @Bean
+    @Conditional(ToolAuthorizationPolicyCondition.class)
     @ConditionalOnMissingBean
     SpringSecurityToolBoundary springSecurityToolBoundary(
             AuthorizationManager<ToolAuthorizationContext> authorizationManager,
@@ -56,6 +60,7 @@ public class ToolAuthorizationAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(SpringSecurityToolBoundary.class)
     // Apply Spring AI 2.0's deprecated ChatClientCustomizer before ChatClientBuilderCustomizer
     // to preserve existing application customizations and Spring AI's application order.
     @SuppressWarnings("removal")

@@ -72,15 +72,13 @@ import static org.mockito.Mockito.verify;
 class PrivacyGuardrailsAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
-            .withPropertyValues("spring.ai.privacy.enabled=true");
+            .withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class));
 
     private final ApplicationContextRunner bootChatClientContextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     ChatClientAutoConfiguration.class,
                     PrivacyGuardrailsAutoConfiguration.class
-            ))
-            .withPropertyValues("spring.ai.privacy.enabled=true");
+            ));
 
     @Test
     void configurationMetadataPublishesTheCanonicalPropertySurface() throws Exception {
@@ -105,16 +103,15 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationIsInactiveUntilGloballyEnabled() {
+    void preparesPrivacyFromAnAnalyzerWithoutAGlobalSwitch() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
                 .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
                 .run(context -> assertThat(context)
-                        .doesNotHaveBean(PrivacyService.class)
-                        .doesNotHaveBean(PrivacyToolCallbackFactory.class)
-                        .doesNotHaveBean(PrivacyChatClientConfigurer.class));
-
-        assertThat(new PrivacyGuardrailsProperties().isEnabled()).isFalse();
+                        .hasNotFailed()
+                        .hasSingleBean(PrivacyService.class)
+                        .hasSingleBean(PrivacyToolCallbackFactory.class)
+                        .hasSingleBean(PrivacyChatClientConfigurer.class));
     }
 
     @Test
@@ -136,14 +133,21 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationFailsClosedWhenNoAnalyzerIsConfigured() {
-        this.contextRunner.run(context -> {
-            assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure())
-                    .hasRootCauseMessage(
-                            "No PiiAnalyzer is configured. Enable regex, OpenNLP, Presidio, or provide a custom analyzer"
-                    );
-        });
+    void startsWithoutPrivacyInfrastructureWhenNoAnalyzerIsConfigured() {
+        this.contextRunner.run(context -> assertThat(context)
+                .hasNotFailed()
+                .doesNotHaveBean(PrivacyService.class)
+                .doesNotHaveBean(PrivacyToolCallbackFactory.class)
+                .doesNotHaveBean(PrivacyChatClientConfigurer.class));
+    }
+
+    @Test
+    void legacyTrueStillPreparesPrivacyFromAnAnalyzer() {
+        this.contextRunner.withPropertyValues("spring.ai.privacy.enabled=true")
+                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .hasSingleBean(PrivacyChatClientConfigurer.class));
     }
 
     @Test
@@ -356,6 +360,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
     @Test
     void autoConfigurationGlobalSwitchDisablesEveryPrivacyBoundary() {
         this.contextRunner
+                .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
                 .withPropertyValues("spring.ai.privacy.enabled=false")
                 .run(context -> assertThat(context)
                         .doesNotHaveBean(PrivacyService.class)

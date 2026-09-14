@@ -73,8 +73,6 @@ public class PublishedArtifactConsumer {
                 .properties(
                         "spring.main.banner-mode=off",
                         "logging.level.root=ERROR",
-                        "spring.ai.privacy.enabled=true",
-                        "spring.ai.privacy.security.enabled=true",
                         "spring.ai.privacy.regex.enabled=true",
                         "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
                         "spring.ai.privacy.regex.rules[0].pattern="

@@ -37,8 +37,7 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(
                     PresidioPrivacyGuardrailsAutoConfiguration.class,
                     PrivacyGuardrailsAutoConfiguration.class
-            ))
-            .withPropertyValues("spring.ai.privacy.enabled=true");
+            ));
 
     @AfterEach
     void stopServer() {
@@ -58,14 +57,15 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationRequiresGlobalOptInEvenWhenProviderIsEnabled() {
+    void legacyGlobalOptOutStillDisablesAnEnabledProvider() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         PresidioPrivacyGuardrailsAutoConfiguration.class,
                         PrivacyGuardrailsAutoConfiguration.class
                 ))
-                .withPropertyValues("spring.ai.privacy.presidio.enabled=true")
+                .withPropertyValues("spring.ai.privacy.presidio.enabled=true", "spring.ai.privacy.enabled=false")
                 .run(context -> assertThat(context)
+                        .hasNotFailed()
                         .doesNotHaveBean(PresidioAnalyzer.class)
                         .doesNotHaveBean(PresidioAnalyzerConfig.class));
     }

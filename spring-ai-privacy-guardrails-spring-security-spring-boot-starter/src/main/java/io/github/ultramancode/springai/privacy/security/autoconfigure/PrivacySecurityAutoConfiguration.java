@@ -23,7 +23,8 @@ import java.util.function.IntFunction;
 @ConditionalOnProperty(
         prefix = "spring.ai.privacy.security",
         name = "enabled",
-        havingValue = "true"
+        havingValue = "true",
+        matchIfMissing = true
 )
 public class PrivacySecurityAutoConfiguration {
 

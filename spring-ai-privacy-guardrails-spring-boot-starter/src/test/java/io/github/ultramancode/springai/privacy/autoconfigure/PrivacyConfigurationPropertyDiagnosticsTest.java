@@ -38,7 +38,8 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                     PrivacyConfigurationDiagnosticsAutoConfiguration.class,
                     PrivacyGuardrailsAutoConfiguration.class
             ))
-            .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of());
+            .withBean(PiiAnalyzer.class, () -> (text, options) -> List.of())
+            .withPropertyValues("spring.ai.privacy.enabled=false");
 
     @Test
     void diagnosticsAreRegisteredIndependentlyOfTheEnabledAutoConfiguration() throws Exception {

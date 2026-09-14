@@ -123,8 +123,8 @@ final class PrivacyConfigurationPropertyDiagnostics {
             if (securityRootTypo.isPresent()) {
                 return securityRootTypo;
             }
-            // A terminal global-enabled typo can silently leave privacy auto-configuration
-            // inactive. Other near-root names may belong to provider or host extensions.
+            // Keep diagnosing legacy opt-out typos during migration. Other near-root
+            // names may belong to provider or host extensions.
             if (propertyIndex == name.getNumberOfElements()
                     && rootMatch.expected().equals("enabled")) {
                 return typoSuggestionDiagnostic(ROOT.toString(), rootMatch);

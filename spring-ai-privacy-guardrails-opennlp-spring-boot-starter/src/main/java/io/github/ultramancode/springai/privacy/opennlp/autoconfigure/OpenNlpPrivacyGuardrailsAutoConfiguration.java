@@ -22,7 +22,7 @@ import java.util.List;
 
 /** Auto-configures the Apache OpenNLP analyzer provider and model resources. */
 @AutoConfiguration(before = PrivacyGuardrailsAutoConfiguration.class)
-@ConditionalOnProperty(prefix = "spring.ai.privacy", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "spring.ai.privacy", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(OpenNlpPrivacyGuardrailsProperties.class)
 public class OpenNlpPrivacyGuardrailsAutoConfiguration {
 

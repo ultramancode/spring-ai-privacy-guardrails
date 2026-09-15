@@ -34,6 +34,10 @@ Spring AI Privacy Guardrails combines a Spring-independent privacy `core` with
 Spring AI integration to enforce privacy policies across chat, RAG, memory,
 tool-call, and output boundaries.
 
+The optional [Spring Security integration](docs/security.md) controls which tools
+are shown to the model and checks authorization before tool execution. It can
+be used independently of PII protection.
+
 ## Why It Exists
 
 Detection is the first step. This library turns findings from built-in and
@@ -53,8 +57,8 @@ flowchart LR
 
 ## Run the Sample
 
-The sample includes a deterministic local `ChatModel`, so no cloud credentials
-are required. With JDK 17 installed, run the following command from the
+The default sample includes a local `ChatModel`, so no external model API key is
+required. With JDK 17 installed, run the following command from the
 repository root:
 
 ```bash
@@ -62,15 +66,15 @@ repository root:
 ```
 
 Open `http://127.0.0.1:8080` to use the sample's **Privacy Boundary
-Inspector**. Its views render runtime evidence returned by the sample backend:
+Inspector**. Compare the values the model and tools actually receive:
 
-- **Local Tool** shows detected raw values replaced with opaque request-scoped
-  tokens at the model boundary, only the allowed `CUSTOMER_ID` restored at the
-  tool boundary, and the tool result protected again before model re-entry.
-- **RAG** compares the raw retrieved document with the protected context
-  actually recorded at the model boundary.
-- **MCP** demonstrates the same scoped disclosure and result re-protection
-  through a real local Streamable HTTP MCP round trip.
+- **Local Tool** shows detected PII replaced with tokens before reaching the
+  model. Only the allowed `CUSTOMER_ID` is restored for the tool, and its result
+  is protected before being sent back to the model.
+- **RAG** compares the original retrieved document with the protected prompt
+  received by the model.
+- **MCP** shows the same protection through a local MCP tool call over
+  Streamable HTTP.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing no fixed-fixture raw PII at the model and one scoped tool disclosure" width="960">
@@ -89,35 +93,55 @@ for the corresponding reproducible automated coverage.
 
 For a step-by-step setup path, see [Getting Started](docs/getting-started.md).
 
-The following example adds privacy boundaries to a Spring AI application that
-already provides a `ChatModel` and `ChatClient.Builder`.
+The following sections outline the protection options for a Spring AI
+application that already provides a `ChatModel` and `ChatClient.Builder`.
 
-### Choose a Starter
+### Choose a PII Analyzer
 
-Choose the starter that matches the analyzer you plan to use.
+PII analyzers determine **what is sensitive**. Privacy Guardrails controls
+**where detected original values may flow** across model, RAG, memory, tool,
+MCP, and output boundaries.
 
-| Use case | Starter |
+| Analyzer | Best fit |
 | --- | --- |
-| Broader PII detection | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` (recommended) |
+| Presidio | Broader PII detection and NLP-backed recognition |
+| Built-in Regex or custom `PiiAnalyzer` | Application-specific identifiers with predictable formats |
+| Apache OpenNLP | JVM-local NER with application-supplied compatible models |
+
+For broader PII detection, Presidio is the recommended default.
+
+Presidio requires an external Presidio Analyzer service. OpenNLP runs in the
+JVM and requires compatible models supplied by the application.
+
+### Choose Starters
+
+Choose the starters for the capabilities your application needs.
+
+| Need | Starter |
+| --- | --- |
 | Regex rules or custom analyzers | `spring-ai-privacy-guardrails-spring-boot-starter` |
-| JVM-only environment with compatible OpenNLP models | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
+| Presidio integration | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
+| Apache OpenNLP integration | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
+| Principal-aware tool discovery and execution | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
 
-For broader PII detection, Presidio is the recommended default choice. Use the
-built-in Regex analyzer for application-specific formats.
+The Presidio and OpenNLP starters already include the base Privacy Guardrails
+starter, so do not add it separately. Add the Spring Security starter by itself
+for tool authorization alone, or add it alongside a privacy starter to use both
+capabilities.
 
-The Presidio starter requires an external Presidio Analyzer service. The
-Presidio and OpenNLP starters already include the base Privacy Guardrails
-starter, so do not add it separately. Adding a starter dependency alone enables
-neither privacy protection nor an analyzer.
+Adding a starter dependency alone does not apply its protection. Follow the
+example below and the relevant guide to complete the setup.
 
 ### Dependency and Basic Configuration
 
-The examples below use version `0.2.1`. To start without an external analyzer
-service, use the base starter with an application-specific regex rule.
+The examples below use version `0.3.0`.
+
+To start without an external analyzer service, use the base starter with an
+application-specific regex rule.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.2.1"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
 }
 ```
 
@@ -125,7 +149,6 @@ dependencies {
 spring:
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize
@@ -160,9 +183,9 @@ ChatClient privacyChatClient(
 }
 ```
 
-Only `ChatClient` instances configured with `PrivacyChatClientConfigurer` are
-protected. Enabling privacy protection requires at least one analyzer;
-otherwise, application startup fails.
+With at least one `PiiAnalyzer` bean available, the starter provides
+`PrivacyChatClientConfigurer`. Apply it to each client that needs privacy
+protection.
 
 Direct calls to a `ChatModel` are outside the automatic protection boundary.
 See [Configuration](docs/configuration.md) for derived clients, analyzer
@@ -204,11 +227,38 @@ For a `ToolCallbackProvider` whose tool list changes at runtime, such as an MCP
 provider, use `wrapProvider(...)`. Combine multiple `ToolCallbackProvider`
 instances with `wrapProviders(...)`.
 
-The application must protect any separate execution paths that use a custom
-`ToolCallingManager` or
-`ToolCallbackResolver`. See
+Custom tool-execution paths outside Spring AI's standard registration flow
+require separate protection. See
 [Per-Tool Original Disclosure](docs/configuration.md#per-tool-original-disclosure)
 for the complete rules.
+
+## Optional Spring Security Tool Authorization
+
+Applications can add the Spring Security starter to keep
+unauthorized tool specifications, including names, descriptions, and input
+schemas, out of the model and re-authorize execution before any allowed
+original PII is restored.
+
+```gradle
+dependencies {
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0"
+}
+```
+
+The Security starter can be used without the base Privacy Guardrails starter.
+Provide an `AuthorizationManager<ToolAuthorizationContext>` bean and create
+clients with `ToolAuthorizationChatClientFactory`, or use
+`PrivacySecurityChatClientFactory` to include privacy protection. Other clients
+are unaffected. Authentication remains the application's responsibility.
+
+When combined with privacy protection, tool authorization and original-value
+disclosure remain separate policies. Authorization determines which tools the
+current principal may discover or execute. Disclosure policy determines which
+original PII values an authorized tool may receive. Keep all Privacy Guardrails
+artifacts on the same version.
+
+See [Spring Security Tool Authorization](docs/security.md) for complete setup,
+required APIs, and supported paths.
 
 ## Core Protection Behavior
 
@@ -252,6 +302,8 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-spring-ai` | Advisors and per-tool original-disclosure boundaries |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |
+| `spring-ai-privacy-guardrails-spring-security` | Optional Spring Security authorization boundary for Spring AI tools |
+| `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Opt-in auto-configuration for the Spring Security tool boundary |
 | `spring-ai-privacy-guardrails-test` | Optional model and tool probes with AssertJ assertions |
 
 See [Architecture](docs/architecture.md) for module responsibilities and the
@@ -266,14 +318,12 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 | Java | 17 |
 | Spring AI | 2.0.1 |
 | Spring Boot | 4.1.1 |
+| Spring Security | 7.1.1 |
 | Presidio Analyzer | 2.2.364 |
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
 
-CI runs the full test suite on Java 17, 21, and 25. Presidio integration tests,
-which require an external service, and JMH smoke tests run as separate CI jobs.
-When Presidio analyzes structured JSON, it uses the REST array-input API
-available in Presidio Analyzer 2.2.361 and later.
+Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
 
 Spring AI maintains compatibility within the current `2.0.x` line, and `2.0.1`
 is recommended for new users.
@@ -284,6 +334,8 @@ is recommended for new users.
   privacy-boundary setup
 - [Configuration](docs/configuration.md): starters, analyzers, tool policies,
   and output policies
+- [Spring Security Tool Authorization](docs/security.md): tool authorization
+  policy, advanced tool configuration, Tool Search, and security-context handling
 - [Architecture](docs/architecture.md): modules and model, tool, and session
   execution flow
 - [Threat Model](docs/threat-model.md): protected assets, trust boundaries,
@@ -303,12 +355,13 @@ compliance.
 
 Applications remain responsible for:
 
-- authentication, authorization, and logging policies;
+- authentication, authorization policy design, application-owned execution
+  paths, and logging policies.
 - access control and data-retention policies for stored `ChatMemory`, vector
-  stores, and databases;
-- validating and tuning analyzer quality for the production environment;
+  stores, and databases.
+- validating and tuning analyzer quality for the production environment.
 - protecting response metadata and non-text media outside the explicitly
-  supported reasoning text; and
+  supported reasoning text.
 - authentication and transport encryption for remote analyzers.
 
 Before using the library in production, review [Security](SECURITY.md) and the
@@ -320,8 +373,9 @@ Before using the library in production, review [Security](SECURITY.md) and the
 ./gradlew --no-daemon clean check
 ```
 
-This command runs the repository's tests and verifies its modules and
-documentation. See [Evaluation](docs/evaluation.md) for the demo analyzer
+This command runs the repository's tests and verifies its module rules.
+Run `./gradlew verifyDocTranslations` to check translation synchronization.
+See [Evaluation](docs/evaluation.md) for the demo analyzer
 regression test and JMH benchmarks.
 
 ## Contributing

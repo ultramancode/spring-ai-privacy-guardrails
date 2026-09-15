@@ -27,8 +27,8 @@ canonicalizes, and resolves that evidence according to application policy.
 Token-to-original mappings are managed per request through `PrivacySession`.
 
 The library protects data that crosses supported model, tool, and output
-boundaries. The automatic protection scope does not cover data handled
-separately inside the application or application-level access control.
+boundaries. The optional Spring Security integration can also authorize tool
+discovery and execution.
 
 ## Module Structure
 
@@ -45,13 +45,16 @@ flowchart LR
     CORE --> PRES["Presidio integration"]
     CORE --> SAI["Spring AI integration"]
     CORE --> OPEN["OpenNLP integration"]
+    SEC["Spring Security integration"]
 
     PRES --> PRESBOOT["Presidio Spring Boot Starter"]
     SAI --> BASE["Base Spring Boot Starter"]
     OPEN --> OPENBOOT["OpenNLP Spring Boot Starter"]
+    SEC --> SECBOOT["Spring Security Spring Boot Starter"]
 
     BASE --> PRESBOOT
     BASE --> OPENBOOT
+    BASE -. "apply both boundaries" .-> SECBOOT
 ```
 
 The `core` module has no Spring dependency and provides detection resolution,
@@ -63,6 +66,14 @@ The Spring AI integration module connects `core` to `ChatClient`, model calls,
 and tool execution boundaries. The base Spring Boot starter assembles `core`
 with the Spring AI integration, while analyzer-specific Spring Boot starters
 add the corresponding analyzer integration.
+
+The optional Spring Security integration uses Spring AI's tool-calling APIs and
+Spring Security Core. Its Spring Boot starter can be used independently of the
+base starter.
+
+When privacy protection and tool authorization are used together, it provides
+configuration for applying both boundaries to the same `ChatClient`.
+No Spring Security dependency is added to `core` or any existing privacy module.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
 Benchmarks and samples are repository-internal modules for performance
@@ -80,6 +91,7 @@ and are not part of the compatibility contract.
 | Analyzer extension | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | Tool policy | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI integration | `PrivacyChatClientConfigurer` |
+| Spring Security integration | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `ToolAuthorizationChatClientFactory`, `PrivacySecurityChatClientFactory` |
 | Test support | `PrivacyTestProbe`, `PrivacyTestAssertions`, `PrivacyTestProbeAssert` |
 
 This table shows representative APIs only. See the Javadoc for the complete
@@ -234,6 +246,35 @@ disclosed are not re-protected and may contain those values.
 
 Detailed disclosure rules and the `returnDirect` flow are documented under
 [Per-Tool Original Disclosure](configuration.md#per-tool-original-disclosure).
+
+## Optional Tool Authorization Boundary
+
+The Spring Security integration shows the model only tools the current user is
+allowed to use, then checks permission again immediately before each tool runs.
+Authorization checks use the user's `Authentication` obtained at the start of
+the request. Tool authorization can be used on its own or with privacy
+protection.
+
+```mermaid
+flowchart LR
+    A["Requesting user"] --> B["Tool authorization<br/>policy"]
+    B --> D["Tool permission<br/>checks"]
+    D --> E["Only allowed tools<br/>shown to model"]
+    D --> F["Permission checked again<br/>before execution"]
+    F --> G["Tool execution"]
+```
+
+When tool authorization and privacy protection are used together, tool
+permission is checked before restoring the original PII values allowed for
+that tool.
+
+The Spring Boot starter provides factories for creating clients with tool
+authorization. A factory applies authorization to the `ChatClient` it creates.
+The configuration of other clients, including those using the same model,
+is unaffected.
+
+See [Spring Security Tool Authorization](security.md) for authorization
+policies, custom tool execution, and authentication in asynchronous calls.
 
 ## Errors and Diagnostics
 

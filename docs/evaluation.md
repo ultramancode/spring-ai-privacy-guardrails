@@ -57,9 +57,43 @@ The matrix records privacy boundaries verified by reproducible automated tests.
 | Denied tool input value disclosure | Raw values of disallowed inputs remain protected. | [`PrivacyToolCallbackWrapperTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
 | Tool result → model | Detected PII in tool results is re-tokenized before returning to the model. | [`PrivacySequentialToolIntegrationTest`](../spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
 | MCP Streamable HTTP tool round trip | The local MCP round trip restores only allowed input values, keeps denied values protected, and re-protects results before they return to the model. | [`McpToolLoopIntegrationTest`](../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/McpToolLoopIntegrationTest.java) |
+| Spring Security tool discovery and execution authorization | Only allowed tools are shown to the model, and every tool requested in one response is authorized before any starts. Permission is checked again immediately before each tool runs. When privacy protection is also used, original PII is restored only after authorization. | [`SpringSecurityToolBoundaryIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java), [`ToolAuthorizationStandaloneIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/ToolAuthorizationStandaloneIntegrationTest.java) |
+| Tool Search and tool changes | Only allowed tools are registered for search, and selected tools are checked against those registered at the start of the request. Requests for denied tools by name and unsupported tool additions or replacements during the request are rejected before execution. | [`SpringSecurityToolSearchIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolSearchIntegrationTest.java), [`SpringSecurityToolMutationIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolMutationIntegrationTest.java) |
+| Tool authorization across call types | Tool permissions are checked using the user's authentication obtained at the start of the request. Tools do not execute without authentication. See [Authentication Handling for Tool Authorization](#authentication-handling-for-tool-authorization) for detailed checks. | [`SpringSecurityContextPropagationIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityContextPropagationIntegrationTest.java) |
 | Request lifecycle on completion and error | Sessions are closed after normal completion and downstream failure. | [`PrivacyLifecycleAdvisorTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
 | Logical streaming response protection | Output frames are buffered as one logical response so PII split across frames is protected before delivery to the subscriber. | [`PrivacyOutputAdvisorStreamTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyOutputAdvisorStreamTest.java) |
 | Streaming cancellation after partial response buffering | Cancellation emits no raw PII, cancels upstream processing, closes the privacy session, and invalidates its mapping. | [`PrivacyLifecycleAdvisorTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
+
+### Spring Security Test Configurations
+
+Tool authorization and Tool Search are tested in both configurations:
+
+- Tool authorization alone.
+- Tool authorization combined with privacy protection.
+
+### Authentication Handling for Tool Authorization
+
+Tests verify that tool authorization uses the authentication provided by the
+application under the following conditions:
+
+- **Streaming:** Tool permissions are checked using the user registered in
+  Reactor's security context. When the calling thread also has authentication,
+  the Reactor identity takes precedence. The calling thread's authentication is
+  used only when no Reactor security context is present.
+- **Missing authentication:** A blocking request with registered tools and no
+  authentication is rejected without executing tools. For streaming, an
+  explicitly empty Reactor security context causes rejection even if the
+  calling thread has authentication.
+- **Asynchronous calls:** When a `ChatClient` invocation starts on another
+  thread, configuring authentication propagation allows tools to execute with
+  that user's permissions. Without propagation, a request lacking
+  authentication is rejected without executing tools.
+- **Request cleanup:** No tool-authorization state for the request remains
+  after completion, rejection due to missing authentication, or streaming
+  cancellation.
+
+For authentication propagation setup and applicable conditions, see
+[Blocking, Reactive, and Asynchronous Context](security.md#blocking-reactive-and-asynchronous-context).
 
 ## JMH Benchmarks
 

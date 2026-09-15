@@ -8,7 +8,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: 832f4dd128678e327f881077fdbb7386aed4546a364d7c33a0dabf757e773cf6 -->
+<!-- i18n-source-sha256: 26e4cd9b60f3ddb71d314172e5ab16b779fda3a99c663c3f8c93362b1519db7a -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -18,6 +18,10 @@ hide:
 분석기는 **보호 대상 정보가 포함된 텍스트를 식별합니다**. Spring AI Privacy Guardrails는
 모델·도구·출력 및 요청 수명 주기 경계에서 **원문 값이 어디까지 이동할 수 있는지**를
 통제합니다.
+
+선택적으로 [Spring Security 연동](security.md)을 추가해 모델에 공개할 도구를 제한하고,
+도구 실행 전에 권한을 검사할 수 있습니다. 도구 권한 검사는 개인정보 보호 기능 없이도
+사용할 수 있습니다.
 
 Spring 공식 블로그에서 소개:
 [This Week in Spring — August 18, 2026](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/).

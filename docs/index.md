@@ -11,6 +11,10 @@ Detection answers **what text is sensitive**. Spring AI Privacy Guardrails
 enforces **where the original value may travel** across model, tool, output,
 and request-lifecycle boundaries.
 
+The optional [Spring Security integration](security.md) controls which tools
+are shown to the model and checks authorization before tool execution. It can
+be used independently of PII protection.
+
 Featured on the Spring Blog:
 [This Week in Spring — August 18, 2026](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/).
 

@@ -34,6 +34,10 @@ Spring AI Privacy Guardrails combines a Spring-independent privacy `core` with
 Spring AI integration to enforce privacy policies across chat, RAG, memory,
 tool-call, and output boundaries.
 
+The optional [Spring Security integration](docs/security.md) controls which tools
+are shown to the model and checks authorization before tool execution. It can
+be used independently of PII protection.
+
 ## Why It Exists
 
 Detection is the first step. This library turns findings from built-in and

@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 309f01a655512dae5fb7af268c221e4b1e4e0135dbd65e86517c524a8d82d07f -->
+<!-- i18n-source-sha256: c6b37a603c16023b681857714834323b24db516c75d41d22a8ddcfc04f745291 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -35,6 +35,10 @@
 Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보호 `core`와 Spring AI
 통합을 결합해 채팅, RAG, 메모리, 도구 호출과 출력 경계에 개인정보 보호 정책을
 적용합니다.
+
+선택적으로 [Spring Security 연동](docs/ko/security.md)을 추가해 모델에 공개할 도구를
+제한하고, 도구 실행 전에 권한을 검사할 수 있습니다. 도구 권한 검사는 개인정보 보호
+기능 없이도 사용할 수 있습니다.
 
 ## 왜 필요한가
 

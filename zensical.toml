@@ -1,7 +1,7 @@
 [project]
 site_name = "Spring AI Privacy Guardrails"
 site_url = "https://ultramancode.github.io/spring-ai-privacy-guardrails/"
-site_description = "Request-scoped PII tokenization and least-privilege disclosure across Spring AI model and tool calls."
+site_description = "Request-scoped PII tokenization and least-privilege disclosure across Spring AI model and tool calls. Optional Spring Security integration adds tool authorization."
 site_author = "Taewoong Kim"
 copyright = """
 Copyright © 2026 Taewoong Kim · <a href="#__consent">Change cookie settings</a>

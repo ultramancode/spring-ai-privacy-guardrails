@@ -40,19 +40,18 @@ be used independently of PII protection.
 
 ## Why It Exists
 
-Detection is the first step. This library turns findings from built-in and
-pluggable analyzers into request-scoped policy at the model, tool, and output
-boundaries.
+After detecting PII, applications need to control where those values go. This
+library sends tokens to the model, restores permitted originals for tools, and
+can inspect the final response before returning it to the application.
 
 ```mermaid
-flowchart LR
-    A["Input · Memory · RAG"] --> B["PII detection"]
-    B --> C["core policy<br/>validation · normalization · tokenization"]
-    C --> D["Model boundary"]
-    D -. "Tool call" .-> E["Tool boundary<br/>restore only allowed originals"]
-    E -. "Re-protected result" .-> D
-    D --> F["Output boundary"]
-    F --> G["Application"]
+flowchart TD
+    A["Input · Memory · RAG"] --> B["Detect PII, then replace<br/>detected values with tokens"]
+    B --> C["Model"]
+    C -. "Tool call" .-> D["Tool<br/>(originals only for permitted types)"]
+    D -. "Replace PII in the result<br/>with tokens" .-> C
+    C --> E["Inspect final response<br/>(when output protection is enabled)"]
+    E --> F["Application"]
 ```
 
 ## Run the Sample

@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 826272f753436a6224a75438e65d251b30da9e0904f3910c79406a376e556eb9 -->
+<!-- i18n-source-sha256: eb20d19e643922b6efc75e6babd73f742ec5de8adcb27bb54f288a49d4727788 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -42,18 +42,18 @@ Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보�
 
 ## 왜 필요한가
 
-탐지는 첫 단계입니다. 이 라이브러리는 내장 및 확장 가능한 분석기의 탐지 결과를
-모델·도구·출력 경계에 적용되는 요청별 정책으로 바꿉니다.
+개인정보를 탐지한 뒤에는 그 값을 어디까지 전달할지 제어해야 합니다. 이 라이브러리는
+모델에는 토큰을 전달하고, 도구에는 허용된 원문만 복원합니다. 필요하면 애플리케이션에
+반환할 최종 응답도 검사할 수 있습니다.
 
 ```mermaid
-flowchart LR
-    A["입력 · 메모리 · RAG"] --> B["개인정보 탐지"]
-    B --> C["core 정책<br/>검증 · 정규화 · 토큰화"]
-    C --> D["모델 경계"]
-    D -. "도구 호출" .-> E["도구 경계<br/>허용된 원문만 복원"]
-    E -. "결과 재보호" .-> D
-    D --> F["출력 경계"]
-    F --> G["애플리케이션"]
+flowchart TD
+    A["입력 · 메모리 · RAG"] --> B["개인정보 탐지 후<br/>탐지된 값을 토큰으로 변환"]
+    B --> C["모델"]
+    C -. "도구 호출" .-> D["도구<br/>(허용된 유형만 원문으로 전달)"]
+    D -. "결과의 개인정보를<br/>토큰으로 변환" .-> C
+    C --> E["최종 응답 검사<br/>(출력 보호 사용 시)"]
+    E --> F["애플리케이션"]
 ```
 
 ## 샘플 실행

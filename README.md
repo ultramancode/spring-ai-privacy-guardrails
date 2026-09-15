@@ -81,8 +81,8 @@ Inspector**. Compare the values the model and tools actually receive:
 
 Text not matched by the demo's detection rules may be returned unchanged by the
 local model, and the Inspector does not expose token mappings. The
-[Sample Guide](samples/spring-ai-demo/README.md) covers the Local Tool, RAG, and
-runtime MCP demos plus optional Presidio, OpenNLP, and real-model integration.
+[Sample Guide](samples/spring-ai-demo/README.md) covers the Local Tool, RAG, MCP,
+and Security demos plus optional Presidio, OpenNLP, and real-model integration.
 
 The default repository checks do not call remote models. See the
 [Privacy Boundary Verification Matrix](docs/evaluation.md#privacy-boundary-verification-matrix)

@@ -3,11 +3,12 @@
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: ce61a618104ab587d077c930acc644492a53adc9b1921a7be22249e35c2c7806 -->
+<!-- i18n-source-sha256: 9d862d7df03f3f03cc1c55465a53fba6715286e0246b0f7bd0bda1ecac99721b -->
 
 샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
 보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수
-있습니다. 기본 샘플은 모델, 문서 검색, MCP 서버를 모두 로컬 환경에서 실행하므로
+있습니다. Security 시나리오에서는 사용자 역할에 따른 도구 접근 권한도 비교합니다.
+기본 샘플은 모델, 문서 검색, MCP 서버를 모두 로컬 환경에서 실행하므로
 외부 서비스 계정이나 API 키가 필요하지 않습니다.
 
 ## Inspector 실행
@@ -19,7 +20,7 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 ```
 
 브라우저에서 `http://127.0.0.1:8080`을 엽니다. 샘플은 로컬 접속만 허용합니다.
-`Local Tool | RAG | MCP` 선택기로 시나리오를 실행하고, `EN | 한국어`로 언어를 선택해
+`Local Tool | RAG | MCP | Security` 선택기로 시나리오를 실행하고, `EN | 한국어`로 언어를 선택해
 시나리오를 다시 실행할 수 있습니다.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
@@ -78,6 +79,23 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 
 ![HTTP 도구 호출, 허용된 고객번호 원문 전달과 보호된 도구 결과를 보여주는 MCP Inspector](../images/privacy-boundary-inspector-mcp-ko.png)
 
+### Security
+
+**Security**를 선택하고 두 예제 사용자로 실행한 같은 고객정보 조회 요청을 비교하세요.
+
+- **일반 직원(`ROLE_EMPLOYEE`):** 모델에 제공하는 도구 목록에서 `customerLookup`을
+  제외합니다. 모델이 이 도구를 요청해도 실행을 거부하므로 도구 실행 횟수는 0회입니다.
+- **고객지원 담당자(`ROLE_CUSTOMER_SUPPORT`):** 모델에 `customerLookup`을 제공하고
+  실행을 허용합니다. 도구는 한 번 실행되며, 고객번호(`CUSTOMER_ID`)만 원문으로
+  전달받습니다. 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 토큰으로 바뀝니다.
+
+로컬 모델은 도구가 목록에서 숨겨져도 의도적으로 조회 도구를 요청합니다. 이를 통해
+도구 목록의 필터링과 실행 차단을 함께 확인합니다. 샘플에서 두 사용자와 역할을 준비하므로
+로그인이나 외부 인증 서비스는 필요하지 않습니다. 도구 실행 권한과 개인정보 원문을 받을
+수 있는 범위는 서로 다른 정책으로 관리합니다.
+
+![일반 직원과 고객지원 담당자의 도구 접근 권한을 비교하는 Security Inspector](../images/privacy-boundary-inspector-security-ko.png)
+
 ## API로 결과 확인
 
 Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API를 사용하세요.
@@ -90,6 +108,7 @@ Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API
 | `GET /demo/tool-loop` | CRM 도구 호출 시 모델 입력, 도구 인자, 보호된 결과와 단계별 검증 결과(`boundaryEvidence`) |
 | `GET /demo/rag` | 검색된 문서 원문(`retrievedDocument`)과 모델에 전달된 전체 보호 프롬프트(`modelVisibleContext`) |
 | `GET /demo/mcp-tool-loop` | 로컬 Streamable HTTP MCP 도구 호출 시 모델 입력, 도구 인자와 결과 |
+| `GET /demo/security-tool-boundary` | 두 역할의 도구 목록, 권한 판정, 실행 횟수와 허용된 호출의 개인정보 보호 검증 결과 |
 
 요청·응답 예제, 다른 분석기를 사용하는 설정과 실제 모델을 연결하는 검증 방법은
 [전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md)를
@@ -103,12 +122,16 @@ Inspector에서 언어를 바꾸면 화면 문구뿐 아니라 예제 입력과 
 
 - Local Tool과 MCP는 언어별 고정 입력과 최종 결과 문구를 사용합니다.
 - RAG는 언어별 질의, 검색 문서 접두어, 프롬프트 템플릿을 사용합니다.
+- Security는 언어별 요청 요약, 예제 입력과 최종 응답을 사용합니다.
 - 엔드포인트 경로, 응답 필드 이름, 코드 식별자, 엔티티 유형은 바뀌지 않습니다.
 
 `POST /demo/protect`는 항상 전달된 `text`를 분석하며 로케일이 사용자 입력을 바꾸지
 않습니다.
 
 ## 해석과 검증
+
+활성 세션 수는 호출 후 서비스 전체에서 관측한 값입니다. 동시에 실행 중인 다른 요청이
+있으면 0보다 클 수 있으므로, 이 값만으로 현재 요청의 세션 누수를 판단할 수는 없습니다.
 
 기본 Regex 규칙과 모든 예제 값은 샘플용입니다. 활성화된 분석기가 탐지하지 못한 텍스트는
 변경되지 않을 수 있으며, 이 고정 시나리오는 일반적인 탐지 정확도나 지원되지 않는 실행

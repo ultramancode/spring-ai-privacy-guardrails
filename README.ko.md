@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: eb20d19e643922b6efc75e6babd73f742ec5de8adcb27bb54f288a49d4727788 -->
+<!-- i18n-source-sha256: 484589038c147bfb3d1ba876994f170e6461cadf5ba35c60dd417ea59c7223fb -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -79,7 +79,7 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행하�
 </p>
 
 데모의 탐지 규칙에 해당하지 않는 텍스트는 로컬 모델이 변경하지 않고 반환할 수 있으며,
-Inspector는 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, 런타임 MCP 데모와 선택형
+Inspector는 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, MCP, Security 데모와 선택형
 Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 [샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다.
 

@@ -54,11 +54,11 @@ the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boun
 
 ### Inspector Rendering Tests
 
-The Security view's rendering tests use Node.js's built-in test runner. They run
-separately from Gradle and require no npm packages.
+The Inspector rendering tests use Node.js 24 and its built-in test runner.
+They run separately from Gradle and require no npm packages.
 
 ```bash
-node --test samples/spring-ai-demo/src/test/javascript/security-evidence.test.cjs
+node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
 ```
 
 ## ChatClient With The Explicit Privacy Configurer
@@ -185,8 +185,11 @@ curl "http://127.0.0.1:8080/demo/security-tool-boundary" \
   -H 'Accept-Language: en'
 ```
 
-This endpoint runs the same deterministic customer lookup request twice. For a
-general employee (`ROLE_EMPLOYEE`), `customerLookup` is absent from the
+This endpoint runs the same customer lookup request as two sample users.
+The local model deliberately requests the tool even when it is hidden, to verify
+execution blocking independently of tool-list filtering.
+
+For a general employee (`ROLE_EMPLOYEE`), `customerLookup` is absent from the
 model-visible definitions and the forced request is denied before the callback
 runs. For a customer-support employee (`ROLE_CUSTOMER_SUPPORT`), the tool is
 exposed and executed once; the existing disclosure policy restores only

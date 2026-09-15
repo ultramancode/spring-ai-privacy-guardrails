@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: cd93ffbde39746c5ce274b39d2b10792cd2c3ee44d5132a93561115641c76173 -->
+<!-- i18n-source-sha256: b87c9a7033d7ff616a02825079419e871889c653bc8f94f4426c0732c2abd98f -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
@@ -57,11 +57,11 @@
 
 ### Inspector 화면 표시 테스트
 
-Security 화면의 표시 로직은 Node.js 내장 테스트 러너로 검증합니다. Gradle과 별도로
-실행하며, npm 패키지를 설치할 필요는 없습니다.
+Inspector 화면의 표시 로직은 Node.js 24의 내장 테스트 러너로 검증합니다. Gradle과
+별도로 실행하며, npm 패키지를 설치할 필요는 없습니다.
 
 ```bash
-node --test samples/spring-ai-demo/src/test/javascript/security-evidence.test.cjs
+node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
 ```
 
 ## 명시적 Privacy Configurer를 사용하는 ChatClient
@@ -182,8 +182,11 @@ curl "http://127.0.0.1:8080/demo/security-tool-boundary" \
   -H 'Accept-Language: ko'
 ```
 
-이 엔드포인트는 동일한 예제 입력으로 고객정보 조회를 두 번 실행합니다. 일반 직원
-(`ROLE_EMPLOYEE`)의 요청에서는 `customerLookup`을 모델에 제공하는 도구 목록에서
+이 엔드포인트는 두 예제 사용자로 같은 고객정보 조회 요청을 실행합니다. 로컬 모델은
+도구가 목록에서 숨겨져도 의도적으로 조회 도구를 요청해, 도구 목록의 필터링뿐 아니라
+실행 차단도 확인합니다.
+
+일반 직원(`ROLE_EMPLOYEE`)의 요청에서는 `customerLookup`을 모델에 제공하는 도구 목록에서
 제외하며, 모델이 이 도구의 호출을 요청해도 콜백 실행 전에 거부합니다. 고객지원 담당자
 (`ROLE_CUSTOMER_SUPPORT`)의 요청에서는 도구를 공개하고 한 번 실행합니다. 기존 원문 공개
 정책에 따라 `CUSTOMER_ID`만 복원하며, 결과는 모델에 다시 전달하기 전에 보호합니다. 샘플은

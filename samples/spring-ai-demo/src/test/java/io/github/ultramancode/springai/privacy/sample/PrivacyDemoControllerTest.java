@@ -119,8 +119,8 @@ class PrivacyDemoControllerTest {
                         "\"status.done\": \"DONE\"",
                         "\"status.done\": \"완료\"",
                         "\"error.returnedHttp\": \"반환 HTTP 상태\"",
-                        "\"flow.sessionsReported\": \"Session cleanup\"",
-                        "\"flow.sessionsReported\": \"세션 정리\"",
+                        "\"flow.sessionsReported\": \"Active sessions after call\"",
+                        "\"flow.sessionsReported\": \"호출 후 활성 세션\"",
                         "\"analyzer.resolution\": \"Resolution reason\"",
                         "\"analyzer.resolution\": \"판정 이유\"",
                         "Start/end positions are character offsets in the original input.",
@@ -237,7 +237,7 @@ class PrivacyDemoControllerTest {
                         "\"rag.protected\": \"보호됨\"",
                         "The MCP tool result is retokenized before it is sent back to the model.",
                         "MCP 도구 결과는 모델로 다시 전달되기 전에 재토큰화됩니다.",
-                        "setStageCompleted(prefix, \"stageCleanup\")"
+                        "setSessionCount(prefix, tool.activeSessionsAfterCall)"
                 )
                 .doesNotContain(
                         "setStageValue(prefix, \"stageCleanup\", tool.activeSessionsAfterCall)",

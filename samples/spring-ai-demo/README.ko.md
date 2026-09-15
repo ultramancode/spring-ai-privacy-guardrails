@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: c2019204d0aa1a19365683cddd1b060b830be000638d5188c733117e578c03b9 -->
+<!-- i18n-source-sha256: 14eccd7f9a3e1990015c610e0709230c2ae6c35e5585e8aca43ae4b219c54f74 -->
 
 이 실행 가능한 샘플은 외부 LLM API 키 없이 항상 같은 결과를 반환하는 로컬
 `ChatModel`로 개인정보 보호 Advisor 경로를 검증합니다. 샘플에서 보호할
@@ -11,7 +11,7 @@
 적용합니다.
 
 ```text
-사용자 원문 입력 -> 모델 프롬프트 토큰화 -> 기능 범위가 제한된 도구 공개
+사용자 원문 입력 -> 모델 프롬프트 토큰화 -> 도구에 허용된 원문만 복원
 -> 도구 결과 재토큰화
 ```
 
@@ -32,11 +32,8 @@
 ### Privacy Boundary Inspector
 
 브라우저에서 이 주소를 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
-있습니다. `Local Tool | RAG | MCP` 선택기로 한 페이지에서 기존 런타임 데모를
-실행할 수 있습니다. `EN | 한국어` 토글은 선택한 로케일을 데모 엔드포인트에 전달하고
-선택한 고정 시나리오를 다시 실행하므로 UI 문구, 예제 입력, 런타임 결과가
-일치합니다. 각 화면은 데모 엔드포인트가 반환한 근거만 렌더링하며, Inspector는 토큰
-매핑, 인식기 내부 구현 또는 모델 설정을 노출하지 않습니다.
+있습니다. `Local Tool | RAG | MCP` 선택기로 데모를 실행하고, 각 화면에서 데모
+엔드포인트가 반환한 결과를 확인할 수 있습니다.
 
 <p align="center">
   <img src="../../docs/images/privacy-boundary-inspector-demo-ko.gif" alt="보호된 모델 및 도구 경계를 보여주는 Privacy Boundary Inspector" width="960">
@@ -50,10 +47,9 @@
 | `RAG` | `GET /demo/rag` | 원문 `retrievedDocument`, 실제 `modelVisibleContext`, 두 단계의 원문 및 토큰화 개인정보를 비교하는 백엔드 불리언 필드 |
 | `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | 실제 로컬 Streamable HTTP MCP 실행 모드, 보호된 모델 및 도구 호출 값, 범위가 제한된 공개, 결과 재보호 |
 
-Inspector는 이 요청들에 `Accept-Language: en` 또는 `ko`를 보내고 선택한 흐름을 다시
-실행합니다. 백엔드 로케일은 고정 입력, RAG 질의와 프롬프트 템플릿, CRM 결과 문구를
-바꾸므로 브라우저 문구만 번역하는 동작이 아닙니다. 엔드포인트 응답에는 화면이 표시하는
-근거 필드가 포함되지만 토큰 매핑은 포함되지 않습니다.
+`EN | 한국어` 토글은 이 요청들에 `Accept-Language: en` 또는 `ko`를 보내고 선택한
+흐름을 다시 실행합니다. 선택한 언어에 맞춰 UI 문구, 예제 입력, RAG 질의와 프롬프트
+템플릿, CRM 결과 문구가 바뀝니다.
 
 이 런타임 데모에 대응하는 재현 가능한 자동 검증 범위는
 [개인정보 보호 경계 검증 매트릭스](../../docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
@@ -65,7 +61,7 @@ Inspector는 이 요청들에 `Accept-Language: en` 또는 `ko`를 보내고 선
 curl "http://127.0.0.1:8080/demo/chat-client"
 ```
 
-이 엔드포인트는 스타터의 고정 개인정보 보호 Advisor 구성이 적용된 Spring AI
+이 엔드포인트는 스타터의 개인정보 보호 구성이 적용된 Spring AI
 `ChatClient`를 사용합니다. `modelResponse`에는 모델에 도달한 불투명 토큰이 표시됩니다.
 `activeSessionsAfterCall`은 호출 후 관측된 서비스 전체 활성 세션 수입니다. 단독으로
 실행하는 샘플에서는 일반적으로 `0`이지만, 동시 호출 중에는 현재 요청의 세션 누수를

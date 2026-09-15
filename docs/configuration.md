@@ -21,16 +21,15 @@ integration starters as needed.
 | OpenNLP Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0` | Advanced JVM-only configuration for applications that already own compatible NER models. |
 | Spring Security Spring Boot starter | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0` | Optional tool-authorization boundary that uses the application's existing Spring Security authentication. It can be used independently or with privacy protection. |
 
-Adding a starter dependency does not enable privacy protection automatically.
-Explicitly enable global privacy and each analyzer you want to use. For
-Presidio, also configure `analyzer-url` when the service does not run at
+Enable the analyzers you want to use, or provide a custom `PiiAnalyzer` bean.
+Then apply protection to the clients that need it as shown below. For
+Presidio, configure `analyzer-url` when the service does not run at
 `http://localhost:5002`.
 
 ```yaml
 spring:
   ai:
     privacy:
-      enabled: true
       presidio:
         enabled: true
 ```
@@ -42,23 +41,22 @@ analyzer receives the source text, so configure only the combination you need.
 
 ### Optional Spring Security Starter
 
-Starting with `0.3.0`, add
-`spring-ai-privacy-guardrails-spring-security-spring-boot-starter` when the
+Add `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` when the
 current principal should control tool discovery and execution. This starter
 is independent of the base Privacy Guardrails starter. It can be used without
 a privacy analyzer and uses the `Authentication` established by the
 application's existing Spring Security configuration.
 
-The authorization-only boundary requires an
-`AuthorizationManager<ToolAuthorizationContext>` bean and
-`spring.ai.privacy.security.enabled=true`. To combine it with privacy
-protection, add a privacy starter, enable `spring.ai.privacy.enabled=true`, and
+Register an `AuthorizationManager<ToolAuthorizationContext>` bean and create
+clients with `ToolAuthorizationChatClientFactory`. To combine authorization with
+privacy protection, add a privacy starter, configure an analyzer, and use
+`PrivacySecurityChatClientFactory`. In either case,
 keep all Privacy Guardrails artifacts on version `0.3.0`. See
 [Spring Security Tool Authorization](security.md) for the complete setup.
 
 ## Apply Privacy Protection to ChatClient
 
-Enabling the starter and an analyzer does not automatically apply protection to
+Configuring an analyzer does not automatically apply protection to
 every `ChatClient`. Apply `PrivacyChatClientConfigurer` to each
 `ChatClient.Builder` that needs privacy protection.
 
@@ -76,11 +74,10 @@ ChatClient chatClient(
 input, model calls, tool execution, and request lifecycle handling. When output
 protection is enabled, it also adds the output boundary.
 
-For authorization without privacy protection, apply
-`ToolAuthorizationChatClientConfigurer` to each builder that can use tools.
-When both boundaries are enabled, apply `PrivacySecurityChatClientConfigurer`,
-which composes the privacy and authorization configurers in the supported
-order. Use only one of these three configuration paths for each builder.
+For tool authorization, use the appropriate factory's `builder(ChatModel)`
+method as described in [Configure the ChatClient](security.md#configure-the-chatclient).
+`PrivacySecurityChatClientFactory` includes privacy protection, so its builders
+must not also receive `PrivacyChatClientConfigurer`.
 
 If a protected `ChatClient` or builder was derived with `mutate()` or `clone()`,
 do not apply `PrivacyChatClientConfigurer` again.
@@ -89,6 +86,12 @@ do not apply `PrivacyChatClientConfigurer` again.
 ChatClient protectedClient = privacyConfigurer.configure(builder).build();
 ChatClient derivedClient = protectedClient.mutate().build();
 ```
+
+`configure(builder)` uses `ToolCallingAdvisor.DEFAULT_ORDER`. If you customize
+the tool advisor's order, use
+`privacyConfigurer.forToolCallingAdvisorOrder(toolOrder).apply(builder)` with
+that same order. The combined Security factory handles this when you supply
+a tool-advisor builder.
 
 The privacy boundary can be used with other Spring AI Advisors. However, if a
 separate Advisor adds or changes input, tool, or response data outside the
@@ -112,8 +115,6 @@ configured under `spring.ai.privacy`.
 
 | Property | Default | Meaning |
 | --- | --- | --- |
-| `spring.ai.privacy.enabled` | `false` | Enables privacy-protection components. Apply `PrivacyChatClientConfigurer` separately to every `ChatClient.Builder` that requires protection. |
-| `spring.ai.privacy.security.enabled` | `false` | Enables the optional Spring Security tool boundary. Requires an `AuthorizationManager<ToolAuthorizationContext>` and `ToolAuthorizationChatClientConfigurer` on tool-bearing builders, or the combined `PrivacySecurityChatClientConfigurer` when privacy is also enabled. |
 | `analysis.language` | `en` | Case-insensitive ASCII language code, canonicalized to lowercase before it is passed to analyzers. |
 | `analysis.included-entity-types` | empty | Detection allowlist. This does not register trusted types. |
 | `analysis.minimum-score` | `0.0` | Global confidence floor. |
@@ -157,24 +158,18 @@ is ignored, and `core` passes the lowercase canonical form to every analyzer.
 Whitespace, punctuation outside that grammar, and empty or repeated separators
 are rejected rather than trimmed or repaired.
 
-Adding only a starter dependency leaves privacy auto-configuration disabled, so
-no analyzer is required. After setting `spring.ai.privacy.enabled=true`,
-configure at least one analyzer. Otherwise, application startup fails.
-
-This library does not limit model-call count, tool-call count, the number of
-registered tools, or cumulative agent-loop iterations. Call-count, cost,
-concurrency, and tool side-effect limits belong in the application or
-orchestration framework. `response-inspection.*` limits do not restrict those
-execution counts; they bound the amount and streaming scope of response content
-the library must inspect or retain for privacy protection.
+The starter creates `PrivacyService` when at least one `PiiAnalyzer` bean is
+available. A `PrivacyService` bean, whether auto-configured or application-provided,
+enables `PrivacyChatClientConfigurer` and `PrivacyToolCallbackFactory`.
+Without that service, these integration beans are not created; applications
+that do not inject them can start normally.
 
 ### Configuration Typo Diagnostics
 
 The base Spring Boot starter warns when it encounters an unknown property name
 inside the fixed `spring.ai.privacy` configuration defined by this library.
-Warnings never prevent application startup. Diagnostics run independently of
-`spring.ai.privacy.enabled`, so they can still report a top-level `enabled`
-misspelling when privacy auto-configuration does not activate.
+Warnings never prevent application startup, and diagnostics run even when no
+analyzer is configured.
 
 For example, misspelling `output.enabled` as shown below still allows the
 application to start, but records a warning that suggests the correct property
@@ -188,15 +183,9 @@ spring:
         enabledd: true
 ```
 
-At the top-level `spring.ai.privacy` namespace, diagnostics check misspellings of
-`enabled` and paths that look like misspellings of `security.enabled`, while
-leaving unrelated analyzer and application extension settings untouched.
-Within the fixed `output`, `response-inspection`, `analysis`, `regex`, `tools`,
-and `security` areas, an unknown property name produces a warning.
-
-The base starter recognizes `security.enabled` without adding a Spring Security
-dependency. These diagnostics are not included in the standalone Security
-starter and do not prove that authorization is configured on a `ChatClient`.
+Diagnostics check property names within `output`, `response-inspection`,
+`analysis`, `regex`, and `tools`. Unknown top-level sections and analyzer-specific
+settings are left untouched.
 
 Dynamic keys below `analysis.provider-minimum-scores`,
 `analysis.entity-aliases`, and `tools.disclosures` are not diagnostic targets.
@@ -237,7 +226,6 @@ analyzer together and merges their results in the default `UNION` mode.
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         entity-aliases:
           US_SSN: NATIONAL_ID
@@ -353,7 +341,6 @@ configuration and avoid unnecessarily complex patterns.
 spring:
   ai:
     privacy:
-      enabled: true
       regex:
         enabled: true
         rules:
@@ -405,7 +392,6 @@ rule uses regex-matched candidates without additional validation.
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       presidio:
@@ -458,7 +444,6 @@ separately.
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       opennlp:
@@ -498,7 +483,6 @@ to that tool.
 spring:
   ai:
     privacy:
-      enabled: true
       tools:
         disclosures:
           customerLookup:
@@ -518,7 +502,7 @@ List<ToolCallback> protectedTools = toolCallbackFactory.wrapAll(
         List.of(customerLookup, knowledgeSearch));
 
 ChatClient chatClient = privacyConfigurer.configure(ChatClient.builder(chatModel)
-        .defaultTools(protectedTools.toArray(ToolCallback[]::new)))
+        .defaultTools(protectedTools.toArray()))
         .build();
 ```
 
@@ -571,7 +555,6 @@ configure the boundary explicitly as described in
 spring:
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize

@@ -8,7 +8,7 @@ the starter's `PrivacyChatClientConfigurer` to the sample's protected
 `ChatClient` builders:
 
 ```text
-raw user input -> tokenized model prompt -> capability-scoped tool disclosure
+raw user input -> tokenized model prompt -> restore only allowed originals for tools
 -> tool result retokenization
 ```
 
@@ -30,12 +30,8 @@ The demo binds only to `http://127.0.0.1:8080`.
 ### Privacy Boundary Inspector
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
-Inspector**. Use the `Local Tool | RAG | MCP` selector to run the existing
-runtime demos from one page. The `EN | 한국어` toggle sends the selected locale
-to the demo endpoints and reruns the selected deterministic scenario so the UI
-copy, synthetic input, and runtime results stay aligned. Each view renders only
-evidence returned by its demo endpoints; the inspector does not expose token
-mappings, recognizer internals, or model configuration.
+Inspector**. Use the `Local Tool | RAG | MCP` selector to run the demos from one
+page. Each view displays results returned by its demo endpoints.
 
 <p align="center">
   <img src="../../docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing protected model and tool boundaries" width="960">
@@ -49,11 +45,9 @@ mappings, recognizer internals, or model configuration.
 | `RAG` | `GET /demo/rag` | The raw `retrievedDocument`, the actual `modelVisibleContext`, and backend booleans that compare raw and tokenized PII at those two stages. |
 | `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | The actual local Streamable HTTP MCP runtime mode, protected model and tool-call values, scoped disclosure, and result re-protection. |
 
-The Inspector sends `Accept-Language: en` or `ko` with these requests and
-reruns the selected flow. The backend locale changes the fixed input, RAG
-query and prompt template, and CRM result wrapper; it does not only translate
-browser labels. The endpoint responses contain the evidence fields rendered by
-the page, but never token mappings.
+The `EN | 한국어` toggle sends `Accept-Language: en` or `ko` with these
+requests and reruns the selected flow. This changes the UI labels, example
+input, RAG query and prompt template, and CRM result text.
 
 These runtime demonstrations complement the reproducible automated coverage in
 the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
@@ -64,8 +58,8 @@ the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boun
 curl "http://127.0.0.1:8080/demo/chat-client"
 ```
 
-This endpoint uses a Spring AI `ChatClient` with the starter's fixed privacy
-advisor bundle. `modelResponse` shows the opaque tokens that reached the model.
+This endpoint uses a Spring AI `ChatClient` with the starter's privacy
+configuration. `modelResponse` shows the opaque tokens that reached the model.
 `activeSessionsAfterCall` is the service-wide active session count observed
 after the call; the isolated sample normally reports `0`, but concurrent calls
 can make it nonzero without indicating that this request leaked a session.

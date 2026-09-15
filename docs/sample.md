@@ -6,8 +6,7 @@ The runnable sample uses a deterministic local `ChatModel`, in-memory RAG
 components, and a loopback MCP server. No cloud credentials are required. Its
 **Privacy Boundary Inspector** renders runtime evidence returned by the sample
 backend; it does not expose token mappings or independently detect PII in the
-browser. The RAG boundary state is calculated and displayed solely from evidence
-returned by the sample backend.
+browser.
 
 ## Run the Inspector
 

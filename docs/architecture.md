@@ -90,7 +90,7 @@ and are not part of the compatibility contract.
 | Analyzer extension | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | Tool policy | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI integration | `PrivacyChatClientConfigurer` |
-| Spring Security integration | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `ToolAuthorizationChatClientConfigurer`, `PrivacySecurityChatClientConfigurer` |
+| Spring Security integration | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `ToolAuthorizationChatClientFactory`, `PrivacySecurityChatClientFactory` |
 | Test support | `PrivacyTestProbe`, `PrivacyTestAssertions`, `PrivacyTestProbeAssert` |
 
 This table shows representative APIs only. See the Javadoc for the complete
@@ -270,10 +270,12 @@ tool arguments. When the privacy boundary is also present, execution
 authorization therefore completes before the privacy wrapper restores any
 original request PII.
 
-The Spring Boot starter automatically secures Spring AI's default
-`ToolCallingManager`. A custom manager requires an application-provided
-`SpringSecurityToolBoundary` because its execution behavior cannot be verified
-through the public manager interface alone.
+The Spring Boot starter provides factories for creating clients with tool
+authorization. Each factory configures its clients' advisors while leaving the
+shared `ChatModel` and existing `ToolCallingManager` unchanged. Other clients
+are unaffected. A custom manager requires an application-provided
+`SpringSecurityToolBoundary` and must execute the callbacks supplied in the
+execution prompt.
 
 See [Spring Security Tool Authorization](security.md) for configuration,
 context propagation, and supported-path details.

@@ -3,7 +3,7 @@
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: 972ed48c0446bc994555a37ad8bf2853ba843cff6c3b4bc861bae3917d9a03d0 -->
+<!-- i18n-source-sha256: 662f684ea67f1a885bff2f0b46120f621151ae25dd9267b54cfb3eaeccf3506f -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -36,8 +36,6 @@ Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라
 
 ## Spring Boot 스타터 추가
 
-Spring Security 스타터는 `0.3.0`부터 제공합니다.
-
 ### Gradle
 
 ```gradle
@@ -62,35 +60,17 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 
 ### 도구 권한 검사만 사용
 
-다음 설정을 활성화합니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      security:
-        enabled: true
-```
-
-이 구성에는 개인정보 분석기나 `spring.ai.privacy.enabled=true`가 필요하지 않습니다.
+아래 예시처럼 `AuthorizationManager<ToolAuthorizationContext>` Bean을 등록합니다.
+그러면 스타터가 도구 권한 검사를 적용할 클라이언트를 만들 수 있도록
+`ToolAuthorizationChatClientFactory`를 제공합니다. 개인정보 분석기는 필요하지 않습니다.
 
 ### 개인정보 보호와 함께 사용
 
 기본 Privacy Guardrails 스타터 또는 이를 포함하는 분석기 스타터를 추가하고, 사용하는
-모든 Privacy Guardrails 모듈의 버전을 `0.3.0`으로 맞추세요. 그런 다음 두 기능을 모두
-활성화합니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      enabled: true
-      security:
-        enabled: true
-```
-
-개인정보 보호를 함께 사용하려면 Regex, Presidio, OpenNLP 또는 사용자 정의
-`PiiAnalyzer` 중 하나를 구성해야 합니다.
+모든 Privacy Guardrails 모듈의 버전을 `0.3.0`으로 맞추세요.
+[시작하기](getting-started.md)를 참고해 Regex, Presidio, OpenNLP 또는 사용자 정의
+`PiiAnalyzer`를 구성합니다. 개인정보 보호와 도구 권한 검사가 모두 구성되면
+스타터가 `PrivacySecurityChatClientFactory`도 제공합니다.
 
 ## 권한 정책 정의
 
@@ -145,9 +125,9 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 
 ## ChatClient 구성
 
-Security 스타터의 기본 구성에서는 도구를 사용하는 각 `ChatClient`에 아래 구성 중
-하나를 적용해야 합니다. 적용하지 않으면 도구 호출이 거부됩니다. 도구가 없는
-`ChatClient`에는 권한 검사 구성이 필요하지 않습니다.
+도구 권한 검사가 필요한 클라이언트는 아래 Factory 중 하나로 생성합니다.
+다른 클라이언트와 공유 `ChatModel`의 구성은 바뀌지 않으며, 의존성이나 정책 Bean만
+추가해도 자동으로 보호되지는 않습니다.
 
 ### 도구 권한 검사만 적용
 
@@ -156,30 +136,30 @@ Security 스타터의 기본 구성에서는 도구를 사용하는 각 `ChatCli
 ```java
 @Bean
 ChatClient authorizedToolClient(
-        ChatClient.Builder builder,
-        ToolAuthorizationChatClientConfigurer authorizationConfigurer
+        ChatModel chatModel,
+        ToolAuthorizationChatClientFactory authorizationFactory
 ) {
-    return authorizationConfigurer.configure(builder).build();
+    return authorizationFactory.builder(chatModel).build();
 }
 ```
 
 ### 개인정보 보호와 함께 적용
 
-개인정보 보호도 활성화했다면 `PrivacySecurityChatClientConfigurer`를 사용하세요.
+개인정보 보호도 구성했다면 `PrivacySecurityChatClientFactory`를 사용하세요.
 도구 권한 검사와 개인정보 보호를 함께 적용합니다.
 
 ```java
 @Bean
 ChatClient securedChatClient(
-        ChatClient.Builder builder,
-        PrivacySecurityChatClientConfigurer privacySecurityConfigurer
+        ChatModel chatModel,
+        PrivacySecurityChatClientFactory privacySecurityFactory
 ) {
-    return privacySecurityConfigurer.configure(builder).build();
+    return privacySecurityFactory.builder(chatModel).build();
 }
 ```
 
-`PrivacySecurityChatClientConfigurer`를 적용했다면 같은 builder에 개인정보 보호 전용
-또는 권한 검사 전용 configurer를 추가로 적용하지 마세요.
+통합 Factory는 개인정보 보호도 구성합니다. 반환된 builder에
+`PrivacyChatClientConfigurer`를 다시 적용하지 마세요.
 
 개인정보 보호를 함께 사용할 때는 `PrivacyToolCallbackFactory`로 도구 콜백을 감쌉니다.
 도구에 원문으로 전달할 개인정보 유형만 `tools.disclosures`에 설정합니다.
@@ -201,16 +181,30 @@ spring:
 
 ## ToolCallingManager 선택
 
-스타터는 Spring AI ChatModel과 자동 구성된 도구 호출 Advisor가 사용할
-`ToolCallingManager`에 권한 검사를 적용하고, 이를 primary manager로 등록합니다.
-기본 구성에서는 Spring AI의 `DefaultToolCallingManager`가 정확히 하나 있어야 하며,
-없거나 후보가 여러 개이면 애플리케이션 시작이 실패합니다.
+Factory는 자신이 생성하는 클라이언트의 도구 호출 Advisor에 권한 검사가 적용된
+manager를 연결합니다. 공유 `ChatModel`과 기존 Spring AI `ToolCallingManager` Bean의
+구성은 유지됩니다.
+
+도구 권한 정책 Bean이 있으면 기본 구성은 실행을 위임할 Spring AI
+`DefaultToolCallingManager`를 정확히 하나 요구합니다. 없거나 후보가 여러 개이면
+애플리케이션 시작이 실패하므로, 이 경우에는 `SpringSecurityToolBoundary`를 명시적으로
+제공해야 합니다.
 
 Spring AI의 이름 기반 도구 조회가 활성화되어 있어도 거부된 도구는 사용할 수 없습니다.
 
-Security 스타터를 활성화한 상태에서 개인정보 보호만 적용하는 별도 도구 경로가
-필요하다면, 권한 검사가 적용되지 않은 `ToolCallingManager`를 해당 경로에 명시적으로
-연결하세요. 이 경로에는 이 연동의 도구 권한 검사가 적용되지 않습니다.
+개인정보 보호만 필요한 클라이언트는 계속 `PrivacyChatClientConfigurer`를 사용할 수
+있습니다. Security 스타터가 있다는 이유만으로 도구 권한 검사가 추가되지는 않습니다.
+
+Factory로 생성한 클라이언트에서 도구를 사용한다면 Spring AI의 도구 Advisor 자동 등록을
+유지하세요. `spring.ai.chat.client.tool-calling.enabled`는 기본값이 `true`이며,
+요청별로 `AdvisorParams.toolCallingAdvisorAutoRegister(false)`를 지정해서도 안 됩니다.
+도구 호출 방식을 바꾸려면 `factory.builder(chatModel, toolAdvisorBuilder)`에
+`ToolCallingAdvisor.Builder<?>`를 전달하세요. `defaultAdvisors(...)`나 요청의
+`advisors(...)`로 별도 도구 Advisor를 등록하면 거부됩니다.
+
+사용자 정의 도구 Advisor builder는 Spring AI의 `copy()`, `toolCallingManager(...)`,
+`build()` 계약을 지켜야 합니다. 보호 구성과 맞지 않는 Advisor 순서나
+`PriorityOrdered`를 구현한 도구 Advisor는 거부됩니다.
 
 ### 사용자 정의 ToolCallingManager
 
@@ -229,65 +223,62 @@ SpringSecurityToolBoundary springSecurityToolBoundary(
 ```
 
 위임 대상 `ToolCallingManager`는 실행용 프롬프트에 전달된 콜백을 사용해 도구를 실행해야
-합니다. 권한 검사가 적용된 primary `ToolCallingManager` 대신 위임 대상을 직접 주입해
-호출하는 경로는 이 경계의 보호 범위에 포함되지 않습니다.
+합니다. 스타터의 Factory는 명시적으로 제공한 이 경계를 사용합니다. 위임 대상을 직접
+호출하는 경로는 보호 범위에 포함되지 않습니다.
 
 Spring Boot 스타터 없이 `spring-ai-privacy-guardrails-spring-security`를 직접
-사용한다면 `boundary.toolCallingManager()`와
-`boundary.toolAuthorizationAdvisor()`를 함께 설치해야 합니다.
+사용한다면 클라이언트에 `boundary.toolAuthorizationAdvisor()`와
+`boundary.toolDefinitionAuthorizationAdvisor()`를 등록하고, 도구 호출 Advisor에는
+`boundary.toolCallingManager()`를 연결하세요. 도구를 변경하는 Advisor는 도구 정의의
+권한 검사보다 먼저 실행되어야 합니다. 개인정보 보호 Advisor도 직접 조합한다면
+도구 정의의 권한 검사는 개인정보 보호의 모델 경계 뒤에 배치해야 합니다.
+스타터의 Factory를 사용하면 이 구성을 직접 조합할 필요가 없습니다.
 
 ## Tool Search
 
 Tool Search는 모델이 필요한 도구를 검색해 선택하는 Spring AI의 선택 기능입니다.
-애플리케이션에서 `ToolSearchToolCallingAdvisor`를 사용한다면 권한 경계의
-`ToolCallingManager`를
-명시적으로 지정하세요. builder는 기본적으로 별도의 `ToolCallingManager`를 생성합니다.
-
-```java
-@Bean
-ToolSearchToolCallingAdvisor toolSearchToolCallingAdvisor(
-        SpringSecurityToolBoundary boundary,
-        ToolIndex toolIndex
-) {
-    return ToolSearchToolCallingAdvisor.builder()
-            .toolIndex(toolIndex)
-            .toolCallingManager(boundary.toolCallingManager())
-            .build();
-}
-```
-
-권한 검사 configurer를 적용한 builder에 이 Advisor도 등록하세요. 예를 들어
-Tool Search와 개인정보 보호를 함께 사용하려면 다음처럼 구성합니다.
+`org.springframework.ai:spring-ai-tool-search-advisor`를 추가하고, 버전은 애플리케이션의
+Spring AI BOM에 맞추세요.
+Advisor builder를 Factory에 전달하면 권한 검사가 적용된 manager가 연결됩니다.
+예를 들어 Tool Search와 개인정보 보호를 함께 사용하려면 다음처럼 구성합니다.
 
 ```java
 @Bean
 ChatClient toolSearchClient(
-        ChatClient.Builder builder,
-        PrivacySecurityChatClientConfigurer privacySecurityConfigurer,
-        ToolSearchToolCallingAdvisor toolSearchAdvisor
+        ChatModel chatModel,
+        PrivacySecurityChatClientFactory privacySecurityFactory,
+        ToolIndex toolIndex
 ) {
-    return privacySecurityConfigurer.configure(builder)
-            .defaultAdvisors(toolSearchAdvisor)
+    return privacySecurityFactory.builder(chatModel,
+                    ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();
 }
 ```
 
-권한 검사만 필요하면 `ToolAuthorizationChatClientConfigurer`를 사용하세요.
-ChatModel과 Tool Search Advisor에는 같은 경계의 `ToolCallingManager`를 연결해야 합니다.
-스타터는 자동 구성된 ChatModel에 이 `ToolCallingManager`를 주입합니다. 직접 만드는 모델과
-도구 호출 Advisor에는 명시적으로 연결해야 합니다.
+권한 검사만 필요하면 `ToolAuthorizationChatClientFactory`의 같은 오버로드를
+사용하세요. 도구는 반환된 builder나 각 요청에 등록합니다. 개인정보 보호를 적용할
+도구는 `PrivacyToolCallbackFactory`로 감싸야 합니다.
+
+Tool Search에는 대화 ID도 필요합니다. 다음처럼 각 요청에 애플리케이션의
+`conversationId`를 전달하세요.
+
+```java
+String response = toolSearchClient.prompt()
+        .user("Find customer CUST-123456.")
+        .tools(protectedCustomerLookup)
+        .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, conversationId))
+        .call()
+        .content();
+```
 
 이 구성에서는 허용된 비즈니스 도구 정의만 인덱스에 넣고, 실행 전에 권한을 다시
 확인합니다. 개인정보 보호도 구성했다면 검색 인자에서 탐지된 개인정보를 검색 실행
 전에 토큰화합니다.
 
-Tool Search에 권한 검사가 없는 원본 `ToolCallingManager`를 연결하면, 이후 모델이나 실행
-단계에서 요청이 거부되더라도 그 전에 권한 없는 도구 정의가 인덱스에 들어갈 수 있습니다.
-실행을 차단해도 이미 인덱스에 전달한 정보까지 되돌릴 수는 없습니다.
-
-Tool Search에서는 Spring AI의 제어 콜백과 권한이 허용된 비즈니스 콜백만 사용할 수
-있습니다. 요청 도중 예상하지 않은 콜백이 추가되거나 교체되면 실행을 거부합니다.
-애플리케이션과 확장 코드에 대한 신뢰 범위는
+Spring AI의 Tool Search 제어 콜백은 비즈니스 도구 권한 정책과 별도로 허용합니다.
+요청 도중 예상하지 않은 콜백이 추가되거나 교체되면 실행을 거부합니다. Tool Search를
+직접 구성하면서 권한 검사가 없는 manager를 연결하면, 이후 검사에 앞서 거부된 도구
+정의가 인덱스에 노출될 수 있습니다. 애플리케이션의 책임 범위는
 [위협 모델](threat-model.md)을 참고하세요.
 
 ## 동기·스트리밍·비동기 호출의 인증 정보
@@ -315,20 +306,9 @@ Tool Search에서는 Spring AI의 제어 콜백과 권한이 허용된 비즈니
 
 ## 호환성
 
-| 구성 요소 | 지원 기준 |
+| 구성 요소 | 지원 계열 |
 | --- | --- |
 | Java | 17 이상 |
-| Spring AI | `2.0.x`의 `2.0.0` 이상, 신규 사용은 `2.0.1` 권장 |
-| Spring Boot | `4.x`의 `4.0.0` 이상 |
-| Spring Security | `7.x`의 `7.0.0` 이상. Spring Boot `4.1.1`의 기본 관리 버전은 `7.1.1` |
-
-호환성 검증은 Spring AI `2.0.1` / Boot `4.1.1` / Security `7.1.1` 조합과 최소 버전인
-Spring AI `2.0.0` / Boot `4.0.0` / Security `7.0.0` 조합에서 수행합니다.
-이 검증이 앞으로 나올 모든 버전의 호환성을 보장하는 것은 아닙니다.
-
-이 통합은 Spring AI와 Spring Security의 공개 인터페이스를 사용하며 리플렉션이나
-Spring AI의 비공개 API를 요구하지 않습니다.
-
-이 기능은 도구 권한을 제어하지만 사용자별 개인정보 공개 범위를 제어하지는 않습니다.
-또한 임베딩 생성이나 `VectorStore` 저장 전에 필요한 수집 단계 보호를 대체하지 않으며,
-구성한 경계 밖의 애플리케이션 자체 실행 경로도 보호하지 않습니다.
+| Spring AI | `2.0.x` |
+| Spring Boot | `4.x` |
+| Spring Security | `7.x` |

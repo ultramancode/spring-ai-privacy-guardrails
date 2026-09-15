@@ -100,13 +100,11 @@ MCP, and output boundaries.
 
 | Analyzer | Best fit |
 | --- | --- |
-| Microsoft Presidio | Broader PII detection and NLP-backed recognition |
+| Presidio | Broader PII detection and NLP-backed recognition |
 | Built-in Regex or custom `PiiAnalyzer` | Application-specific identifiers with predictable formats |
 | Apache OpenNLP | JVM-local NER with application-supplied compatible models |
 
-For broader PII detection, Microsoft Presidio is the recommended default. Use
-the built-in Regex analyzer or a custom `PiiAnalyzer` for application-specific
-identifiers with predictable formats.
+For broader PII detection, Presidio is the recommended default.
 
 Presidio requires an external Presidio Analyzer service. OpenNLP runs in the
 JVM and requires compatible models supplied by the application.
@@ -118,7 +116,7 @@ Choose the starters for the capabilities your application needs.
 | Need | Starter |
 | --- | --- |
 | Regex rules or custom analyzers | `spring-ai-privacy-guardrails-spring-boot-starter` |
-| Microsoft Presidio integration | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
+| Presidio integration | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
 | Apache OpenNLP integration | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | Principal-aware tool discovery and execution | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
 
@@ -147,7 +145,6 @@ dependencies {
 spring:
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize
@@ -182,9 +179,9 @@ ChatClient privacyChatClient(
 }
 ```
 
-Only `ChatClient` instances configured with `PrivacyChatClientConfigurer` are
-protected. Enabling privacy protection requires at least one analyzer;
-otherwise, application startup fails.
+With at least one `PiiAnalyzer` bean available, the starter provides
+`PrivacyChatClientConfigurer`. Apply it to each client that needs privacy
+protection.
 
 Direct calls to a `ChatModel` are outside the automatic protection boundary.
 See [Configuration](docs/configuration.md) for derived clients, analyzer
@@ -233,7 +230,7 @@ for the complete rules.
 
 ## Optional Spring Security Tool Authorization
 
-From version `0.3.0`, applications can add the Spring Security starter to keep
+Applications can add the Spring Security starter to keep
 unauthorized tool specifications, including names, descriptions, and input
 schemas, out of the model and re-authorize execution before any allowed
 original PII is restored.
@@ -245,9 +242,10 @@ dependencies {
 ```
 
 The Security starter can be used without the base Privacy Guardrails starter.
-Applications must provide a tool authorization policy and apply the
-authorization boundary to every `ChatClient` that can use tools. Authentication
-remains the application's responsibility.
+Provide an `AuthorizationManager<ToolAuthorizationContext>` bean and create
+clients with `ToolAuthorizationChatClientFactory`, or use
+`PrivacySecurityChatClientFactory` to include privacy protection. Other clients
+are unaffected. Authentication remains the application's responsibility.
 
 When combined with privacy protection, tool authorization and original-value
 disclosure remain separate policies. Authorization determines which tools the
@@ -374,8 +372,9 @@ Before using the library in production, review [Security](SECURITY.md) and the
 ./gradlew --no-daemon clean check
 ```
 
-This command runs the repository's tests and verifies its modules and
-documentation. See [Evaluation](docs/evaluation.md) for the demo analyzer
+This command runs the repository's tests and verifies its module rules.
+Run `./gradlew verifyDocTranslations` to check translation synchronization.
+See [Evaluation](docs/evaluation.md) for the demo analyzer
 regression test and JMH benchmarks.
 
 ## Contributing

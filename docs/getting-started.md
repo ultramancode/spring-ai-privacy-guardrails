@@ -68,13 +68,12 @@ dependencies {
 </dependency>
 ```
 
-Enable privacy protection and define application-specific identifiers:
+Enable Regex and define application-specific identifiers:
 
 ```yaml
 spring:
   ai:
     privacy:
-      enabled: true
       regex:
         enabled: true
         rules:
@@ -90,8 +89,8 @@ These rules detect only the configured formats. Regex rules are useful for
 structured application identifiers; they are not intended to provide complete
 general-purpose PII detection.
 
-After `spring.ai.privacy.enabled=true`, at least one analyzer must be configured
-or application startup fails.
+Once a `PiiAnalyzer` bean is available, the starter provides `PrivacyService`
+and `PrivacyChatClientConfigurer`.
 
 ### Optional: Validate Regex Matches
 
@@ -102,7 +101,6 @@ also needs a checksum or domain-specific validation step.
 spring:
   ai:
     privacy:
-      enabled: true
       regex:
         enabled: true
         rules:
@@ -145,7 +143,7 @@ details.
 
 ## 3. Protect a ChatClient
 
-Enabling privacy and an analyzer does not automatically protect every
+Configuring an analyzer does not automatically protect every
 `ChatClient`.
 
 Apply the starter-provided `PrivacyChatClientConfigurer` to each builder that
@@ -273,16 +271,16 @@ tool-result re-protection, see the
 ### Optional Spring Security Tool Authorization
 
 When the current principal should determine which tools the model can discover
-or execute, add the optional Spring Security starter available from `0.3.0`.
+or execute, add the optional Spring Security starter.
 It is independent of the base starter and can be used without a privacy
 analyzer.
-Provide an `AuthorizationManager<ToolAuthorizationContext>`, enable
-`spring.ai.privacy.security.enabled=true`, and apply
-`ToolAuthorizationChatClientConfigurer` to tool-bearing builders.
+Provide an `AuthorizationManager<ToolAuthorizationContext>` bean and create
+clients through the `ToolAuthorizationChatClientFactory` bean's `builder(chatModel)`
+method.
 
 To combine authorization with PII protection, also add a privacy or analyzer
-starter, enable `spring.ai.privacy.enabled=true`, and use
-`PrivacySecurityChatClientConfigurer`. Keep all Privacy Guardrails artifacts on
+starter, configure an analyzer, and use
+`PrivacySecurityChatClientFactory`. Keep all Privacy Guardrails artifacts on
 version `0.3.0`. The combined path re-authorizes execution before a privacy
 wrapper restores allowed original values. See
 [Spring Security Tool Authorization](security.md) for the complete setup and
@@ -322,7 +320,6 @@ Enable Presidio and configure its Analyzer endpoint:
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       presidio:
@@ -375,7 +372,6 @@ A minimal `PERSON` configuration can look like:
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       opennlp:
@@ -408,7 +404,6 @@ privacy check:
 spring:
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize
@@ -453,9 +448,6 @@ A protected `ChatClient` protects supported message content before it is sent to
 the model. This includes supported memory and RAG context that is sent to the
 model. It does not automatically modify PII that is already stored in
 chat-memory storage, vector stores, databases, logs, or traces.
-
-Direct `ChatModel` calls and custom execution paths outside the configured
-`ChatClient` boundary are not protected automatically.
 
 ## Next Steps
 

@@ -3,7 +3,7 @@
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 2fab2b6176e1dba6a62fab2c4b31e27a24daadbc0da15246ef3a20b0933422a2 -->
+<!-- i18n-source-sha256: 89fe7ada51bee00b4daf8864034fd9f00673df392e63c92d9fcc75c49f4c5943 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다. 기본 Spring Boot 스타터는 `core` 모듈과 Spring AI 통합 경계를
@@ -22,15 +22,14 @@
 | OpenNLP Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0` | 호환되는 NER 모델을 이미 보유한 애플리케이션을 위한 고급 JVM 전용 구성입니다. |
 | Spring Security Spring Boot 스타터 | `io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0` | 애플리케이션의 기존 Spring Security 인증 정보를 사용하는 선택적 도구 권한 검사 경계입니다. 단독으로 사용하거나 개인정보 보호와 함께 사용할 수 있습니다. |
 
-스타터 의존성만 추가해도 개인정보 보호 기능이 자동으로 켜지지는 않습니다. 전역
-기능과 사용할 분석기를 명시적으로 활성화하세요. Presidio를
+사용할 분석기를 활성화하거나 사용자 정의 `PiiAnalyzer` Bean을 등록한 뒤,
+아래 예시처럼 필요한 클라이언트에 보호를 적용하세요. Presidio를
 `http://localhost:5002` 외의 주소에서 실행한다면 `analyzer-url`도 설정해야 합니다.
 
 ```yaml
 spring:
   ai:
     privacy:
-      enabled: true
       presidio:
         enabled: true
 ```
@@ -42,20 +41,21 @@ spring:
 
 ### Spring Security 스타터
 
-현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한 도구를 제한하려면 `0.3.0`부터
-제공되는 `spring-ai-privacy-guardrails-spring-security-spring-boot-starter`를 추가합니다.
+현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한 도구를 제한하려면
+`spring-ai-privacy-guardrails-spring-security-spring-boot-starter`를 추가합니다.
 이 스타터는 기본 Privacy Guardrails 스타터와 독립적이고 개인정보 분석기 없이 사용할
 수 있습니다. 인증 정보는 애플리케이션의 기존 Spring Security 설정을 사용합니다.
 
-도구 권한 검사 경계에는 `AuthorizationManager<ToolAuthorizationContext>` Bean과
-`spring.ai.privacy.security.enabled=true`가 필요합니다. 개인정보 보호와 함께 사용하려면
-개인정보 보호 스타터를 추가하고 `spring.ai.privacy.enabled=true`도 활성화하세요. 함께
+`AuthorizationManager<ToolAuthorizationContext>` Bean을 등록하고
+`ToolAuthorizationChatClientFactory`로 클라이언트를 생성하세요. 개인정보 보호와 함께
+사용하려면 개인정보 보호 스타터를 추가하고 분석기를 구성한 뒤
+`PrivacySecurityChatClientFactory`를 사용하세요. 어느 구성이든 함께
 사용하는 모든 Privacy Guardrails 모듈의 버전은 `0.3.0`으로 맞춰야 합니다. 전체
 설정은 [Spring Security 도구 권한](security.md)을 참고하세요.
 
 ## ChatClient에 보호 적용
 
-스타터와 분석기를 활성화해도 모든 `ChatClient`에 보호가 자동으로 적용되지는
+분석기를 구성해도 모든 `ChatClient`에 보호가 자동으로 적용되지는
 않습니다. 개인정보 보호가 필요한 `ChatClient.Builder`에
 `PrivacyChatClientConfigurer`를 적용하세요.
 
@@ -73,11 +73,10 @@ ChatClient chatClient(
 개인정보 보호 경계를 구성하며, 출력 보호가 활성화되어 있으면 출력 경계도 함께
 적용합니다.
 
-개인정보 보호 없이 도구 권한 검사만 사용하려면 도구를 사용할 수 있는 각 builder에
-`ToolAuthorizationChatClientConfigurer`를 적용하세요. 두 경계를 모두 활성화했다면
-`PrivacySecurityChatClientConfigurer`로 두 기능을 필요한 순서로 함께 적용합니다.
-각 builder에는 개인정보 보호 전용, 권한 검사 전용, 두 기능을 함께 적용하는 구성 중
-하나만 사용하세요.
+도구 권한 검사가 필요하면 [ChatClient 구성](security.md#chatclient-구성)을 참고해
+해당 Factory의 `builder(ChatModel)` 메서드를 사용하세요.
+`PrivacySecurityChatClientFactory`에는 개인정보 보호도 포함되므로, 반환된 builder에
+`PrivacyChatClientConfigurer`를 추가로 적용하지 마세요.
 
 이미 보호 구성이 적용된 `ChatClient`나 builder를 `mutate()` 또는 `clone()`한 경우에는
 `PrivacyChatClientConfigurer`를 다시 적용하지 마세요.
@@ -86,6 +85,11 @@ ChatClient chatClient(
 ChatClient protectedClient = privacyConfigurer.configure(builder).build();
 ChatClient derivedClient = protectedClient.mutate().build();
 ```
+
+`configure(builder)`는 `ToolCallingAdvisor.DEFAULT_ORDER`를 기준으로 구성합니다.
+도구 Advisor의 순서를 변경했다면 같은 순서 값을
+`privacyConfigurer.forToolCallingAdvisorOrder(toolOrder).apply(builder)`에 전달하세요.
+Security 통합 Factory는 전달받은 도구 Advisor builder의 순서에 맞춰 구성합니다.
 
 다른 Spring AI Advisor와 함께 사용할 수 있습니다. 다만 별도의 Advisor가 개인정보
 보호 경계 밖에서 입력·도구·응답 데이터를 추가하거나 변경하면, 그 내용은 자동으로
@@ -107,8 +111,6 @@ Spring AI의 표준 `UserMessage`, `SystemMessage`, `AssistantMessage`,
 
 | 속성 | 기본값 | 의미 |
 | --- | --- | --- |
-| `spring.ai.privacy.enabled` | `false` | 개인정보 보호 구성 요소를 활성화합니다. 보호할 `ChatClient.Builder`에는 `PrivacyChatClientConfigurer`를 별도로 적용해야 합니다. |
-| `spring.ai.privacy.security.enabled` | `false` | Spring Security 도구 권한 검사 경계를 활성화합니다. `AuthorizationManager<ToolAuthorizationContext>` 정책을 제공하고, 도구를 사용할 수 있는 builder에 `ToolAuthorizationChatClientConfigurer`를 적용해야 합니다. 개인정보 보호도 활성화했다면 두 기능을 함께 적용하는 `PrivacySecurityChatClientConfigurer`를 사용합니다. |
 | `analysis.language` | `en` | 대소문자를 구분하지 않는 ASCII 언어 코드입니다. 소문자 정규형으로 분석기에 전달합니다. |
 | `analysis.included-entity-types` | 비어 있음 | 탐지 허용 목록입니다. 신뢰할 수 있는 유형을 등록하는 설정은 아닙니다. |
 | `analysis.minimum-score` | `0.0` | 전체 신뢰도 하한입니다. |
@@ -151,24 +153,17 @@ Spring Boot 설정 메타데이터는 IDE 자동 완성을 제공합니다.
 소문자 정규형을 모든 분석기에 전달합니다. 공백, 문법에 없는 문장부호,
 빈 구분자와 반복된 구분자는 자동으로 잘라내거나 보정하지 않고 거부합니다.
 
-스타터 의존성만 추가하면 개인정보 보호 자동 설정은 비활성 상태이므로 분석기가 필요하지
-않습니다. `spring.ai.privacy.enabled=true`로 활성화한 뒤에는 분석기를 하나 이상 구성해야
-하며, 분석기가 없으면 애플리케이션 시작이 실패합니다.
-
-이 라이브러리는 모델 호출 횟수, 도구 호출 횟수, 등록 가능한 도구 수 또는 에이전트
-반복 횟수를 제한하지 않습니다. 호출 횟수, 비용, 동시 실행 수와 도구의 부수 효과에
-대한 제한은 애플리케이션이나 오케스트레이션 프레임워크에서 관리해야 합니다.
-`response-inspection.*` 설정은 이러한 실행 횟수를 제한하는 것이 아니라, 개인정보
-보호를 위해 라이브러리가 검사하거나 보존하는 응답 콘텐츠의 크기와 스트리밍 범위를
-제한합니다.
+스타터는 `PiiAnalyzer` Bean이 하나 이상 있으면 `PrivacyService`를 생성합니다.
+자동 구성되거나 애플리케이션이 직접 등록한 `PrivacyService` Bean이 있으면
+`PrivacyChatClientConfigurer`와 `PrivacyToolCallbackFactory`를 제공합니다.
+이 서비스가 없으면 두 연동 Bean을 생성하지 않으며, 이를 주입받지 않는 애플리케이션은
+정상적으로 시작할 수 있습니다.
 
 ### 설정 오타 진단
 
 기본 Spring Boot 스타터는 이 라이브러리가 정의한 고정 `spring.ai.privacy` 설정에서
 알 수 없는 프로퍼티 이름을 발견하면 경고합니다. 이 경고는 애플리케이션 시작을
-막지 않습니다. 진단은 `spring.ai.privacy.enabled`와 별개로 실행되므로, 최상위
-`enabled`의 오타 때문에 개인정보 보호 자동 설정이 활성화되지 않은 경우에도
-문제를 알려줄 수 있습니다.
+막지 않으며, 분석기를 구성하지 않아도 진단은 실행됩니다.
 
 예를 들어 다음처럼 `output.enabled`를 잘못 입력하면 애플리케이션은 계속 시작되지만
 올바른 프로퍼티 이름을 제안하는 경고가 기록됩니다.
@@ -181,14 +176,8 @@ spring:
         enabledd: true
 ```
 
-최상위 `spring.ai.privacy`에서는 `enabled`의 오타와 `security.enabled`의 오타로
-보이는 경로를 검사하고, 관련 없는 분석기·애플리케이션 확장 설정은 그대로 둡니다.
-`output`, `response-inspection`, `analysis`, `regex`, `tools`, `security` 고정 설정
-영역에서는 알 수 없는 프로퍼티 이름을 경고합니다.
-
-기본 스타터는 Spring Security 의존성 없이 `security.enabled`를 진단합니다.
-이 진단 기능은 독립적인 Security 스타터에는 포함되지 않으며, `ChatClient`에 실제로
-권한 검사가 적용되었는지를 검증하는 기능은 아닙니다.
+진단 대상은 `output`, `response-inspection`, `analysis`, `regex`, `tools` 안의
+프로퍼티 이름입니다. 알 수 없는 최상위 영역과 분석기별 설정은 검사하지 않습니다.
 
 `analysis.provider-minimum-scores`, `analysis.entity-aliases`, `tools.disclosures`
 아래의 동적 키와 `analysis.included-entity-types`,
@@ -225,7 +214,6 @@ Presidio, OpenNLP와 Spring Bean으로 등록한 사용자 정의 `PiiAnalyzer`�
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         entity-aliases:
           US_SSN: NATIONAL_ID
@@ -332,7 +320,6 @@ Regex 분석기는 모든 개인정보를 탐지하기 위한 용도가 아니�
 spring:
   ai:
     privacy:
-      enabled: true
       regex:
         enabled: true
         rules:
@@ -385,7 +372,6 @@ ID는 소문자 ASCII 영문자와 숫자로 이루어진 구간을 하나의 �
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       presidio:
@@ -435,7 +421,6 @@ Spring Boot의 상태 점검 기능을 사용하는 경우 Presidio 서비스의
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       opennlp:
@@ -470,7 +455,6 @@ OpenNLP 연동은 기존 NER 모델을 활용하려는 애플리케이션을 위
 spring:
   ai:
     privacy:
-      enabled: true
       tools:
         disclosures:
           customerLookup:
@@ -489,7 +473,7 @@ List<ToolCallback> protectedTools = toolCallbackFactory.wrapAll(
         List.of(customerLookup, knowledgeSearch));
 
 ChatClient chatClient = privacyConfigurer.configure(ChatClient.builder(chatModel)
-        .defaultTools(protectedTools.toArray(ToolCallback[]::new)))
+        .defaultTools(protectedTools.toArray()))
         .build();
 ```
 
@@ -539,7 +523,6 @@ Spring Security 연동을 활성화하면 원문 공개 정책을 적용하기 �
 spring:
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize

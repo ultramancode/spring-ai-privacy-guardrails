@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 92408a30a30fc719b05f21f4c8da13e25dd4a4a4f90d7eab5f7fbd7227633085 -->
+<!-- i18n-source-sha256: 309f01a655512dae5fb7af268c221e4b1e4e0135dbd65e86517c524a8d82d07f -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -101,13 +101,11 @@ PII 분석기는 **무엇이 민감한 정보인지** 판별합니다. Privacy G
 
 | 분석기 | 적합한 경우 |
 | --- | --- |
-| Microsoft Presidio | 자연어에 포함된 다양한 PII 유형을 탐지할 때 |
+| Presidio | 자연어에 포함된 다양한 PII 유형을 탐지할 때 |
 | 내장 Regex 또는 사용자 정의 `PiiAnalyzer` | 형식이 일정한 애플리케이션 고유 식별자를 탐지할 때 |
 | Apache OpenNLP | 애플리케이션이 보유한 호환 NER 모델을 JVM 안에서 실행할 때 |
 
-다양한 PII 유형을 탐지하려면 Microsoft Presidio를 기본 선택지로 권장합니다. 형식이
-일정한 애플리케이션 고유 식별자에는 내장 Regex 분석기나 사용자 정의 `PiiAnalyzer`를
-사용할 수 있습니다.
+다양한 PII 유형을 탐지하려면 Presidio를 기본 선택지로 권장합니다.
 
 Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니다. OpenNLP는 JVM
 안에서 실행되며, 애플리케이션이 호환되는 모델을 제공해야 합니다.
@@ -119,7 +117,7 @@ Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니�
 | 필요한 기능 | 추가할 스타터 |
 | --- | --- |
 | 정규식(Regex) 규칙 또는 사용자 정의 분석기 사용 | `spring-ai-privacy-guardrails-spring-boot-starter` |
-| Microsoft Presidio 연동 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
+| Presidio 연동 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
 | Apache OpenNLP 연동 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | 사용자별 도구 공개·실행 권한 검사 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
 
@@ -147,7 +145,6 @@ dependencies {
 spring:
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize
@@ -179,9 +176,8 @@ ChatClient privacyChatClient(
 }
 ```
 
-`PrivacyChatClientConfigurer`를 적용한 `ChatClient`만 보호됩니다. 개인정보 보호 기능을
-활성화하려면 하나 이상의 분석기가 필요하며, 분석기가 없으면 애플리케이션 시작이
-실패합니다.
+`PiiAnalyzer` Bean이 하나 이상 있으면 스타터가 `PrivacyChatClientConfigurer`를
+제공합니다. 개인정보 보호가 필요한 각 클라이언트에 적용하세요.
 
 직접 호출하는 `ChatModel`은 자동 보호 범위에 포함되지 않습니다. 파생 클라이언트,
 분석기 조합과 실패 정책은 [설정 문서](docs/ko/configuration.md)를 참고하세요.
@@ -225,7 +221,7 @@ Spring AI의 표준 도구 등록 경로가 아닌 사용자 정의 실행 경�
 
 ## Spring Security 도구 권한
 
-`0.3.0`부터 Spring Security 스타터를 별도로 추가해 권한 없는 도구 명세(이름·설명·입력
+Spring Security 스타터를 별도로 추가해 권한 없는 도구 명세(이름·설명·입력
 형식)를 모델에 노출하지 않고, 허용된 개인정보 원문을 복원하기 전에 도구 실행 권한을
 다시 확인할 수 있습니다.
 
@@ -236,8 +232,10 @@ dependencies {
 ```
 
 Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 수 있습니다.
-애플리케이션에서 도구 권한 정책을 제공하고, 도구를 사용하는 모든 `ChatClient`에 권한
-검사를 적용해야 합니다. 사용자 인증은 애플리케이션이 담당합니다.
+`AuthorizationManager<ToolAuthorizationContext>` Bean을 제공하고
+`ToolAuthorizationChatClientFactory`로 클라이언트를 생성하세요. 개인정보 보호도 필요하면
+`PrivacySecurityChatClientFactory`를 사용합니다. 다른 클라이언트에는 영향을 주지 않으며,
+사용자 인증은 애플리케이션이 담당합니다.
 
 개인정보 보호와 함께 사용해도 도구 권한과 개인정보 원문 공개 범위는 서로 다른 정책으로
 관리합니다. 권한 정책은 현재 사용자에게 공개하고 실행할 도구를 결정하고, 원문 공개
@@ -351,7 +349,8 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 ./gradlew --no-daemon clean check
 ```
 
-이 명령은 테스트를 실행하고 저장소의 모듈과 문서를 검사합니다. 데모 분석기 회귀 테스트와
+이 명령은 테스트를 실행하고 저장소의 모듈 규칙을 검사합니다.
+번역 동기화는 `./gradlew verifyDocTranslations`로 별도 확인할 수 있습니다. 데모 분석기 회귀 테스트와
 JMH 벤치마크는 [평가 문서](docs/ko/evaluation.md)를 참고하세요.
 
 ## 기여하기

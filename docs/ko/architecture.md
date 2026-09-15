@@ -3,7 +3,7 @@
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 1c533d9377108a991c56d9df8f370de1d04ed5fc3bc349b66752bb1fe6a7f5c2 -->
+<!-- i18n-source-sha256: cf7a82573150fd3ffac9e05eee918ea8809922a8e046f1ddcf20f320e93bd6c5 -->
 
 ## 책임 범위
 
@@ -88,7 +88,7 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 | 분석기 확장 | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | 도구 정책 | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI 연동 | `PrivacyChatClientConfigurer` |
-| Spring Security 연동 | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `ToolAuthorizationChatClientConfigurer`, `PrivacySecurityChatClientConfigurer` |
+| Spring Security 연동 | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `ToolAuthorizationChatClientFactory`, `PrivacySecurityChatClientFactory` |
 | 테스트 지원 | `PrivacyTestProbe`, `PrivacyTestAssertions`, `PrivacyTestProbeAssert` |
 
 이 표는 각 역할의 대표 API만 보여주며 전체 공개 API 목록은 Javadoc에서 확인할 수 있습니다.
@@ -249,10 +249,12 @@ flowchart LR
 구성했다면 실행 권한 확인이 끝난 뒤에야 개인정보 보호 래퍼가 요청의 개인정보 원문을
 복원합니다.
 
-Spring Boot 스타터는 Spring AI의 기본 `ToolCallingManager`에 권한 검사를 자동으로
-적용합니다. 사용자 정의 `ToolCallingManager`는 공개 인터페이스만으로 실행 방식을 확인할
-수 없으므로, 사용할 때는 애플리케이션이 `SpringSecurityToolBoundary`를 명시적으로
-제공해야 합니다.
+Spring Boot 스타터는 도구 권한 검사가 적용된 클라이언트를 만들 수 있도록 Factory를
+제공합니다. 각 Factory는 자신이 생성하는 클라이언트의 Advisor를 구성하며, 공유
+`ChatModel`과 기존 `ToolCallingManager`의 구성은 유지합니다. 다른 클라이언트에는
+영향을 주지 않습니다. 사용자 정의 manager를 사용하려면 애플리케이션이
+`SpringSecurityToolBoundary`를 제공해야 하며, 해당 manager는 실행용 프롬프트에
+전달된 콜백을 사용해 도구를 실행해야 합니다.
 
 설정 방법, 보안 컨텍스트 전달과 지원 경로의 자세한 내용은
 [Spring Security 도구 권한](security.md)을 참고하세요.

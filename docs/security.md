@@ -36,8 +36,6 @@ entity type is configured under `tools.disclosures`.
 
 ## Add the Spring Boot Starter
 
-The optional starter is introduced in `0.3.0`.
-
 ### Gradle
 
 ```gradle
@@ -63,36 +61,17 @@ that uses tools begins.
 
 ### Tool Authorization Only
 
-Enable the following property:
-
-```yaml
-spring:
-  ai:
-    privacy:
-      security:
-        enabled: true
-```
-
-This configuration does not require a privacy analyzer or
-`spring.ai.privacy.enabled=true`.
+Register an `AuthorizationManager<ToolAuthorizationContext>` bean as shown
+below. The starter then provides a `ToolAuthorizationChatClientFactory` for
+creating clients with tool authorization. No privacy analyzer is required.
 
 ### With Privacy Protection
 
 Add the base Privacy Guardrails starter or an analyzer starter that includes
-it, and keep all Privacy Guardrails artifacts on version `0.3.0`. Then enable
-both features:
-
-```yaml
-spring:
-  ai:
-    privacy:
-      enabled: true
-      security:
-        enabled: true
-```
-
-To use privacy protection, configure at least one analyzer: Regex, Presidio,
-OpenNLP, or a custom `PiiAnalyzer`.
+it, and keep all Privacy Guardrails artifacts on version `0.3.0`. Configure
+Regex, Presidio, OpenNLP, or a custom `PiiAnalyzer` as described in
+[Getting Started](getting-started.md). When privacy and authorization are both
+configured, the starter also provides a `PrivacySecurityChatClientFactory`.
 
 ## Define the Authorization Policy
 
@@ -152,9 +131,9 @@ all tools.
 
 ## Configure the ChatClient
 
-With the Security starter's default setup, apply one of the configurations
-below to each `ChatClient` that uses tools. Otherwise, its tool calls are
-rejected. A `ChatClient` without tools does not need authorization configuration.
+Create each client that needs tool authorization with one of the factories
+below. The starter leaves other clients and the shared `ChatModel` unchanged;
+adding the dependency or policy bean does not protect them automatically.
 
 ### Apply Tool Authorization Only
 
@@ -163,31 +142,31 @@ To use tool authorization on its own, configure the `ChatClient` as follows:
 ```java
 @Bean
 ChatClient authorizedToolClient(
-        ChatClient.Builder builder,
-        ToolAuthorizationChatClientConfigurer authorizationConfigurer
+        ChatModel chatModel,
+        ToolAuthorizationChatClientFactory authorizationFactory
 ) {
-    return authorizationConfigurer.configure(builder).build();
+    return authorizationFactory.builder(chatModel).build();
 }
 ```
 
 ### Combine with Privacy Protection
 
-When privacy protection is also enabled, use
-`PrivacySecurityChatClientConfigurer`. It applies tool authorization and privacy
+When privacy protection is also configured, use
+`PrivacySecurityChatClientFactory`. It applies tool authorization and privacy
 protection together:
 
 ```java
 @Bean
 ChatClient securedChatClient(
-        ChatClient.Builder builder,
-        PrivacySecurityChatClientConfigurer privacySecurityConfigurer
+        ChatModel chatModel,
+        PrivacySecurityChatClientFactory privacySecurityFactory
 ) {
-    return privacySecurityConfigurer.configure(builder).build();
+    return privacySecurityFactory.builder(chatModel).build();
 }
 ```
 
-After applying `PrivacySecurityChatClientConfigurer`, do not also apply the
-privacy-only or authorization-only configurer to the same builder.
+The combined factory already configures privacy protection. Do not apply
+`PrivacyChatClientConfigurer` again to its builders.
 
 When using privacy protection, wrap tool callbacks with
 `PrivacyToolCallbackFactory`. Configure `tools.disclosures` only for the PII
@@ -210,17 +189,32 @@ spring:
 
 ## ToolCallingManager Selection
 
-The starter installs an authorization-aware `ToolCallingManager` as the primary
-manager for Spring AI chat models and auto-configured tool-calling advisors.
-The default setup requires exactly one Spring AI `DefaultToolCallingManager`.
-Startup fails when that manager is missing or multiple candidates are present.
+The factories configure their clients' tool-calling advisors with an
+authorization-aware manager. The shared `ChatModel` and Spring AI's existing
+`ToolCallingManager` bean keep their original configuration.
+
+When a tool policy bean is present, the default setup requires exactly one
+Spring AI `DefaultToolCallingManager` to delegate execution to. Startup fails
+if that manager is missing or multiple candidates are present, unless an
+explicit `SpringSecurityToolBoundary` is provided.
 
 Denied tools remain unavailable even when Spring AI resolver fallback is enabled.
 
-To keep a separate privacy-only tool path while the Security starter is
-enabled, explicitly wire that path to a `ToolCallingManager` without tool
-authorization. This integration's tool authorization checks do not apply to
-that path.
+A privacy-only client can continue to use `PrivacyChatClientConfigurer`.
+It does not acquire tool authorization merely because the Security starter is
+present.
+
+Keep Spring AI's automatic tool-advisor registration enabled for factory-created
+clients that use tools (`spring.ai.chat.client.tool-calling.enabled`, enabled
+by default). Do not disable it per request with
+`AdvisorParams.toolCallingAdvisorAutoRegister(false)`. To customize tool
+calling, pass a `ToolCallingAdvisor.Builder<?>` to `factory.builder(chatModel,
+toolAdvisorBuilder)`. Registering a separate tool advisor with
+`defaultAdvisors(...)` or request-level `advisors(...)` is rejected.
+
+Custom tool-advisor builders must honor Spring AI's `copy()`,
+`toolCallingManager(...)`, and `build()` contracts. Incompatible advisor orders
+and tool advisors implementing `PriorityOrdered` are rejected.
 
 ### Custom ToolCallingManager
 
@@ -238,68 +232,67 @@ SpringSecurityToolBoundary springSecurityToolBoundary(
 ```
 
 The delegate must execute tool calls using the callbacks supplied in the
-execution prompt. Paths that deliberately inject and invoke the raw delegate
-instead of the primary authorization-aware manager are outside this boundary.
+execution prompt. The starter's factories use this explicit boundary. Calling
+the raw delegate directly is outside its protection scope.
 
 When using `spring-ai-privacy-guardrails-spring-security` directly without the
-Spring Boot starter, install both `boundary.toolCallingManager()` and
-`boundary.toolAuthorizationAdvisor()` together.
+Spring Boot starter, register `boundary.toolAuthorizationAdvisor()` and
+`boundary.toolDefinitionAuthorizationAdvisor()` on the client, and configure
+its tool-calling advisor with `boundary.toolCallingManager()`. Advisors that
+change tools must run before definition authorization. When composing privacy
+advisors manually, definition authorization must run after the privacy model
+boundary. The starter factories handle this setup for you.
 
 ## Tool Search
 
 Tool Search is an optional Spring AI feature that lets a model search for the
-tools it needs. If your application uses `ToolSearchToolCallingAdvisor`, supply
-the authorization boundary's manager explicitly. Its builder creates a separate
-manager by default:
-
-```java
-@Bean
-ToolSearchToolCallingAdvisor toolSearchToolCallingAdvisor(
-        SpringSecurityToolBoundary boundary,
-        ToolIndex toolIndex
-) {
-    return ToolSearchToolCallingAdvisor.builder()
-            .toolIndex(toolIndex)
-            .toolCallingManager(boundary.toolCallingManager())
-            .build();
-}
-```
-
-Register that advisor on a builder configured for authorization. For example,
-to combine Tool Search with privacy protection:
+tools it needs. Add `org.springframework.ai:spring-ai-tool-search-advisor`, using
+the version managed by your application's Spring AI BOM. Pass its advisor
+builder to the factory, which supplies the authorization-aware manager.
+For example, to combine Tool Search with privacy
+protection:
 
 ```java
 @Bean
 ChatClient toolSearchClient(
-        ChatClient.Builder builder,
-        PrivacySecurityChatClientConfigurer privacySecurityConfigurer,
-        ToolSearchToolCallingAdvisor toolSearchAdvisor
+        ChatModel chatModel,
+        PrivacySecurityChatClientFactory privacySecurityFactory,
+        ToolIndex toolIndex
 ) {
-    return privacySecurityConfigurer.configure(builder)
-            .defaultAdvisors(toolSearchAdvisor)
+    return privacySecurityFactory.builder(chatModel,
+                    ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();
 }
 ```
 
-For authorization alone, use `ToolAuthorizationChatClientConfigurer` instead.
-The chat model and Tool Search advisor must use the same boundary manager.
-The starter wires it into auto-configured chat models. Manually built models
-and tool-calling advisors need explicit wiring.
+For authorization alone, use the same overload on
+`ToolAuthorizationChatClientFactory`. Register your tools on the returned
+builder or on each request; privacy-protected tools must still be wrapped with
+`PrivacyToolCallbackFactory`.
+
+Tool Search also requires a conversation ID. Pass your application's
+`conversationId` on each request, for example:
+
+```java
+String response = toolSearchClient.prompt()
+        .user("Find customer CUST-123456.")
+        .tools(protectedCustomerLookup)
+        .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, conversationId))
+        .call()
+        .content();
+```
 
 With this setup, only authorized business definitions enter the index and
 business tools are authorized again before execution. When privacy protection
 is also configured, detected PII in search arguments is tokenized before the
 search runs.
 
-If Tool Search uses a raw manager, it can index denied tool definitions before
-a later model or execution check rejects the request. Execution denial cannot
-undo that earlier disclosure to the index.
-
-During Tool Search, the integration permits Spring AI's control callback and
-tool callbacks from the authorized tool set. Unexpected callback additions
-or replacements during the request are rejected. The application and its
-extensions remain part of the trusted boundary described in the
-[Threat Model](threat-model.md).
+Spring AI's Tool Search control callback is permitted separately from the
+business-tool policy. Unexpected callback additions or replacements during the
+request are rejected. Custom Tool Search wiring that uses a raw manager can
+expose denied definitions to the index before later checks run. See the
+[Threat Model](threat-model.md)
+for the application's responsibilities.
 
 ## Blocking, Reactive, and Asynchronous Context
 
@@ -328,21 +321,9 @@ or fails, or when a stream completes, fails, or is cancelled.
 
 ## Compatibility
 
-| Component | Supported baseline |
+| Component | Supported versions |
 | --- | --- |
 | Java | 17 or later |
-| Spring AI | `2.0.0` or later in the `2.0.x` line. `2.0.1` is recommended. |
-| Spring Boot | `4.0.0` or later in the `4.x` line |
-| Spring Security | `7.0.0` or later in the `7.x` line. Spring Boot `4.1.1` manages version `7.1.1` by default. |
-
-Compatibility checks cover Spring AI `2.0.1` / Boot `4.1.1` / Security `7.1.1`
-and the minimum combination of Spring AI `2.0.0` / Boot `4.0.0` / Security
-`7.0.0`. These checks do not establish compatibility with every future release.
-
-The integration uses Spring AI and Spring Security public interfaces and does
-not require reflection or Spring AI private APIs.
-
-This feature authorizes tools. It does not provide identity-specific control
-over PII disclosure. It also does not replace ingestion-time protection for
-embeddings or VectorStore persistence or secure application-owned execution
-paths outside the configured boundary.
+| Spring AI | `2.0.x` |
+| Spring Boot | `4.x` |
+| Spring Security | `7.x` |

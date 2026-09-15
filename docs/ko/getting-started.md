@@ -3,7 +3,7 @@
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 2b0e78078159f4872fc5661b0977a985274d9479dadd9730c003772d68ebee9f -->
+<!-- i18n-source-sha256: 1c6069dc4dccc2621c5cda97cd457997c4c27d0e093f7ae46881618ce6c5518d -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -72,13 +72,12 @@ dependencies {
 </dependency>
 ```
 
-개인정보 보호를 활성화하고 애플리케이션 전용 식별자 규칙을 정의합니다.
+Regex를 활성화하고 애플리케이션 전용 식별자 규칙을 정의합니다.
 
 ```yaml
 spring:
   ai:
     privacy:
-      enabled: true
       regex:
         enabled: true
         rules:
@@ -93,8 +92,8 @@ spring:
 이 규칙은 설정한 형식만 탐지합니다. Regex는 구조화된 애플리케이션 식별자에
 적합하며, 일반적인 PII 전체를 탐지하기 위한 기능은 아닙니다.
 
-`spring.ai.privacy.enabled=true`로 설정한 뒤에는 최소 하나의 분석기가
-구성되어 있어야 하며, 그렇지 않으면 애플리케이션 시작이 실패합니다.
+`PiiAnalyzer` Bean이 있으면 스타터가 `PrivacyService`와
+`PrivacyChatClientConfigurer`를 제공합니다.
 
 ### 선택 사항: Regex 일치 결과 검증
 
@@ -105,7 +104,6 @@ spring:
 spring:
   ai:
     privacy:
-      enabled: true
       regex:
         enabled: true
         rules:
@@ -148,7 +146,7 @@ RegexPiiMatchValidator customerIdMatchValidator() {
 
 ## 3. ChatClient 보호
 
-개인정보 보호와 분석기를 활성화하는 것만으로 모든 `ChatClient`가 자동으로
+분석기를 구성하는 것만으로 모든 `ChatClient`가 자동으로
 보호되지는 않습니다.
 
 보호할 각 `ChatClient.Builder`에 스타터가 제공하는
@@ -276,14 +274,14 @@ MCP 도구 제공자가 이름에 접두사를 추가하는 경우에는 `tools.
 ### Spring Security 도구 권한
 
 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한 도구를 제한하려면
-`0.3.0`부터 제공되는 Spring Security 스타터를 추가합니다.
+Spring Security 스타터를 추가합니다.
 이 스타터는 기본 스타터와 독립적이며 개인정보 분석기 없이 사용할 수 있습니다.
-`AuthorizationManager<ToolAuthorizationContext>`를 제공하고
-`spring.ai.privacy.security.enabled=true`를 활성화한 뒤, 해당 builder에는
-`ToolAuthorizationChatClientConfigurer`를 적용하세요.
+`AuthorizationManager<ToolAuthorizationContext>` Bean을 제공하고
+`ToolAuthorizationChatClientFactory` Bean의 `builder(chatModel)` 메서드로
+클라이언트를 생성하세요.
 
 개인정보 보호와 함께 사용하려면 개인정보 보호 또는 분석기 스타터도 추가하고
-`spring.ai.privacy.enabled=true`를 활성화한 뒤 `PrivacySecurityChatClientConfigurer`를
+분석기를 구성한 뒤 `PrivacySecurityChatClientFactory`를
 사용하세요. 함께 사용하는 모든 Privacy Guardrails 모듈의 버전은 `0.3.0`으로
 맞춰야 합니다. 두 기능을 함께 사용하면 개인정보 보호 래퍼가 허용된 원문 값을 복원하기 전에
 실행 권한을 다시 확인합니다. 전체 설정과 고급 구성은
@@ -322,7 +320,6 @@ Presidio를 활성화하고 `analyzer-url`을 지정합니다.
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       presidio:
@@ -375,7 +372,6 @@ dependencies {
 spring:
   ai:
     privacy:
-      enabled: true
       analysis:
         language: en
       opennlp:
@@ -408,7 +404,6 @@ OpenNLP 모델 바이너리는 이 프로젝트에 포함되어 있지 않습니
 spring:
   ai:
     privacy:
-      enabled: true
       output:
         enabled: true
         action: tokenize
@@ -452,9 +447,6 @@ Regex, Presidio 또는 OpenNLP가 적합하지 않은 경우 애플리케이션�
 여기에는 모델로 전달되는 메모리와 RAG 컨텍스트도 포함됩니다.
 하지만 채팅 메모리 저장소, 벡터 저장소, 데이터베이스, 로그 또는 트레이스에 이미
 저장된 PII 자체를 자동으로 변경하지는 않습니다.
-
-`ChatModel` 직접 호출과 구성된 `ChatClient` 경계 밖의 사용자 정의 실행
-경로에는 보호가 자동으로 적용되지 않습니다.
 
 ## 다음 단계
 

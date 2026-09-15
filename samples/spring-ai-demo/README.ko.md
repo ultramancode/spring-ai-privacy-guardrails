@@ -3,12 +3,11 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 14eccd7f9a3e1990015c610e0709230c2ae6c35e5585e8aca43ae4b219c54f74 -->
+<!-- i18n-source-sha256: 17b83596bc45c63c8ce2440ff93e459cb68f4cff0225c624e5cded13aa498b15 -->
 
-이 실행 가능한 샘플은 외부 LLM API 키 없이 항상 같은 결과를 반환하는 로컬
-`ChatModel`로 개인정보 보호 Advisor 경로를 검증합니다. 샘플에서 보호할
-`ChatClient.Builder`에 스타터의 `PrivacyChatClientConfigurer`를 명시적으로
-적용합니다.
+이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
+원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
+외부 LLM API 키가 필요하지 않습니다.
 
 ```text
 사용자 원문 입력 -> 모델 프롬프트 토큰화 -> 도구에 허용된 원문만 복원
@@ -41,11 +40,11 @@
 
 ### Inspector 런타임 엔드포인트
 
-| Inspector 화면 | 백엔드 요청 | 반환되는 런타임 근거 |
+| Inspector 화면 | 백엔드 요청 | 확인할 결과 |
 | --- | --- | --- |
-| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | 언어별 고정 입력과 `detectedSpans`, 불투명 토큰 상태의 모델 입력 및 도구 인자, 범위가 제한된 `CUSTOMER_ID` 복원, 다시 보호된 도구 결과 |
-| `RAG` | `GET /demo/rag` | 원문 `retrievedDocument`, 실제 `modelVisibleContext`, 두 단계의 원문 및 토큰화 개인정보를 비교하는 백엔드 불리언 필드 |
-| `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | 실제 로컬 Streamable HTTP MCP 실행 모드, 보호된 모델 및 도구 호출 값, 범위가 제한된 공개, 결과 재보호 |
+| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | 언어별 예제 입력, 탐지 위치(`detectedSpans`), 모델에 전달된 토큰, 도구에 고객번호만 원문으로 전달되는지와 결과가 다시 보호되는지 확인 |
+| `RAG` | `GET /demo/rag` | 검색한 원문 문서(`retrievedDocument`)와 모델에 전달된 전체 보호 프롬프트(`modelVisibleContext`) 비교 |
+| `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | 로컬 Streamable HTTP MCP 호출에서도 모델 입력이 보호되고, 도구에는 고객번호만 원문으로 전달되며, 결과가 다시 보호되는지 확인 |
 
 `EN | 한국어` 토글은 이 요청들에 `Accept-Language: en` 또는 `ko`를 보내고 선택한
 흐름을 다시 실행합니다. 선택한 언어에 맞춰 UI 문구, 예제 입력, RAG 질의와 프롬프트
@@ -80,7 +79,7 @@ curl "http://127.0.0.1:8080/demo/rag" \
 ```
 
 이 엔드포인트는 메모리 내 `SimpleVectorStore`에서 예제 문서를 검색합니다.
-응답에는 검색된 원문 문서와 항상 같은 결과를 반환하는 로컬 모델이 실제로 받은 토큰화
+응답에는 검색된 원문 문서와 로컬 모델이 실제로 받은 토큰화
 컨텍스트가 포함됩니다. 이를 통해 모델 실행 전에 검색 문서의 개인정보가 토큰화되었음을
 확인할 수 있습니다. 외부 벡터 저장소, 임베딩 서비스 또는 모델은 사용하지 않습니다.
 
@@ -109,12 +108,13 @@ curl "http://127.0.0.1:8080/demo/protect" \
 }
 ```
 
-이 구체적인 토큰 문자열 형식은 공개 계약이 아니며, 애플리케이션 로직은 이를 해석하거나
-의존해서는 안 됩니다.
+예시의 토큰 문자열 형식은 변경될 수 있습니다. 애플리케이션에서는 토큰의 내부 문자열을
+해석하거나 특정 형식에 의존하지 마세요.
 
-세션 nonce는 요청마다 새로 생성됩니다. 같은 입력으로 엔드포인트를 두 번 호출해도 서로
-다른 불투명 토큰이 생성되어야 합니다. 각 탐지 범위의 `providers` 목록에는 확정된
-근거에서 가져온 표준 분석기 ID만 포함됩니다.
+토큰은 요청별로 생성됩니다. 같은 입력으로 엔드포인트를 두 번 호출해도 서로 다른
+불투명 토큰이 생성됩니다. 각 탐지 범위의 `providers`에는 해당 탐지 결과에 사용된
+분석기의 ID가 표시됩니다. `successfulProviders`는 분석에 성공한 분석기 목록이며, 개인정보를
+찾지 못한 분석기도 포함됩니다.
 
 기본 설정은 다음 형식에 소규모 형식 기반 정규식 규칙을 사용합니다.
 
@@ -157,11 +157,12 @@ curl "http://127.0.0.1:8080/demo/tool-loop" \
 수입니다. 동시 요청이 있으면 현재 요청의 세션 누수를 의미하지 않으면서 0보다 클 수
 있습니다.
 
-공개 범위는 `spring.ai.privacy.tools.disclosures`에서 가져옵니다. 데모는 별도 정책을
-만들지 않고 자동 구성된 `PrivacyToolCallbackFactory`와 명시적
-`PrivacyChatClientConfigurer`를 사용합니다.
+도구에 원문으로 전달할 개인정보 유형은 `spring.ai.privacy.tools.disclosures`에
+설정합니다. 샘플은 `PrivacyToolCallbackFactory`로 도구를 감싸고,
+`PrivacyChatClientConfigurer`로 클라이언트에 개인정보 보호를 적용합니다.
 
-`/demo/tool-loop` 엔드포인트는 프로세스 내부 CRM 구현체를 사용합니다.
+`/demo/tool-loop`는 샘플에 포함된 로컬 CRM 도구를 호출하므로 외부 CRM 서비스가
+필요하지 않습니다.
 
 ## Streamable HTTP MCP 도구 루프 데모
 
@@ -171,9 +172,9 @@ curl "http://127.0.0.1:8080/demo/mcp-tool-loop" \
 ```
 
 이 엔드포인트는 실제 로컬 Streamable HTTP MCP 왕복 호출을 통해 같은 고정 흐름을
-실행합니다. 근거에는 고정 예제 데이터에서 탐지된 원문 값이 모델에서 관찰되지 않고,
-MCP 도구에서는 `CUSTOMER_ID`만 복원되며, MCP 결과에서 탐지된 값이 모델 재진입 전에
-보호되는 과정이 표시됩니다.
+실행합니다. 결과에는 고정 예제 데이터에서 탐지된 원문 값이 모델에서 관찰되지 않고,
+MCP 도구에서는 `CUSTOMER_ID`만 복원되며, MCP 결과에서 탐지된 값이 모델에 다시
+전달되기 전에 보호되는 과정이 표시됩니다.
 호출 후 관측된 서비스 전체 활성 세션 수도 함께 보고합니다. 외부 MCP 인프라나 모델은
 필요하지 않습니다.
 
@@ -231,9 +232,10 @@ Presidio를 반드시 사용할 수 있어야 합니다. 정규식 분석이 성
 
 ## 선택적 JVM 전용 OpenNLP Adapter
 
-`opennlp` 프로필은 애플리케이션이 제공하는 토크나이저 및 개체명 인식 모델로 선택적
-프로세스 내부 어댑터를 실행합니다. 저장소에는 모델 바이너리를 포함하거나 재배포하지
-않습니다. 로컬 스모크 테스트를 위해
+`opennlp` 프로필은 직접 준비한 모델 파일로 같은 JVM 안에서 개인정보를 탐지합니다.
+텍스트를 단어·기호 단위로 나누는 토크나이저 모델과 사람 이름을 찾는 개체명 인식 모델을
+사용합니다.
+저장소에는 모델 파일이 포함되어 있지 않습니다. 기본 동작을 확인하려면
 [Apache OpenNLP 기존 모델 목록](https://opennlp.sourceforge.net/models-1.5/)에서
 영어 토크나이저와 사람 이름 모델을 Git에서 제외된 `build` 디렉터리로 내려받습니다.
 

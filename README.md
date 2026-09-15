@@ -57,8 +57,8 @@ flowchart LR
 
 ## Run the Sample
 
-The sample includes a deterministic local `ChatModel`, so no cloud credentials
-are required. With JDK 17 installed, run the following command from the
+The default sample includes a local `ChatModel`, so no external model API key is
+required. With JDK 17 installed, run the following command from the
 repository root:
 
 ```bash
@@ -66,15 +66,15 @@ repository root:
 ```
 
 Open `http://127.0.0.1:8080` to use the sample's **Privacy Boundary
-Inspector**. Its views render runtime evidence returned by the sample backend:
+Inspector**. Compare the values the model and tools actually receive:
 
-- **Local Tool** shows detected raw values replaced with opaque request-scoped
-  tokens at the model boundary, only the allowed `CUSTOMER_ID` restored at the
-  tool boundary, and the tool result protected again before model re-entry.
-- **RAG** compares the raw retrieved document with the protected context
-  actually recorded at the model boundary.
-- **MCP** demonstrates the same scoped disclosure and result re-protection
-  through a real local Streamable HTTP MCP round trip.
+- **Local Tool** shows detected PII replaced with tokens before reaching the
+  model. Only the allowed `CUSTOMER_ID` is restored for the tool, and its result
+  is protected before being sent back to the model.
+- **RAG** compares the original retrieved document with the protected prompt
+  received by the model.
+- **MCP** shows the same protection through a local MCP tool call over
+  Streamable HTTP.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing no fixed-fixture raw PII at the model and one scoped tool disclosure" width="960">
@@ -323,10 +323,7 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
 
-CI runs the full test suite on Java 17, 21, and 25. Presidio integration tests,
-which require an external service, and JMH smoke tests run as separate CI jobs.
-When Presidio analyzes structured JSON, it uses the REST array-input API
-available in Presidio Analyzer 2.2.361 and later.
+Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
 
 Spring AI maintains compatibility within the current `2.0.x` line, and `2.0.1`
 is recommended for new users.

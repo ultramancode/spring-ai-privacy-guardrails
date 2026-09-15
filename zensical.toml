@@ -13,25 +13,29 @@ extra_css = ["stylesheets/extra.css"]
 extra_javascript = ["javascripts/consent.js"]
 
 nav = [
-  { "Home" = "index.md" },
-  { "Getting Started" = "getting-started.md" },
-  { "Reference" = [
-    { "Sample / Demo Guide" = "sample.md" },
-    { "Configuration" = "configuration.md" },
-    { "Tool Authorization" = "security.md" },
-    { "Architecture" = "architecture.md" },
-    { "Threat Model" = "threat-model.md" },
-    { "Evaluation" = "evaluation.md" },
+  { "English" = [
+    { "Home" = "index.md" },
+    { "Getting Started" = "getting-started.md" },
+    { "Reference" = [
+      { "Sample / Demo Guide" = "sample.md" },
+      { "Configuration" = "configuration.md" },
+      { "Tool Authorization" = "security.md" },
+      { "Architecture" = "architecture.md" },
+      { "Threat Model" = "threat-model.md" },
+      { "Evaluation" = "evaluation.md" },
+    ] },
   ] },
   { "한국어" = [
     { "홈" = "ko/index.md" },
     { "시작하기" = "ko/getting-started.md" },
-    { "샘플 / 데모 가이드" = "ko/sample.md" },
-    { "설정과 사용법" = "ko/configuration.md" },
-    { "도구 권한" = "ko/security.md" },
-    { "아키텍처" = "ko/architecture.md" },
-    { "위협 모델" = "ko/threat-model.md" },
-    { "평가 및 벤치마크" = "ko/evaluation.md" },
+    { "참고 문서" = [
+      { "샘플 / 데모 가이드" = "ko/sample.md" },
+      { "설정과 사용법" = "ko/configuration.md" },
+      { "도구 권한" = "ko/security.md" },
+      { "아키텍처" = "ko/architecture.md" },
+      { "위협 모델" = "ko/threat-model.md" },
+      { "평가 및 벤치마크" = "ko/evaluation.md" },
+    ] },
   ] },
 ]
 
@@ -72,6 +76,7 @@ features = [
   "navigation.instant",
   "navigation.tabs",
   "navigation.tabs.sticky",
+  "navigation.sections",
   "navigation.top",
   "navigation.footer",
   "content.code.copy",

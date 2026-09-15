@@ -3,12 +3,12 @@
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: f3b7a39706f0504fef6866a640b0bec1a36cb06c74a85cd768e5cd73e572e92d -->
+<!-- i18n-source-sha256: ce61a618104ab587d077c930acc644492a53adc9b1921a7be22249e35c2c7806 -->
 
-실행 가능한 샘플은 항상 같은 결과를 반환하는 로컬 `ChatModel`, 메모리 내 RAG 구성 요소,
-루프백 MCP 서버를 사용하므로 클라우드 자격 증명이 필요하지 않습니다. **Privacy
-Boundary Inspector**는 샘플 백엔드가 반환한 런타임 근거를 표시하며, 토큰 매핑을
-노출하거나 브라우저에서 개인정보를 별도로 탐지하지 않습니다.
+샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
+보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수
+있습니다. 기본 샘플은 모델, 문서 검색, MCP 서버를 모두 로컬 환경에서 실행하므로
+외부 서비스 계정이나 API 키가 필요하지 않습니다.
 
 ## Inspector 실행
 
@@ -18,9 +18,9 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-`http://127.0.0.1:8080`을 엽니다. 샘플은 이 루프백 주소에만 바인딩됩니다.
-`Local Tool | RAG | MCP` 선택기로 시나리오를 실행하고, `EN | 한국어`로 선택한 런타임
-로케일에서 시나리오를 다시 실행할 수 있습니다.
+브라우저에서 `http://127.0.0.1:8080`을 엽니다. 샘플은 로컬 접속만 허용합니다.
+`Local Tool | RAG | MCP` 선택기로 시나리오를 실행하고, `EN | 한국어`로 언어를 선택해
+시나리오를 다시 실행할 수 있습니다.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
   <iframe
@@ -34,70 +34,72 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
   </iframe>
 </div>
 
-## 런타임 엔드포인트
-
-| 엔드포인트 | 반환 내용 |
-| --- | --- |
-| `GET /demo/protect` | EN 또는 KO 고정 예제 데이터의 분석기 탐지 범위와 토큰화 결과. 모델 호출이 아니라 토큰화 미리보기입니다. |
-| `POST /demo/protect` | 비어 있지 않은 JSON `text` 필드에 대한 같은 미리보기 |
-| `GET /demo/tool-loop` | 프로세스 내부 CRM 구현체를 사용하는 실제 보호된 `ChatClient` 도구 루프의 근거 |
-| `GET /demo/rag` | 검색된 원문 문서와 로컬 모델에 실제로 기록된 전체 보호 프롬프트 |
-| `GET /demo/mcp-tool-loop` | 실제 로컬 Streamable HTTP MCP 도구 루프의 근거 |
-
-Inspector는 언어별 고정 입력을 가져오기 위해 `GET /demo/scenario`도 사용합니다. 요청과
-응답 예제, 선택적 분석기 프로필, 선택형 실제 모델 검증은
-[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md)를
-참고하세요.
-
-## 각 시나리오의 검증 범위
+## 시나리오별 확인 방법
 
 ### Local Tool
 
-Inspector는 `/demo/scenario`, `/demo/protect`, `/demo/tool-loop`의 결과를 함께 표시합니다.
-예제 데이터에 대해 도구 루프 응답은 탐지된 원문 값 네 개가 모델 경계에서 모두
-관찰되지 않고 불투명 토큰이 존재함을 기록합니다. 모델은 토큰화된 `employeeId`, `email`,
-`phone`, `customerId` 인자를 생성합니다. 해당 요청 안에서 정책은 허용된
-`CUSTOMER_ID`만 복원하고, 나머지 세 값은 프로세스 내부 CRM 구현체 실행 시에도 토큰
-상태를 유지합니다. CRM 결과는 두 번째 모델 호출 전에 다시 토큰화됩니다.
+**Local Tool**을 선택하고 단계별로 전달되는 값을 확인하세요.
 
-반환되는 `boundaryEvidence`의 각 항목에는 화면에 표시되는 관측 개수, 검사한 예제 값의
-전체 개수와 그에 따른 통과 여부가 포함됩니다.
+1. **모델 입력과 도구 인자:** 예제의 사번, 이메일, 전화번호, 고객번호가 모두 토큰으로
+   바뀝니다. 모델이 생성한 도구 인자에도 이 토큰이 사용됩니다.
+2. **도구 실행:** 고객 정보를 조회하는 CRM 도구에는 정책이 허용한 고객번호
+   (`CUSTOMER_ID`)만 원문으로 전달됩니다. 나머지 세 값은 토큰 상태를 유지합니다.
+3. **도구 결과:** 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 토큰으로
+   바뀝니다.
 
-![보호된 모델 입력, 최소 권한 CRM 공개, 모델 재진입 보호를 보여주는 Local Tool 개인정보 경계 Inspector](../images/privacy-boundary-inspector-local-tool-ko.png)
+화면 상단의 ‘관측 / 전체’는 검사한 예제 값 중 원문이 확인된 개수를 나타냅니다.
+예를 들어 ‘모델 원문 노출’의 `0/4`는 네 값 모두 원문이 모델에서 발견되지 않았다는
+뜻이고, ‘허용된 원문 복원’의 `1/1`은 허용된 고객번호가 원문으로 전달되었다는 뜻입니다.
+각 항목에는 `PASS` 또는 `FAIL`도 표시됩니다.
+
+![보호된 모델 입력, 허용된 고객번호 원문 전달과 보호된 도구 결과를 보여주는 Local Tool Inspector](../images/privacy-boundary-inspector-local-tool-ko.png)
 
 ### RAG
 
-샘플은 메모리 내 `SimpleVectorStore`에서 `alice@example.com`이 포함된 고정 문서 하나를
-검색합니다. `retrievedDocument`는 이 원문 검색 결과입니다. `modelVisibleContext`는 모델
-경계에서 개인정보 보호를 적용한 뒤 기록된 전체 질의, 프롬프트 템플릿, 검색
-컨텍스트입니다. 응답은 원문 이메일이 검색 문서에는 있고 모델에 보이는 프롬프트에는 없으며,
-그 자리에는 불투명 `EMAIL_ADDRESS` 토큰이 있음을 보여줍니다.
+**RAG**를 선택하고 검색된 문서와 모델이 전달받은 프롬프트를 비교하세요. 문서의
+`alice@example.com`이 모델의 프롬프트에서는 `EMAIL_ADDRESS` 토큰으로 바뀝니다.
 
-이 시나리오는 저장 문서가 아니라 모델 경계의 보호를 검증합니다. 항상 같은 결과를
-반환하는 로컬 임베딩을 사용하며 외부 벡터 저장소, 임베딩 서비스 또는 LLM을
-사용하지 않습니다.
+화면에는 검색된 문서 원문과 개인정보 보호가 적용된 전체 프롬프트가 나란히 표시됩니다.
+전체 프롬프트에는 질문, 프롬프트 템플릿과 검색 내용이 포함됩니다. 저장된 문서 자체는
+변경되지 않습니다.
+
+로컬 임베딩 모델로 문서를 검색하며, 외부 벡터 저장소, 임베딩 서비스
+또는 LLM은 사용하지 않습니다.
 
 ![검색된 문서와 모델에 노출된 보호 컨텍스트를 비교하는 RAG 개인정보 경계 Inspector](../images/privacy-boundary-inspector-rag-ko.png)
 
 ### MCP
 
-MCP 시나리오는 같은 고정 도구 정책으로 실제 루프백 HTTP 왕복 호출을 수행합니다.
-애플리케이션은 `/mcp`에 내장 로컬 서버를 시작하고 Streamable HTTP로 연결해
-`customerLookup`을 검색한 뒤, 해당 `ToolCallbackProvider`를 감싸 MCP 도구 호출을 한 번
-실행합니다. 서버 측 근거는 `CUSTOMER_ID`만 복원되고 다른 인자는 토큰 상태를 유지함을
-확인합니다. 두 번째 모델 호출에서 기록한 근거는 MCP 결과에서 탐지된 값이 모델 재진입
-전에 보호됨을 확인합니다. 응답은 이 경로를
-`actual-streamable-http-mcp-tool-loop`로 식별합니다.
+**MCP**를 선택하면 Streamable HTTP로 `customerLookup` 도구를 호출합니다.
+도구에는 고객번호(`CUSTOMER_ID`)만 원문으로 전달되고 나머지 개인정보는 토큰을 유지하는지,
+결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 보호되는지 확인하세요.
 
-서버는 샘플 JVM 안에 내장되어 있고 첫 호출 후 재사용됩니다. 원격 또는 별도 배포된 MCP
-서비스는 아닙니다.
+샘플에 로컬 MCP 서버가 포함되어 있으므로 MCP 서비스를 별도로 배포할 필요가 없습니다.
 
-![Streamable HTTP 왕복, 최소 권한 공개, 모델 재진입 보호를 보여주는 MCP 개인정보 경계 Inspector](../images/privacy-boundary-inspector-mcp-ko.png)
+![HTTP 도구 호출, 허용된 고객번호 원문 전달과 보호된 도구 결과를 보여주는 MCP Inspector](../images/privacy-boundary-inspector-mcp-ko.png)
+
+## API로 결과 확인
+
+Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API를 사용하세요.
+
+| 엔드포인트 | 반환 내용 |
+| --- | --- |
+| `GET /demo/scenario` | 선택한 언어의 예제 입력 |
+| `GET /demo/protect` | 고정 예제에서 개인정보를 탐지한 위치와 토큰화 결과. 모델을 호출하지 않습니다. |
+| `POST /demo/protect` | JSON 본문의 `text`에 입력한 텍스트의 탐지·토큰화 결과. `text`는 비어 있거나 공백으로만 이루어져서는 안 됩니다. |
+| `GET /demo/tool-loop` | CRM 도구 호출 시 모델 입력, 도구 인자, 보호된 결과와 단계별 검증 결과(`boundaryEvidence`) |
+| `GET /demo/rag` | 검색된 문서 원문(`retrievedDocument`)과 모델에 전달된 전체 보호 프롬프트(`modelVisibleContext`) |
+| `GET /demo/mcp-tool-loop` | 로컬 Streamable HTTP MCP 도구 호출 시 모델 입력, 도구 인자와 결과 |
+
+요청·응답 예제, 다른 분석기를 사용하는 설정과 실제 모델을 연결하는 검증 방법은
+[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md)를
+참고하세요.
 
 ## EN/KO 런타임 로케일
 
-Inspector는 모든 시나리오 요청에 `Accept-Language: en` 또는 `ko`를 보내고 선택한 흐름을
-다시 실행합니다. 백엔드는 UI 문구 외의 런타임 값도 변경합니다.
+Inspector에서 언어를 바꾸면 화면 문구뿐 아니라 예제 입력과 결과도 선택한 언어로
+바뀝니다. API를 직접 호출할 때는 요청에 `Accept-Language: en` 또는
+`Accept-Language: ko` 헤더를 지정하세요.
 
 - Local Tool과 MCP는 언어별 고정 입력과 최종 결과 문구를 사용합니다.
 - RAG는 언어별 질의, 검색 문서 접두어, 프롬프트 템플릿을 사용합니다.

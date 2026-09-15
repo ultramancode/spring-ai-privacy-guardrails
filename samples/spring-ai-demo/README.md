@@ -2,10 +2,9 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-This runnable sample exercises the privacy advisor path with a deterministic
-local `ChatModel`, so it requires no external LLM API key. It explicitly applies
-the starter's `PrivacyChatClientConfigurer` to the sample's protected
-`ChatClient` builders:
+This runnable sample shows how PII is protected before reaching the model and
+which original values are allowed through to tools. The default configuration
+uses a local `ChatModel` provided by the sample, so no external LLM API key is required:
 
 ```text
 raw user input -> tokenized model prompt -> restore only allowed originals for tools
@@ -39,11 +38,11 @@ page. Each view displays results returned by its demo endpoints.
 
 ### Inspector Runtime Endpoints
 
-| Inspector view | Backend requests | Returned runtime evidence |
+| Inspector view | Backend requests | Results to check |
 | --- | --- | --- |
-| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Localized fixed input and `detectedSpans`, opaque model input and tool arguments, scoped `CUSTOMER_ID` restoration, and the re-protected tool result. |
-| `RAG` | `GET /demo/rag` | The raw `retrievedDocument`, the actual `modelVisibleContext`, and backend booleans that compare raw and tokenized PII at those two stages. |
-| `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | The actual local Streamable HTTP MCP runtime mode, protected model and tool-call values, scoped disclosure, and result re-protection. |
+| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Check the localized example input, detection positions (`detectedSpans`), tokens sent to the model, restoration of only the customer ID for the tool, and protection of the tool result. |
+| `RAG` | `GET /demo/rag` | Compare the original retrieved document (`retrievedDocument`) with the complete protected prompt sent to the model (`modelVisibleContext`). |
+| `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | Check that a local Streamable HTTP MCP call also protects model input, restores only the customer ID for the tool, and protects the tool result. |
 
 The `EN | 한국어` toggle sends `Accept-Language: en` or `ko` with these
 requests and reruns the selected flow. This changes the UI labels, example
@@ -79,7 +78,7 @@ curl "http://127.0.0.1:8080/demo/rag" \
 
 This endpoint retrieves a fixed synthetic document from an in-memory
 `SimpleVectorStore`. The response includes the raw retrieved document and the
-tokenized context actually received by the deterministic local model. This
+tokenized context actually received by the local model. This
 confirms that retrieved PII is tokenized before model execution. No external
 vector store, embedding service, or model is used.
 
@@ -108,13 +107,14 @@ Expected shape:
 }
 ```
 
-This concrete token string shape is not a public contract; application logic
-must not parse it or otherwise depend on it.
+The token format shown in this example may change. Application logic must not
+parse token internals or depend on a specific format.
 
-The session nonce is generated again for every request. Calling the endpoint
-twice with the same input must produce different opaque tokens.
-Each span's `providers` list contains only canonical analyzer provider IDs from
-the resolved evidence.
+Tokens are unique to each request. Calling the endpoint twice with the same
+input produces different opaque tokens.
+Each span's `providers` list identifies analyzers whose findings contributed to that result.
+`successfulProviders` lists analyzers that completed successfully, including
+those that found no PII.
 
 The default configuration uses small, format-based regex rules for:
 
@@ -159,11 +159,13 @@ model call. `activeSessionsAfterCall` is the service-wide active session count
 observed after the call; concurrent requests can make it nonzero without
 showing that this request leaked a session.
 
-Disclosure scope comes from `spring.ai.privacy.tools.disclosures`; the demo uses the
-auto-configured `PrivacyToolCallbackFactory` and explicit privacy configurer
-rather than creating parallel policies.
+Set the PII types each tool may receive as original values in
+`spring.ai.privacy.tools.disclosures`. The sample wraps tools with
+`PrivacyToolCallbackFactory` and applies privacy protection to the client with
+`PrivacyChatClientConfigurer`.
 
-The `/demo/tool-loop` endpoint uses an in-process CRM delegate.
+The `/demo/tool-loop` endpoint calls a local CRM tool included in the sample,
+so no external CRM service is required.
 
 ## Streamable HTTP MCP Tool Loop Demo
 
@@ -175,7 +177,7 @@ curl "http://127.0.0.1:8080/demo/mcp-tool-loop" \
 This endpoint runs the same deterministic flow through an actual local
 Streamable HTTP MCP round trip. Its evidence shows the fixed fixture's detected
 raw values absent at the model, only `CUSTOMER_ID` restored at the MCP tool, and
-detected values in the MCP result protected before model re-entry. It also
+detected values in the MCP result protected before returning to the model. It also
 reports the service-wide active session count observed after the call. It
 requires no external MCP infrastructure or model.
 
@@ -234,9 +236,10 @@ a compatible Korean NLP and recognizer pipeline.
 
 ## Optional JVM-Only OpenNLP Adapter
 
-The `opennlp` profile exercises the optional in-process adapter with
-application-supplied tokenizer and name-finder models. The repository does not
-bundle or redistribute model binaries. For a local smoke test, download the
+The `opennlp` profile detects PII in the same JVM using model files you supply:
+a tokenizer model to split text into tokens and a name-finder model to detect
+people's names. Model files are not included in the repository. To check basic
+functionality, download the
 English tokenizer and person models from the
 [Apache OpenNLP legacy model catalog](https://opennlp.sourceforge.net/models-1.5/)
 into the ignored `build` directory:

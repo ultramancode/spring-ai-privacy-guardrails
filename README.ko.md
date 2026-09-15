@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: c6b37a603c16023b681857714834323b24db516c75d41d22a8ddcfc04f745291 -->
+<!-- i18n-source-sha256: 826272f753436a6224a75438e65d251b30da9e0904f3910c79406a376e556eb9 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -58,23 +58,21 @@ flowchart LR
 
 ## 샘플 실행
 
-샘플에는 같은 입력에 항상 같은 결과를 반환하는 로컬 `ChatModel`이 포함되어 있어
-클라우드 자격 증명이 필요하지 않습니다. JDK 17이 설치된 환경에서 저장소 루트의 다음
-명령을 실행하세요.
+기본 샘플에는 로컬 `ChatModel`이 포함되어 있어 외부 모델 API 키가 필요하지 않습니다.
+JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행하세요.
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
 `http://127.0.0.1:8080`을 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
-있습니다. 각 화면은 샘플 백엔드가 반환한 런타임 근거를 표시합니다.
+있습니다. 모델과 도구가 실제로 전달받은 값을 비교할 수 있습니다.
 
-- **Local Tool**은 탐지된 원문 값이 모델 경계에서 요청 범위의 불투명 토큰으로 바뀌고,
-  허용된 `CUSTOMER_ID`만 도구 경계로 복원되며, 도구 결과가 모델 재진입 전에 다시
-  보호되는 과정을 보여줍니다.
-- **RAG**는 검색된 원문 문서와 모델 경계에 실제로 기록된 보호 컨텍스트를 비교합니다.
-- **MCP**는 같은 범위 제한 공개와 결과 재보호를 실제 로컬 Streamable HTTP MCP 왕복
-  호출을 통해 보여줍니다.
+- **Local Tool**은 탐지된 개인정보가 모델에 전달되기 전에 토큰으로 바뀌는 과정을
+  보여줍니다. 도구에는 허용된 `CUSTOMER_ID`만 원문으로 복원하며, 도구 결과는 모델에
+  다시 전달하기 전에 보호합니다.
+- **RAG**는 검색된 원문 문서와 모델이 전달받은 보호된 프롬프트를 비교합니다.
+- **MCP**는 Streamable HTTP를 통한 로컬 MCP 도구 호출에서 같은 보호 과정을 보여줍니다.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델에서 관찰된 고정 예제 데이터의 개인정보 원문 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">
@@ -308,10 +306,7 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 | Apache OpenNLP | 2.5.11 |
 | Gradle wrapper | 9.6.1 |
 
-CI는 Java 17, 21, 25에서 전체 테스트를 실행합니다. 외부 서비스가 필요한 Presidio 연동
-테스트와 JMH 스모크 테스트는 별도 CI 작업으로 실행합니다.
-구조화된 JSON 분석에 Presidio를 사용하는 경우, Presidio Analyzer 2.2.361 이상에서
-지원되는 REST 배열 입력 API를 사용합니다.
+구조화된 JSON을 Presidio로 분석하려면 Presidio Analyzer 2.2.361 이상을 사용하세요.
 
 Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자에게는 `2.0.1`을
 권장합니다.

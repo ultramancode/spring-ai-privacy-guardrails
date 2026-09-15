@@ -28,8 +28,7 @@ Token-to-original mappings are managed per request through `PrivacySession`.
 
 The library protects data that crosses supported model, tool, and output
 boundaries. The optional Spring Security integration can also authorize tool
-discovery and execution. Data handled separately inside the application and
-access-control paths outside the configured boundary remain application-owned.
+discovery and execution.
 
 ## Module Structure
 
@@ -70,8 +69,10 @@ add the corresponding analyzer integration.
 
 The optional Spring Security integration uses Spring AI's tool-calling APIs and
 Spring Security Core. Its Spring Boot starter can be used independently of the
-base starter. When privacy protection and tool authorization are used together,
-it provides configuration for applying both boundaries to the same `ChatClient`.
+base starter.
+
+When privacy protection and tool authorization are used together, it provides
+configuration for applying both boundaries to the same `ChatClient`.
 No Spring Security dependency is added to `core` or any existing privacy module.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
@@ -248,37 +249,32 @@ Detailed disclosure rules and the `returnDirect` flow are documented under
 
 ## Optional Tool Authorization Boundary
 
-The Spring Security integration captures the current `Authentication` when a
-protected request begins. An authorization-aware `ToolCallingManager` filters
-tool definitions before model exposure and checks authorization again before
-execution. The captured request identity remains available across supported
-asynchronous tool-execution paths. This boundary can run independently or
-compose with the privacy boundary.
+The Spring Security integration shows the model only tools the current user is
+allowed to use, then checks permission again immediately before each tool runs.
+Authorization checks use the user's `Authentication` obtained at the start of
+the request. Tool authorization can be used on its own or with privacy
+protection.
 
 ```mermaid
 flowchart LR
-    A["SecurityContext<br/>at request entry"] --> B["Tool authorization<br/>boundary"]
-    B --> D["Authorization-aware<br/>ToolCallingManager"]
-    D --> E["Authorized definitions<br/>to model"]
-    D --> F["Execution re-authorization"]
-    F --> G["Tool callback<br/>raw or privacy-wrapped"]
+    A["Requesting user"] --> B["Tool authorization<br/>policy"]
+    B --> D["Tool permission<br/>checks"]
+    D --> E["Only allowed tools<br/>shown to model"]
+    D --> F["Permission checked again<br/>before execution"]
+    F --> G["Tool execution"]
 ```
 
-The authorization manager receives the request's `Authentication`, the tool
-definition, and either the definition or execution phase. It does not receive
-tool arguments. When the privacy boundary is also present, execution
-authorization therefore completes before the privacy wrapper restores any
-original request PII.
+When tool authorization and privacy protection are used together, tool
+permission is checked before restoring the original PII values allowed for
+that tool.
 
 The Spring Boot starter provides factories for creating clients with tool
-authorization. Each factory configures its clients' advisors while leaving the
-shared `ChatModel` and existing `ToolCallingManager` unchanged. Other clients
-are unaffected. A custom manager requires an application-provided
-`SpringSecurityToolBoundary` and must execute the callbacks supplied in the
-execution prompt.
+authorization. A factory applies authorization to the `ChatClient` it creates.
+The configuration of other clients, including those using the same model,
+is unaffected.
 
-See [Spring Security Tool Authorization](security.md) for configuration,
-context propagation, and supported-path details.
+See [Spring Security Tool Authorization](security.md) for authorization
+policies, custom tool execution, and authentication in asynchronous calls.
 
 ## Errors and Diagnostics
 

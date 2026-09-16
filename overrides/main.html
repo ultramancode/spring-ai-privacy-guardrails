@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {% if page %}
+    {% for path in config.extra.translated_pages %}
+      {% if page.url == path or page.url == ("ko/" ~ path) %}
+        <link rel="alternate" hreflang="en" href="{{ config.site_url ~ path }}">
+        <link rel="alternate" hreflang="ko" href="{{ config.site_url ~ 'ko/' ~ path }}">
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+{% endblock %}

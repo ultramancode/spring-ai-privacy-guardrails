@@ -1,9 +1,15 @@
+---
+description: >-
+  Spring AI Privacy Guardrails의 보호 대상, 신뢰 경계, 보안 통제와 한계를 살펴보고 애플리케이션에서 별도로 관리해야 할 영역을
+  설명합니다.
+---
+
 # 위협 모델
 
 [English](../threat-model.md) | **한국어**
 
 <!-- i18n-source: docs/threat-model.md -->
-<!-- i18n-source-sha256: e6592e9286f613a819d4244454cce69febcc2f74c0a0b18a72f01101d8a4954c -->
+<!-- i18n-source-sha256: e5c2e59bf79f9a40e84c33b2ce61a35f384379f43ae9737ea2454c0011dd4d62 -->
 
 ## 보호 대상
 

@@ -1,3 +1,9 @@
+---
+description: >-
+  Spring AI Privacy Guardrails protects PII within each request, limits the original
+  values sent to tools, and optionally applies Spring Security tool authorization.
+---
+
 # Spring AI Privacy Guardrails
 
 **English** | [한국어](ko/index.md)

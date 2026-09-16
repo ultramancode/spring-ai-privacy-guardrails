@@ -1,3 +1,9 @@
+---
+description: >-
+  Configure Spring AI Privacy Guardrails analyzers, tokenization, tool disclosure
+  policies, output protection, processing limits, and ChatClient integration.
+---
+
 # Configuration and Usage
 
 **English** | [한국어](ko/configuration.md)

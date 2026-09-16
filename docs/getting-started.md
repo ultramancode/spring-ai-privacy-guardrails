@@ -1,3 +1,9 @@
+---
+description: >-
+  Set up Spring AI Privacy Guardrails: choose a starter and analyzer, then protect
+  model requests, local and MCP tool calls, and final responses.
+---
+
 # Getting Started
 
 **English** | [한국어](ko/getting-started.md)

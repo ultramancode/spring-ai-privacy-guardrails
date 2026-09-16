@@ -1,4 +1,7 @@
 ---
+description: >-
+  Verify Spring AI Privacy Guardrails with privacy boundary and tool authorization
+  tests, reproducible analyzer checks, and performance benchmarks.
 hide:
   - footer
 ---

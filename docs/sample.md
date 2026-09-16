@@ -1,3 +1,9 @@
+---
+description: >-
+  Run the Privacy Boundary Inspector's Local Tool, RAG, and MCP scenarios to examine
+  privacy protection in model requests and tool calls.
+---
+
 # Sample / Demo Guide
 
 **English** | [한국어](ko/sample.md)

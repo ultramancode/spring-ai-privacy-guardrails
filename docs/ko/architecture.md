@@ -1,9 +1,14 @@
+---
+description: >-
+  Spring AI Privacy Guardrails의 모듈, 요청별 세션, 모델·도구 보호 경계, 실행 흐름과 자원 정리 과정을 설명합니다.
+---
+
 # 아키텍처
 
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 48576b33feb819a35442f09e3af3861cede6f11eb074a86ff2f0dc24f0f89f2a -->
+<!-- i18n-source-sha256: f9bd6ee31269023e38848f4e85102b51318c012c35fbb440d4e49c2d627c0d35 -->
 
 ## 책임 범위
 

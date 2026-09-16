@@ -1,9 +1,15 @@
+---
+description: >-
+  Privacy Boundary Inspector의 Local Tool, RAG, MCP 시나리오를 실행해 모델 요청과 도구 호출의 개인정보 보호 동작을
+  확인하는 방법을 설명합니다.
+---
+
 # 샘플 / 데모 가이드
 
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: 5daca371c8ca2ef2e2d5692ee6870349130a97776d939f5ae6c1370ec8129c1a -->
+<!-- i18n-source-sha256: f0ce444748bb8ec2d997f12b20851fcaccfbd997fb46eb2c90bbe07b5a359895 -->
 
 샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
 보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수

@@ -1,9 +1,14 @@
+---
+description: >-
+  Spring AI Privacy Guardrails의 개인정보 보호 경계와 도구 권한 검증, 재현 가능한 분석기 테스트, 성능 벤치마크를 설명합니다.
+---
+
 # 평가와 벤치마크
 
 [English](../evaluation.md) | **한국어**
 
 <!-- i18n-source: docs/evaluation.md -->
-<!-- i18n-source-sha256: 53364c80a38f1e763ca2d2b97f3de479b4dad49d7fcc18ec4a3beadafc1267b9 -->
+<!-- i18n-source-sha256: 2f262af76f5245ad82d8ecfa105a3d5507ceb801d7d330df3a12e3590e5a5dfe -->
 
 이 저장소에는 데모 분석기의 회귀 테스트, 개인정보 보호 경계 테스트와 JMH 벤치마크가
 포함되어 있습니다. 회귀 테스트는 탐지 결과를, 경계 테스트는 정책 적용을, JMH 벤치마크는

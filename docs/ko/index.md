@@ -1,4 +1,7 @@
 ---
+description: >-
+  Spring AI Privacy Guardrails는 요청별로 개인정보를 보호하고 도구에 전달할 원문을 제한합니다. Spring Security 도구
+  권한 검사를 선택적으로 함께 사용할 수 있습니다.
 hide:
   - footer
 ---
@@ -8,7 +11,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: 8c7f94556fe01ed12c5c87754413585bb127ef2781fac4f42f047bc18e3e83cf -->
+<!-- i18n-source-sha256: 7e969bc0ecc8896307e16c6388c04ce8439998d526085802acae1a3633ac7d3c -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 

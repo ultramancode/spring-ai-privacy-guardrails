@@ -1,9 +1,15 @@
+---
+description: >-
+  Spring AI Privacy Guardrails의 분석기, 토큰화, 도구별 원문 공개 정책, 출력 보호, 처리 제한과 ChatClient 연동을
+  설정하는 방법을 설명합니다.
+---
+
 # 설정과 사용법
 
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 99ab1211e0ddbba73b87eecbb4da89aa8eac5b443ad9edc8e44a9a34305bae95 -->
+<!-- i18n-source-sha256: 1c7caae39ccd93080bd9e278bd103471a9d7dbe90eba899b14724336c6d121de -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.

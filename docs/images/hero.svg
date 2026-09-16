@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="820" viewBox="0 0 1600 820" role="img" aria-labelledby="title desc">
   <title id="title">Spring AI Privacy Guardrails</title>
-  <desc id="desc">PII detection results drive privacy policy enforcement across model and tool calls. Model-bound PII stays tokenized, while each scoped tool receives only explicitly allowed original values and its result is protected again.</desc>
+  <desc id="desc">PII detection results drive privacy policy enforcement across model and tool calls. Detected model-bound PII is replaced with opaque tokens that do not directly reveal the original values, while each scoped tool receives only explicitly allowed original values and its result is protected again. Optional Spring Security controls which tools the user can access and execute.</desc>
 
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
@@ -121,6 +121,16 @@
   <path d="M1445 418V500C1445 558 1384 586 1310 600L1298 604"
         fill="none" stroke="#52e29a" stroke-width="3" marker-end="url(#arrowGreen)"/>
 
+  <!-- Optional tool authorization -->
+  <g transform="translate(106 602)">
+    <rect width="4" height="100" rx="2" fill="#62a7ff"/>
+    <text x="24" y="22" class="sans node-title" style="fill: #8bbcff">OPTIONAL SPRING SECURITY</text>
+    <text x="24" y="56" class="sans node-body" style="font-size: 18px">
+      <tspan x="24">Control which tools the user</tspan>
+      <tspan x="24" dy="26">can access and execute.</tspan>
+    </text>
+  </g>
+
   <!-- Scoped tool access -->
   <g transform="translate(690 572)">
     <rect width="610" height="240" rx="26" fill="#102a2a" stroke="#52e29a" stroke-width="2.5"/>
@@ -133,12 +143,12 @@
     <text x="40" y="132" class="mono" font-size="15" fill="#d7fff1">{</text>
 
     <text x="56" y="158" class="mono" font-size="15" fill="#d7fff1">"customerId": "CUST-123456"</text>
-    <rect x="432" y="142" width="112" height="22" rx="11" fill="#174f3d"/>
+    <rect x="424" y="142" width="128" height="22" rx="11" fill="#174f3d"/>
     <text x="488" y="157" text-anchor="middle" class="sans label" fill="#73f0ad">RESTORED</text>
 
     <text x="56" y="184" class="mono" font-size="15" fill="#d7fff1">"phone": "[[PII_PHONE_...]]"</text>
-    <rect x="432" y="168" width="112" height="22" rx="11" fill="#163f4c"/>
-    <text x="488" y="183" text-anchor="middle" class="sans label" fill="#6be9e0">TOKENIZED</text>
+    <rect x="424" y="168" width="128" height="22" rx="11" fill="#163f4c"/>
+    <text x="488" y="183" text-anchor="middle" class="sans label" fill="#6be9e0">OPAQUE TOKEN</text>
 
     <text x="40" y="198" class="mono" font-size="15" fill="#d7fff1">}</text>
 

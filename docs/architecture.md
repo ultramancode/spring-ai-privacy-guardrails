@@ -4,27 +4,28 @@
 
 ## Responsibility Boundary
 
-Spring AI Privacy Guardrails replaces PII detected by analyzers with
-request-scoped tokens before sending data to a model. Immediately before tool
+Spring AI Privacy Guardrails tokenizes PII detected by analyzers before sending
+data to a model, replacing it with request-scoped **opaque tokens**. These replacement
+strings do not directly reveal the original values. Immediately before tool
 execution, it restores only the original values allowed by policy and
 re-protects the results afterward. When output protection is enabled, it also
 applies the configured policy to the final response.
 
 ```mermaid
-flowchart LR
-    A["Input · Memory · RAG"] --> B["PII detection"]
-    B --> C["core policy<br/>validation · normalization · tokenization"]
-    C --> D["Model boundary"]
-    D -. "Tool call" .-> E["Tool boundary<br/>restore only allowed originals"]
-    E -. "Re-protected result" .-> D
-    D --> F["Output boundary"]
-    F --> G["Application"]
+flowchart TD
+    A["Input · Memory · RAG"] --> B["Detect PII<br/>then tokenize it"]
+    B --> C["Model"]
+    C -. "Tool call" .-> D["Tool<br/>(originals only for permitted types)"]
+    D -. "Tokenize PII<br/>in the result" .-> C
+    C --> E["Inspect final response<br/>(when output protection is enabled)"]
+    E --> F["Application"]
 ```
 
 Detection offsets always refer to the caller-supplied input text. Analyzers
 return ranges, entity types, scores, and other evidence; `core` validates,
 canonicalizes, and resolves that evidence according to application policy.
-Token-to-original mappings are managed per request through `PrivacySession`.
+Mappings between opaque tokens and original values are managed per request
+through `PrivacySession`.
 
 The library protects data that crosses supported model, tool, and output
 boundaries. The optional Spring Security integration can also authorize tool
@@ -35,30 +36,31 @@ discovery and execution.
 This project is a Gradle multi-module library that separates core privacy
 policy, Spring AI integration, and analyzer integrations.
 
-The arrows below show how modules combine to form the Spring Boot starters.
+The diagram shows the main dependencies between this library's modules. Arrows
+point to the required module. Privacy protection and tool authorization can be
+used independently or applied together to the same `ChatClient`.
 
 ```mermaid
 %%{init: {"flowchart": {"curve": "linear"}}}%%
 flowchart LR
     CORE["core"]
 
-    CORE --> PRES["Presidio integration"]
-    CORE --> SAI["Spring AI integration"]
-    CORE --> OPEN["OpenNLP integration"]
+    PRES["Presidio integration"] --> CORE
+    SAI["Spring AI integration"] --> CORE
+    OPEN["OpenNLP integration"] --> CORE
     SEC["Spring Security integration"]
 
-    PRES --> PRESBOOT["Presidio Spring Boot Starter"]
-    SAI --> BASE["Base Spring Boot Starter"]
-    OPEN --> OPENBOOT["OpenNLP Spring Boot Starter"]
-    SEC --> SECBOOT["Spring Security Spring Boot Starter"]
+    PRESBOOT["Presidio<br/>Spring Boot Starter"] --> PRES
+    BASE["Base<br/>Spring Boot Starter"] --> SAI
+    OPENBOOT["OpenNLP<br/>Spring Boot Starter"] --> OPEN
+    SECBOOT["Spring Security<br/>Spring Boot Starter"] --> SEC
 
-    BASE --> PRESBOOT
-    BASE --> OPENBOOT
-    BASE -. "apply both boundaries" .-> SECBOOT
+    PRESBOOT --> BASE
+    OPENBOOT --> BASE
 ```
 
 The `core` module has no Spring dependency and provides detection resolution,
-tokenization, session management, and the built-in Regex analyzer. The Presidio
+PII tokenization, session management, and the built-in Regex analyzer. The Presidio
 and OpenNLP integration modules add the corresponding analyzer integrations on
 top of these shared capabilities.
 
@@ -71,9 +73,10 @@ The optional Spring Security integration uses Spring AI's tool-calling APIs and
 Spring Security Core. Its Spring Boot starter can be used independently of the
 base starter.
 
-When privacy protection and tool authorization are used together, it provides
-configuration for applying both boundaries to the same `ChatClient`.
-No Spring Security dependency is added to `core` or any existing privacy module.
+To use privacy protection and tool authorization together, add a privacy
+starter alongside the Spring Security starter and apply both capabilities to
+the same `ChatClient`. No Spring Security dependency is added to `core` or any
+existing privacy module.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
 Benchmarks and samples are repository-internal modules for performance
@@ -129,14 +132,15 @@ also documents overlap-resolution behavior.
 
 ## Requests and Sessions
 
-Token-to-original mappings are managed per request through `PrivacySession`.
+Mappings between opaque tokens and original values are managed per request
+through `PrivacySession`.
 Direct `core` usage and Spring AI integration use the same session model.
 
-Each request receives a separate session, and tokens created in that session are
+Each request receives a separate session, and opaque tokens created in that session are
 valid only within that request. The Spring AI execution context carries only a
-session handle; the actual token-to-original-value mapping remains in
-library-managed internal state and is not included in model requests or tool
-inputs.
+session handle. The actual mapping between opaque tokens and original values
+remains in library-managed internal state and is not included in model requests
+or tool inputs.
 
 A session is not bound to a specific execution thread, so tool execution can
 continue on another thread while using the same request session. If the session
@@ -150,7 +154,9 @@ the session lifecycle explicitly.
 ## Spring AI Execution Flow
 
 The Spring AI integration protects the supported model and tool flow within one
-request session.
+request session. When this library's Spring Security integration is applied to
+the client, it also checks which tools can be shown to the model and whether
+the requested tools may execute.
 
 ```mermaid
 sequenceDiagram
@@ -160,14 +166,21 @@ sequenceDiagram
     participant T as Tool
 
     A->>P: Input · Memory · RAG
-    P->>P: Detect · validate · normalize · tokenize
+    P->>P: Detect PII, then tokenize it
+
+    P->>P: Keep only authorized tools<br/>(with tool authorization)
+
     P->>M: Protected model request
 
     opt Tool call
         M->>P: Tool call
-        P->>T: Restore only allowed original values
+
+        P->>P: Check tool execution permissions<br/>(with tool authorization)
+
+        P->>P: Restore permitted originals
+        P->>T: Execute tool
         T-->>P: Tool result
-        P->>P: Re-protect result
+        P->>P: Tokenize PII in the tool result
         P-->>M: Protected tool result
     end
 
@@ -180,6 +193,14 @@ sequenceDiagram
     P-->>A: Application output
     P->>P: Clean up session
 ```
+
+Tool authorization uses the authentication of the user who started the request.
+The tool list is authorized before every model call. All requested tools are
+authorized before any of them execute, and each tool is checked again immediately
+before it runs. If execution authorization is denied for a tool, its original
+values are not restored and the tool is not executed. See
+[Tool Authorization](security.md) for authentication propagation and policy
+configuration.
 
 `PrivacyChatClientConfigurer` applies the privacy configuration only to the
 `ChatClient.Builder` selected by the application and does not affect other
@@ -256,12 +277,12 @@ the request. Tool authorization can be used on its own or with privacy
 protection.
 
 ```mermaid
-flowchart LR
-    A["Requesting user"] --> B["Tool authorization<br/>policy"]
-    B --> D["Tool permission<br/>checks"]
-    D --> E["Only allowed tools<br/>shown to model"]
-    D --> F["Permission checked again<br/>before execution"]
-    F --> G["Tool execution"]
+flowchart TD
+    A["Request user's authentication"] --> D["Tool permission checks"]
+    B["Application authorization policy"] --> D
+    D --> E["Before each model call:<br/>show only authorized tools"]
+    D --> F["Immediately before execution:<br/>recheck permission"]
+    F --> G["Execute authorized tool"]
 ```
 
 When tool authorization and privacy protection are used together, tool

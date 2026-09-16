@@ -8,7 +8,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: 2cbc1eea70318779b50d546d3654783194edc6c6eeb53149d85b52be7a2fed12 -->
+<!-- i18n-source-sha256: 8c7f94556fe01ed12c5c87754413585bb127ef2781fac4f42f047bc18e3e83cf -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -16,8 +16,8 @@ hide:
 공개합니다. 모든 도구 결과는 모델이나 애플리케이션에 반환하기 전에 다시 보호합니다.
 
 분석기는 **보호 대상 정보가 포함된 텍스트를 식별합니다**. Spring AI Privacy Guardrails는
-그 결과에 따라 **모델과 도구에 전달할 값을 보호하고**, 각 도구에 공개할 원문의 범위를
-제한합니다.
+**개인정보 토큰화**로 탐지된 원문을 **불투명 토큰(opaque token)**으로 바꾸어 모델에 전달합니다.
+불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다. 각 도구에 공개할 원문의 범위도 제한합니다.
 
 선택적으로 [Spring Security 연동](security.md)을 추가해 모델에 공개할 도구를 제한하고,
 도구 실행 전에 권한을 검사할 수 있습니다. 도구 권한 검사는 개인정보 보호 기능 없이도
@@ -29,9 +29,10 @@ Spring 공식 블로그에서 소개:
 ## 직접 확인하기
 
 Privacy Boundary Inspector에서 Local Tool, RAG 및 MCP 시나리오의 모델과 도구가
-전달받은 값을 비교할 수 있습니다.
+전달받은 값을 비교할 수 있습니다. Security에서는 사용자 역할에 따른 도구 접근 권한을
+비교합니다.
 
-![Local Tool, RAG 및 MCP 시나리오에서 모델과 도구의 입력을 비교하는 Privacy Boundary Inspector](../images/privacy-boundary-inspector-demo-ko.gif)
+![Local Tool, RAG, MCP, Security 시나리오를 보여주는 Privacy Boundary Inspector](../images/privacy-boundary-inspector-demo-ko.gif)
 
 전체 Inspector 흐름은 [샘플 / 데모 가이드](sample.md)를 참고하세요.
 
@@ -56,7 +57,7 @@ Privacy Boundary Inspector에서 Local Tool, RAG 및 MCP 시나리오의 모델�
 ```
 
 `http://127.0.0.1:8080`을 열어 Local Tool, RAG, MCP 시나리오에서 개인정보가 어떻게
-보호되는지 확인할 수 있습니다.
+보호되는지 확인하고, Security에서 역할별 도구 접근 권한을 비교할 수 있습니다.
 
 Inspector 흐름은 [샘플 / 데모 가이드](sample.md), Presidio·OpenNLP 구성과 통합 예제는
 [전체 샘플 애플리케이션 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md)를

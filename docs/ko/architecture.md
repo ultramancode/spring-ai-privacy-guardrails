@@ -3,28 +3,29 @@
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 7031201940cb4cf56d875051bd2ce50aa3c4f798a288bae7854e7025a182a2b5 -->
+<!-- i18n-source-sha256: 48576b33feb819a35442f09e3af3861cede6f11eb074a86ff2f0dc24f0f89f2a -->
 
 ## 책임 범위
 
-Spring AI Privacy Guardrails는 분석기가 탐지한 개인정보를 요청 단위 토큰으로 바꾸어
-모델에 전달합니다. 도구를 실행하기 직전에 정책이 허용한 원문 값만 복원하고, 실행 결과를
-다시 보호합니다. 출력 보호를 활성화하면 최종 응답에도 설정한 정책을 적용합니다.
+Spring AI Privacy Guardrails는 **개인정보 토큰화**로 분석기가 탐지한 원문을
+요청별 **불투명 토큰(opaque token)**으로 바꿔 모델에 전달합니다. 불투명 토큰은
+원문 값을 직접 드러내지 않는 대체 문자열입니다.
+도구를 실행하기 직전에 정책이 허용한 원문 값만 복원하고, 실행 결과를 다시 보호합니다.
+출력 보호를 활성화하면 최종 응답에도 설정한 정책을 적용합니다.
 
 ```mermaid
-flowchart LR
-    A["입력 · 메모리 · RAG"] --> B["개인정보 탐지"]
-    B --> C["core 정책<br/>검증 · 정규화 · 토큰화"]
-    C --> D["모델 경계"]
-    D -. "도구 호출" .-> E["도구 경계<br/>허용된 원문만 복원"]
-    E -. "결과 재보호" .-> D
-    D --> F["출력 경계"]
-    F --> G["애플리케이션"]
+flowchart TD
+    A["입력 · 메모리 · RAG"] --> B["개인정보 탐지 후<br/>탐지된 값 토큰화"]
+    B --> C["모델"]
+    C -. "도구 호출" .-> D["도구<br/>(허용된 유형만 원문으로 전달)"]
+    D -. "결과의 개인정보<br/>토큰화" .-> C
+    C --> E["최종 응답 검사<br/>(출력 보호 사용 시)"]
+    E --> F["애플리케이션"]
 ```
 
 탐지 위치는 항상 호출자가 제공한 입력 원문을 기준으로 계산합니다. 분석기는 탐지 범위와
 유형, 신뢰도 등의 근거를 반환하며, `core` 모듈은 이를 검증하고 정규화한 뒤
-애플리케이션 정책에 따라 해석합니다. 토큰과 원본 값의 매핑은 요청별
+애플리케이션 정책에 따라 해석합니다. 불투명 토큰과 원본 값의 매핑은 요청별
 `PrivacySession`을 통해 관리됩니다.
 
 라이브러리는 지원하는 모델·도구·출력 경계를 통과하는 데이터를 보호합니다.
@@ -35,29 +36,30 @@ flowchart LR
 이 프로젝트는 Gradle 멀티 모듈 라이브러리이며, 모듈별로 개인정보 보호 정책,
 Spring AI 연동과 분석기 연동의 역할을 분리합니다.
 
-아래 화살표는 각 모듈이 조합되어 Spring Boot 스타터를 구성하는 흐름을 나타냅니다.
+이 라이브러리 내부 주요 모듈의 의존 관계입니다. 화살표는 의존 대상 모듈을 가리킵니다.
+개인정보 보호와 도구 권한 검사는 각각 사용하거나 같은 `ChatClient`에 함께 적용할 수
+있습니다.
 
 ```mermaid
 %%{init: {"flowchart": {"curve": "linear"}}}%%
 flowchart LR
     CORE["core"]
 
-    CORE --> PRES["Presidio 연동"]
-    CORE --> SAI["Spring AI 연동"]
-    CORE --> OPEN["OpenNLP 연동"]
+    PRES["Presidio 연동"] --> CORE
+    SAI["Spring AI 연동"] --> CORE
+    OPEN["OpenNLP 연동"] --> CORE
     SEC["Spring Security 연동"]
 
-    PRES --> PRESBOOT["Presidio Spring Boot 스타터"]
-    SAI --> BASE["기본 Spring Boot 스타터"]
-    OPEN --> OPENBOOT["OpenNLP Spring Boot 스타터"]
-    SEC --> SECBOOT["Spring Security Spring Boot 스타터"]
+    PRESBOOT["Presidio<br/>Spring Boot 스타터"] --> PRES
+    BASE["기본<br/>Spring Boot 스타터"] --> SAI
+    OPENBOOT["OpenNLP<br/>Spring Boot 스타터"] --> OPEN
+    SECBOOT["Spring Security<br/>Spring Boot 스타터"] --> SEC
 
-    BASE --> PRESBOOT
-    BASE --> OPENBOOT
-    BASE -. "두 경계를 함께 적용" .-> SECBOOT
+    PRESBOOT --> BASE
+    OPENBOOT --> BASE
 ```
 
-`core` 모듈은 Spring에 의존하지 않고 탐지 결과 해석, 토큰화, 세션 관리와 내장
+`core` 모듈은 Spring에 의존하지 않고 탐지 결과 해석, 개인정보 토큰화, 세션 관리와 내장
 정규식(Regex) 분석기를 제공합니다. Presidio와 OpenNLP 연동 모듈은 이 공통 기능 위에 각
 분석기와의 연동을 추가합니다.
 
@@ -68,9 +70,9 @@ Spring AI 연동 모듈은 `core`를 `ChatClient`, 모델 호출과 도구 실�
 Spring Security 연동은 Spring AI의 도구 호출 API와 `spring-security-core`를
 사용합니다. 전용 Spring Boot 스타터는 기본 스타터와 독립적으로 사용할 수 있습니다.
 
-개인정보 보호와 도구 권한 검사를 함께 사용할 때는 두 경계를 동일한 `ChatClient`에
-적용하는 구성을 제공합니다. `core`와 기존 개인정보 보호 모듈에는 Spring Security
-의존성이 추가되지 않습니다.
+개인정보 보호와 도구 권한 검사를 함께 사용하려면 개인정보 보호 스타터와 Spring
+Security 스타터를 함께 추가하고, 두 기능을 동일한 `ChatClient`에 적용하세요. `core`와
+기존 개인정보 보호 모듈에는 Spring Security 의존성이 추가되지 않습니다.
 
 테스트 지원 모듈은 애플리케이션에서 개인정보 보호 동작을 검증하기 위한 테스트 전용
 API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행 가능한 사용 예제를 위한
@@ -120,11 +122,11 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 
 ## 요청과 세션
 
-토큰과 원본 값의 매핑은 요청별 `PrivacySession`을 통해 관리됩니다. `core`를 직접
+불투명 토큰과 원본 값의 매핑은 요청별 `PrivacySession`을 통해 관리됩니다. `core`를 직접
 사용할 때와 Spring AI 연동을 사용할 때 모두 같은 세션 모델을 사용합니다.
 
-각 요청에는 별도의 세션이 만들어지고, 생성된 토큰은 해당 요청 안에서만 유효합니다.
-Spring AI 실행 컨텍스트에는 세션 식별자(`handle`)만 전달하며, 실제 토큰과 원본 값의
+각 요청에는 별도의 세션이 만들어지고, 생성된 불투명 토큰은 해당 요청 안에서만 유효합니다.
+Spring AI 실행 컨텍스트에는 세션 식별자(`handle`)만 전달하며, 실제 불투명 토큰과 원본 값의
 매핑은 라이브러리가 관리하는 내부 상태에 유지됩니다. 이 매핑은 모델 요청이나 도구
 입력에 포함되지 않습니다.
 
@@ -139,6 +141,8 @@ Spring AI 연동에서는 요청이 정상적으로 끝나거나 오류 또는 �
 ## Spring AI 실행 흐름
 
 Spring AI 연동은 지원하는 모델과 도구 호출 흐름을 하나의 요청 세션 안에서 보호합니다.
+클라이언트에 이 라이브러리의 Spring Security 연동을 적용하면 모델에 제공할 도구와
+도구 실행 권한도 검사합니다.
 
 ```mermaid
 sequenceDiagram
@@ -148,14 +152,21 @@ sequenceDiagram
     participant T as 도구
 
     A->>P: 입력 · 메모리 · RAG
-    P->>P: 탐지 · 검증 · 정규화 · 토큰화
+    P->>P: 개인정보 탐지 후 토큰화
+
+    P->>P: 허용된 도구만 목록에 유지<br/>(도구 권한 검사 적용 시)
+
     P->>M: 보호된 모델 요청
 
     opt 도구 호출
         M->>P: 도구 호출
-        P->>T: 허용된 원문 값만 복원
+
+        P->>P: 도구 실행 권한 검사<br/>(도구 권한 검사 적용 시)
+
+        P->>P: 허용된 원문만 복원
+        P->>T: 도구 실행
         T-->>P: 도구 결과
-        P->>P: 결과 재보호
+        P->>P: 도구 결과의 개인정보 토큰화
         P-->>M: 보호된 도구 결과
     end
 
@@ -168,6 +179,12 @@ sequenceDiagram
     P-->>A: 애플리케이션 출력
     P->>P: 세션 정리
 ```
+
+도구 권한 검사는 요청을 시작한 사용자의 인증 정보를 사용합니다. 도구 목록의 권한은
+모델을 호출할 때마다 검사합니다. 도구 실행 전에는 요청된 도구 전체의 권한을 먼저
+확인하고, 각 도구를 실행하기 직전에 다시 검사합니다. 실행 권한이 거부되면 해당
+도구를 실행하지 않고 원문도 복원하지 않습니다. 인증 정보 전달과 정책 설정은
+[도구 권한](security.md)을 참고하세요.
 
 `PrivacyChatClientConfigurer`는 애플리케이션이 선택한 `ChatClient.Builder`에만
 개인정보 보호 구성을 적용하며, 다른 `ChatClient`에는 영향을 주지 않습니다.
@@ -234,12 +251,12 @@ Spring Security 연동은 현재 사용자가 사용할 수 있는 도구만 모
 함께 사용할 수 있습니다.
 
 ```mermaid
-flowchart LR
-    A["요청한 사용자"] --> B["도구 권한 정책"]
-    B --> D["도구 권한 검사"]
-    D --> E["허용된 도구만<br/>모델에 제공"]
-    D --> F["실행 직전<br/>권한 재확인"]
-    F --> G["도구 실행"]
+flowchart TD
+    A["요청 사용자의 인증 정보"] --> D["도구 권한 검사"]
+    B["애플리케이션의 권한 정책"] --> D
+    D --> E["모델 호출 전:<br/>허용된 도구만 제공"]
+    D --> F["도구 실행 직전:<br/>권한 재확인"]
+    F --> G["허용된 도구 실행"]
 ```
 
 도구 권한 검사와 개인정보 보호를 함께 사용하면, 도구의 실행 권한을 확인한 뒤

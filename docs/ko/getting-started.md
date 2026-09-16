@@ -3,7 +3,7 @@
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: c5ae0465da8b6da145353de4cff5005940c3d66c8f7f0a353195fb00a1017012 -->
+<!-- i18n-source-sha256: 37df2bb67b41172f5b45fd0b06b533b24f250cc152abd5368dfadb3c2823d890 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -128,7 +128,10 @@ String response = privacyChatClient.prompt()
         .content();
 ```
 
-모델 호출 전에 탐지된 개인정보는 원문을 알 수 없는 대체 문자열(토큰)로 바뀝니다.
+이 라이브러리에서 **개인정보 토큰화**는 탐지된 개인정보 원문을 요청별
+**불투명 토큰(opaque token)**으로 바꾸는 처리입니다. 모델 호출 전에 적용되며,
+불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.
+
 아래는 모델에 전달되는 내용을 보여주는 예시입니다. `<opaque>` 부분은 실제 요청에서
 생성되는 값이며 요청마다 달라집니다.
 
@@ -138,8 +141,8 @@ Employee [[PII_EMPLOYEE_ID_<opaque>]] requested customer
 ```
 
 위 예시에서 탐지된 사번과 고객번호는 원문으로 모델에 전달되지 않습니다.
-토큰과 원문의 대응 관계는 라이브러리가 요청별로 관리합니다. 애플리케이션에서는
-토큰의 내부 문자열을 해석하거나 특정 형식에 의존하지 마세요.
+불투명 토큰과 원문의 대응 관계는 라이브러리가 요청별로 관리합니다. 애플리케이션에서는
+불투명 토큰의 내부 문자열을 해석하거나 특정 형식에 의존하지 마세요.
 
 `ChatModel`을 직접 호출하는 경로는 이 자동 보호 경계 밖에 있습니다.
 
@@ -148,7 +151,7 @@ Employee [[PII_EMPLOYEE_ID_<opaque>]] requested customer
 
 ## 4. 로컬 도구와 MCP 경계 보호
 
-도구에 개인정보 보호를 적용하면, 탐지된 값은 기본적으로 토큰으로 전달됩니다.
+도구에 개인정보 보호를 적용하면, 탐지된 값은 기본적으로 불투명 토큰으로 전달됩니다.
 고객 조회에 고객번호가 필요한 경우처럼 도구가 원문을 받아야 한다면,
 `tools.disclosures`에 도구 이름과 공개할 개인정보 유형을 지정하세요.
 
@@ -165,7 +168,7 @@ spring:
 로컬 도구와 MCP 도구 모두 `tools.disclosures`에 설정한 도구 이름은 대소문자를
 구분하며 실제 `ToolDefinition.name()`과 정확히 일치해야 합니다. 위 설정을 적용하면
 `customerLookup`에 고객번호(`CUSTOMER_ID`)만 원문으로 전달하고, 그 외에
-탐지된 개인정보는 토큰으로 전달합니다.
+탐지된 개인정보는 불투명 토큰으로 전달합니다.
 
 ### 로컬 ToolCallback
 

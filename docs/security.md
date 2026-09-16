@@ -521,7 +521,8 @@ String response = toolSearchClient.prompt()
 With this setup, only authorized tools registered for the request are searchable,
 and permission is checked again immediately before a selected tool executes.
 When privacy protection is also used, detected PII in the search query is
-tokenized before the search runs.
+replaced with **opaque tokens** before the search runs. These replacement
+strings do not directly reveal the original values.
 
 The library allows the tool that performs the search; the application's
 authorization policy applies to the tools being searched. Tool replacements

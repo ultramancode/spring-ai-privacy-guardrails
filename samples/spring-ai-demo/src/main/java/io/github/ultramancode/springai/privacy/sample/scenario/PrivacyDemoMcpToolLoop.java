@@ -1,7 +1,7 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosureScope;
@@ -9,6 +9,7 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.mcp.McpToolNamePrefixGenerator;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -24,7 +25,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-final class PrivacyDemoMcpToolLoop implements AutoCloseable {
+public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
 
     private static final PrivacyDemoScenario SCENARIO = PrivacyDemoScenario.DEFAULT;
     private static final List<String> RAW_VALUES = SCENARIO.originalValues();
@@ -38,9 +39,11 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             OpaquePiiTokenFormat.patternForEntityType("PHONE_NUMBER");
     private static final Pattern CUSTOMER_ID_TOKEN_PATTERN =
             OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID");
-    private final PrivacyChatClientConfigurer privacyConfigurer;
+    private final PrivacySecurityChatClientFactory privacySecurityFactory;
     private final PrivacyToolCallbackFactory toolCallbackFactory;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
+    private final ToolCallingManager toolCallingManager;
+    private final PrivacyDemoSecurityPolicy securityPolicy;
     private final ObjectMapper objectMapper;
     private LocalMcpCrmServer localMcpServer;
     private McpSyncClient mcpClient;
@@ -48,15 +51,19 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
     private ToolDisclosureScope disclosureScope;
     private Path serverBaseDirectory;
 
-    PrivacyDemoMcpToolLoop(
-            PrivacyChatClientConfigurer privacyConfigurer,
+    public PrivacyDemoMcpToolLoop(
+            PrivacySecurityChatClientFactory privacySecurityFactory,
             PrivacyToolCallbackFactory toolCallbackFactory,
             ToolDisclosurePolicy toolDisclosurePolicy,
+            ToolCallingManager toolCallingManager,
+            PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
-        this.privacyConfigurer = privacyConfigurer;
+        this.privacySecurityFactory = privacySecurityFactory;
         this.toolCallbackFactory = toolCallbackFactory;
         this.toolDisclosurePolicy = toolDisclosurePolicy;
+        this.toolCallingManager = toolCallingManager;
+        this.securityPolicy = securityPolicy;
         this.objectMapper = objectMapper;
     }
 
@@ -64,7 +71,12 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         LocalMcpCrmServer server = localMcpServer(locale);
         server.useRecords(crmRecords(locale));
         initializeMcpClient(server);
-        return runAgainstLocalServer(input, locale, server);
+        PrivacyDemoSecurityPolicy.AuthenticatedRun<PrivacyDemoToolLoop.Result> authenticatedRun =
+                this.securityPolicy.runAs(
+                        PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT,
+                        () -> runAgainstLocalServer(input, locale, server)
+                );
+        return authenticatedRun.value();
     }
 
     @Override
@@ -117,10 +129,15 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             LocalMcpCrmServer server
     ) {
         PrivacyDemoToolLoop.DemoToolLoopModel model =
-                new PrivacyDemoToolLoop.DemoToolLoopModel(this.objectMapper, "MCP", locale);
+                new PrivacyDemoToolLoop.DemoToolLoopModel(
+                        this.objectMapper,
+                        "MCP",
+                        locale,
+                        this.toolCallingManager
+                );
 
-        ChatClient.Builder builder = ChatClient.builder(model).defaultTools(this.protectedMcpTools);
-        this.privacyConfigurer.configure(builder);
+        ChatClient.Builder builder = this.privacySecurityFactory.builder(model)
+                .defaultTools(this.protectedMcpTools);
 
         int callsBeforeRequest = server.requestEvidence().calls();
         String finalResponse = builder.build().prompt().user(input).call().content();
@@ -144,33 +161,36 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
                 && SCENARIO.customerId().equals(customerId)
                 && !CUSTOMER_ID_TOKEN_PATTERN.matcher(customerId).find();
 
+        List<String> allowedOriginalEntityTypes = this.disclosureScope.entityTypes().stream().sorted().toList();
+        PrivacyDemoToolLoop.BoundaryEvidence boundaryEvidence = new PrivacyDemoToolLoop.BoundaryEvidence(
+                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                        model.rawValueCount(),
+                        RAW_VALUES.size()
+                ),
+                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                        deniedRawValueCount,
+                        DENIED_TOOL_VALUES.size()
+                ),
+                PrivacyDemoToolLoop.EvidenceCount.expectedAll(
+                        allowedRawValueCount,
+                        ALLOWED_TOOL_VALUES.size()
+                ),
+                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                        model.rawToolResultValueCountAtModel(),
+                        RAW_VALUES.size()
+                )
+        );
+
         return new PrivacyDemoToolLoop.Result(
                 model.calls(),
                 !model.rawPiiSeenByModel(),
                 model.protectedModelInput(),
                 model.issuedToolArguments(),
-                this.disclosureScope.entityTypes().stream().sorted().toList(),
+                allowedOriginalEntityTypes,
                 receivedOnlyAllowedOriginals,
                 requestEvidence.lookupSucceeded(),
                 model.protectedToolResultSeenByModel(),
-                new PrivacyDemoToolLoop.BoundaryEvidence(
-                        PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                                model.rawValueCount(),
-                                RAW_VALUES.size()
-                        ),
-                        PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                                deniedRawValueCount,
-                                DENIED_TOOL_VALUES.size()
-                        ),
-                        PrivacyDemoToolLoop.EvidenceCount.expectedAll(
-                                allowedRawValueCount,
-                                ALLOWED_TOOL_VALUES.size()
-                        ),
-                        PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                                model.rawToolResultValueCountAtModel(),
-                                RAW_VALUES.size()
-                        )
-                ),
+                boundaryEvidence,
                 finalResponse
         );
     }

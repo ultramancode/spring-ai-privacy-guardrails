@@ -3,18 +3,19 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 17b83596bc45c63c8ce2440ff93e459cb68f4cff0225c624e5cded13aa498b15 -->
+<!-- i18n-source-sha256: 9c0b32a91079aba485af1b2657f54466c83c19bb1adf81c20fa037b83ba62814 -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
-외부 LLM API 키가 필요하지 않습니다.
+외부 LLM API 키가 필요하지 않습니다. 탐지된 개인정보는 원문 값을 직접 드러내지 않는
+대체 문자열인 **불투명 토큰(opaque token)**으로 바뀝니다.
 
 ```text
-사용자 원문 입력 -> 모델 프롬프트 토큰화 -> 도구에 허용된 원문만 복원
--> 도구 결과 재토큰화
+사용자 원문 입력 -> 모델 프롬프트의 개인정보 토큰화
+-> 도구에 허용된 원문만 복원 -> 도구 결과의 개인정보 토큰화
 ```
 
-데모 응답은 토큰 매핑을 직렬화하지 않지만, 탐지되지 않은 텍스트는 변경 없이 반환될
+데모 응답은 불투명 토큰 매핑을 직렬화하지 않지만, 탐지되지 않은 텍스트는 변경 없이 반환될
 수 있습니다. 사용자 정의 텍스트는 URL, 브라우저 기록 또는 일반적인 액세스 로그의
 요청 줄에 복사되지 않도록 POST 본문으로만 받습니다.
 
@@ -31,7 +32,7 @@
 ### Privacy Boundary Inspector
 
 브라우저에서 이 주소를 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
-있습니다. `Local Tool | RAG | MCP` 선택기로 데모를 실행하고, 각 화면에서 데모
+있습니다. `Local Tool | RAG | MCP | Security` 선택기로 데모를 실행하고, 각 화면에서 데모
 엔드포인트가 반환한 결과를 확인할 수 있습니다.
 
 <p align="center">
@@ -42,9 +43,10 @@
 
 | Inspector 화면 | 백엔드 요청 | 확인할 결과 |
 | --- | --- | --- |
-| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | 언어별 예제 입력, 탐지 위치(`detectedSpans`), 모델에 전달된 토큰, 도구에 고객번호만 원문으로 전달되는지와 결과가 다시 보호되는지 확인 |
+| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | 언어별 예제 입력, 탐지 위치(`detectedSpans`), 모델에 전달된 불투명 토큰, 도구에 고객번호만 원문으로 전달되는지와 결과가 다시 보호되는지 확인 |
 | `RAG` | `GET /demo/rag` | 검색한 원문 문서(`retrievedDocument`)와 모델에 전달된 전체 보호 프롬프트(`modelVisibleContext`) 비교 |
 | `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | 로컬 Streamable HTTP MCP 호출에서도 모델 입력이 보호되고, 도구에는 고객번호만 원문으로 전달되며, 결과가 다시 보호되는지 확인 |
+| `Security` | `GET /demo/security-tool-boundary` | 동일한 고객정보 조회 요청을 일반 직원과 고객지원 담당자로 실행해 백엔드가 기록한 정의·실행 권한 판정, 도구 실행 횟수, 허용된 실행의 개인정보 보호 근거 |
 
 `EN | 한국어` 토글은 이 요청들에 `Accept-Language: en` 또는 `ko`를 보내고 선택한
 흐름을 다시 실행합니다. 선택한 언어에 맞춰 UI 문구, 예제 입력, RAG 질의와 프롬프트
@@ -79,8 +81,8 @@ curl "http://127.0.0.1:8080/demo/rag" \
 ```
 
 이 엔드포인트는 메모리 내 `SimpleVectorStore`에서 예제 문서를 검색합니다.
-응답에는 검색된 원문 문서와 로컬 모델이 실제로 받은 토큰화
-컨텍스트가 포함됩니다. 이를 통해 모델 실행 전에 검색 문서의 개인정보가 토큰화되었음을
+응답에는 검색된 원문 문서와 로컬 모델이 실제로 받은 보호된
+컨텍스트가 포함됩니다. 이를 통해 모델 실행 전에 검색 문서의 개인정보가 불투명 토큰으로 바뀌었음을
 확인할 수 있습니다. 외부 벡터 저장소, 임베딩 서비스 또는 모델은 사용하지 않습니다.
 
 ## 정규식 전용 보호
@@ -108,10 +110,10 @@ curl "http://127.0.0.1:8080/demo/protect" \
 }
 ```
 
-예시의 토큰 문자열 형식은 변경될 수 있습니다. 애플리케이션에서는 토큰의 내부 문자열을
+예시의 불투명 토큰 문자열 형식은 변경될 수 있습니다. 애플리케이션에서는 불투명 토큰의 내부 문자열을
 해석하거나 특정 형식에 의존하지 마세요.
 
-토큰은 요청별로 생성됩니다. 같은 입력으로 엔드포인트를 두 번 호출해도 서로 다른
+불투명 토큰은 요청별로 생성됩니다. 같은 입력으로 엔드포인트를 두 번 호출해도 서로 다른
 불투명 토큰이 생성됩니다. 각 탐지 범위의 `providers`에는 해당 탐지 결과에 사용된
 분석기의 ID가 표시됩니다. `successfulProviders`는 분석에 성공한 분석기 목록이며, 개인정보를
 찾지 못한 분석기도 포함됩니다.
@@ -133,7 +135,7 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
   -d '{"text":"Email alice@example.com, phone 010-2345-6789, customer ID CUST-654321, employee ID EMP-1234."}'
 ```
 
-응답에는 `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CUSTOMER_ID`, `EMPLOYEE_ID` 토큰이
+응답에는 `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CUSTOMER_ID`, `EMPLOYEE_ID` 불투명 토큰이
 포함되어야 합니다. 사람 이름은 안정적인 식별자 형식이 아니라 의미 기반 엔티티이므로
 정규식 전용 프로필은 이를 추측하지 않습니다. `PERSON` 탐지가 필요하면 Presidio 또는
 아래의 선택적 OpenNLP 프로필처럼 구성된 NER 분석기를 사용하세요.
@@ -159,10 +161,33 @@ curl "http://127.0.0.1:8080/demo/tool-loop" \
 
 도구에 원문으로 전달할 개인정보 유형은 `spring.ai.privacy.tools.disclosures`에
 설정합니다. 샘플은 `PrivacyToolCallbackFactory`로 도구를 감싸고,
-`PrivacyChatClientConfigurer`로 클라이언트에 개인정보 보호를 적용합니다.
+`PrivacySecurityChatClientFactory`로 클라이언트를 생성해 개인정보 보호와 도구 권한
+검사를 함께 적용합니다.
 
 `/demo/tool-loop`는 샘플에 포함된 로컬 CRM 도구를 호출하므로 외부 CRM 서비스가
 필요하지 않습니다.
+
+## Spring Security 도구 권한 경계 데모
+
+```bash
+curl "http://127.0.0.1:8080/demo/security-tool-boundary" \
+  -H 'Accept-Language: ko'
+```
+
+이 엔드포인트는 두 예제 사용자로 같은 고객정보 조회 요청을 실행합니다. 로컬 모델은
+도구가 목록에서 숨겨져도 의도적으로 조회 도구를 요청해, 도구 목록의 필터링뿐 아니라
+실행 차단도 확인합니다.
+
+일반 직원(`ROLE_EMPLOYEE`)의 요청에서는 `customerLookup`을 모델에 제공하는 도구 목록에서
+제외하며, 모델이 이 도구의 호출을 요청해도 콜백 실행 전에 거부합니다. 고객지원 담당자
+(`ROLE_CUSTOMER_SUPPORT`)의 요청에서는 도구를 공개하고 한 번 실행합니다. 기존 원문 공개
+정책에 따라 `CUSTOMER_ID`만 복원하며, 결과는 모델에 다시 전달하기 전에 보호합니다. 샘플은
+프로세스 내부의 고정 권한 정책을 사용하므로 로그인, 인증 토큰 발급 서비스, 외부 모델 또는 외부
+서비스가 필요하지 않습니다.
+
+<p align="center">
+  <img src="../../docs/images/privacy-boundary-inspector-security-ko.png" alt="일반 직원의 도구 호출 거부와 고객지원 담당자의 도구 호출 허용을 비교하는 Security Inspector" width="960">
+</p>
 
 ## Streamable HTTP MCP 도구 루프 데모
 
@@ -201,7 +226,7 @@ chmod 600 samples/spring-ai-demo/.env
 로컬 파일의 값보다 우선합니다.
 
 이 검증 구성은 동기 호출, 스트리밍, 도구 루프, `returnDirect` 경로를 다룹니다. 모델
-경계 보호, 범위가 제한된 CRM 공개, 결과 재토큰화, 애플리케이션 출력 정책, 세션 정리를
+경계 보호, 범위가 제한된 CRM 공개, 도구 결과의 개인정보 토큰화, 애플리케이션 출력 정책, 세션 정리를
 검증합니다. 성공 요약에는 요청·응답 내용과 자격 증명이 포함되지 않습니다. 모델 제공자와
 JUnit 실패는 원래 SDK 진단을 유지하므로 실패한 실행 로그에는 엔드포인트 응답이 포함될
 수 있습니다.
@@ -270,7 +295,7 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
   -d '{"text":"John Smith joined the board."}'
 ```
 
-응답은 `John Smith`를 `PERSON` 토큰으로 바꿔야 합니다. 탐지 범위는 오프셋 `0..10`을
+응답은 `John Smith`를 `PERSON` 불투명 토큰으로 바꿔야 합니다. 탐지 범위는 오프셋 `0..10`을
 포함하고 `providers: ["OPENNLP"]`를 보고해야 합니다. `successfulProviders`에는
 `OPENNLP`와 `REGEX`가 모두 포함됩니다. OpenNLP 모델은 해당 범위를 찾았고 계속
 활성화된 정규식 분석기는 그 범위의 근거를 만들지 않았지만 성공적으로 완료되었기

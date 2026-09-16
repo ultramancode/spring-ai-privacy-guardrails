@@ -516,7 +516,8 @@ integration test.
 
 ## Per-Tool Original Disclosure
 
-Privacy-protected tools receive detected PII as tokens by default. If a tool
+Privacy-protected tools receive detected PII as **opaque tokens** by default.
+These replacement strings do not directly reveal the original values. If a tool
 needs original values, specify the entity types it may receive in
 `tools.disclosures`.
 
@@ -605,7 +606,7 @@ spring:
 When output protection is enabled, the configured policy is applied to PII
 returned from the model or tools to the application.
 
-- `TOKENIZE` consistently replaces the same PII value with the same token within
+- `TOKENIZE` consistently replaces the same PII value with the same opaque token within
   one request.
 - `REDACT` replaces PII with a typed marker that cannot be restored to the
   original value.
@@ -632,8 +633,9 @@ additional model call only when every tool selected in one model response has
 `returnDirect = true`. Otherwise, tool results are returned to the model.
 
 Even when `output.enabled=false`, PII in a directly returned `returnDirect`
-result remains tokenized. When output protection is enabled, the final result is
-processed according to the configured `TOKENIZE`, `REDACT`, or `BLOCK` policy.
+result remains in the form of opaque tokens. When output protection is enabled,
+the final result is processed according to the configured `TOKENIZE`, `REDACT`,
+or `BLOCK` policy.
 
 ### Final Model Output Inspection
 
@@ -643,7 +645,7 @@ inputs, model-call boundaries, or tool results.
 
 | `output.enabled` | Final model-output inspection | Delivery behavior |
 | --- | --- | --- |
-| `false` | No | The final model output is not inspected separately. Streaming calls may deliver model-generated text incrementally. Other privacy boundaries and fail-safe tokenization of `returnDirect` results remain active. |
+| `false` | No | The final model output is not inspected separately. Streaming calls may deliver model-generated text incrementally. Other privacy boundaries remain active, and PII in `returnDirect` results is still replaced with opaque tokens. |
 | `true` | Yes | The complete response is inspected, then `TOKENIZE`, `REDACT`, or `BLOCK` is applied before delivery. |
 
 The Spring AI streaming API remains usable when output protection is enabled,
@@ -709,10 +711,10 @@ Applications that use the starters do not need to manage the sessions or value
 structures described below.
 
 When using `PrivacyService` directly, open a `PrivacySession` first.
-`session.handle()` identifies the session to use for analysis, tokenization,
-and restoration. This example tokenizes the source text and then restores only
-customer IDs (`CUSTOMER_ID`), whose disclosure the application has allowed,
-within the same session.
+`session.handle()` identifies the session to use for PII analysis, tokenization,
+and restoration. This example replaces PII in the source text with opaque tokens
+and then restores only customer IDs (`CUSTOMER_ID`), whose disclosure the
+application has allowed, within the same session.
 
 ```java
 try (PrivacySession session = privacyService.openSession()) {
@@ -726,9 +728,9 @@ try (PrivacySession session = privacyService.openSession()) {
 ```
 
 Only the types passed as the third argument to `detokenize(...)` are restored;
-tokens for other types remain protected. Choose these types according to the
+opaque tokens for other types remain protected. Choose these types according to the
 application's disclosure policy. Once the try block ends and the session closes,
-its tokens can no longer be restored. Passing an unknown or closed session
+its opaque tokens can no longer be restored. Passing an unknown or closed session
 `handle` raises an error.
 
 `tokenizeValueTree()` and `detokenizeValueTree()` operate on JSON-compatible
@@ -775,8 +777,8 @@ The example uses the following values and objects:
 | `customerLookup` | The original `ToolCallback` whose input you want to inspect. Create a test tool or use the application's tool callback you want to verify. |
 | `"Alice"`, `"alice@example.com"` | Example name and email values used to check PII detection and delivery. Use matching values in the test input and assertions. |
 
-For this test, use the `PERSON` token from the model input in the tool-call
-arguments produced by `testModel`. This lets the test verify that the token is
+For this test, use the `PERSON` opaque token from the model input in the tool-call
+arguments produced by `testModel`. This lets the test verify that the opaque token is
 restored to `"Alice"` before it reaches the tool.
 
 ```java
@@ -908,7 +910,7 @@ The available error types and their detailed meaning are documented in the
 | `phase()` | Meaning |
 | --- | --- |
 | `ANALYSIS` | PII detection and analysis |
-| `TOKENIZATION` | Replace PII with opaque tokens |
+| `TOKENIZATION` | PII tokenization |
 | `REDACTION` | Replace PII with redaction markers |
 | `DETOKENIZATION` | Restore authorized original values |
 | `SESSION` | Privacy-session processing |

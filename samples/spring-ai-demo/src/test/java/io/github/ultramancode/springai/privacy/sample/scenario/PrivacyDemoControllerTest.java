@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -50,7 +50,7 @@ class PrivacyDemoControllerTest {
                         "Model raw exposure"
                 )))
                 .andExpect(content().string(Matchers.containsString(
-                        "Retokenized result"
+                        "Tool result tokenization"
                 )))
                 .andExpect(content().string(Matchers.containsString(
                         "id=\"scenarioSelector\""
@@ -63,6 +63,9 @@ class PrivacyDemoControllerTest {
                 )))
                 .andExpect(content().string(Matchers.containsString(
                         "<option value=\"mcp\">MCP</option>"
+                )))
+                .andExpect(content().string(Matchers.containsString(
+                        "<option value=\"security\">Security</option>"
                 )))
                 .andExpect(content().string(Matchers.containsString(
                         "id=\"languageToggle\""
@@ -116,8 +119,8 @@ class PrivacyDemoControllerTest {
                         "\"status.done\": \"DONE\"",
                         "\"status.done\": \"완료\"",
                         "\"error.returnedHttp\": \"반환 HTTP 상태\"",
-                        "\"flow.sessionsReported\": \"Session cleanup\"",
-                        "\"flow.sessionsReported\": \"세션 정리\"",
+                        "\"flow.sessionsReported\": \"Service-wide active sessions\"",
+                        "\"flow.sessionsReported\": \"서비스 전체 활성 세션\"",
                         "\"analyzer.resolution\": \"Resolution reason\"",
                         "\"analyzer.resolution\": \"판정 이유\"",
                         "Start/end positions are character offsets in the original input.",
@@ -128,12 +131,12 @@ class PrivacyDemoControllerTest {
                         "\"analyzer.start\": \"시작 위치\"",
                         "\"analyzer.end\": \"End offset\"",
                         "\"analyzer.end\": \"끝 위치\"",
-                        "The CRM tool result is tokenized and protected again before model re-entry.",
-                        "CRM 도구 결과는 모델에 다시 전달되기 전에 재토큰화되어 보호됩니다.",
+                        "Detected PII in the CRM tool result is replaced with opaque tokens before returning to the model.",
+                        "CRM 도구 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 불투명 토큰으로 바뀝니다.",
                         "This is the actual document text returned by vector search.",
                         "벡터 검색으로 조회된 실제 문서 원문입니다.",
-                        "Raw PII has been replaced with opaque tokens.",
-                        "원문 개인정보는 불투명 토큰으로 대체되어 있습니다.",
+                        "Detected PII has been replaced with opaque tokens, strings that do not directly reveal the original values.",
+                        "탐지된 개인정보는 불투명 토큰으로 대체되어 있습니다. 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.",
                         "\"rag.evidenceTitle\": \"Backend verification evidence\"",
                         "\"rag.evidenceTitle\": \"백엔드 검증 근거\"",
                         "Displays the /demo/rag backend response values that support the results above.",
@@ -142,8 +145,8 @@ class PrivacyDemoControllerTest {
                         "\"rag.evidenceRetrievedRaw\": \"검색 문서에 원문 PII 포함\"",
                         "data-i18n=\"rag.evidenceModelRaw\">Model context contains raw PII</span>",
                         "\"rag.evidenceModelRaw\": \"모델 컨텍스트에 원문 PII 포함\"",
-                        "data-i18n=\"rag.evidenceModelToken\">Model context contains protected tokens</span>",
-                        "\"rag.evidenceModelToken\": \"모델 컨텍스트에 보호 토큰 포함\"",
+                        "data-i18n=\"rag.evidenceModelToken\">Model context contains opaque tokens</span>",
+                        "\"rag.evidenceModelToken\": \"모델 컨텍스트에 불투명 토큰 포함\"",
                         "data-i18n=\"rag.evidenceActiveSessions\">Service-wide active sessions after call</span>",
                         "\"rag.evidenceActiveSessions\": \"호출 후 서비스 전체 활성 세션\"",
                         "<code>retrievedDocumentContainsRawPii</code>",
@@ -160,28 +163,28 @@ class PrivacyDemoControllerTest {
                         "실제 모델 경계에 전달된 입력입니다.",
                         "data-i18n-aria-label=\"local.boundaryDisclosure\"",
                         "data-i18n-aria-label=\"mcp.boundaryDisclosure\"",
-                        "Within this request, only CUSTOMER_ID is restored to its original value and sent to the CRM tool.",
-                        "Within this request, only CUSTOMER_ID is restored to its original value and sent to the MCP tool.",
-                        "현재 요청 안에서 CUSTOMER_ID만 원문으로 복원되어 CRM 도구에 전달됩니다.",
-                        "현재 요청 안에서 CUSTOMER_ID만 원문으로 복원되어 MCP 도구에 전달됩니다.",
+                        "Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the CRM tool.",
+                        "Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the MCP tool.",
+                        "현재 요청에서는 고객번호(CUSTOMER_ID)만 원문으로 복원해 CRM 도구에 전달합니다.",
+                        "현재 요청에서는 고객번호(CUSTOMER_ID)만 원문으로 복원해 MCP 도구에 전달합니다.",
                         "\"disclosure.before\": \"Before tool boundary\"",
-                        "\"disclosure.tokenized\": \"TOKENIZED\"",
+                        "\"disclosure.tokenized\": \"OPAQUE TOKEN\"",
                         "class=\"disclosure-boundary local-disclosure-boundary\"",
                         "class=\"tool-boundary-focus\"",
                         "class=\"secondary-evidence\"",
                         "\"disclosure.atBoundary\": \"Tool boundary\"",
                         "\"disclosure.customerOnlyRestored\": \"ORIGINAL RESTORED\"",
                         "\"disclosure.customerOnlyRestored\": \"원문 복원\"",
-                        "data-i18n=\"disclosure.localCustomerOnlyRestored\">ONLY · ORIGINAL RESTORED</strong>",
-                        "\"disclosure.localCustomerOnlyRestored\": \"만 원문 복원\"",
+                        "data-i18n=\"disclosure.customerOnlyRestored\">ORIGINAL RESTORED</strong>",
+                        "\"disclosure.customerId\": \"고객번호\"",
                         "\"disclosure.currentRequestOnly\": \"THIS REQUEST ONLY\"",
                         "\"disclosure.currentRequestOnly\": \"현재 요청에서만\"",
                         "\"disclosure.crmLookupSucceeded\": \"CRM lookup succeeded\"",
                         "\"disclosure.crmLookupSucceeded\": \"CRM 조회 성공\"",
                         "\"disclosure.mcpLookupSucceeded\": \"MCP tool lookup succeeded\"",
                         "\"disclosure.mcpLookupSucceeded\": \"MCP 도구 조회 성공\"",
-                        "\"disclosure.othersTokenized\": \"Other PII remains tokenized\"",
-                        "\"disclosure.othersTokenized\": \"다른 PII는 계속 토큰 상태\"",
+                        "\"disclosure.othersTokenized\": \"Other PII stays as opaque tokens\"",
+                        "\"disclosure.othersTokenized\": \"다른 개인정보는 불투명 토큰 유지\"",
                         "\"disclosure.rawOmitted\": \"The restored value is sent only to the tool and is not displayed in this Inspector.\"",
                         "\"disclosure.rawOmitted\": \"실제 복원 값은 도구에만 전달되며, 이 화면에는 표시되지 않습니다.\"",
                         "id=\"allowedDisclosureCheck\"",
@@ -226,15 +229,13 @@ class PrivacyDemoControllerTest {
                         "id=\"mcpAllowedToolMeaning\"",
                         "\"summary.none\": \"NONE\"",
                         "\"summary.none\": \"없음\"",
-                        "\"summary.customerOnly\": \"CUSTOMER_ID ONLY\"",
-                        "\"summary.customerOnly\": \"CUSTOMER_ID만\"",
+                        "\"summary.customerOnly\": \"Customer ID\"",
+                        "\"summary.customerOnly\": \"고객번호\"",
                         "\"rag.present\": \"PRESENT\"",
                         "\"rag.present\": \"있음\"",
-                        "\"rag.protected\": \"PROTECTED\"",
-                        "\"rag.protected\": \"보호됨\"",
-                        "The MCP tool result is retokenized before it is sent back to the model.",
-                        "MCP 도구 결과는 모델로 다시 전달되기 전에 재토큰화됩니다.",
-                        "setStageCompleted(prefix, \"stageCleanup\")"
+                        "Detected PII in the MCP tool result is replaced with opaque tokens before returning to the model.",
+                        "MCP 도구 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 불투명 토큰으로 바뀝니다.",
+                        "setSessionCount(prefix, tool.activeSessionsAfterCall)"
                 )
                 .doesNotContain(
                         "setStageValue(prefix, \"stageCleanup\", tool.activeSessionsAfterCall)",
@@ -275,6 +276,12 @@ class PrivacyDemoControllerTest {
         assertScenarioWiring(page, "local-tool", "/demo/tool-loop", "runLocalTool");
         assertScenarioWiring(page, "rag", "/demo/rag", "runRag");
         assertScenarioWiring(page, "mcp", "/demo/mcp-tool-loop", "runMcp");
+        assertScenarioWiring(
+                page,
+                "security",
+                "/demo/security-tool-boundary",
+                "runSecurity"
+        );
         assertTranslationCoverage(page);
     }
 
@@ -616,6 +623,59 @@ class PrivacyDemoControllerTest {
     }
 
     @Test
+    void securityBoundaryHidesAndBlocksTheToolForGeneralEmployeesButAllowsCustomerSupport()
+            throws Exception {
+        this.mockMvc.perform(get("/demo/security-tool-boundary")
+                        .header(HttpHeaders.ACCEPT_LANGUAGE, "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("actual-spring-security-tool-boundary"))
+                .andExpect(jsonPath("$.requestSummary").value("Look up the customer information."))
+                .andExpect(jsonPath("$.generalEmployee.role").value("ROLE_EMPLOYEE"))
+                .andExpect(jsonPath("$.generalEmployee.exposedToolNames").isEmpty())
+                .andExpect(jsonPath("$.generalEmployee.authorizationChecks[*].phase")
+                        .value(Matchers.hasItem("DEFINITION")))
+                .andExpect(jsonPath("$.generalEmployee.authorizationChecks[*].granted")
+                        .value(Matchers.everyItem(Matchers.is(false))))
+                .andExpect(jsonPath("$.generalEmployee.modelRequestedTool").value(true))
+                .andExpect(jsonPath("$.generalEmployee.toolCallDenied").value(true))
+                .andExpect(jsonPath("$.generalEmployee.denialType")
+                        .value("AuthorizationDeniedException"))
+                .andExpect(jsonPath("$.generalEmployee.callbackInvocations").value(0))
+                .andExpect(jsonPath("$.generalEmployee.deniedCallStoppedBeforeCallback")
+                        .value(true))
+                .andExpect(jsonPath("$.customerSupport.role").value("ROLE_CUSTOMER_SUPPORT"))
+                .andExpect(jsonPath("$.customerSupport.exposedToolNames[0]")
+                        .value("customerLookup"))
+                .andExpect(jsonPath("$.customerSupport.authorizationChecks[*].phase")
+                        .value(Matchers.hasItems("DEFINITION", "EXECUTION")))
+                .andExpect(jsonPath("$.customerSupport.authorizationChecks[*].granted")
+                        .value(Matchers.everyItem(Matchers.is(true))))
+                .andExpect(jsonPath("$.customerSupport.modelRequestedTool").value(true))
+                .andExpect(jsonPath("$.customerSupport.toolCallDenied").value(false))
+                .andExpect(jsonPath("$.customerSupport.callbackInvocations").value(1))
+                .andExpect(jsonPath("$.customerSupport.toolReceivedOnlyAllowedOriginals")
+                        .value(true))
+                .andExpect(jsonPath("$.customerSupport.toolResultRetokenizedBeforeModel")
+                        .value(true))
+                .andExpect(jsonPath("$.customerSupport.finalResponse").value(Matchers.containsString(
+                        "[[PII_CUSTOMER_ID_"
+                )))
+                .andExpect(jsonPath("$.activeSessionsAfterCall").value(0))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("EMP-1234"))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "test@example.com"
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "010-1234-5678"
+                ))))
+                .andExpect(content().string(Matchers.not(Matchers.containsString(
+                        "CUST-123456"
+                ))));
+
+        assertThat(this.privacyService.activeSessionCount()).isZero();
+    }
+
+    @Test
     @Timeout(20)
     void repeatedMcpToolLoopCallsReuseRuntimeAndPreservePrivacyEvidence() throws Exception {
         assertMcpToolLoopEvidence(
@@ -728,7 +788,7 @@ class PrivacyDemoControllerTest {
                         + Pattern.quote(runner)
                         + "\\(scenario,\\s*locale\\)\\s*\\{[^}]*json\\(scenario\\.endpoint,\\s*locale\\)"
         ));
-        if ("mcp".equals(scenarioKey)) {
+        if ("security".equals(scenarioKey)) {
             assertThat(page).containsPattern(Pattern.compile(
                     "else\\s*\\{\\s*await\\s+" + Pattern.quote(runner)
                             + "\\(scenario,\\s*locale\\);"
@@ -758,8 +818,10 @@ class PrivacyDemoControllerTest {
         requiredKeys.addAll(Set.of(
                 "lead.rag",
                 "lead.mcp",
+                "lead.security",
                 "run.rag",
                 "run.mcp",
+                "run.security",
                 "running",
                 "errorPrefix",
                 "error.returnedHttp"

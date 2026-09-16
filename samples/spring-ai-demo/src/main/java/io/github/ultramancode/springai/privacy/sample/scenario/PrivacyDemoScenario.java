@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import java.util.List;
 import java.util.Locale;

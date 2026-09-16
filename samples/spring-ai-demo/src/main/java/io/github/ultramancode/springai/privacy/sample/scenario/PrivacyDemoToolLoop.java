@@ -1,7 +1,7 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
@@ -14,7 +14,10 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import reactor.core.publisher.Flux;
 import tools.jackson.databind.ObjectMapper;
 
@@ -27,7 +30,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-final class PrivacyDemoToolLoop {
+public final class PrivacyDemoToolLoop {
 
     private static final PrivacyDemoScenario SCENARIO = PrivacyDemoScenario.DEFAULT;
     private static final List<String> RAW_VALUES = SCENARIO.originalValues();
@@ -48,62 +51,164 @@ final class PrivacyDemoToolLoop {
             CUSTOMER_ID_TOKEN_PATTERN
     );
 
-    private final PrivacyChatClientConfigurer privacyConfigurer;
+    private final PrivacySecurityChatClientFactory privacySecurityFactory;
     private final PrivacyToolCallbackFactory toolCallbackFactory;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
+    private final ToolCallingManager toolCallingManager;
+    private final PrivacyDemoSecurityPolicy securityPolicy;
     private final ObjectMapper objectMapper;
 
-    PrivacyDemoToolLoop(
-            PrivacyChatClientConfigurer privacyConfigurer,
+    public PrivacyDemoToolLoop(
+            PrivacySecurityChatClientFactory privacySecurityFactory,
             PrivacyToolCallbackFactory toolCallbackFactory,
             ToolDisclosurePolicy toolDisclosurePolicy,
+            ToolCallingManager toolCallingManager,
+            PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
-        this.privacyConfigurer = privacyConfigurer;
+        this.privacySecurityFactory = privacySecurityFactory;
         this.toolCallbackFactory = toolCallbackFactory;
         this.toolDisclosurePolicy = toolDisclosurePolicy;
+        this.toolCallingManager = toolCallingManager;
+        this.securityPolicy = securityPolicy;
         this.objectMapper = objectMapper;
     }
 
     Result run(String input, PrivacyDemoLocale locale) {
-        DemoToolLoopModel model = new DemoToolLoopModel(this.objectMapper, "CRM", locale);
+        PrivacyDemoSecurityPolicy.AuthenticatedRun<Attempt> authenticatedRun =
+                this.securityPolicy.runAs(
+                        PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT,
+                        () -> execute(input, locale)
+                );
+        Attempt attempt = authenticatedRun.value();
+        if (attempt.denial() != null) {
+            throw attempt.denial();
+        }
+        return attempt.result();
+    }
+
+    SecurityRun runSecurityScenario(
+            String input,
+            PrivacyDemoLocale locale,
+            PrivacyDemoSecurityPolicy.Role role
+    ) {
+        PrivacyDemoSecurityPolicy.AuthenticatedRun<Attempt> authenticatedRun =
+                this.securityPolicy.runAs(role, () -> execute(input, locale));
+        return SecurityRun.from(role, authenticatedRun);
+    }
+
+    private Attempt execute(String input, PrivacyDemoLocale locale) {
+        DemoToolLoopModel model = new DemoToolLoopModel(
+                this.objectMapper,
+                "CRM",
+                locale,
+                this.toolCallingManager
+        );
         PrivacyDemoCrmTool delegate = new PrivacyDemoCrmTool(this.objectMapper);
         ToolCallback scopedTool = this.toolCallbackFactory.wrap(delegate);
 
-        ChatClient.Builder builder = ChatClient.builder(model).defaultTools(scopedTool);
-        this.privacyConfigurer.configure(builder);
-        String finalResponse = builder.build().prompt().user(input).call().content();
+        ChatClient.Builder builder = this.privacySecurityFactory.builder(model)
+                .defaultTools(scopedTool);
+        String finalResponse;
+        try {
+            finalResponse = builder.build().prompt().user(input).call().content();
+        }
+        catch (AuthorizationDeniedException denial) {
+            return new Attempt(model, delegate, null, denial);
+        }
 
-        return new Result(
+        List<String> allowedOriginalEntityTypes = this.toolDisclosurePolicy.scopeFor(delegate.getToolDefinition())
+                .entityTypes()
+                .stream()
+                .sorted()
+                .toList();
+        BoundaryEvidence boundaryEvidence = new BoundaryEvidence(
+                EvidenceCount.expectedNone(model.rawValueCount(), RAW_VALUES.size()),
+                EvidenceCount.expectedNone(
+                        delegate.deniedRawValueCount(),
+                        DENIED_TOOL_VALUES.size()
+                ),
+                EvidenceCount.expectedAll(
+                        delegate.allowedRawValueCount(),
+                        ALLOWED_TOOL_VALUES.size()
+                ),
+                EvidenceCount.expectedNone(
+                        model.rawToolResultValueCountAtModel(),
+                        RAW_VALUES.size()
+                )
+        );
+
+        Result result = new Result(
                 model.calls(),
                 !model.rawPiiSeenByModel(),
                 model.protectedModelInput(),
                 model.issuedToolArguments(),
-                this.toolDisclosurePolicy.scopeFor(delegate.getToolDefinition())
-                        .entityTypes()
-                        .stream()
-                        .sorted()
-                        .toList(),
+                allowedOriginalEntityTypes,
                 delegate.receivedOnlyAllowedOriginals(),
                 delegate.lookupSucceededWithRestoredCustomerId(),
                 model.protectedToolResultSeenByModel(),
-                new BoundaryEvidence(
-                        EvidenceCount.expectedNone(model.rawValueCount(), RAW_VALUES.size()),
-                        EvidenceCount.expectedNone(
-                                delegate.deniedRawValueCount(),
-                                DENIED_TOOL_VALUES.size()
-                        ),
-                        EvidenceCount.expectedAll(
-                                delegate.allowedRawValueCount(),
-                                ALLOWED_TOOL_VALUES.size()
-                        ),
-                        EvidenceCount.expectedNone(
-                                model.rawToolResultValueCountAtModel(),
-                                RAW_VALUES.size()
-                        )
-                ),
+                boundaryEvidence,
                 finalResponse
         );
+        return new Attempt(model, delegate, result, null);
+    }
+
+    record SecurityRun(
+            String role,
+            List<String> exposedToolNames,
+            List<PrivacyDemoSecurityPolicy.AuthorizationCheck> authorizationChecks,
+            boolean modelRequestedTool,
+            String denialType,
+            int callbackInvocations,
+            Result completedResult
+    ) {
+
+        private static SecurityRun from(
+                PrivacyDemoSecurityPolicy.Role role,
+                PrivacyDemoSecurityPolicy.AuthenticatedRun<Attempt> authenticatedRun
+        ) {
+            Attempt attempt = authenticatedRun.value();
+            AuthorizationDeniedException denial = attempt.denial();
+            String denialType = denial == null ? null : denial.getClass().getSimpleName();
+
+            return new SecurityRun(
+                    role.authority(),
+                    attempt.model().exposedToolNames(),
+                    authenticatedRun.checks(),
+                    attempt.model().issuedToolArguments() != null,
+                    denialType,
+                    attempt.delegate().calls(),
+                    attempt.result()
+            );
+        }
+
+        boolean toolCallDenied() {
+            return this.denialType != null;
+        }
+
+        boolean deniedCallStoppedBeforeCallback() {
+            return toolCallDenied() && this.callbackInvocations == 0;
+        }
+
+        boolean toolReceivedOnlyAllowedOriginals() {
+            return this.completedResult != null && this.completedResult.toolReceivedOnlyAllowedOriginals();
+        }
+
+        boolean toolResultRetokenizedBeforeModel() {
+            return this.completedResult != null && this.completedResult.toolResultRetokenizedBeforeModel();
+        }
+
+        String finalResponse() {
+            return this.completedResult == null ? null : this.completedResult.finalResponse();
+        }
+    }
+
+    private record Attempt(
+            DemoToolLoopModel model,
+            PrivacyDemoCrmTool delegate,
+            Result result,
+            AuthorizationDeniedException denial
+    ) {
     }
 
     record Result(
@@ -150,7 +255,9 @@ final class PrivacyDemoToolLoop {
         private final ObjectMapper objectMapper;
         private final String protectedResultSource;
         private final PrivacyDemoLocale locale;
+        private final ToolCallingManager toolCallingManager;
         private final Set<String> rawValuesSeenByModel = new LinkedHashSet<>();
+        private List<String> exposedToolNames = List.of();
         private int calls;
         private boolean protectedToolResultSeenByModel;
         private int rawToolResultValueCountAtModel;
@@ -158,11 +265,11 @@ final class PrivacyDemoToolLoop {
         private String issuedToolArguments;
 
         DemoToolLoopModel(ObjectMapper objectMapper) {
-            this(objectMapper, "CRM", PrivacyDemoLocale.EN);
+            this(objectMapper, "CRM", PrivacyDemoLocale.EN, null);
         }
 
         DemoToolLoopModel(ObjectMapper objectMapper, String protectedResultSource) {
-            this(objectMapper, protectedResultSource, PrivacyDemoLocale.EN);
+            this(objectMapper, protectedResultSource, PrivacyDemoLocale.EN, null);
         }
 
         DemoToolLoopModel(
@@ -170,13 +277,24 @@ final class PrivacyDemoToolLoop {
                 String protectedResultSource,
                 PrivacyDemoLocale locale
         ) {
+            this(objectMapper, protectedResultSource, locale, null);
+        }
+
+        DemoToolLoopModel(
+                ObjectMapper objectMapper,
+                String protectedResultSource,
+                PrivacyDemoLocale locale,
+                ToolCallingManager toolCallingManager
+        ) {
             this.objectMapper = objectMapper;
             this.protectedResultSource = protectedResultSource;
             this.locale = locale;
+            this.toolCallingManager = toolCallingManager;
         }
 
         @Override
         public ChatResponse call(Prompt prompt) {
+            resolveExposedTools(prompt);
             this.calls++;
             recordRawValues(prompt);
 
@@ -218,6 +336,20 @@ final class PrivacyDemoToolLoop {
             return response(new AssistantMessage(
                     this.locale.protectedResult(this.protectedResultSource, toolResult)
             ));
+        }
+
+        private void resolveExposedTools(Prompt prompt) {
+            if (this.toolCallingManager == null) {
+                return;
+            }
+            if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) {
+                throw new IllegalStateException("Expected tool-calling options");
+            }
+            this.exposedToolNames = this.toolCallingManager.resolveToolDefinitions(options)
+                    .stream()
+                    .map(ToolDefinition::name)
+                    .sorted()
+                    .toList();
         }
 
         private void recordRawValues(Prompt prompt) {
@@ -291,6 +423,10 @@ final class PrivacyDemoToolLoop {
 
         String protectedModelInput() {
             return this.protectedModelInput;
+        }
+
+        List<String> exposedToolNames() {
+            return this.exposedToolNames;
         }
     }
 

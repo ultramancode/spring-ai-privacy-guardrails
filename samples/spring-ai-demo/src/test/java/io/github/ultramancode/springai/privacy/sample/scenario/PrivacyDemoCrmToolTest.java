@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import org.junit.jupiter.api.Test;
 import tools.jackson.core.type.TypeReference;

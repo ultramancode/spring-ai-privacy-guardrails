@@ -4,14 +4,16 @@
 
 This runnable sample shows how PII is protected before reaching the model and
 which original values are allowed through to tools. The default configuration
-uses a local `ChatModel` provided by the sample, so no external LLM API key is required:
+uses a local `ChatModel` provided by the sample, so no external LLM API key is required.
+Detected PII is replaced with **opaque tokens**, replacement strings that do not
+directly reveal the original values.
 
 ```text
-raw user input -> tokenized model prompt -> restore only allowed originals for tools
--> tool result retokenization
+raw user input -> tokenize PII in the model prompt
+-> restore only allowed originals for tools -> tokenize PII in tool results
 ```
 
-Demo responses do not serialize token mappings, but unmatched text can still be
+Demo responses do not serialize opaque token mappings, but unmatched text can still be
 returned unchanged. Custom text is accepted only in a POST body so it is not
 copied into URLs, browser history, or ordinary access-log request lines.
 
@@ -29,7 +31,7 @@ The demo binds only to `http://127.0.0.1:8080`.
 ### Privacy Boundary Inspector
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
-Inspector**. Use the `Local Tool | RAG | MCP` selector to run the demos from one
+Inspector**. Use the `Local Tool | RAG | MCP | Security` selector to run the demos from one
 page. Each view displays results returned by its demo endpoints.
 
 <p align="center">
@@ -40,9 +42,10 @@ page. Each view displays results returned by its demo endpoints.
 
 | Inspector view | Backend requests | Results to check |
 | --- | --- | --- |
-| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Check the localized example input, detection positions (`detectedSpans`), tokens sent to the model, restoration of only the customer ID for the tool, and protection of the tool result. |
+| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Check the localized example input, detection positions (`detectedSpans`), opaque tokens sent to the model, restoration of only the customer ID for the tool, and protection of the tool result. |
 | `RAG` | `GET /demo/rag` | Compare the original retrieved document (`retrievedDocument`) with the complete protected prompt sent to the model (`modelVisibleContext`). |
 | `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | Check that a local Streamable HTTP MCP call also protects model input, restores only the customer ID for the tool, and protects the tool result. |
+| `Security` | `GET /demo/security-tool-boundary` | Backend-recorded definition and execution decisions for the same customer lookup request as a general employee and a customer-support employee, callback counts, and privacy evidence from the allowed run. |
 
 The `EN | 한국어` toggle sends `Accept-Language: en` or `ko` with these
 requests and reruns the selected flow. This changes the UI labels, example
@@ -78,8 +81,8 @@ curl "http://127.0.0.1:8080/demo/rag" \
 
 This endpoint retrieves a fixed synthetic document from an in-memory
 `SimpleVectorStore`. The response includes the raw retrieved document and the
-tokenized context actually received by the local model. This
-confirms that retrieved PII is tokenized before model execution. No external
+protected context actually received by the local model. This
+confirms that retrieved PII is replaced with opaque tokens before model execution. No external
 vector store, embedding service, or model is used.
 
 ## Regex-Only Protection
@@ -107,10 +110,10 @@ Expected shape:
 }
 ```
 
-The token format shown in this example may change. Application logic must not
-parse token internals or depend on a specific format.
+The opaque token format shown in this example may change. Application logic must not
+parse opaque token internals or depend on a specific format.
 
-Tokens are unique to each request. Calling the endpoint twice with the same
+Opaque tokens are unique to each request. Calling the endpoint twice with the same
 input produces different opaque tokens.
 Each span's `providers` list identifies analyzers whose findings contributed to that result.
 `successfulProviders` lists analyzers that completed successfully, including
@@ -134,7 +137,7 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
 ```
 
 The response should contain `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CUSTOMER_ID`,
-and `EMPLOYEE_ID` tokens. Person names are semantic entities rather than stable
+and `EMPLOYEE_ID` opaque tokens. Person names are semantic entities rather than stable
 identifier formats, so the regex-only profile does not guess them. Use a
 configured NER provider such as Presidio or the optional OpenNLP profile below
 when `PERSON` detection is required.
@@ -161,11 +164,35 @@ showing that this request leaked a session.
 
 Set the PII types each tool may receive as original values in
 `spring.ai.privacy.tools.disclosures`. The sample wraps tools with
-`PrivacyToolCallbackFactory` and applies privacy protection to the client with
-`PrivacyChatClientConfigurer`.
+`PrivacyToolCallbackFactory` and creates the client with
+`PrivacySecurityChatClientFactory` to apply both privacy protection and tool
+authorization.
 
 The `/demo/tool-loop` endpoint calls a local CRM tool included in the sample,
 so no external CRM service is required.
+
+## Spring Security Tool Boundary Demo
+
+```bash
+curl "http://127.0.0.1:8080/demo/security-tool-boundary" \
+  -H 'Accept-Language: en'
+```
+
+This endpoint runs the same customer lookup request as two sample users.
+The local model deliberately requests the tool even when it is hidden, to verify
+execution blocking independently of tool-list filtering.
+
+For a general employee (`ROLE_EMPLOYEE`), `customerLookup` is absent from the
+model-visible definitions and the forced request is denied before the callback
+runs. For a customer-support employee (`ROLE_CUSTOMER_SUPPORT`), the tool is
+exposed and executed once; the existing disclosure policy restores only
+`CUSTOMER_ID`, and the result is protected again before model re-entry. The
+sample installs a fixed in-process authorization policy and requires no login,
+authentication token issuer, external model, or external service.
+
+<p align="center">
+  <img src="../../docs/images/privacy-boundary-inspector-security.png" alt="Security Inspector comparing a blocked general employee with an authorized customer-support employee" width="960">
+</p>
 
 ## Streamable HTTP MCP Tool Loop Demo
 
@@ -205,8 +232,9 @@ The task requires `OPENAI_COMPATIBLE_API_KEY`,
 environment variables take precedence over values in the ignored local file.
 
 The harness covers blocking, streaming, tool-loop, and `returnDirect` paths. It
-checks model-bound protection, scoped CRM disclosure, result retokenization,
-application output policy, and session cleanup. Successful summaries omit
+checks model-bound protection, scoped CRM disclosure, PII tokenization of tool
+results, application output policy, and session cleanup.
+Successful summaries omit
 payloads and credentials. Provider and JUnit failures retain original SDK
 diagnostics, so failed-run logs may contain endpoint responses.
 
@@ -275,7 +303,7 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
   -d '{"text":"John Smith joined the board."}'
 ```
 
-The response should replace `John Smith` with a `PERSON` token. Its detected
+The response should replace `John Smith` with a `PERSON` opaque token. Its detected
 span should cover offsets `0..10` and report `providers: ["OPENNLP"]`.
 `successfulProviders` contains both `OPENNLP` and `REGEX`: the OpenNLP model
 found the span, while the still-enabled regex analyzer also completed

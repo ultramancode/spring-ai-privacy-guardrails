@@ -18,7 +18,9 @@ not guarantee accuracy or latency in a production environment.
 The demo's Regex analyzer uses the same configuration as the runnable sample and
 is tested against a synthetic dataset. The test checks that the expected entity
 types and raw values are detected, those raw values are absent from the
-tokenized output, and request sessions are cleaned up.
+protected output, and request sessions are cleaned up. Detected PII is replaced
+with **opaque tokens**, replacement strings that do not directly reveal the
+original values.
 
 To run only the regression test with the default demo configuration:
 
@@ -50,13 +52,13 @@ The matrix records privacy boundaries verified by reproducible automated tests.
 
 | Boundary | Verified behavior | Test |
 | --- | --- | --- |
-| Direct prompt → model | Raw detected PII is replaced with an opaque request-scoped token before the model call. | [`PrivacyChatClientIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatClientIntegrationTest.java) |
-| Spring AI chat memory → model copy | Stored memory can retain application-owned raw text while the copy sent to the model is tokenized. | [`PrivacyChatMemoryIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatMemoryIntegrationTest.java) |
+| Direct prompt → model | Raw detected PII is replaced with a request-scoped opaque token before the model call. | [`PrivacyChatClientIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatClientIntegrationTest.java) |
+| Spring AI chat memory → model copy | Stored memory can retain application-owned raw text while detected PII in the copy sent to the model is replaced with opaque tokens. | [`PrivacyChatMemoryIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatMemoryIntegrationTest.java) |
 | Spring AI VectorStore RAG → model | When retrieval returns a document containing detected PII, the raw value is replaced with an opaque token before the model call. | [`PrivacyVectorStoreRagIntegrationTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyVectorStoreRagIntegrationTest.java) |
 | Allowed tool input value disclosure | A scoped tool receives originals only for explicitly allowed entity types. | [`PrivacyToolCallbackWrapperTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
 | Denied tool input value disclosure | Raw values of disallowed inputs remain protected. | [`PrivacyToolCallbackWrapperTest`](../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
-| Tool result → model | Detected PII in tool results is re-tokenized before returning to the model. | [`PrivacySequentialToolIntegrationTest`](../spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
-| MCP Streamable HTTP tool round trip | The local MCP round trip restores only allowed input values, keeps denied values protected, and re-protects results before they return to the model. | [`McpToolLoopIntegrationTest`](../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/McpToolLoopIntegrationTest.java) |
+| Tool result → model | Detected PII in tool results is replaced with opaque tokens before returning to the model. | [`PrivacySequentialToolIntegrationTest`](../spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
+| MCP Streamable HTTP tool round trip | The local MCP round trip restores only allowed input values, keeps denied values protected, and re-protects results before they return to the model. | [`McpToolLoopIntegrationTest`](../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/scenario/McpToolLoopIntegrationTest.java) |
 | Spring Security tool discovery and execution authorization | Only allowed tools are shown to the model, and every tool requested in one response is authorized before any starts. Permission is checked again immediately before each tool runs. When privacy protection is also used, original PII is restored only after authorization. | [`SpringSecurityToolBoundaryIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java), [`ToolAuthorizationStandaloneIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/ToolAuthorizationStandaloneIntegrationTest.java) |
 | Tool Search and tool changes | Only allowed tools are registered for search, and selected tools are checked against those registered at the start of the request. Requests for denied tools by name and unsupported tool additions or replacements during the request are rejected before execution. | [`SpringSecurityToolSearchIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolSearchIntegrationTest.java), [`SpringSecurityToolMutationIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolMutationIntegrationTest.java) |
 | Tool authorization across call types | Tool permissions are checked using the user's authentication obtained at the start of the request. Tools do not execute without authentication. See [Authentication Handling for Tool Authorization](#authentication-handling-for-tool-authorization) for detailed checks. | [`SpringSecurityContextPropagationIntegrationTest`](../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityContextPropagationIntegrationTest.java) |
@@ -98,7 +100,7 @@ For authentication propagation setup and applicable conditions, see
 ## JMH Benchmarks
 
 The repository's JMH benchmarks measure execution time for key local processing
-paths, including Regex analysis, request-scoped tokenization, tool-boundary
+paths, including Regex analysis, request-scoped PII tokenization, tool-boundary
 processing, and detokenization. In the same environment, the results can be
 used to compare scaling behavior and version-to-version performance changes.
 

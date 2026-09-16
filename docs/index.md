@@ -8,8 +8,9 @@ Keep detected PII out of the model. Reveal only what each trusted tool needs.
 Protect every tool result before returning it to the model or application.
 
 Detection answers **what text is sensitive**. Spring AI Privacy Guardrails
-uses those findings to **protect values sent to models and tools** and limits
-which original values each tool may receive.
+tokenizes detected PII before sending it to a model. Each detected value is
+replaced with an **opaque token**, a string that does not directly reveal the
+original value. It also limits which original values each tool may receive.
 
 The optional [Spring Security integration](security.md) controls which tools
 are shown to the model and checks authorization before tool execution. It can
@@ -21,9 +22,10 @@ Featured on the Spring Blog:
 ## See It in Action
 
 The Privacy Boundary Inspector lets you compare the values received by the
-model and tools in Local Tool, RAG, and MCP scenarios.
+model and tools in Local Tool, RAG, and MCP scenarios. Security compares tool
+access for users with different roles.
 
-![Privacy Boundary Inspector comparing model and tool inputs in Local Tool, RAG, and MCP scenarios](images/privacy-boundary-inspector-demo.gif)
+![Privacy Boundary Inspector comparing model and tool inputs in Local Tool, RAG, MCP, and Security scenarios](images/privacy-boundary-inspector-demo.gif)
 
 See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 
@@ -48,7 +50,7 @@ The default sample uses a local `ChatModel` and requires no external model API k
 ```
 
 Open `http://127.0.0.1:8080` to check how PII is protected in Local Tool, RAG,
-and MCP scenarios.
+and MCP scenarios, and compare role-based tool access in Security.
 
 See the [Sample / Demo Guide](sample.md) for the Inspector workflow and the
 [full sample application guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md)

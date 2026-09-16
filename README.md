@@ -24,8 +24,9 @@
 **Detect PII with built-in and pluggable analyzers. Control where original
 values may travel.**
 
-When protection is applied to a `ChatClient`, PII detected by analyzers is
-replaced with request-scoped tokens before the input is sent to the model.
+When protection is applied to a `ChatClient`, **PII tokenization** replaces detected
+values with request-scoped **opaque tokens** before the input is sent to the model.
+These replacement strings do not directly reveal the original values.
 Immediately before a protected tool runs, original values are restored only for
 the entity types allowed by policy, and the tool result is protected again.
 Final-response inspection can be enabled when needed.
@@ -40,19 +41,22 @@ be used independently of PII protection.
 
 ## Why It Exists
 
-Detection is the first step. This library turns findings from built-in and
-pluggable analyzers into request-scoped policy at the model, tool, and output
-boundaries.
+**Detection is the first step. Control where original values go.**
+
+Detected PII is sent to the model as opaque tokens. Tools receive only the originals
+allowed by policy, and tool results are protected before they return to the model.
+
+With the optional Spring Security integration, the model sees only tools authorized
+for the user, and permissions are checked again immediately before execution.
 
 ```mermaid
-flowchart LR
-    A["Input · Memory · RAG"] --> B["PII detection"]
-    B --> C["core policy<br/>validation · normalization · tokenization"]
-    C --> D["Model boundary"]
-    D -. "Tool call" .-> E["Tool boundary<br/>restore only allowed originals"]
-    E -. "Re-protected result" .-> D
-    D --> F["Output boundary"]
-    F --> G["Application"]
+flowchart TD
+    A["Input · Memory · RAG"] --> B["Detect PII<br/>then tokenize it"]
+    B --> C["Model"]
+    C -. "Tool call" .-> D["Tool<br/>(originals only for permitted types)"]
+    D -. "Tokenize PII<br/>in the result" .-> C
+    C --> E["Inspect final response<br/>(when output protection is enabled)"]
+    E --> F["Application"]
 ```
 
 ## Run the Sample
@@ -68,7 +72,7 @@ repository root:
 Open `http://127.0.0.1:8080` to use the sample's **Privacy Boundary
 Inspector**. Compare the values the model and tools actually receive:
 
-- **Local Tool** shows detected PII replaced with tokens before reaching the
+- **Local Tool** shows detected PII replaced with opaque tokens before reaching the
   model. Only the allowed `CUSTOMER_ID` is restored for the tool, and its result
   is protected before being sent back to the model.
 - **RAG** compares the original retrieved document with the protected prompt
@@ -81,9 +85,9 @@ Inspector**. Compare the values the model and tools actually receive:
 </p>
 
 Text not matched by the demo's detection rules may be returned unchanged by the
-local model, and the Inspector does not expose token mappings. The
-[Sample Guide](samples/spring-ai-demo/README.md) covers the Local Tool, RAG, and
-runtime MCP demos plus optional Presidio, OpenNLP, and real-model integration.
+local model, and the Inspector does not expose opaque token mappings. The
+[Sample Guide](samples/spring-ai-demo/README.md) covers the Local Tool, RAG, MCP,
+and Security demos plus optional Presidio, OpenNLP, and real-model integration.
 
 The default repository checks do not call remote models. See the
 [Privacy Boundary Verification Matrix](docs/evaluation.md#privacy-boundary-verification-matrix)
@@ -267,7 +271,7 @@ required APIs, and supported paths.
 </p>
 
 - Each protected request uses an isolated `PrivacySession`. Detected PII in
-  supported model input, including memory and RAG content, is tokenized before
+  supported model input, including memory and RAG content, is replaced with opaque tokens before
   the model call.
 - Protected tools receive only original values allowed by policy. Structured
   tool input remains least-privilege, and tool results are protected again
@@ -286,7 +290,7 @@ Applications can optionally register a `PrivacyEnforcementObserver` to receive
 privacy enforcement events at supported model, tool-input, tool-result, and
 application-output boundaries. Each event contains only `boundary`, identifying
 where it occurred, and `outcome`, describing the result at that boundary. It does
-not include PII, tokens, payloads, tool names, or request identifiers.
+not include PII, opaque tokens, payloads, tool names, or request identifiers.
 
 See [Privacy-Safe Runtime Observation](docs/configuration.md#privacy-safe-runtime-observation)
 for registration, outcome semantics, and callback execution guidance.
@@ -298,7 +302,7 @@ dependencies. Add test support separately in the application's test scope.
 
 | Module | Purpose |
 | --- | --- |
-| `spring-ai-privacy-guardrails-core` | Analyzer SPI, detection resolution, sessions, regex analysis, and tokenization |
+| `spring-ai-privacy-guardrails-core` | Analyzer SPI, detection resolution, sessions, regex analysis, and PII tokenization |
 | `spring-ai-privacy-guardrails-spring-ai` | Advisors and per-tool original-disclosure boundaries |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |

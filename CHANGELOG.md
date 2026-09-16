@@ -1,9 +1,34 @@
 # Changelog
 
+## [0.3.0]
+
+This release adds optional Spring Security-based tool authorization and improves PII analysis for structured inputs.
+
+### Added
+
+- Added optional Spring Security tool authorization and a Spring Boot starter.
+- Added a Security scenario to the Privacy Boundary Inspector.
+
+### Fixed
+
+- Fixed PII detection in structured JSON by analyzing keys and values independently.
+- Applied the existing input-size limit to direct core text operations.
+
+### Documentation
+
+- Added tool authorization guides. Updated the English and Korean documentation and demo visuals.
+
+### Compatibility
+
+- Removed the `spring.ai.privacy.enabled` property. Privacy components are now configured based on registered analyzer or service beans.
+
+### New Contributors
+
+- Thanks to [@NewChoBo](https://github.com/NewChoBo) for the contribution in [#36](https://github.com/ultramancode/spring-ai-privacy-guardrails/pull/36).
+
 ## [0.2.1]
 
-This maintenance release refreshes upstream compatibility baselines and CI
-coverage without changing public APIs or privacy-enforcement behavior.
+This maintenance release refreshes upstream compatibility baselines and CI coverage without changing public APIs or privacy-enforcement behavior.
 
 ### Changed
 
@@ -12,33 +37,26 @@ coverage without changing public APIs or privacy-enforcement behavior.
 
 ### Documentation
 
-- Improved navigation across the English and Korean documentation, including a
-  Korean documentation home.
-- Documented the project's mention in the official Spring Blog post
-  [This Week in Spring — August 18, 2026](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/).
+- Improved navigation across the English and Korean documentation, including a Korean documentation home.
+- Documented the project's mention in the official Spring Blog post [This Week in Spring — August 18, 2026](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/).
 
 ### Compatibility
 
-- Retained Java 17 CI verification for Spring AI 2.0.0 alongside the default
-  2.0.1 baseline.
+- Retained Java 17 CI verification for Spring AI 2.0.0 alongside the default 2.0.1 baseline.
 - Verified the live Presidio integration on Java 17.
 - No breaking changes.
 
 ## [0.2.0]
 
-This release lowers the Java baseline to 17 and adds privacy-safe runtime
-observation for supported Spring AI privacy boundaries.
+This release lowers the Java baseline to 17 and adds privacy-safe runtime observation for supported Spring AI privacy boundaries.
 
 ### Added
 
-- Added `PrivacyEnforcementObserver` for model, tool-input, tool-result, and
-  application-output boundaries with privacy-safe `PROTECTED`, `DISCLOSED`,
-  and `BLOCKED` outcomes.
+- Added `PrivacyEnforcementObserver` for model, tool-input, tool-result, and application-output boundaries with privacy-safe `PROTECTED`, `DISCLOSED`, and `BLOCKED` outcomes.
 
 ### Changed
 
-- Lowered the minimum Java baseline from 21 to 17 while retaining compatibility
-  verification on Java 17, 21, and 25.
+- Lowered the minimum Java baseline from 21 to 17 while retaining compatibility verification on Java 17, 21, and 25.
 
 ### Documentation
 
@@ -46,8 +64,7 @@ observation for supported Spring AI privacy boundaries.
 
 ### Compatibility
 
-- Existing applications do not need to configure a `PrivacyEnforcementObserver`;
-  privacy enforcement behavior remains unchanged when no observer is registered.
+- Existing applications do not need to configure a `PrivacyEnforcementObserver`; privacy enforcement behavior remains unchanged when no observer is registered.
 - No breaking changes.
 
 ## [0.1.1]

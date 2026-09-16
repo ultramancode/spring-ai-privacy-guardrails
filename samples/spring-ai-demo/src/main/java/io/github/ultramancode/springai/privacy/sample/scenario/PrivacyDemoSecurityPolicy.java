@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
@@ -15,20 +15,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-final class PrivacyDemoSecurityPolicy {
+public final class PrivacyDemoSecurityPolicy {
 
     private static final String CUSTOMER_LOOKUP = "customerLookup";
 
-    AuthorizationDecision authorize(
+    public AuthorizationDecision authorize(
             Authentication authentication,
             ToolAuthorizationContext context
     ) {
-        boolean granted = authentication != null
-                && authentication.isAuthenticated()
-                && authentication.getAuthorities().stream()
-                        .anyMatch(authority -> Role.CUSTOMER_SUPPORT.authority()
-                                .equals(authority.getAuthority()))
-                && CUSTOMER_LOOKUP.equals(context.toolDefinition().name());
+        boolean granted = isToolAllowed(authentication, context.toolDefinition().name());
         if (authentication != null && authentication.getPrincipal() instanceof DemoPrincipal principal) {
             principal.record(new AuthorizationCheck(
                     context.toolDefinition().name(),
@@ -37,6 +32,24 @@ final class PrivacyDemoSecurityPolicy {
             ));
         }
         return new AuthorizationDecision(granted);
+    }
+
+    private static boolean isToolAllowed(Authentication authentication, String toolName) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        if (toolName == null) {
+            return false;
+        }
+        return switch (toolName) {
+            case CUSTOMER_LOOKUP -> hasRole(authentication, Role.CUSTOMER_SUPPORT);
+            default -> false;
+        };
+    }
+
+    private static boolean hasRole(Authentication authentication, Role role) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> role.authority().equals(authority.getAuthority()));
     }
 
     <T> AuthenticatedRun<T> runAs(Role role, Supplier<T> action) {
@@ -51,7 +64,9 @@ final class PrivacyDemoSecurityPolicy {
         ));
         strategy.setContext(requestContext);
         try {
-            return new AuthenticatedRun<>(action.get(), principal.checks());
+            T result = action.get();
+            List<AuthorizationCheck> checks = principal.checks();
+            return new AuthenticatedRun<>(result, checks);
         }
         finally {
             strategy.setContext(previousContext);

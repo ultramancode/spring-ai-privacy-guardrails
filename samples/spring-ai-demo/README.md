@@ -52,15 +52,6 @@ input, RAG query and prompt template, and CRM result text.
 These runtime demonstrations complement the reproducible automated coverage in
 the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
 
-### Inspector Rendering Tests
-
-The Inspector rendering tests use Node.js 24 and its built-in test runner.
-They run separately from Gradle and require no npm packages.
-
-```bash
-node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
-```
-
 ## ChatClient With The Explicit Privacy Configurer
 
 ```bash

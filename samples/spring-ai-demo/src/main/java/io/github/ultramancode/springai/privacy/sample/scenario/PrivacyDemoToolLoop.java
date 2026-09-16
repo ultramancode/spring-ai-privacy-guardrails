@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientFactory;
@@ -30,7 +30,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-final class PrivacyDemoToolLoop {
+public final class PrivacyDemoToolLoop {
 
     private static final PrivacyDemoScenario SCENARIO = PrivacyDemoScenario.DEFAULT;
     private static final List<String> RAW_VALUES = SCENARIO.originalValues();
@@ -58,7 +58,7 @@ final class PrivacyDemoToolLoop {
     private final PrivacyDemoSecurityPolicy securityPolicy;
     private final ObjectMapper objectMapper;
 
-    PrivacyDemoToolLoop(
+    public PrivacyDemoToolLoop(
             PrivacySecurityChatClientFactory privacySecurityFactory,
             PrivacyToolCallbackFactory toolCallbackFactory,
             ToolDisclosurePolicy toolDisclosurePolicy,
@@ -75,39 +75,26 @@ final class PrivacyDemoToolLoop {
     }
 
     Result run(String input, PrivacyDemoLocale locale) {
-        Attempt attempt = this.securityPolicy.runAs(
-                PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT,
-                () -> execute(input, locale)
-        ).value();
+        PrivacyDemoSecurityPolicy.AuthenticatedRun<Attempt> authenticatedRun =
+                this.securityPolicy.runAs(
+                        PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT,
+                        () -> execute(input, locale)
+                );
+        Attempt attempt = authenticatedRun.value();
         if (attempt.denial() != null) {
             throw attempt.denial();
         }
         return attempt.result();
     }
 
-    SecurityRun runSecurity(
+    SecurityRun runSecurityScenario(
             String input,
             PrivacyDemoLocale locale,
             PrivacyDemoSecurityPolicy.Role role
     ) {
         PrivacyDemoSecurityPolicy.AuthenticatedRun<Attempt> authenticatedRun =
                 this.securityPolicy.runAs(role, () -> execute(input, locale));
-        Attempt attempt = authenticatedRun.value();
-        Result result = attempt.result();
-        boolean denied = attempt.denial() != null;
-        return new SecurityRun(
-                role.authority(),
-                attempt.model().exposedToolNames(),
-                authenticatedRun.checks(),
-                attempt.model().issuedToolArguments() != null,
-                denied,
-                denied ? attempt.denial().getClass().getSimpleName() : null,
-                attempt.delegate().calls(),
-                denied && attempt.delegate().calls() == 0,
-                result != null && result.toolReceivedOnlyAllowedOriginals(),
-                result != null && result.toolResultRetokenizedBeforeModel(),
-                result == null ? null : result.finalResponse()
-        );
+        return SecurityRun.from(role, authenticatedRun);
     }
 
     private Attempt execute(String input, PrivacyDemoLocale locale) {
@@ -130,34 +117,37 @@ final class PrivacyDemoToolLoop {
             return new Attempt(model, delegate, null, denial);
         }
 
+        List<String> allowedOriginalEntityTypes = this.toolDisclosurePolicy.scopeFor(delegate.getToolDefinition())
+                .entityTypes()
+                .stream()
+                .sorted()
+                .toList();
+        BoundaryEvidence boundaryEvidence = new BoundaryEvidence(
+                EvidenceCount.expectedNone(model.rawValueCount(), RAW_VALUES.size()),
+                EvidenceCount.expectedNone(
+                        delegate.deniedRawValueCount(),
+                        DENIED_TOOL_VALUES.size()
+                ),
+                EvidenceCount.expectedAll(
+                        delegate.allowedRawValueCount(),
+                        ALLOWED_TOOL_VALUES.size()
+                ),
+                EvidenceCount.expectedNone(
+                        model.rawToolResultValueCountAtModel(),
+                        RAW_VALUES.size()
+                )
+        );
+
         Result result = new Result(
                 model.calls(),
                 !model.rawPiiSeenByModel(),
                 model.protectedModelInput(),
                 model.issuedToolArguments(),
-                this.toolDisclosurePolicy.scopeFor(delegate.getToolDefinition())
-                        .entityTypes()
-                        .stream()
-                        .sorted()
-                        .toList(),
+                allowedOriginalEntityTypes,
                 delegate.receivedOnlyAllowedOriginals(),
                 delegate.lookupSucceededWithRestoredCustomerId(),
                 model.protectedToolResultSeenByModel(),
-                new BoundaryEvidence(
-                        EvidenceCount.expectedNone(model.rawValueCount(), RAW_VALUES.size()),
-                        EvidenceCount.expectedNone(
-                                delegate.deniedRawValueCount(),
-                                DENIED_TOOL_VALUES.size()
-                        ),
-                        EvidenceCount.expectedAll(
-                                delegate.allowedRawValueCount(),
-                                ALLOWED_TOOL_VALUES.size()
-                        ),
-                        EvidenceCount.expectedNone(
-                                model.rawToolResultValueCountAtModel(),
-                                RAW_VALUES.size()
-                        )
-                ),
+                boundaryEvidence,
                 finalResponse
         );
         return new Attempt(model, delegate, result, null);
@@ -168,14 +158,49 @@ final class PrivacyDemoToolLoop {
             List<String> exposedToolNames,
             List<PrivacyDemoSecurityPolicy.AuthorizationCheck> authorizationChecks,
             boolean modelRequestedTool,
-            boolean toolCallDenied,
             String denialType,
             int callbackInvocations,
-            boolean deniedCallStoppedBeforeCallback,
-            boolean toolReceivedOnlyAllowedOriginals,
-            boolean toolResultRetokenizedBeforeModel,
-            String finalResponse
+            Result completedResult
     ) {
+
+        private static SecurityRun from(
+                PrivacyDemoSecurityPolicy.Role role,
+                PrivacyDemoSecurityPolicy.AuthenticatedRun<Attempt> authenticatedRun
+        ) {
+            Attempt attempt = authenticatedRun.value();
+            AuthorizationDeniedException denial = attempt.denial();
+            String denialType = denial == null ? null : denial.getClass().getSimpleName();
+
+            return new SecurityRun(
+                    role.authority(),
+                    attempt.model().exposedToolNames(),
+                    authenticatedRun.checks(),
+                    attempt.model().issuedToolArguments() != null,
+                    denialType,
+                    attempt.delegate().calls(),
+                    attempt.result()
+            );
+        }
+
+        boolean toolCallDenied() {
+            return this.denialType != null;
+        }
+
+        boolean deniedCallStoppedBeforeCallback() {
+            return toolCallDenied() && this.callbackInvocations == 0;
+        }
+
+        boolean toolReceivedOnlyAllowedOriginals() {
+            return this.completedResult != null && this.completedResult.toolReceivedOnlyAllowedOriginals();
+        }
+
+        boolean toolResultRetokenizedBeforeModel() {
+            return this.completedResult != null && this.completedResult.toolResultRetokenizedBeforeModel();
+        }
+
+        String finalResponse() {
+            return this.completedResult == null ? null : this.completedResult.finalResponse();
+        }
     }
 
     private record Attempt(

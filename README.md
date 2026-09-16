@@ -40,9 +40,13 @@ be used independently of PII protection.
 
 ## Why It Exists
 
-After detecting PII, applications need to control where those values go. This
-library sends tokens to the model, restores permitted originals for tools, and
-can inspect the final response before returning it to the application.
+**Detection is the first step. Control where original values go.**
+
+Detected PII is sent to the model as tokens. Tools receive only the originals
+allowed by policy, and tool results are protected before they return to the model.
+
+With the optional Spring Security integration, the model sees only tools authorized
+for the user, and permissions are checked again immediately before execution.
 
 ```mermaid
 flowchart TD

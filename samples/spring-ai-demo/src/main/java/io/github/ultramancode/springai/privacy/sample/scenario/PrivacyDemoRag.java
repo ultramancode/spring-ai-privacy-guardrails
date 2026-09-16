@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
@@ -26,7 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-final class PrivacyDemoRag {
+public final class PrivacyDemoRag {
 
     private static final String RAW_PII = "alice@example.com";
     private static final RagFixture ENGLISH = new RagFixture(
@@ -66,7 +66,7 @@ final class PrivacyDemoRag {
     private final Map<PrivacyDemoLocale, ChatClient> chatClients;
     private final RecordingPromptChatModel chatModel;
 
-    PrivacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
+    public PrivacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
         VectorStore vectorStore = SimpleVectorStore.builder(new DeterministicEmbeddingModel()).build();
         vectorStore.add(List.of(
                 new Document(ENGLISH.retrievedDocument()),

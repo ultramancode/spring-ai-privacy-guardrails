@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: b87c9a7033d7ff616a02825079419e871889c653bc8f94f4426c0732c2abd98f -->
+<!-- i18n-source-sha256: a432790613aa3e7063351eb9da08161660bf8c2d1f788d053b2ad9de72d4934a -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
@@ -54,15 +54,6 @@
 이 런타임 데모에 대응하는 재현 가능한 자동 검증 범위는
 [개인정보 보호 경계 검증 매트릭스](../../docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
 참고하세요.
-
-### Inspector 화면 표시 테스트
-
-Inspector 화면의 표시 로직은 Node.js 24의 내장 테스트 러너로 검증합니다. Gradle과
-별도로 실행하며, npm 패키지를 설치할 필요는 없습니다.
-
-```bash
-node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
-```
 
 ## 명시적 Privacy Configurer를 사용하는 ChatClient
 

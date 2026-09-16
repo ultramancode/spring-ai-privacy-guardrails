@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 484589038c147bfb3d1ba876994f170e6461cadf5ba35c60dd417ea59c7223fb -->
+<!-- i18n-source-sha256: 5dabadb6f5c42205391e7b8ce97a0d866757572cc96e214e793fd8ae1a2cae07 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -42,9 +42,13 @@ Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보�
 
 ## 왜 필요한가
 
-개인정보를 탐지한 뒤에는 그 값을 어디까지 전달할지 제어해야 합니다. 이 라이브러리는
-모델에는 토큰을 전달하고, 도구에는 허용된 원문만 복원합니다. 필요하면 애플리케이션에
-반환할 최종 응답도 검사할 수 있습니다.
+**탐지는 첫 단계입니다. 원문이 어디까지 전달되는지도 통제해야 합니다.**
+
+모델에는 탐지된 개인정보를 토큰으로 전달하고, 도구에는 정책이 허용한 원문만 복원합니다.
+도구 결과는 모델에 다시 전달하기 전에 보호합니다.
+
+선택적으로 Spring Security를 연동하면 모델에 제공할 도구를 사용자 권한에 따라 제한하고,
+실행 직전에도 권한을 확인합니다.
 
 ```mermaid
 flowchart TD

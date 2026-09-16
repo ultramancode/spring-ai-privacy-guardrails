@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.sample;
+package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientFactory;
@@ -25,7 +25,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-final class PrivacyDemoMcpToolLoop implements AutoCloseable {
+public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
 
     private static final PrivacyDemoScenario SCENARIO = PrivacyDemoScenario.DEFAULT;
     private static final List<String> RAW_VALUES = SCENARIO.originalValues();
@@ -51,7 +51,7 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
     private ToolDisclosureScope disclosureScope;
     private Path serverBaseDirectory;
 
-    PrivacyDemoMcpToolLoop(
+    public PrivacyDemoMcpToolLoop(
             PrivacySecurityChatClientFactory privacySecurityFactory,
             PrivacyToolCallbackFactory toolCallbackFactory,
             ToolDisclosurePolicy toolDisclosurePolicy,
@@ -71,10 +71,12 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         LocalMcpCrmServer server = localMcpServer(locale);
         server.useRecords(crmRecords(locale));
         initializeMcpClient(server);
-        return this.securityPolicy.runAs(
-                PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT,
-                () -> runAgainstLocalServer(input, locale, server)
-        ).value();
+        PrivacyDemoSecurityPolicy.AuthenticatedRun<PrivacyDemoToolLoop.Result> authenticatedRun =
+                this.securityPolicy.runAs(
+                        PrivacyDemoSecurityPolicy.Role.CUSTOMER_SUPPORT,
+                        () -> runAgainstLocalServer(input, locale, server)
+                );
+        return authenticatedRun.value();
     }
 
     @Override
@@ -159,33 +161,36 @@ final class PrivacyDemoMcpToolLoop implements AutoCloseable {
                 && SCENARIO.customerId().equals(customerId)
                 && !CUSTOMER_ID_TOKEN_PATTERN.matcher(customerId).find();
 
+        List<String> allowedOriginalEntityTypes = this.disclosureScope.entityTypes().stream().sorted().toList();
+        PrivacyDemoToolLoop.BoundaryEvidence boundaryEvidence = new PrivacyDemoToolLoop.BoundaryEvidence(
+                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                        model.rawValueCount(),
+                        RAW_VALUES.size()
+                ),
+                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                        deniedRawValueCount,
+                        DENIED_TOOL_VALUES.size()
+                ),
+                PrivacyDemoToolLoop.EvidenceCount.expectedAll(
+                        allowedRawValueCount,
+                        ALLOWED_TOOL_VALUES.size()
+                ),
+                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                        model.rawToolResultValueCountAtModel(),
+                        RAW_VALUES.size()
+                )
+        );
+
         return new PrivacyDemoToolLoop.Result(
                 model.calls(),
                 !model.rawPiiSeenByModel(),
                 model.protectedModelInput(),
                 model.issuedToolArguments(),
-                this.disclosureScope.entityTypes().stream().sorted().toList(),
+                allowedOriginalEntityTypes,
                 receivedOnlyAllowedOriginals,
                 requestEvidence.lookupSucceeded(),
                 model.protectedToolResultSeenByModel(),
-                new PrivacyDemoToolLoop.BoundaryEvidence(
-                        PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                                model.rawValueCount(),
-                                RAW_VALUES.size()
-                        ),
-                        PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                                deniedRawValueCount,
-                                DENIED_TOOL_VALUES.size()
-                        ),
-                        PrivacyDemoToolLoop.EvidenceCount.expectedAll(
-                                allowedRawValueCount,
-                                ALLOWED_TOOL_VALUES.size()
-                        ),
-                        PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                                model.rawToolResultValueCountAtModel(),
-                                RAW_VALUES.size()
-                        )
-                ),
+                boundaryEvidence,
                 finalResponse
         );
     }

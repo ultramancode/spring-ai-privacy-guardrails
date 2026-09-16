@@ -8,7 +8,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: 0ffb6f0df16b2fb1a2e3f3fae258289fb22c691c5cd338f4647641f1d7afd2d6 -->
+<!-- i18n-source-sha256: 8c7f94556fe01ed12c5c87754413585bb127ef2781fac4f42f047bc18e3e83cf -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -16,8 +16,8 @@ hide:
 공개합니다. 모든 도구 결과는 모델이나 애플리케이션에 반환하기 전에 다시 보호합니다.
 
 분석기는 **보호 대상 정보가 포함된 텍스트를 식별합니다**. Spring AI Privacy Guardrails는
-그 결과에 따라 **모델과 도구에 전달할 값을 보호하고**, 각 도구에 공개할 원문의 범위를
-제한합니다.
+**개인정보 토큰화**로 탐지된 원문을 **불투명 토큰(opaque token)**으로 바꾸어 모델에 전달합니다.
+불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다. 각 도구에 공개할 원문의 범위도 제한합니다.
 
 선택적으로 [Spring Security 연동](security.md)을 추가해 모델에 공개할 도구를 제한하고,
 도구 실행 전에 권한을 검사할 수 있습니다. 도구 권한 검사는 개인정보 보호 기능 없이도

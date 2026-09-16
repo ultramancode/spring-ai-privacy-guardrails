@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 5dabadb6f5c42205391e7b8ce97a0d866757572cc96e214e793fd8ae1a2cae07 -->
+<!-- i18n-source-sha256: 88663e59e275f807543cbdec0c03f6a0271e459b0660bf3c062ce24ad6d03ae2 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -27,10 +27,11 @@
 **내장 및 확장 가능한 분석기로 개인정보를 탐지하고, 원문 값이 어디까지 이동할 수
 있는지 통제합니다.**
 
-`ChatClient`에 보호를 적용하면 분석기가 탐지한 개인정보를 요청별 토큰으로 바꿔 모델에
-전달합니다. 보호된 도구를 호출할 때는 정책이 허용한 엔티티 유형의 값만 실행 직전에
-원문으로 복원하고, 도구 결과는 다시 보호합니다. 필요하면 최종 응답 검사도 활성화할 수
-있습니다.
+`ChatClient`에 보호를 적용하면 **개인정보 토큰화**로 모델에 전달할 입력을 보호합니다.
+분석기가 탐지한 개인정보 원문을 요청별 **불투명 토큰(opaque token)**으로 바꾸며,
+이 대체 문자열은 원문 값을 직접 드러내지 않습니다.
+보호된 도구를 호출할 때는 정책이 허용한 엔티티 유형의 값만 실행 직전에 원문으로
+복원하고, 도구 결과는 다시 보호합니다. 필요하면 최종 응답 검사도 활성화할 수 있습니다.
 
 Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보호 `core`와 Spring AI
 통합을 결합해 채팅, RAG, 메모리, 도구 호출과 출력 경계에 개인정보 보호 정책을
@@ -44,7 +45,7 @@ Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보�
 
 **탐지는 첫 단계입니다. 원문이 어디까지 전달되는지도 통제해야 합니다.**
 
-모델에는 탐지된 개인정보를 토큰으로 전달하고, 도구에는 정책이 허용한 원문만 복원합니다.
+모델에는 탐지된 개인정보를 불투명 토큰으로 전달하고, 도구에는 정책이 허용한 원문만 복원합니다.
 도구 결과는 모델에 다시 전달하기 전에 보호합니다.
 
 선택적으로 Spring Security를 연동하면 모델에 제공할 도구를 사용자 권한에 따라 제한하고,
@@ -52,10 +53,10 @@ Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보�
 
 ```mermaid
 flowchart TD
-    A["입력 · 메모리 · RAG"] --> B["개인정보 탐지 후<br/>탐지된 값을 토큰으로 변환"]
+    A["입력 · 메모리 · RAG"] --> B["개인정보 탐지 후<br/>탐지된 값 토큰화"]
     B --> C["모델"]
     C -. "도구 호출" .-> D["도구<br/>(허용된 유형만 원문으로 전달)"]
-    D -. "결과의 개인정보를<br/>토큰으로 변환" .-> C
+    D -. "결과의 개인정보<br/>토큰화" .-> C
     C --> E["최종 응답 검사<br/>(출력 보호 사용 시)"]
     E --> F["애플리케이션"]
 ```
@@ -72,7 +73,7 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행하�
 `http://127.0.0.1:8080`을 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
 있습니다. 모델과 도구가 실제로 전달받은 값을 비교할 수 있습니다.
 
-- **Local Tool**은 탐지된 개인정보가 모델에 전달되기 전에 토큰으로 바뀌는 과정을
+- **Local Tool**은 탐지된 개인정보가 모델에 전달되기 전에 불투명 토큰으로 바뀌는 과정을
   보여줍니다. 도구에는 허용된 `CUSTOMER_ID`만 원문으로 복원하며, 도구 결과는 모델에
   다시 전달하기 전에 보호합니다.
 - **RAG**는 검색된 원문 문서와 모델이 전달받은 보호된 프롬프트를 비교합니다.
@@ -83,7 +84,7 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행하�
 </p>
 
 데모의 탐지 규칙에 해당하지 않는 텍스트는 로컬 모델이 변경하지 않고 반환할 수 있으며,
-Inspector는 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, MCP, Security 데모와 선택형
+Inspector는 불투명 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, MCP, Security 데모와 선택형
 Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 [샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다.
 
@@ -258,7 +259,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 </p>
 
 - 보호된 각 요청은 독립된 `PrivacySession`을 사용합니다. 메모리와 RAG 콘텐츠를 포함한
-  지원 형식의 모델 입력에서 탐지된 개인정보는 모델 호출 전에 토큰화됩니다.
+  지원 형식의 모델 입력에서 탐지된 개인정보는 모델 호출 전에 불투명 토큰으로 바뀝니다.
 - 보호된 도구에는 정책이 허용한 원문 값만 공개합니다. 구조화된 도구 입력에도 최소 권한을
   적용하고, `returnDirect`를 포함한 도구 결과는 모델이나 애플리케이션에 전달되기 전에
   다시 보호합니다.
@@ -274,7 +275,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 애플리케이션은 선택적으로 `PrivacyEnforcementObserver`를 등록해 모델·도구 입력·도구
 결과·애플리케이션 출력 경계에서 발생하는 개인정보 보호 처리 이벤트를 받을 수 있습니다.
 각 이벤트에는 이벤트가 발생한 경계(`boundary`)와 해당 경계의 처리 결과(`outcome`)만
-포함됩니다. 개인정보 원문, 토큰, 페이로드, 도구 이름과 요청 식별자는 포함되지 않습니다.
+포함됩니다. 개인정보 원문, 불투명 토큰, 페이로드, 도구 이름과 요청 식별자는 포함되지 않습니다.
 
 등록 방법, 결과의 의미와 콜백 실행 지침은
 [개인정보 보호 런타임 관측](docs/ko/configuration.md#개인정보-보호-런타임-관측)을 참고하세요.
@@ -286,7 +287,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 
 | 모듈 | 목적 |
 | --- | --- |
-| `spring-ai-privacy-guardrails-core` | 분석기 SPI, 탐지 결과 해석, 세션, 정규식과 토큰화 |
+| `spring-ai-privacy-guardrails-core` | 분석기 SPI, 탐지 결과 해석, 세션, 정규식 분석과 개인정보 토큰화 |
 | `spring-ai-privacy-guardrails-spring-ai` | Advisor와 도구별 원문 공개 경계 |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP 어댑터 |
 | `spring-ai-privacy-guardrails-opennlp` | 사용자 제공 OpenNLP 모델용 JVM 전용 어댑터 |

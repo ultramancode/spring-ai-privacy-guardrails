@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1010" viewBox="0 0 1600 1010" role="img" aria-labelledby="title desc">
   <title id="title">Detector and execution-boundary responsibilities</title>
-  <desc id="desc">Detection providers produce sensitive-span results. The privacy core resolves them and maintains request-scoped tokens. Spring AI advisors and tool wrappers enforce protection before models, disclose only permitted entity types to each tool, re-protect tool results, and optionally apply output policy.</desc>
+  <desc id="desc">Detection providers produce sensitive-span results. The privacy core resolves them and maintains request-scoped opaque tokens that do not directly reveal the original values. Spring AI advisors and tool wrappers enforce protection before models, disclose only permitted entity types to each tool, re-protect tool results, and optionally apply output policy.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop stop-color="#07111f"/>
@@ -117,8 +117,8 @@
     <path d="M600 71H664" stroke="#38d6d0" stroke-width="3" marker-end="url(#cyanArrow)"/>
 
     <rect x="676" width="250" height="142" rx="20" fill="#102a2a" stroke="#52e29a"/>
-    <text x="801" y="34" text-anchor="middle" class="sans card-title">Scoped tool</text>
-    <text x="801" y="68" text-anchor="middle" class="sans small">default deny · allowed types only</text>
+    <text x="801" y="34" text-anchor="middle" class="sans card-title">Tool input</text>
+    <text x="801" y="68" text-anchor="middle" class="sans small">restore allowed original values</text>
     <text x="801" y="101" text-anchor="middle" class="sans small" fill="#7ff0b5">LEAST PRIVILEGE</text>
 
     <path d="M938 71H1002" stroke="#52e29a" stroke-width="3" marker-end="url(#greenArrow)"/>

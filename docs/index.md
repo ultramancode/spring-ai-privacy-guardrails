@@ -8,8 +8,9 @@ Keep detected PII out of the model. Reveal only what each trusted tool needs.
 Protect every tool result before returning it to the model or application.
 
 Detection answers **what text is sensitive**. Spring AI Privacy Guardrails
-uses those findings to **protect values sent to models and tools** and limits
-which original values each tool may receive.
+tokenizes detected PII before sending it to a model. Each detected value is
+replaced with an **opaque token**, a string that does not directly reveal the
+original value. It also limits which original values each tool may receive.
 
 The optional [Spring Security integration](security.md) controls which tools
 are shown to the model and checks authorization before tool execution. It can

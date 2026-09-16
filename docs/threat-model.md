@@ -6,10 +6,12 @@
 
 This document describes threats to the following information, the library's
 protections, and the areas the application must manage separately.
+**Opaque tokens** are replacement strings for detected PII that do not directly
+reveal the original values.
 
 - Original PII that may appear in model input, retrieved content, tool input and
   results, and final output.
-- Token-to-original-PII-value mappings managed per request through
+- Mappings between opaque tokens and original PII values, managed per request through
   `PrivacySession`.
 - Credentials used for remote analyzer services and analyzer requests and
   responses.
@@ -36,7 +38,7 @@ Spring Security integration relies on the application's authentication and tool
 authorization policy. When privacy protection is also configured, registering
 or authorizing a tool does not by itself permit original PII disclosure. The
 application must separately configure which entity types may be restored from
-tokens for each tool.
+opaque tokens for each tool.
 
 ## Threats and Controls
 
@@ -44,7 +46,7 @@ tokens for each tool.
 
 | Threat | Library control |
 | --- | --- |
-| Unprotected PII in model input or final output | Detected PII in supported model input text is replaced with tokens before the model call. When output protection is enabled, the configured policy applies to the final response body and supported reasoning text. |
+| Unprotected PII in model input or final output | Detected PII in supported model input text is replaced with opaque tokens before the model call. When output protection is enabled, the configured policy applies to the final response body and supported reasoning text. |
 | Inspection bypass through structured values, streaming, or `returnDirect` | JSON and supported value structures are inspected under size and complexity bounds. When output protection is enabled, streaming responses are collected through completion for inspection, and the configured output policy also applies to `returnDirect` results. |
 | Inspection bypass through unsupported message types | Unsupported `Message` implementations cause an error instead of being sent to the model. |
 
@@ -63,16 +65,16 @@ tokens for each tool.
 
 | Threat | Library control |
 | --- | --- |
-| Unauthorized original PII or new PII in tool results | For tools with privacy protection, restoring tokens to original values is denied by default. Only configured entity types are restored immediately before execution. Detected PII in tool results is replaced with tokens before the results are passed on. |
+| Unauthorized original PII or new PII in tool results | For tools with privacy protection, restoring opaque tokens to original values is denied by default. Only configured entity types are restored immediately before execution. Detected PII in tool results is replaced with opaque tokens before the results are passed on. |
 | Privacy steps omitted by custom advisors or tool paths | On a `ChatClient` with the library's standard privacy configuration, missing or duplicate required advisors and unprotected tool callbacks are detected. |
 | Unauthorized tool discovery or execution | When Spring Security integration is configured, denied tools are excluded from the model's tool list and cannot be executed by requesting them by name. All tools requested in one model response are authorized before any runs. Each tool is checked again immediately before execution and, when privacy protection is enabled, before original PII is restored. |
 | Callbacks added or replaced after authorization | With Spring Security integration configured, tool callbacks are checked against those present at the start of the request. Unsupported additions or replacements are rejected before execution. |
 
 **Scope and considerations**
 
-- **Tool privacy protection:** Original-value disclosure and result tokenization apply
-  to tools wrapped by `PrivacyToolCallbackFactory`. Other execution paths must be
-  protected separately.
+- **Tool privacy protection:** Original-value disclosure and PII tokenization of tool
+  results apply to tools wrapped by `PrivacyToolCallbackFactory`. Other execution
+  paths must be protected separately.
 - **Custom execution paths:** The application must protect advisors that change data
   outside the privacy boundary and separate execution paths that use a custom
   `ToolCallingManager` or `ToolCallbackResolver`.
@@ -102,8 +104,8 @@ tokens for each tool.
 
 | Threat | Library control |
 | --- | --- |
-| Token reuse or invalid-session access | Tokens and original-value mappings are managed separately for each request through `PrivacySession`. Tokens from another request are not restored to original values, and unknown or closed sessions fail. |
-| PII retained in a session after a request ends | When a Spring AI request using the standard privacy configuration completes, fails, or its stream is cancelled, the library cleans up the token-to-original-value mappings it manages. The mappings themselves are not included in model requests or tool input. |
+| Opaque token reuse or invalid-session access | Mappings between opaque tokens and original values are managed separately for each request through `PrivacySession`. Opaque tokens from another request are not restored to original values, and unknown or closed sessions fail. |
+| PII retained in a session after a request ends | When a Spring AI request using the standard privacy configuration completes, fails, or its stream is cancelled, the library cleans up the mappings it manages between opaque tokens and original values. The mappings themselves are not included in model requests or tool input. |
 | Resource exhaustion from very large or deeply nested input | The library enforces size, item-count, nesting-depth, and similar bounds when inspecting supported text, JSON, value structures, and responses. |
 
 **Scope and considerations**
@@ -125,7 +127,7 @@ depends on the analyzers and score thresholds. Allowing some analyzer failures
 lets processing continue with successful results, which may reduce coverage. See
 [Detection and Resolution](configuration.md#detection-and-resolution) for details.
 
-Tokenization does not guarantee anonymization. Tokens and session handles
+Replacing PII with opaque tokens does not guarantee anonymization. Opaque tokens and session handles
 (`PrivacyContextHandle`) must not be used as proof of user identity or permission.
 
 Session cleanup releases the mappings held by the library. It does not delete

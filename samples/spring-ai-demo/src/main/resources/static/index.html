@@ -690,10 +690,10 @@
 
     <section class="flow" data-i18n-aria-label="protectedExecutionFlow" aria-label="Protected execution flow">
       <div class="flow-stage" id="stageInput"><span>1</span><b data-i18n="flow.rawInput">Raw input</b></div>
-      <div class="flow-stage" id="stageModel"><span>2</span><b data-i18n="flow.tokenizedModel">Tokenized model input</b><small data-i18n="status.wait">WAIT</small></div>
+      <div class="flow-stage" id="stageModel"><span>2</span><b data-i18n="flow.tokenizedModel">Model input tokenization</b><small data-i18n="status.wait">WAIT</small></div>
       <div class="flow-stage" id="stageTool"><span>3</span><b data-i18n="flow.scopedCrm">Scoped CRM disclosure</b><small data-i18n="status.wait">WAIT</small></div>
-      <div class="flow-stage" id="stageResult"><span>4</span><b data-i18n="flow.retokenizedResult">Retokenized result</b><small data-i18n="status.wait">WAIT</small></div>
-      <div class="flow-stage" id="stageCleanup"><span>5</span><b data-i18n="flow.sessionsReported">Active sessions after call</b><small data-i18n="status.wait">WAIT</small></div>
+      <div class="flow-stage" id="stageResult"><span>4</span><b data-i18n="flow.retokenizedResult">Tool result tokenization</b><small data-i18n="status.wait">WAIT</small></div>
+      <div class="flow-stage" id="stageCleanup"><span>5</span><b data-i18n="flow.sessionsReported">Service-wide active sessions</b><small data-i18n="status.wait">WAIT</small></div>
     </section>
 
     <section class="evidence-grid">
@@ -713,7 +713,7 @@
       </article>
 
       <article class="card step-card step-3">
-        <div class="step"><span class="number">3</span><div><h2 data-i18n="tool.modelInputTitle">Protected model input</h2><p class="hint" data-i18n="local.modelInputHint">This is the input received by the model, with detected personal information replaced by tokens.</p></div></div>
+        <div class="step"><span class="number">3</span><div><h2 data-i18n="tool.modelInputTitle">Protected model input</h2><p class="hint" data-i18n="local.modelInputHint">This is the input received by the model. Detected personal information is replaced with opaque tokens, strings that do not directly reveal the original values.</p></div></div>
         <pre class="protected-output" id="protected">—</pre>
       </article>
 
@@ -723,27 +723,27 @@
       </article>
 
       <article class="card step-card step-5">
-        <div class="step"><span class="number">5</span><div><h2 data-i18n="local.boundaryTitle">Personal information sent to the CRM tool</h2><p class="hint" data-i18n="local.boundaryHint">Within this request, only CUSTOMER_ID is restored to its original value and sent to the CRM tool. Other personal information remains tokenized.</p></div></div>
+        <div class="step"><span class="number">5</span><div><h2 data-i18n="local.boundaryTitle">Personal information sent to the CRM tool</h2><p class="hint" data-i18n="local.boundaryHint">Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the CRM tool. Other personal information remains in the form of opaque tokens.</p></div></div>
         <div class="disclosure-boundary local-disclosure-boundary" data-i18n-aria-label="local.boundaryDisclosure" aria-label="Least-privilege disclosure at the Local Tool boundary">
           <div class="boundary-before">
             <small data-i18n="disclosure.before">Before tool boundary</small>
-            <strong>CUSTOMER_ID</strong>
-            <span class="token-state" data-i18n="disclosure.tokenized">TOKENIZED</span>
+            <strong data-i18n="disclosure.customerId">Customer ID</strong>
+            <span class="token-state" data-i18n="disclosure.tokenized">OPAQUE TOKEN</span>
           </div>
           <span class="disclosure-arrow" aria-hidden="true">→</span>
           <div class="tool-boundary-focus">
             <small data-i18n="disclosure.atBoundary">Tool boundary</small>
-            <div class="restoration-hero"><div class="chips" id="allowedOriginalEntityTypes"></div><strong data-i18n="disclosure.localCustomerOnlyRestored">ONLY · ORIGINAL RESTORED</strong><b id="allowedDisclosureCheck">—</b></div>
+            <div class="restoration-hero"><div class="chips" id="allowedOriginalEntityTypes"></div><strong data-i18n="disclosure.customerOnlyRestored">ORIGINAL RESTORED</strong><b id="allowedDisclosureCheck">—</b></div>
             <span class="request-scope" data-i18n="disclosure.currentRequestOnly">THIS REQUEST ONLY</span>
             <div class="lookup-evidence"><small data-i18n="disclosure.backendEvidence">Backend evidence</small><strong data-i18n="disclosure.crmLookupSucceeded">CRM lookup succeeded</strong><b id="lookupCheck">—</b></div>
           </div>
-          <div class="secondary-evidence"><strong data-i18n="disclosure.othersTokenized">Other PII remains tokenized</strong><code>EMPLOYEE_ID · EMAIL_ADDRESS · PHONE_NUMBER</code></div>
+          <div class="secondary-evidence"><strong data-i18n="disclosure.othersTokenized">Other PII stays as opaque tokens</strong><code>EMPLOYEE_ID · EMAIL_ADDRESS · PHONE_NUMBER</code></div>
         </div>
         <p class="disclosure-note privacy" data-i18n="disclosure.rawOmitted">The restored value is sent only to the tool and is not displayed in this Inspector.</p>
       </article>
 
       <article class="card step-card step-6">
-        <div class="step"><span class="number">6</span><div><h2 data-i18n="tool.finalTitle">Final model response</h2><p class="hint" data-i18n="tool.finalHint">The CRM tool result is tokenized and protected again before model re-entry. Below is the actual final response returned by the model after receiving that protected result.</p></div></div>
+        <div class="step"><span class="number">6</span><div><h2 data-i18n="tool.finalTitle">Final model response</h2><p class="hint" data-i18n="tool.finalHint">Detected PII in the CRM tool result is replaced with opaque tokens before returning to the model. Below is the actual final response returned by the model after receiving that protected result.</p></div></div>
         <pre class="protected-output" id="finalResponse">—</pre>
       </article>
     </section>
@@ -751,9 +751,9 @@
 
   <section class="scenario-panel" id="ragScenario" data-scenario="rag" hidden>
     <section class="metrics rag-metrics" data-i18n-aria-label="ragEvidence" aria-label="RAG evidence">
-      <div class="metric observation"><span data-i18n="rag.retrievedRaw">Retrieved-document raw PII</span><div class="metric-result"><strong id="ragRetrievedRaw">—</strong><small class="metric-status" data-i18n="rag.beforeProtection">Before protection</small></div></div>
-      <div class="metric observation"><span data-i18n="rag.modelRaw">Model raw PII</span><div class="metric-result"><strong id="ragModelRaw">—</strong><small class="metric-status" data-i18n="rag.actualModelContext">Actual model context</small></div></div>
-      <div class="metric observation"><span data-i18n="rag.modelToken">Model tokenized PII</span><div class="metric-result"><strong id="ragModelToken">—</strong><small class="metric-status" data-i18n="rag.actualModelContext">Actual model context</small></div></div>
+      <div class="metric observation"><span data-i18n="rag.retrievedRaw">Original PII in retrieved document</span><div class="metric-result"><strong id="ragRetrievedRaw">—</strong><small class="metric-status" data-i18n="rag.beforeProtection">Before protection</small></div></div>
+      <div class="metric observation"><span data-i18n="rag.modelRaw">Original PII in model input</span><div class="metric-result"><strong id="ragModelRaw">—</strong><small class="metric-status" data-i18n="rag.actualModelContext">Actual model context</small></div></div>
+      <div class="metric observation"><span data-i18n="rag.modelToken">Opaque tokens in model input</span><div class="metric-result"><strong id="ragModelToken">—</strong><small class="metric-status" data-i18n="rag.actualModelContext">Actual model context</small></div></div>
     </section>
 
     <section class="boundary-comparison" data-i18n-aria-label="ragComparison" aria-label="Retrieved document to model-visible protected context">
@@ -765,7 +765,7 @@
       <div class="rag-boundary" aria-hidden="true"><small data-i18n="rag.boundary">RAG privacy boundary</small><div class="rag-boundary-flow"><span id="ragBoundaryInput" data-i18n="status.wait">WAIT</span><b>↓</b><strong id="ragBoundaryOutput" data-i18n="status.wait">WAIT</strong></div><em class="rag-boundary-state" id="ragBoundaryState" data-i18n="status.wait">WAIT</em></div>
 
       <article class="card rag-after">
-        <div class="step"><span class="number">2</span><div><h2 data-i18n="rag.contextTitle">Model-visible protected context</h2><p class="hint" data-i18n="rag.contextHint">This is the context actually sent to the model after the RAG document was protected. Raw PII has been replaced with opaque tokens.</p></div></div>
+        <div class="step"><span class="number">2</span><div><h2 data-i18n="rag.contextTitle">Model-visible protected context</h2><p class="hint" data-i18n="rag.contextHint">This is the context actually sent to the model after the RAG document was protected. Detected PII has been replaced with opaque tokens, strings that do not directly reveal the original values.</p></div></div>
         <pre class="protected-output" id="modelVisibleContext">—</pre>
       </article>
     </section>
@@ -775,7 +775,7 @@
       <div class="checks">
         <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceRetrievedRaw">Retrieved document contains raw PII</span><code>retrievedDocumentContainsRawPii</code></span><b class="value" id="ragRetrievedRawDetail">—</b></div>
         <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceModelRaw">Model context contains raw PII</span><code>modelVisibleContextContainsRawPii</code></span><b class="value" id="ragModelRawDetail">—</b></div>
-        <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceModelToken">Model context contains protected tokens</span><code>modelVisibleContextContainsTokenizedPii</code></span><b class="value" id="ragModelTokenDetail">—</b></div>
+        <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceModelToken">Model context contains opaque tokens</span><code>modelVisibleContextContainsTokenizedPii</code></span><b class="value" id="ragModelTokenDetail">—</b></div>
         <div class="check"><span class="rag-evidence-label"><span data-i18n="rag.evidenceActiveSessions">Service-wide active sessions after call</span><code>activeSessionsAfterCall</code></span><b class="value" id="ragActiveSessionsDetail">—</b></div>
       </div>
     </article>
@@ -791,10 +791,10 @@
 
     <section class="flow" data-i18n-aria-label="mcpExecutionFlow" aria-label="Streamable HTTP MCP execution flow">
       <div class="flow-stage" id="mcpStageInput"><span>1</span><b data-i18n="flow.rawInput">Raw input</b></div>
-      <div class="flow-stage" id="mcpStageModel"><span>2</span><b data-i18n="flow.tokenizedModel">Tokenized model input</b><small data-i18n="status.wait">WAIT</small></div>
+      <div class="flow-stage" id="mcpStageModel"><span>2</span><b data-i18n="flow.tokenizedModel">Model input tokenization</b><small data-i18n="status.wait">WAIT</small></div>
       <div class="flow-stage" id="mcpStageTool"><span>3</span><b data-i18n="flow.scopedMcp">Scoped MCP disclosure</b><small data-i18n="status.wait">WAIT</small></div>
-      <div class="flow-stage" id="mcpStageResult"><span>4</span><b data-i18n="flow.retokenizedResult">Retokenized result</b><small data-i18n="status.wait">WAIT</small></div>
-      <div class="flow-stage" id="mcpStageCleanup"><span>5</span><b data-i18n="flow.sessionsReported">Active sessions after call</b><small data-i18n="status.wait">WAIT</small></div>
+      <div class="flow-stage" id="mcpStageResult"><span>4</span><b data-i18n="flow.retokenizedResult">Tool result tokenization</b><small data-i18n="status.wait">WAIT</small></div>
+      <div class="flow-stage" id="mcpStageCleanup"><span>5</span><b data-i18n="flow.sessionsReported">Service-wide active sessions</b><small data-i18n="status.wait">WAIT</small></div>
     </section>
 
     <section class="evidence-grid">
@@ -812,22 +812,22 @@
       </article>
 
       <article class="card step-card step-3">
-        <div class="step"><span class="number">3</span><div><h2 data-i18n="tool.modelInputTitle">Protected model input</h2><p class="hint" data-i18n="mcp.modelInputHint">This is the input delivered to the actual model boundary. Raw personal information has been replaced with opaque tokens.</p></div></div>
+        <div class="step"><span class="number">3</span><div><h2 data-i18n="tool.modelInputTitle">Protected model input</h2><p class="hint" data-i18n="mcp.modelInputHint">This is the input delivered to the actual model boundary. Detected personal information has been replaced with opaque tokens, strings that do not directly reveal the original values.</p></div></div>
         <pre class="protected-output" id="mcpProtected">—</pre>
       </article>
 
       <article class="card step-card step-4">
-        <div class="step"><span class="number">4</span><div><h2 data-i18n="mcp.argumentsTitle">Model-issued protected MCP arguments</h2><p class="hint" data-i18n="mcp.argumentsHint">These arguments were generated by the model for the MCP tool call. The policy's allowed scope has not yet been applied, so personal information remains tokenized.</p></div></div>
+        <div class="step"><span class="number">4</span><div><h2 data-i18n="mcp.argumentsTitle">Model-issued protected MCP arguments</h2><p class="hint" data-i18n="mcp.argumentsHint">These arguments were generated by the model for the MCP tool call. The policy's allowed scope has not yet been applied, so personal information remains in the form of opaque tokens.</p></div></div>
         <pre class="protected-output" id="mcpToolArguments">—</pre>
       </article>
 
       <article class="card step-card step-5">
-        <div class="step"><span class="number">5</span><div><h2 data-i18n="mcp.boundaryTitle">Personal information sent to the MCP tool</h2><p class="hint" data-i18n="mcp.boundaryHint">Within this request, only CUSTOMER_ID is restored to its original value and sent to the MCP tool. Other personal information remains tokenized.</p></div></div>
+        <div class="step"><span class="number">5</span><div><h2 data-i18n="mcp.boundaryTitle">Personal information sent to the MCP tool</h2><p class="hint" data-i18n="mcp.boundaryHint">Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the MCP tool. Other personal information remains in the form of opaque tokens.</p></div></div>
         <div class="disclosure-boundary" data-i18n-aria-label="mcp.boundaryDisclosure" aria-label="Least-privilege disclosure at the MCP tool boundary">
           <div class="boundary-before">
             <small data-i18n="disclosure.before">Before tool boundary</small>
-            <strong>CUSTOMER_ID</strong>
-            <span class="token-state" data-i18n="disclosure.tokenized">TOKENIZED</span>
+            <strong data-i18n="disclosure.customerId">Customer ID</strong>
+            <span class="token-state" data-i18n="disclosure.tokenized">OPAQUE TOKEN</span>
           </div>
           <span class="disclosure-arrow" aria-hidden="true">→</span>
           <div class="tool-boundary-focus">
@@ -836,13 +836,13 @@
             <span class="request-scope" data-i18n="disclosure.currentRequestOnly">THIS REQUEST ONLY</span>
             <div class="lookup-evidence"><small data-i18n="disclosure.backendEvidence">Backend evidence</small><strong data-i18n="disclosure.mcpLookupSucceeded">MCP tool lookup succeeded</strong><b id="mcpLookupCheck">—</b></div>
           </div>
-          <div class="secondary-evidence"><strong data-i18n="disclosure.othersTokenized">Other PII remains tokenized</strong><code>EMPLOYEE_ID · EMAIL_ADDRESS · PHONE_NUMBER</code></div>
+          <div class="secondary-evidence"><strong data-i18n="disclosure.othersTokenized">Other PII stays as opaque tokens</strong><code>EMPLOYEE_ID · EMAIL_ADDRESS · PHONE_NUMBER</code></div>
         </div>
         <p class="disclosure-note privacy" data-i18n="disclosure.rawOmitted">The restored value is sent only to the tool and is not displayed in this Inspector.</p>
       </article>
 
       <article class="card step-card step-6">
-        <div class="step"><span class="number">6</span><div><h2 data-i18n="mcp.finalTitle">Final model response</h2><p class="hint" data-i18n="mcp.finalHint">The MCP tool result is retokenized before it is sent back to the model. Below is the actual final response returned by the model after receiving the protected MCP result.</p></div></div>
+        <div class="step"><span class="number">6</span><div><h2 data-i18n="mcp.finalTitle">Final model response</h2><p class="hint" data-i18n="mcp.finalHint">Detected PII in the MCP tool result is replaced with opaque tokens before returning to the model. Below is the actual final response returned by the model after receiving the protected MCP result.</p></div></div>
         <pre class="protected-output" id="mcpFinalResponse">—</pre>
       </article>
     </section>
@@ -853,7 +853,7 @@
       <div class="metric" id="securityAuthorizationMetric"><span data-i18n="security.metric.authorization">Authorization checks</span><div class="metric-result"><strong id="securityAuthorizationMeaning">—</strong><small class="metric-status" id="securityAuthorizationStatus" data-i18n="status.wait">WAIT</small></div></div>
       <div class="metric" id="securityToolInputMetric"><span data-i18n="security.metric.toolInput">Tool input</span><div class="metric-result"><strong id="securityToolInputMeaning">—</strong><small class="metric-status" id="securityToolInputStatus" data-i18n="status.wait">WAIT</small></div></div>
       <div class="metric" id="securityToolOutputMetric"><span data-i18n="security.metric.toolOutput">Tool output</span><div class="metric-result"><strong id="securityToolOutputMeaning">—</strong><small class="metric-status" id="securityToolOutputStatus" data-i18n="status.wait">WAIT</small></div></div>
-      <div class="metric observation" id="securityCleanupMetric"><span data-i18n="security.metric.cleanup">Active sessions after call</span><div class="metric-result"><strong id="securityCleanupMeaning">—</strong><small class="metric-status" id="securityCleanupStatus" data-i18n="status.wait">WAIT</small></div></div>
+      <div class="metric observation" id="securityCleanupMetric"><span data-i18n="security.metric.cleanup">Service-wide active sessions</span><div class="metric-result"><strong id="securityCleanupMeaning">—</strong><small class="metric-status" id="securityCleanupStatus" data-i18n="status.wait">WAIT</small></div></div>
     </section>
     <div class="security-section-heading"><span class="security-section-index">1</span><h2 data-i18n="security.requestLabel">Request summary</h2></div>
     <div class="security-comparison-context">
@@ -899,7 +899,6 @@
     </section>
   </section>
 
-  <p class="hint" data-i18n="sessions.note">Active sessions are counted across the service after the call; concurrent requests can affect this number.</p>
   <div class="error" id="error" role="alert"></div>
 </main>
 
@@ -936,7 +935,6 @@
       "status.wait": "WAIT",
       "status.done": "DONE",
       "status.observed": "OBSERVED",
-      "sessions.note": "Active sessions are counted across the service after the call; concurrent requests can affect this number.",
       "metric.modelRaw": "Model raw exposure",
       "metric.deniedLocal": "Disallowed raw exposure at CRM",
       "metric.allowedLocal": "Allowed original restoration",
@@ -945,15 +943,15 @@
       "metric.resultRaw": "Result raw re-exposure",
       "summary.observedTotal": "Observed / total",
       "summary.none": "NONE",
-      "summary.customerOnly": "CUSTOMER_ID ONLY",
+      "summary.customerOnly": "Customer ID",
       "summary.rawObserved": "RAW OBSERVED",
       "summary.scopedRestored": "SCOPED RESTORED",
       "flow.rawInput": "Raw input",
-      "flow.tokenizedModel": "Tokenized model input",
+      "flow.tokenizedModel": "Model input tokenization",
       "flow.scopedCrm": "Scoped CRM disclosure",
       "flow.scopedMcp": "Scoped MCP disclosure",
-      "flow.retokenizedResult": "Retokenized result",
-      "flow.sessionsReported": "Active sessions after call",
+      "flow.retokenizedResult": "Tool result tokenization",
+      "flow.sessionsReported": "Service-wide active sessions",
       "local.inputTitle": "Synthetic application input",
       "local.inputHint": "This fixed input is sent to the Local Tool loop; memory and RAG are not part of this scenario.",
       "local.analyzerTitle": "Analyzer findings",
@@ -964,30 +962,29 @@
       "analyzer.end": "End offset",
       "analyzer.resolution": "Resolution reason",
       "tool.modelInputTitle": "Protected model input",
-      "local.modelInputHint": "This is the input received by the model, with detected personal information replaced by tokens.",
+      "local.modelInputHint": "This is the input received by the model. Detected personal information is replaced with opaque tokens, strings that do not directly reveal the original values.",
       "local.argumentsTitle": "Model-issued tool arguments",
       "tool.argumentsHint": "These are the protected arguments issued by the model, before scoped disclosure.",
       "local.boundaryTitle": "Personal information sent to the CRM tool",
-      "local.boundaryHint": "Within this request, only CUSTOMER_ID is restored to its original value and sent to the CRM tool. Other personal information remains tokenized.",
+      "local.boundaryHint": "Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the CRM tool. Other personal information remains in the form of opaque tokens.",
       "local.boundaryDisclosure": "Policy-controlled original values at the CRM tool",
       "disclosure.before": "Before tool boundary",
-      "disclosure.tokenized": "TOKENIZED",
+      "disclosure.customerId": "Customer ID",
+      "disclosure.tokenized": "OPAQUE TOKEN",
       "disclosure.atBoundary": "Tool boundary",
       "disclosure.customerOnlyRestored": "ORIGINAL RESTORED",
-      "disclosure.localCustomerOnlyRestored": "ONLY · ORIGINAL RESTORED",
       "disclosure.currentRequestOnly": "THIS REQUEST ONLY",
       "disclosure.backendEvidence": "Backend evidence",
       "disclosure.crmLookupSucceeded": "CRM lookup succeeded",
       "disclosure.mcpLookupSucceeded": "MCP tool lookup succeeded",
-      "disclosure.othersTokenized": "Other PII remains tokenized",
+      "disclosure.othersTokenized": "Other PII stays as opaque tokens",
       "disclosure.rawOmitted": "The restored value is sent only to the tool and is not displayed in this Inspector.",
       "tool.finalTitle": "Final model response",
-      "tool.finalHint": "The CRM tool result is tokenized and protected again before model re-entry. Below is the actual final response returned by the model after receiving that protected result.",
-      "rag.retrievedRaw": "Retrieved-document raw PII",
-      "rag.modelRaw": "Model raw PII",
-      "rag.modelToken": "Model tokenized PII",
+      "tool.finalHint": "Detected PII in the CRM tool result is replaced with opaque tokens before returning to the model. Below is the actual final response returned by the model after receiving that protected result.",
+      "rag.retrievedRaw": "Original PII in retrieved document",
+      "rag.modelRaw": "Original PII in model input",
+      "rag.modelToken": "Opaque tokens in model input",
       "rag.present": "PRESENT",
-      "rag.protected": "PROTECTED",
       "rag.beforeProtection": "Before protection",
       "rag.actualModelContext": "Actual model context",
       "rag.boundary": "RAG privacy boundary",
@@ -995,17 +992,17 @@
       "rag.opaqueToken": "OPAQUE TOKEN",
       "rag.boundaryProtected": "PROTECTED",
       "rag.modelRawObserved": "RAW PII OBSERVED",
-      "rag.tokenNotObserved": "TOKEN NOT OBSERVED",
+      "rag.tokenNotObserved": "OPAQUE TOKEN NOT OBSERVED",
       "rag.boundaryNotConfirmed": "NOT CONFIRMED",
       "rag.retrievedTitle": "Retrieved document",
       "rag.retrievedHint": "This is the actual document text returned by vector search. At this stage, it still contains raw PII.",
       "rag.contextTitle": "Model-visible protected context",
-      "rag.contextHint": "This is the context actually sent to the model after the RAG document was protected. Raw PII has been replaced with opaque tokens.",
+      "rag.contextHint": "This is the context actually sent to the model after the RAG document was protected. Detected PII has been replaced with opaque tokens, strings that do not directly reveal the original values.",
       "rag.evidenceTitle": "Backend verification evidence",
       "rag.evidenceHint": "Displays the /demo/rag backend response values that support the results above. The browser does not create a separate privacy verdict.",
       "rag.evidenceRetrievedRaw": "Retrieved document contains raw PII",
       "rag.evidenceModelRaw": "Model context contains raw PII",
-      "rag.evidenceModelToken": "Model context contains protected tokens",
+      "rag.evidenceModelToken": "Model context contains opaque tokens",
       "rag.evidenceActiveSessions": "Service-wide active sessions after call",
       "mcp.inputTitle": "Example MCP scenario input",
       "mcp.inputHint": "This example input is sent to the actual MCP tool loop. The following steps show only evidence recorded during that execution.",
@@ -1013,14 +1010,14 @@
       "mcp.runtimeHint": "Execution information from a round-trip call to the actual local Streamable HTTP MCP server. The backend runtime mode ID and model call count below are shown exactly as returned.",
       "mcp.runtimeModeId": "Runtime mode ID",
       "mcp.modelCalls": "Model call count",
-      "mcp.modelInputHint": "This is the input delivered to the actual model boundary. Raw personal information has been replaced with opaque tokens.",
+      "mcp.modelInputHint": "This is the input delivered to the actual model boundary. Detected personal information has been replaced with opaque tokens, strings that do not directly reveal the original values.",
       "mcp.argumentsTitle": "Model-issued protected MCP arguments",
-      "mcp.argumentsHint": "These arguments were generated by the model for the MCP tool call. The policy's allowed scope has not yet been applied, so personal information remains tokenized.",
+      "mcp.argumentsHint": "These arguments were generated by the model for the MCP tool call. The policy's allowed scope has not yet been applied, so personal information remains in the form of opaque tokens.",
       "mcp.boundaryTitle": "Personal information sent to the MCP tool",
-      "mcp.boundaryHint": "Within this request, only CUSTOMER_ID is restored to its original value and sent to the MCP tool. Other personal information remains tokenized.",
+      "mcp.boundaryHint": "Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the MCP tool. Other personal information remains in the form of opaque tokens.",
       "mcp.boundaryDisclosure": "Policy-controlled original values at the MCP tool",
       "mcp.finalTitle": "Final model response",
-      "mcp.finalHint": "The MCP tool result is retokenized before it is sent back to the model. Below is the actual final response returned by the model after receiving the protected MCP result.",
+      "mcp.finalHint": "Detected PII in the MCP tool result is replaced with opaque tokens before returning to the model. Below is the actual final response returned by the model after receiving the protected MCP result.",
       "security.viewerTitle": "General employee",
       "security.supportTitle": "Customer support",
       "security.requestLabel": "Request summary",
@@ -1033,7 +1030,7 @@
       "security.outcome.notConfirmed": "The expected protected execution was not confirmed.",
       "security.notConfirmed": "NOT CONFIRMED",
       "security.notExecuted": "NOT EXECUTED",
-      "security.outcome.allowed": "The local model received the protected CRM result.",
+      "security.outcome.allowed": "The model received the protected CRM result with detected PII replaced by opaque tokens. Opaque tokens are replacement strings that do not directly reveal the original values.",
       "security.visibility": "Model-visible tool names",
       "security.callDecision": "Model tool call",
       "security.actualExecution": "Actual tool execution",
@@ -1043,7 +1040,7 @@
       "security.metric.toolInputMeaning": "ALLOWED ORIGINALS ONLY",
       "security.metric.toolOutput": "Tool output",
       "security.metric.toolOutputMeaning": "REPROTECTED",
-      "security.metric.cleanup": "Active sessions after call",
+      "security.metric.cleanup": "Service-wide active sessions",
       "security.metric.cleanupMeaning": "ACTIVE SESSIONS: {count}",
       "security.hidden": "HIDDEN",
       "security.notRequested": "NOT REQUESTED",
@@ -1083,7 +1080,6 @@
       "status.wait": "대기",
       "status.done": "완료",
       "status.observed": "관측값",
-      "sessions.note": "활성 세션 수는 호출 후 서비스 전체에서 관측한 값이며, 동시에 실행 중인 다른 요청의 영향을 받을 수 있습니다.",
       "metric.modelRaw": "모델 원문 노출",
       "metric.deniedLocal": "CRM 비허용 원문 노출",
       "metric.allowedLocal": "허용된 원문 복원",
@@ -1092,15 +1088,15 @@
       "metric.resultRaw": "결과 원문 재노출",
       "summary.observedTotal": "관측 / 전체",
       "summary.none": "없음",
-      "summary.customerOnly": "CUSTOMER_ID만",
+      "summary.customerOnly": "고객번호",
       "summary.rawObserved": "원문 관측",
       "summary.scopedRestored": "범위 내 복원",
       "flow.rawInput": "원문 입력",
-      "flow.tokenizedModel": "토큰화된 모델 입력",
+      "flow.tokenizedModel": "모델 입력 토큰화",
       "flow.scopedCrm": "범위 제한 CRM 공개",
       "flow.scopedMcp": "범위 제한 MCP 공개",
-      "flow.retokenizedResult": "재토큰화된 결과",
-      "flow.sessionsReported": "호출 후 활성 세션",
+      "flow.retokenizedResult": "도구 결과 토큰화",
+      "flow.sessionsReported": "서비스 전체 활성 세션",
       "local.inputTitle": "예제 애플리케이션 입력",
       "local.inputHint": "이 고정 입력은 Local Tool 루프로 전달되며, 이 시나리오에는 메모리와 RAG가 포함되지 않습니다.",
       "local.analyzerTitle": "분석기 탐지 결과",
@@ -1111,30 +1107,29 @@
       "analyzer.end": "끝 위치",
       "analyzer.resolution": "판정 이유",
       "tool.modelInputTitle": "보호된 모델 입력",
-      "local.modelInputHint": "모델이 실제로 전달받은 입력입니다. 탐지된 개인정보는 토큰으로 바뀌어 있습니다.",
+      "local.modelInputHint": "모델이 실제로 전달받은 입력입니다. 탐지된 개인정보는 불투명 토큰으로 바뀌어 있습니다. 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.",
       "local.argumentsTitle": "모델이 생성한 도구 인자",
       "tool.argumentsHint": "범위 제한 공개 전에 모델이 생성한 보호된 인자입니다.",
       "local.boundaryTitle": "CRM 도구에 전달되는 개인정보",
-      "local.boundaryHint": "현재 요청 안에서 CUSTOMER_ID만 원문으로 복원되어 CRM 도구에 전달됩니다. 다른 개인정보는 토큰 상태를 유지합니다.",
+      "local.boundaryHint": "현재 요청에서는 고객번호(CUSTOMER_ID)만 원문으로 복원해 CRM 도구에 전달합니다. 다른 개인정보는 불투명 토큰 상태를 유지합니다.",
       "local.boundaryDisclosure": "CRM 도구에 정책이 허용한 원문 전달",
       "disclosure.before": "도구 경계 전",
-      "disclosure.tokenized": "토큰 상태",
+      "disclosure.customerId": "고객번호",
+      "disclosure.tokenized": "불투명 토큰",
       "disclosure.atBoundary": "도구 경계",
       "disclosure.customerOnlyRestored": "원문 복원",
-      "disclosure.localCustomerOnlyRestored": "만 원문 복원",
       "disclosure.currentRequestOnly": "현재 요청에서만",
       "disclosure.backendEvidence": "백엔드 근거",
       "disclosure.crmLookupSucceeded": "CRM 조회 성공",
       "disclosure.mcpLookupSucceeded": "MCP 도구 조회 성공",
-      "disclosure.othersTokenized": "다른 PII는 계속 토큰 상태",
+      "disclosure.othersTokenized": "다른 개인정보는 불투명 토큰 유지",
       "disclosure.rawOmitted": "실제 복원 값은 도구에만 전달되며, 이 화면에는 표시되지 않습니다.",
       "tool.finalTitle": "최종 모델 응답",
-      "tool.finalHint": "CRM 도구 결과는 모델에 다시 전달되기 전에 재토큰화되어 보호됩니다. 아래에는 보호된 결과를 받은 뒤 모델이 반환한 실제 최종 응답을 표시합니다.",
-      "rag.retrievedRaw": "검색 문서 원문 PII",
-      "rag.modelRaw": "모델 원문 PII",
-      "rag.modelToken": "모델 토큰화 PII",
+      "tool.finalHint": "CRM 도구 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 불투명 토큰으로 바뀝니다. 아래에는 보호된 결과를 받은 뒤 모델이 반환한 실제 최종 응답을 표시합니다.",
+      "rag.retrievedRaw": "검색 문서의 개인정보 원문",
+      "rag.modelRaw": "모델 입력의 개인정보 원문",
+      "rag.modelToken": "모델 입력의 불투명 토큰",
       "rag.present": "있음",
-      "rag.protected": "보호됨",
       "rag.beforeProtection": "보호 전 문서",
       "rag.actualModelContext": "실제 모델 컨텍스트",
       "rag.boundary": "RAG 개인정보 경계",
@@ -1142,17 +1137,17 @@
       "rag.opaqueToken": "불투명 토큰",
       "rag.boundaryProtected": "보호됨",
       "rag.modelRawObserved": "원문 PII 관측",
-      "rag.tokenNotObserved": "보호 토큰 미관측",
+      "rag.tokenNotObserved": "불투명 토큰 미관측",
       "rag.boundaryNotConfirmed": "확인되지 않음",
       "rag.retrievedTitle": "검색된 문서",
       "rag.retrievedHint": "벡터 검색으로 조회된 실제 문서 원문입니다. 이 단계에는 원문 개인정보가 포함되어 있습니다.",
       "rag.contextTitle": "모델에 노출된 보호 컨텍스트",
-      "rag.contextHint": "RAG 문서가 보호된 뒤 실제 모델에 전달된 컨텍스트입니다. 원문 개인정보는 불투명 토큰으로 대체되어 있습니다.",
+      "rag.contextHint": "RAG 문서가 보호된 뒤 실제 모델에 전달된 컨텍스트입니다. 탐지된 개인정보는 불투명 토큰으로 대체되어 있습니다. 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.",
       "rag.evidenceTitle": "백엔드 검증 근거",
       "rag.evidenceHint": "위 결과의 근거가 되는 /demo/rag 백엔드 응답 값을 표시합니다. 브라우저는 별도의 개인정보 판정을 생성하지 않습니다.",
       "rag.evidenceRetrievedRaw": "검색 문서에 원문 PII 포함",
       "rag.evidenceModelRaw": "모델 컨텍스트에 원문 PII 포함",
-      "rag.evidenceModelToken": "모델 컨텍스트에 보호 토큰 포함",
+      "rag.evidenceModelToken": "모델 컨텍스트에 불투명 토큰 포함",
       "rag.evidenceActiveSessions": "호출 후 서비스 전체 활성 세션",
       "mcp.inputTitle": "예제 MCP 시나리오 입력",
       "mcp.inputHint": "이 예제 입력이 실제 MCP 도구 루프로 전달되며, 이후 단계에는 해당 실행에서 기록된 근거만 표시합니다.",
@@ -1160,14 +1155,14 @@
       "mcp.runtimeHint": "실제 로컬 Streamable HTTP MCP 서버를 왕복 호출한 실행 정보입니다. 아래에는 백엔드 실행 모드 ID와 모델 호출 횟수를 그대로 표시합니다.",
       "mcp.runtimeModeId": "실행 모드 ID",
       "mcp.modelCalls": "모델 호출 횟수",
-      "mcp.modelInputHint": "실제 모델 경계에 전달된 입력입니다. 원문 개인정보는 불투명 토큰으로 대체되어 있습니다.",
+      "mcp.modelInputHint": "실제 모델 경계에 전달된 입력입니다. 탐지된 개인정보는 불투명 토큰으로 대체되어 있습니다. 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.",
       "mcp.argumentsTitle": "모델이 생성한 보호된 MCP 인자",
-      "mcp.argumentsHint": "모델이 MCP 도구 호출을 위해 생성한 인자입니다. 허용 범위가 적용되기 전이므로 개인정보는 아직 토큰 상태입니다.",
+      "mcp.argumentsHint": "모델이 MCP 도구 호출을 위해 생성한 인자입니다. 허용 범위가 적용되기 전이므로 개인정보는 아직 불투명 토큰 상태입니다.",
       "mcp.boundaryTitle": "MCP 도구에 전달되는 개인정보",
-      "mcp.boundaryHint": "현재 요청 안에서 CUSTOMER_ID만 원문으로 복원되어 MCP 도구에 전달됩니다. 다른 개인정보는 토큰 상태를 유지합니다.",
+      "mcp.boundaryHint": "현재 요청에서는 고객번호(CUSTOMER_ID)만 원문으로 복원해 MCP 도구에 전달합니다. 다른 개인정보는 불투명 토큰 상태를 유지합니다.",
       "mcp.boundaryDisclosure": "MCP 도구에 정책이 허용한 원문 전달",
       "mcp.finalTitle": "최종 모델 응답",
-      "mcp.finalHint": "MCP 도구 결과는 모델로 다시 전달되기 전에 재토큰화됩니다. 아래에는 보호된 MCP 결과를 받은 뒤 모델이 반환한 실제 최종 응답을 표시합니다.",
+      "mcp.finalHint": "MCP 도구 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 불투명 토큰으로 바뀝니다. 아래에는 보호된 MCP 결과를 받은 뒤 모델이 반환한 실제 최종 응답을 표시합니다.",
       "security.viewerTitle": "일반 직원",
       "security.supportTitle": "고객지원 담당자",
       "security.requestLabel": "요청 요약",
@@ -1180,7 +1175,7 @@
       "security.outcome.notConfirmed": "예상한 보호 동작이 확인되지 않았습니다.",
       "security.notConfirmed": "확인되지 않음",
       "security.notExecuted": "실행 안 됨",
-      "security.outcome.allowed": "로컬 모델이 보호된 CRM 결과를 수신했습니다.",
+      "security.outcome.allowed": "CRM 조회 결과에서 탐지된 개인정보를 불투명 토큰으로 바꿔 모델에 전달했습니다. 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.",
       "security.visibility": "모델이 받은 도구 목록",
       "security.callDecision": "모델의 도구 호출",
       "security.actualExecution": "실제 도구 실행",
@@ -1190,7 +1185,7 @@
       "security.metric.toolInputMeaning": "허용된 원문만",
       "security.metric.toolOutput": "도구 출력",
       "security.metric.toolOutputMeaning": "재보호됨",
-      "security.metric.cleanup": "호출 후 활성 세션",
+      "security.metric.cleanup": "서비스 전체 활성 세션",
       "security.metric.cleanupMeaning": "활성 세션 {count}",
       "security.hidden": "숨김",
       "security.notRequested": "요청되지 않음",
@@ -1332,7 +1327,11 @@
     container.replaceChildren(...values.map(value => {
       const chip = document.createElement("span");
       chip.className = "chip";
-      chip.textContent = value;
+      if (value === "CUSTOMER_ID") {
+        setLocalizedText(chip, "disclosure.customerId");
+      } else {
+        setTechnicalText(chip, value);
+      }
       return chip;
     }));
   }
@@ -1682,7 +1681,7 @@
     );
     setLocalizedText(
       element("ragModelToken"),
-      rag.modelVisibleContextContainsTokenizedPii ? "rag.protected" : "summary.none"
+      rag.modelVisibleContextContainsTokenizedPii ? "rag.present" : "summary.none"
     );
     element("ragRetrievedRawDetail").textContent = retrievedRaw;
     element("ragModelRawDetail").textContent = modelRaw;

@@ -4,18 +4,19 @@
 
 ## Responsibility Boundary
 
-Spring AI Privacy Guardrails replaces PII detected by analyzers with
-request-scoped tokens before sending data to a model. Immediately before tool
+Spring AI Privacy Guardrails tokenizes PII detected by analyzers before sending
+data to a model, replacing it with request-scoped **opaque tokens**. These replacement
+strings do not directly reveal the original values. Immediately before tool
 execution, it restores only the original values allowed by policy and
 re-protects the results afterward. When output protection is enabled, it also
 applies the configured policy to the final response.
 
 ```mermaid
 flowchart TD
-    A["Input · Memory · RAG"] --> B["Detect PII, then replace<br/>detected values with tokens"]
+    A["Input · Memory · RAG"] --> B["Detect PII<br/>then tokenize it"]
     B --> C["Model"]
     C -. "Tool call" .-> D["Tool<br/>(originals only for permitted types)"]
-    D -. "Replace PII in the result<br/>with tokens" .-> C
+    D -. "Tokenize PII<br/>in the result" .-> C
     C --> E["Inspect final response<br/>(when output protection is enabled)"]
     E --> F["Application"]
 ```
@@ -23,7 +24,8 @@ flowchart TD
 Detection offsets always refer to the caller-supplied input text. Analyzers
 return ranges, entity types, scores, and other evidence; `core` validates,
 canonicalizes, and resolves that evidence according to application policy.
-Token-to-original mappings are managed per request through `PrivacySession`.
+Mappings between opaque tokens and original values are managed per request
+through `PrivacySession`.
 
 The library protects data that crosses supported model, tool, and output
 boundaries. The optional Spring Security integration can also authorize tool
@@ -58,7 +60,7 @@ flowchart LR
 ```
 
 The `core` module has no Spring dependency and provides detection resolution,
-tokenization, session management, and the built-in Regex analyzer. The Presidio
+PII tokenization, session management, and the built-in Regex analyzer. The Presidio
 and OpenNLP integration modules add the corresponding analyzer integrations on
 top of these shared capabilities.
 
@@ -130,14 +132,15 @@ also documents overlap-resolution behavior.
 
 ## Requests and Sessions
 
-Token-to-original mappings are managed per request through `PrivacySession`.
+Mappings between opaque tokens and original values are managed per request
+through `PrivacySession`.
 Direct `core` usage and Spring AI integration use the same session model.
 
-Each request receives a separate session, and tokens created in that session are
+Each request receives a separate session, and opaque tokens created in that session are
 valid only within that request. The Spring AI execution context carries only a
-session handle; the actual token-to-original-value mapping remains in
-library-managed internal state and is not included in model requests or tool
-inputs.
+session handle. The actual mapping between opaque tokens and original values
+remains in library-managed internal state and is not included in model requests
+or tool inputs.
 
 A session is not bound to a specific execution thread, so tool execution can
 continue on another thread while using the same request session. If the session
@@ -163,7 +166,7 @@ sequenceDiagram
     participant T as Tool
 
     A->>P: Input · Memory · RAG
-    P->>P: Detect PII, then replace it with tokens
+    P->>P: Detect PII, then tokenize it
 
     P->>P: Keep only authorized tools<br/>(with tool authorization)
 
@@ -177,7 +180,7 @@ sequenceDiagram
         P->>P: Restore permitted originals
         P->>T: Execute tool
         T-->>P: Tool result
-        P->>P: Replace PII in the tool result with tokens
+        P->>P: Tokenize PII in the tool result
         P-->>M: Protected tool result
     end
 

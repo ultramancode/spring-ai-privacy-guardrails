@@ -126,9 +126,12 @@ String response = privacyChatClient.prompt()
         .content();
 ```
 
-Before the model call, detected PII is replaced with strings that do not reveal
-the original values (tokens). The example below shows what the model receives.
-The `<opaque>` part represents a value generated for each request.
+In this library, **PII tokenization** replaces detected PII with request-scoped
+**opaque tokens** before the model call. These replacement strings do not directly
+reveal the original values.
+
+The example below shows what the model receives. The `<opaque>` part represents
+a value generated for each request.
 
 ```text
 Employee [[PII_EMPLOYEE_ID_<opaque>]] requested customer
@@ -136,9 +139,9 @@ Employee [[PII_EMPLOYEE_ID_<opaque>]] requested customer
 ```
 
 In this example, the detected employee and customer IDs are not sent to the
-model as original values. The library manages token-to-original mappings for
-each request. Application logic must not parse token internals or depend on a
-specific token format.
+model as original values. The library manages mappings between opaque tokens
+and original values for each request. Application logic must not parse opaque
+token internals or depend on a specific opaque token format.
 
 Direct calls to a `ChatModel` are outside this automatic boundary.
 
@@ -147,7 +150,7 @@ To inspect the input sent to the model, run the fixed examples in the
 
 ## 4. Protect Local and MCP Tools
 
-Once privacy protection is applied to a tool, detected PII is passed as tokens
+Once privacy protection is applied to a tool, detected PII is passed as opaque tokens
 by default. If a tool needs an original value, such as a customer ID for a
 lookup, specify the tool name and permitted PII types in `tools.disclosures`.
 
@@ -164,7 +167,7 @@ spring:
 For both local and MCP tools, the name configured in `tools.disclosures` is
 case-sensitive and must exactly match the actual `ToolDefinition.name()`. With
 this policy, `customerLookup` receives only customer IDs (`CUSTOMER_ID`) as
-original values. Other detected PII is passed as tokens.
+original values. Other detected PII is passed as opaque tokens.
 
 ### Local ToolCallback
 

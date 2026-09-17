@@ -181,12 +181,14 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
         }
         JsonNode message = choice.path("message");
         if (!"assistant".equals(message.path("role").asString(""))
-                || !message.path("content").isString()
-                || (message.hasNonNull("tool_calls")
-                        && (!message.path("tool_calls").isArray()
-                                || !message.path("tool_calls").isEmpty()))
-                || message.hasNonNull("function_call")
-                || message.hasNonNull("refusal")) {
+                || !message.path("content").isString()) {
+            throw invalidResponse();
+        }
+        JsonNode toolCalls = message.path("tool_calls");
+        if (message.hasNonNull("tool_calls") && (!toolCalls.isArray() || !toolCalls.isEmpty())) {
+            throw invalidResponse();
+        }
+        if (message.hasNonNull("function_call") || message.hasNonNull("refusal")) {
             throw invalidResponse();
         }
         return message.path("content").asString();

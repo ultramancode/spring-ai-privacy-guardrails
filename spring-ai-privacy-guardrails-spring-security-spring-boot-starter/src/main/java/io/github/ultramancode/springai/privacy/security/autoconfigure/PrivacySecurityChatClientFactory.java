@@ -68,8 +68,11 @@ public final class PrivacySecurityChatClientFactory {
         int plannedToolOrder = toolAdvisorBuilderCopy.getAdvisorOrder();
         UnaryOperator<ChatClient.Builder> privacyAdvisorConfigurer = this.privacyConfigurer.apply(plannedToolOrder);
         Objects.requireNonNull(terminalConfigurer, "terminalConfigurer");
-        UnaryOperator<ChatClient.Builder> combinedConfigurer = builder -> privacyAdvisorConfigurer.apply(
-                Objects.requireNonNull(terminalConfigurer.apply(builder), "terminalConfigurer must not return null"));
+        UnaryOperator<ChatClient.Builder> combinedConfigurer = builder -> {
+            ChatClient.Builder terminalConfiguredBuilder = Objects.requireNonNull(
+                    terminalConfigurer.apply(builder), "terminalConfigurer must not return null");
+            return privacyAdvisorConfigurer.apply(terminalConfiguredBuilder);
+        };
         return this.authorizationFactory.createBuilder(model, toolAdvisorBuilderCopy, combinedConfigurer, actualToolOrder -> {
             if (actualToolOrder != plannedToolOrder) {
                 throw new IllegalArgumentException("Tool advisor order changed after planning the privacy boundary: "

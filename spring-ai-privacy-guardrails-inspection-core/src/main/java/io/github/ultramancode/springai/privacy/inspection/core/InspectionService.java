@@ -50,20 +50,21 @@ public final class InspectionService {
                 request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet());
         List<InspectionReport.Outcome> outcomes = new ArrayList<>();
         for (ContentInspector inspector : inspectors) {
-            InspectionResult result = executeInspector(inspector, request, expectedSegmentIds);
-            if (result.failure() != null && isNonOverridable(result.failure())) {
-                throw new InspectionException(result.failure());
+            InspectionResult inspectorResult = executeInspector(inspector, request, expectedSegmentIds);
+            if (inspectorResult.failure() != null && isNonOverridable(inspectorResult.failure())) {
+                throw new InspectionException(inspectorResult.failure());
             }
             // Preserve positive evidence even if the remainder timed out or was incomplete.
             InspectionDecision decision =
-                    Objects.requireNonNull(policy.evaluate(result), "policy decision");
+                    Objects.requireNonNull(policy.evaluate(inspectorResult), "policy decision");
             if (decision == InspectionDecision.BLOCK) {
-                outcomes.add(new InspectionReport.Outcome(inspector.providerId(), result));
+                outcomes.add(new InspectionReport.Outcome(inspector.providerId(), inspectorResult));
                 return new InspectionReport(InspectionDecision.BLOCK, outcomes);
             }
-            result = verifyCompletion(request, result, expectedSegmentIds);
-            outcomes.add(new InspectionReport.Outcome(inspector.providerId(), result));
-            if (result.status() == InspectionResult.Status.FAILED
+            InspectionResult completionCheckedResult =
+                    verifyCompletion(request, inspectorResult, expectedSegmentIds);
+            outcomes.add(new InspectionReport.Outcome(inspector.providerId(), completionCheckedResult));
+            if (completionCheckedResult.status() == InspectionResult.Status.FAILED
                     && failurePolicy == InspectionFailurePolicy.BLOCK) {
                 return new InspectionReport(InspectionDecision.BLOCK, outcomes);
             }

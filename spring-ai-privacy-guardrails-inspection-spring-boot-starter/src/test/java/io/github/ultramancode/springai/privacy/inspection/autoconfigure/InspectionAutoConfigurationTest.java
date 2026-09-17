@@ -25,6 +25,7 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import reactor.core.publisher.Flux;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -46,11 +47,11 @@ class InspectionAutoConfigurationTest {
 
     @Test
     void configurationMetadataDescribesAllInspectionProperties() throws Exception {
-        try (var resource =
+        try (InputStream resource =
                 InspectionProperties.class.getResourceAsStream(
                         "/META-INF/spring-configuration-metadata.json")) {
             assertThat(resource).isNotNull();
-            var metadata = JsonParserFactory.getJsonParser().parseMap(
+            Map<String, Object> metadata = JsonParserFactory.getJsonParser().parseMap(
                     new String(resource.readAllBytes(), StandardCharsets.UTF_8));
             List<?> properties = (List<?>) metadata.get("properties");
             assertThat(properties)
@@ -130,14 +131,14 @@ class InspectionAutoConfigurationTest {
                     .run(
                             context -> {
                                 assertThat(context).hasNotFailed();
-                                var builder =
+                                ChatClient.Builder builder =
                                         context.getBean(InspectionChatClientConfigurer.class)
                                                 .configure(ChatClient.builder(privacyCheckingModel()));
                                 context.getBean(PrivacyChatClientConfigurer.class)
                                         .forToolCallingAdvisorOrder(
                                                 ToolCallingAdvisor.DEFAULT_ORDER)
                                         .apply(builder);
-                                var client = builder.build();
+                                ChatClient client = builder.build();
                                 String result =
                                         streaming
                                                 ? client.prompt().user("Hello Alice").stream()

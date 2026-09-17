@@ -195,28 +195,29 @@ public final class PromptGuardContentInspector implements ContentInspector, Auto
         }
         long deadline = System.nanoTime() + request.remaining().toNanos();
         Map<String, OnnxTensor> inputs = new HashMap<>();
-        OrtSession.RunOptions run = new OrtSession.RunOptions();
-        AtomicBoolean runClosed = new AtomicBoolean();
-        AtomicReference<InspectionFailure> stopped = new AtomicReference<>();
+        OrtSession.RunOptions runOptions = new OrtSession.RunOptions();
+        AtomicBoolean runOptionsClosed = new AtomicBoolean();
+        AtomicReference<InspectionFailure> terminationReason = new AtomicReference<>();
         Thread caller = Thread.currentThread();
         ScheduledFuture<?> watchdog =
                 WATCHDOG.scheduleAtFixedRate(
                         () -> {
-                            InspectionFailure failure =
-                                    caller.isInterrupted()
-                                            ? InspectionFailure.CANCELLED
-                                            : System.nanoTime() - deadline >= 0
-                                                    ? InspectionFailure.TIMEOUT
-                                                    : null;
-                            if (failure != null) {
-                                synchronized (run) {
-                                    if (!runClosed.get()) {
-                                        stopped.set(failure);
-                                        try {
-                                            run.setTerminate(true);
-                                        } catch (OrtException ignored) {
-                                        }
-                                    }
+                            InspectionFailure failure;
+                            if (caller.isInterrupted()) {
+                                failure = InspectionFailure.CANCELLED;
+                            } else if (System.nanoTime() - deadline >= 0) {
+                                failure = InspectionFailure.TIMEOUT;
+                            } else {
+                                return;
+                            }
+                            synchronized (runOptions) {
+                                if (runOptionsClosed.get()) {
+                                    return;
+                                }
+                                terminationReason.set(failure);
+                                try {
+                                    runOptions.setTerminate(true);
+                                } catch (OrtException ignored) {
                                 }
                             }
                         },
@@ -236,20 +237,20 @@ public final class PromptGuardContentInspector implements ContentInspector, Auto
                         "token_type_ids",
                         OnnxTensor.createTensor(environment, new long[][] {encoding.getTypeIds()}));
             }
-            try (OrtSession.Result outputs = session.run(inputs, run)) {
+            try (OrtSession.Result outputs = session.run(inputs, runOptions)) {
                 request.checkActive();
                 return readMaliciousProbability(outputs);
             }
         } catch (OrtException ex) {
-            if (stopped.get() != null) {
-                throw new InspectionException(stopped.get());
+            if (terminationReason.get() != null) {
+                throw new InspectionException(terminationReason.get());
             }
             throw ex;
         } finally {
             watchdog.cancel(false);
-            synchronized (run) {
-                runClosed.set(true);
-                run.close();
+            synchronized (runOptions) {
+                runOptionsClosed.set(true);
+                runOptions.close();
             }
             inputs.values().forEach(OnnxTensor::close);
         }

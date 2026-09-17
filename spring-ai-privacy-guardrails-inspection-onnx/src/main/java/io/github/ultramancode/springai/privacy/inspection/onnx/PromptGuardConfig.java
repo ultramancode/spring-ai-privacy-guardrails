@@ -10,14 +10,15 @@ public record PromptGuardConfig(
     public PromptGuardConfig {
         Objects.requireNonNull(model, "model");
         Objects.requireNonNull(tokenizer, "tokenizer");
-        if (!Double.isFinite(threshold)
-                || threshold <= 0
-                || threshold > 1
-                || overlapTokens < 0
-                || overlapTokens > 256
-                || intraOpThreads < 1
-                || intraOpThreads > 64) {
-            throw new IllegalArgumentException("Invalid Prompt Guard configuration");
+        if (!Double.isFinite(threshold) || threshold <= 0 || threshold > 1) {
+            throw new IllegalArgumentException(
+                    "threshold must be finite, greater than 0 and at most 1");
+        }
+        if (overlapTokens < 0 || overlapTokens > 256) {
+            throw new IllegalArgumentException("overlapTokens must be between 0 and 256");
+        }
+        if (intraOpThreads < 1 || intraOpThreads > 64) {
+            throw new IllegalArgumentException("intraOpThreads must be between 1 and 64");
         }
     }
 

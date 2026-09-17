@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -48,7 +49,7 @@ class PromptGuardLiveTest {
         model = Path.of(System.getenv("INSPECTION_ONNX_MODEL"));
         tokenizer = Path.of(System.getenv("INSPECTION_ONNX_TOKENIZER"));
         reference = new Properties();
-        try (var input =
+        try (InputStream input =
                 Files.newInputStream(Path.of(System.getenv("INSPECTION_ONNX_REFERENCE")))) {
             reference.load(input);
         }
@@ -63,9 +64,9 @@ class PromptGuardLiveTest {
     @Test
     void realTokenizerWindowsAndInspectorScoresMatchPythonReference() throws Exception {
         // A diagnostic-only near-zero threshold exposes all scores through the existing public API.
-        var config = new PromptGuardConfig(model, tokenizer, 1e-12, 64, 2);
-        try (var inspector = new PromptGuardContentInspector(config);
-                var encoder =
+        PromptGuardConfig config = new PromptGuardConfig(model, tokenizer, 1e-12, 64, 2);
+        try (PromptGuardContentInspector inspector = new PromptGuardContentInspector(config);
+                HuggingFaceTokenizer encoder =
                         HuggingFaceTokenizer.newInstance(
                                 tokenizer,
                                 Map.of(
@@ -103,7 +104,7 @@ class PromptGuardLiveTest {
                             .as(name + " mask " + w)
                             .isEqualTo(reference.getProperty(window + "attention_mask.sha256"));
                 }
-                var result = inspector.inspect(request(text, 16));
+                InspectionResult result = inspector.inspect(request(text, 16));
                 assertThat(result.status())
                         .as(name + " completion: " + result.failure())
                         .isEqualTo(InspectionResult.Status.COMPLETED);
@@ -130,9 +131,9 @@ class PromptGuardLiveTest {
 
     @Test
     void defaultPolicyAllowsBenignAndBlocksAnEnglishInjection() {
-        try (var inspector =
+        try (PromptGuardContentInspector inspector =
                 new PromptGuardContentInspector(PromptGuardConfig.defaults(model, tokenizer))) {
-            var service = new InspectionService(List.of(inspector));
+            InspectionService service = new InspectionService(List.of(inspector));
             assertThat(service.inspect(request(text("case.0."), 16)).decision())
                     .isEqualTo(InspectionDecision.ALLOW);
             assertThat(service.inspect(request(text("case.1."), 16)).decision())
@@ -144,12 +145,12 @@ class PromptGuardLiveTest {
     void realModelChecksTheTailAndRejectsInsufficientWindowBudget() {
         assertThat(reference.getProperty("case.7.name")).isEqualTo("tail_attack");
         assertThat(Integer.parseInt(reference.getProperty("case.7.windows"))).isGreaterThan(1);
-        try (var inspector =
+        try (PromptGuardContentInspector inspector =
                 new PromptGuardContentInspector(PromptGuardConfig.defaults(model, tokenizer))) {
-            var complete = inspector.inspect(request(text("case.7."), 16));
+            InspectionResult complete = inspector.inspect(request(text("case.7."), 16));
             assertThat(complete.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(complete.findings()).isNotEmpty();
-            var limited = inspector.inspect(request(text("case.7."), 1));
+            InspectionResult limited = inspector.inspect(request(text("case.7."), 1));
             assertThat(limited.failure()).isEqualTo(InspectionFailure.LIMIT_EXCEEDED);
             assertThat(limited.inspectedSegmentIds()).isEmpty();
         }
@@ -175,7 +176,7 @@ class PromptGuardLiveTest {
 
     private static String fileHash(Path file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        try (var input = Files.newInputStream(file)) {
+        try (InputStream input = Files.newInputStream(file)) {
             byte[] buffer = new byte[65536];
             int read;
             while ((read = input.read(buffer)) != -1) {

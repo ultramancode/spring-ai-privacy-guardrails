@@ -9,16 +9,19 @@ public record InspectionLimits(
 
     public InspectionLimits {
         Objects.requireNonNull(timeout, "timeout");
-        if (maxSegments < 1
-                || maxSegments > 10_000
-                || maxCharacters < 1
-                || maxCharacters > 10_000_000
-                || maxChunks < 1
-                || maxChunks > 10_000
-                || timeout.isNegative()
+        if (maxSegments < 1 || maxSegments > 10_000) {
+            throw new IllegalArgumentException("maxSegments must be between 1 and 10000");
+        }
+        if (maxCharacters < 1 || maxCharacters > 10_000_000) {
+            throw new IllegalArgumentException("maxCharacters must be between 1 and 10000000");
+        }
+        if (maxChunks < 1 || maxChunks > 10_000) {
+            throw new IllegalArgumentException("maxChunks must be between 1 and 10000");
+        }
+        if (timeout.isNegative()
                 || timeout.isZero()
                 || timeout.compareTo(Duration.ofHours(1)) > 0) {
-            throw new IllegalArgumentException("Inspection limits must be positive and bounded");
+            throw new IllegalArgumentException("timeout must be positive and at most 1 hour");
         }
     }
 

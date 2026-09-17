@@ -8,11 +8,13 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionExcepti
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.net.InetSocketAddress;
@@ -123,9 +125,9 @@ class OpenAiCompatibleContentInspectorTest {
 
     @Test
     void strictKananaMappingAndDedicatedHttpEnvelope() throws Exception {
-        var inspector = start("<SAFE>");
+        OpenAiCompatibleContentInspector inspector = start("<SAFE>");
         assertThat(inspector.inspect(protectedRequest()).findings()).isEmpty();
-        var sent = JSON.readTree(received.get());
+        JsonNode sent = JSON.readTree(received.get());
         assertThat(sent.path("messages").size()).isEqualTo(1);
         assertThat(sent.path("messages").get(0).path("role").asString()).isEqualTo("user");
         assertThat(sent.path("max_tokens").asInt()).isEqualTo(1);
@@ -146,7 +148,7 @@ class OpenAiCompatibleContentInspectorTest {
 
     @Test
     void unprotectedContentNeverLeavesByDefault() throws Exception {
-        var inspector = start("<SAFE>");
+        OpenAiCompatibleContentInspector inspector = start("<SAFE>");
         assertThatThrownBy(
                         () ->
                                 inspector.inspect(
@@ -165,7 +167,7 @@ class OpenAiCompatibleContentInspectorTest {
     @Test
     void explicitlyAuthorizedRawContentCanBeSent() throws Exception {
         start("<SAFE>");
-        var inspector =
+        OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.kanana(config(true, Duration.ofSeconds(2), 4096));
         assertThat(
                         inspector
@@ -178,7 +180,7 @@ class OpenAiCompatibleContentInspectorTest {
 
     @Test
     void unknownLabelsAndMalformedResponsesNeverBecomeSafe() throws Exception {
-        var inspector = start("I think this is <SAFE>");
+        OpenAiCompatibleContentInspector inspector = start("I think this is <SAFE>");
         for (String body :
                 List.of(
                         envelope("I think this is <SAFE>"),
@@ -190,7 +192,7 @@ class OpenAiCompatibleContentInspectorTest {
                         envelope("<SAFE>") + "{}",
                         "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"<SAFE>\",\"tool_calls\":[{}]}}]}")) {
             response.set(body);
-            var report = new InspectionService(List.of(inspector)).inspect(protectedRequest());
+            InspectionReport report = new InspectionService(List.of(inspector)).inspect(protectedRequest());
             assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
             assertThat(report.outcomes().get(0).result().status())
                     .isEqualTo(InspectionResult.Status.FAILED);
@@ -200,10 +202,10 @@ class OpenAiCompatibleContentInspectorTest {
     @Test
     void boundedResponsesAndHttpFailuresAreSanitized() throws Exception {
         start("<SAFE>");
-        var inspector =
+        OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofSeconds(2), 128));
         response.set("secret".repeat(300));
-        var result = inspector.inspect(protectedRequest());
+        InspectionResult result = inspector.inspect(protectedRequest());
         assertThat(result.failure()).isEqualTo(InspectionFailure.LIMIT_EXCEEDED);
         assertThat(result.toString()).doesNotContain("secret");
         status = 503;
@@ -214,24 +216,12 @@ class OpenAiCompatibleContentInspectorTest {
 
     @Test
     void rejectsMalformedToolCallsEvenWhenTheNodeIsEmpty() throws Exception {
-        var inspector = start("<SAFE>");
-        for (Object malformed : List.of("", "unexpected", Map.of(), 0, false)) {
-            response.set(
-                    JSON.writeValueAsString(
-                            Map.of(
-                                    "choices",
-                                    List.of(
-                                            Map.of(
-                                                    "finish_reason",
-                                                    "stop",
-                                                    "message",
-                                                    Map.of(
-                                                            "role",
-                                                            "assistant",
-                                                            "content",
-                                                            "<SAFE>",
-                                                            "tool_calls",
-                                                            malformed))))));
+        OpenAiCompatibleContentInspector inspector = start("<SAFE>");
+        for (Object malformedToolCalls : List.of("", "unexpected", Map.of(), 0, false)) {
+            Map<String, Object> message =
+                    Map.of("role", "assistant", "content", "<SAFE>", "tool_calls", malformedToolCalls);
+            Map<String, Object> choice = Map.of("finish_reason", "stop", "message", message);
+            response.set(JSON.writeValueAsString(Map.of("choices", List.of(choice))));
             assertThat(inspector.inspect(protectedRequest()).failure())
                     .isEqualTo(InspectionFailure.INVALID_RESPONSE);
         }
@@ -241,7 +231,7 @@ class OpenAiCompatibleContentInspectorTest {
     void timeoutIsAnOperationalFailure() throws Exception {
         start("<SAFE>");
         delayMillis = 500;
-        var inspector =
+        OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofMillis(50), 4096));
         assertThat(inspector.inspect(protectedRequest()).failure())
                 .isEqualTo(InspectionFailure.TIMEOUT);
@@ -266,7 +256,8 @@ class OpenAiCompatibleContentInspectorTest {
                 exchange.close();
             }
         });
-        var inspector = OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofSeconds(10), 4096));
+        OpenAiCompatibleContentInspector inspector =
+                OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofSeconds(10), 4096));
         CountDownLatch done = new CountDownLatch(1);
         AtomicReference<InspectionFailure> failure = new AtomicReference<>();
         AtomicBoolean interruptRestored = new AtomicBoolean();
@@ -301,7 +292,7 @@ class OpenAiCompatibleContentInspectorTest {
 
     @Test
     void interruptedRequestNeverStartsHttp() throws Exception {
-        var inspector = start("<SAFE>");
+        OpenAiCompatibleContentInspector inspector = start("<SAFE>");
         try {
             Thread.currentThread().interrupt();
             assertThatThrownBy(() -> inspector.inspect(protectedRequest()))
@@ -316,7 +307,7 @@ class OpenAiCompatibleContentInspectorTest {
     @Test
     void strictJsonProtocolRejectsExtraFieldsAndTruncation() throws Exception {
         start("{\"verdict\":\"SAFE\"}");
-        var inspector =
+        OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.jsonGuard(
                         config(false, Duration.ofSeconds(2), 4096));
         assertThat(inspector.inspect(protectedRequest()).status())

@@ -88,21 +88,21 @@ class CombinedInspectionIntegrationTest {
 
     @ParameterizedTest(name = "streaming={0}, toolSearch={1}")
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
-    void combinedFactoryInspectsProtectedToolResults(boolean streaming, boolean search) {
+    void combinedFactoryInspectsProtectedToolResults(boolean streaming, boolean toolSearchEnabled) {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
-            var inspected = new CopyOnWriteArrayList<InspectionRequest>();
+            List<InspectionRequest> inspected = new CopyOnWriteArrayList<>();
             AtomicInteger modelCalls = new AtomicInteger();
-            var client = context.getBean(PrivacySecurityChatClientFactory.class)
-                    .builder(toolCallingModel(search, modelCalls), toolAdvisorBuilder(search),
+            ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
+                    .builder(toolCallingModel(toolSearchEnabled, modelCalls), toolAdvisorBuilder(toolSearchEnabled),
                             inspectionConfigurer(inspected))
                     .defaultTools(context.getBean(PrivacyToolCallbackFactory.class).wrap(lookupTool()))
                     .build();
-            var authentication = UsernamePasswordAuthenticationToken.authenticated(
+            UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken.authenticated(
                     "test", "unused", List.of());
             SecurityContextHolder.getContext().setAuthentication(authentication);
             try {
-                var request = client.prompt().user("Hello Alice")
+                ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello Alice")
                         .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "fixture"));
                 if (streaming) {
                     assertThatThrownBy(() -> request.stream().content()
@@ -114,8 +114,8 @@ class CombinedInspectionIntegrationTest {
                     assertThatThrownBy(() -> request.call().content())
                             .isInstanceOf(InspectionBlockedException.class);
                 }
-                assertThat(modelCalls).hasValue(search ? 2 : 1);
-                assertThat(inspected).hasSize(search ? 3 : 2);
+                assertThat(modelCalls).hasValue(toolSearchEnabled ? 2 : 1);
+                assertThat(inspected).hasSize(toolSearchEnabled ? 3 : 2);
                 assertThat(inspected.get(inspected.size() - 1).segments())
                         .anyMatch(s -> s.source() == ContentSegment.Source.TOOL && s.text().contains("attack"));
             } finally {
@@ -142,8 +142,9 @@ class CombinedInspectionIntegrationTest {
                     return Flux.defer(() -> Flux.just(call(prompt)));
                 }
             };
-            var inspection = new InspectionChatClientConfigurer(new InspectionService(List.of(
-                    new RuleBasedContentInspector(List.of(InspectionRule.literal("attack", "attack"))))));
+            InspectionChatClientConfigurer inspection =
+                    new InspectionChatClientConfigurer(new InspectionService(List.of(
+                            new RuleBasedContentInspector(List.of(InspectionRule.literal("attack", "attack"))))));
             UnaryOperator<ChatClient.Builder> configureClone =
                     builder -> inspection.configure(builder.clone());
             ChatClient.Builder builder = privacyEnabled
@@ -151,7 +152,7 @@ class CombinedInspectionIntegrationTest {
                             .builderWithTerminalBoundary(model, configureClone)
                     : context.getBean(ToolAuthorizationChatClientFactory.class)
                             .builderWithTerminalBoundary(model, configureClone);
-            var request = builder.build().prompt().user("Alice attack");
+            ChatClient.ChatClientRequestSpec request = builder.build().prompt().user("Alice attack");
 
             if (streaming) {
                 assertThatThrownBy(() -> request.stream().content().collectList().block(Duration.ofSeconds(5)))
@@ -170,7 +171,7 @@ class CombinedInspectionIntegrationTest {
             assertThat(request.segments())
                     .allSatisfy(segment -> assertThat(segment.text()).doesNotContain("Alice"));
             inspected.add(request);
-            var findings = request.segments().stream()
+            List<InspectionFinding> findings = request.segments().stream()
                     .filter(s -> s.text().contains("attack"))
                     .map(s -> new InspectionFinding(s.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
                     .toList();
@@ -186,7 +187,7 @@ class CombinedInspectionIntegrationTest {
                 ignored -> {});
     }
 
-    private ChatModel toolCallingModel(boolean search, AtomicInteger modelCalls) {
+    private ChatModel toolCallingModel(boolean toolSearchEnabled, AtomicInteger modelCalls) {
         return new ChatModel() {
             @Override
             public ChatOptions getOptions() {
@@ -196,10 +197,10 @@ class CombinedInspectionIntegrationTest {
             @Override
             public ChatResponse call(Prompt prompt) {
                 int round = modelCalls.incrementAndGet();
-                if (search && round == 1) {
-                    return toolResponse("toolSearchTool", "{\"query\":\"lookup\"}");
+                if (toolSearchEnabled && round == 1) {
+                    return toolCallResponse("toolSearchTool", "{\"query\":\"lookup\"}");
                 }
-                return toolResponse("lookup", "{}");
+                return toolCallResponse("lookup", "{}");
             }
 
             @Override
@@ -209,8 +210,8 @@ class CombinedInspectionIntegrationTest {
         };
     }
 
-    private ToolCallingAdvisor.Builder<?> toolAdvisorBuilder(boolean search) {
-        if (!search) {
+    private ToolCallingAdvisor.Builder<?> toolAdvisorBuilder(boolean toolSearchEnabled) {
+        if (!toolSearchEnabled) {
             return ToolCallingAdvisor.builder();
         }
         ToolIndex index = mock(ToolIndex.class);
@@ -234,7 +235,7 @@ class CombinedInspectionIntegrationTest {
         };
     }
 
-    private static ChatResponse toolResponse(String name, String arguments) {
+    private static ChatResponse toolCallResponse(String name, String arguments) {
         return new ChatResponse(List.of(new Generation(AssistantMessage.builder()
                 .content("")
                 .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + name, "function", name, arguments)))

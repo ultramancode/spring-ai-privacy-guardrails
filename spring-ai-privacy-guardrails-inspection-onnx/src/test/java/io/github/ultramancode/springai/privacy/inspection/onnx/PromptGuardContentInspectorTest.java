@@ -10,6 +10,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -27,12 +28,12 @@ class PromptGuardContentInspectorTest {
 
     private PromptGuardConfig config() throws Exception {
         byte[] encoded;
-        try (var input = getClass().getResourceAsStream("/inspection-fixture.onnx.base64")) {
+        try (InputStream input = getClass().getResourceAsStream("/inspection-fixture.onnx.base64")) {
             encoded = Base64.getMimeDecoder().decode(input.readAllBytes());
         }
         Path model = Files.write(temp.resolve("fixture.onnx"), encoded);
         Path tokenizer;
-        try (var input = getClass().getResourceAsStream("/inspection-fixture-tokenizer.json")) {
+        try (InputStream input = getClass().getResourceAsStream("/inspection-fixture-tokenizer.json")) {
             tokenizer = Files.write(temp.resolve("tokenizer.json"), input.readAllBytes());
         }
         return PromptGuardConfig.defaults(model, tokenizer);
@@ -44,8 +45,8 @@ class PromptGuardContentInspectorTest {
 
     @Test
     void tokenizerMatchesKnownFixtureTokenIds() throws Exception {
-        var config = config();
-        try (var tokenizer =
+        PromptGuardConfig config = config();
+        try (HuggingFaceTokenizer tokenizer =
                 HuggingFaceTokenizer.newInstance(
                         config.tokenizer(),
                         Map.of(
@@ -81,11 +82,11 @@ class PromptGuardContentInspectorTest {
 
     @Test
     void realOnnxAndTokenizerClassifyBothFixtureLabels() throws Exception {
-        try (var inspector = inspector()) {
-            var benign = inspector.inspect(request("hello world", 16));
+        try (PromptGuardContentInspector inspector = inspector()) {
+            InspectionResult benign = inspector.inspect(request("hello world", 16));
             assertThat(benign.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(benign.findings()).isEmpty();
-            var malicious = inspector.inspect(request("hello attack", 16));
+            InspectionResult malicious = inspector.inspect(request("hello attack", 16));
             assertThat(malicious.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(malicious.findings())
                     .singleElement()
@@ -100,8 +101,8 @@ class PromptGuardContentInspectorTest {
 
     @Test
     void tailBeyond512TokensIsNotSilentlyTruncated() throws Exception {
-        try (var inspector = inspector()) {
-            var result = inspector.inspect(request("hello ".repeat(1100) + "attack", 16));
+        try (PromptGuardContentInspector inspector = inspector()) {
+            InspectionResult result = inspector.inspect(request("hello ".repeat(1100) + "attack", 16));
             assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(result.inspectedSegmentIds()).containsExactly("s1");
             assertThat(result.findings()).isNotEmpty();
@@ -110,8 +111,8 @@ class PromptGuardContentInspectorTest {
 
     @Test
     void exceedingWindowBudgetFailsWithoutClaimingCompleteCoverage() throws Exception {
-        try (var inspector = inspector()) {
-            var result = inspector.inspect(request("hello ".repeat(1100) + "attack", 1));
+        try (PromptGuardContentInspector inspector = inspector()) {
+            InspectionResult result = inspector.inspect(request("hello ".repeat(1100) + "attack", 1));
             assertThat(result.failure()).isEqualTo(InspectionFailure.LIMIT_EXCEEDED);
             assertThat(result.inspectedSegmentIds()).isEmpty();
         }
@@ -119,7 +120,7 @@ class PromptGuardContentInspectorTest {
 
     @Test
     void closeIsIdempotentAndPreventsFurtherRuns() throws Exception {
-        var inspector = inspector();
+        PromptGuardContentInspector inspector = inspector();
         inspector.close();
         inspector.close();
         assertThat(inspector.inspect(request("hello", 16)).failure())
@@ -128,7 +129,7 @@ class PromptGuardContentInspectorTest {
 
     @Test
     void interruptionIsPreserved() throws Exception {
-        try (var inspector = inspector()) {
+        try (PromptGuardContentInspector inspector = inspector()) {
             try {
                 Thread.currentThread().interrupt();
                 assertThatThrownBy(() -> inspector.inspect(request("hello", 16)))

@@ -35,6 +35,7 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.util.MimeTypeUtils;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
@@ -64,7 +65,7 @@ class InspectionChatClientIntegrationTest {
 
     static final class RecordingModel implements ChatModel {
         final AtomicInteger calls = new AtomicInteger();
-        boolean tools;
+        boolean toolCallingEnabled;
 
         @Override
         public ChatOptions getOptions() {
@@ -74,22 +75,16 @@ class InspectionChatClientIntegrationTest {
         @Override
         public ChatResponse call(Prompt prompt) {
             calls.incrementAndGet();
-            if (tools
+            if (toolCallingEnabled
                     && prompt.getInstructions().stream()
                             .noneMatch(ToolResponseMessage.class::isInstance)) {
-                return new ChatResponse(
-                        List.of(
-                                new Generation(
-                                        AssistantMessage.builder()
-                                                .content("")
-                                                .toolCalls(
-                                                        List.of(
-                                                                new AssistantMessage.ToolCall(
-                                                                        "call-1",
-                                                                        "function",
-                                                                        "lookup",
-                                                                        "{}")))
-                                                .build())));
+                AssistantMessage.ToolCall toolCall =
+                        new AssistantMessage.ToolCall("call-1", "function", "lookup", "{}");
+                AssistantMessage assistantMessage = AssistantMessage.builder()
+                        .content("")
+                        .toolCalls(List.of(toolCall))
+                        .build();
+                return new ChatResponse(List.of(new Generation(assistantMessage)));
             }
             return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
         }
@@ -118,8 +113,8 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void permitsBenignAndBlocksAttackBeforeBusinessCall() {
-        var model = new RecordingModel();
-        var client = client(model);
+        RecordingModel model = new RecordingModel();
+        ChatClient client = client(model);
         assertThat(client.prompt().user("hello").call().content()).isEqualTo("done");
         assertThatThrownBy(() -> client.prompt().user("attack").call().content())
                 .isInstanceOf(InspectionBlockedException.class);
@@ -128,8 +123,8 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void streamingIsLazyAndBlocksBeforeSubscriptionToBusinessModel() {
-        var model = new RecordingModel();
-        var publisher = client(model).prompt().user("attack").stream().content();
+        RecordingModel model = new RecordingModel();
+        Flux<String> publisher = client(model).prompt().user("attack").stream().content();
         assertThat(model.calls).hasValue(0);
         StepVerifier.create(publisher)
                 .expectError(InspectionBlockedException.class)
@@ -144,9 +139,9 @@ class InspectionChatClientIntegrationTest {
     @Test
     void toolResultIsInspectedBeforeTheSecondModelCall() {
         for (boolean streaming : List.of(false, true)) {
-            var model = new RecordingModel();
-            model.tools = true;
-            var client =
+            RecordingModel model = new RecordingModel();
+            model.toolCallingEnabled = true;
+            ChatClient client =
                     configurer()
                             .configure(ChatClient.builder(model))
                             .defaultTools(tool("attack"))
@@ -165,9 +160,9 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void benignToolResultAllowsSecondModelCall() {
-        var model = new RecordingModel();
-        model.tools = true;
-        var client =
+        RecordingModel model = new RecordingModel();
+        model.toolCallingEnabled = true;
+        ChatClient client =
                 configurer()
                         .configure(ChatClient.builder(model))
                         .defaultTools(tool("benign result"))
@@ -178,8 +173,8 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void observesAllMessageRolesNotJustUsers() {
-        var model = new RecordingModel();
-        var client = client(model);
+        RecordingModel model = new RecordingModel();
+        ChatClient client = client(model);
         assertThatThrownBy(
                         () ->
                                 client.prompt(
@@ -196,8 +191,8 @@ class InspectionChatClientIntegrationTest {
     @ParameterizedTest(name = "{0}, streaming={2}")
     @MethodSource("unsupportedMessages")
     void rejectsUnsupportedContentBeforeBusinessModel(String description, Message message, boolean streaming) {
-        var model = new RecordingModel();
-        var request = client(model).prompt(new Prompt(List.of(message)));
+        RecordingModel model = new RecordingModel();
+        ChatClient.ChatClientRequestSpec request = client(model).prompt(new Prompt(List.of(message)));
         if (streaming) {
             StepVerifier.create(request.stream().content())
                     .expectErrorMatches(error -> error instanceof InspectionException failure
@@ -225,7 +220,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void ragContentAddedEarlierInTheChainIsInspected() {
-        var model = new RecordingModel();
+        RecordingModel model = new RecordingModel();
         CallAdvisor rag =
                 new CallAdvisor() {
                     public ChatClientResponse adviseCall(
@@ -257,8 +252,8 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void rejectsFormattingAppendedByTheTerminalModelAdvisorAfterInspection() {
-        var model = new RecordingModel();
-        var client = client(model);
+        RecordingModel model = new RecordingModel();
+        ChatClient client = client(model);
         String key = ChatClientAttributes.OUTPUT_FORMAT.getKey();
         assertThatThrownBy(
                         () ->
@@ -278,7 +273,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void rejectsRequestAddedLateAdvisorsBeforeAnyModelCall() {
-        var model = new RecordingModel();
+        RecordingModel model = new RecordingModel();
         CallAdvisor late =
                 new CallAdvisor() {
                     public ChatClientResponse adviseCall(
@@ -302,13 +297,13 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void allowsObservationWrappingTheInspectionAndRejectsDuplicateConfiguration() {
-        var model = new RecordingModel();
+        RecordingModel model = new RecordingModel();
         AtomicInteger observations = new AtomicInteger();
         CallAdvisor observer =
                 new CallAdvisor() {
                     public ChatClientResponse adviseCall(
                             ChatClientRequest request, CallAdvisorChain chain) {
-                        var result = chain.nextCall(request);
+                        ChatClientResponse result = chain.nextCall(request);
                         observations.incrementAndGet();
                         return result;
                     }
@@ -321,8 +316,8 @@ class InspectionChatClientIntegrationTest {
                         return "observer";
                     }
                 };
-        var configurer = configurer();
-        var builder = configurer.configure(ChatClient.builder(model)).defaultAdvisors(observer);
+        InspectionChatClientConfigurer configurer = configurer();
+        ChatClient.Builder builder = configurer.configure(ChatClient.builder(model)).defaultAdvisors(observer);
         assertThatThrownBy(() -> configurer.configure(builder))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(builder.build().prompt().user("hello").call().content()).isEqualTo("done");
@@ -351,14 +346,14 @@ class InspectionChatClientIntegrationTest {
                         return InspectionResult.failed(InspectionFailure.TIMEOUT);
                     }
                 };
-        var model = new RecordingModel();
-        var config =
+        RecordingModel model = new RecordingModel();
+        InspectionChatClientConfigurer config =
                 new InspectionChatClientConfigurer(
                         new InspectionService(
                                 List.of(blocking),
                                 InspectionPolicy.blockFindings(),
                                 InspectionFailurePolicy.FAIL_OPEN));
-        var subscription =
+        Disposable subscription =
                 config.configure(ChatClient.builder(model)).build().prompt().user("hello").stream()
                         .content()
                         .subscribe();

@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -16,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RuleBasedContentInspectorTest {
 
     private InspectionRequest request(String... texts) {
-        var segments = new ArrayList<ContentSegment>();
+        List<ContentSegment> segments = new ArrayList<>();
         for (String text : texts) {
             segments.add(
                     new ContentSegment(
@@ -31,7 +32,7 @@ class RuleBasedContentInspectorTest {
 
     @Test
     void literalsAndRegexPreserveSeparateSegments() {
-        var inspector =
+        RuleBasedContentInspector inspector =
                 new RuleBasedContentInspector(
                         List.of(
                                 InspectionRule.literal("literal", "ignore previous instructions"),
@@ -39,7 +40,7 @@ class RuleBasedContentInspectorTest {
                                         "regex",
                                         InspectionFinding.Category.PROMPT_LEAKING,
                                         "(?i)reveal.*system prompt")));
-        var result =
+        InspectionResult result =
                 inspector.inspect(
                         request(
                                 "ordinary text",
@@ -54,7 +55,7 @@ class RuleBasedContentInspectorTest {
 
     @Test
     void literalMetacharactersAreNotRegex() {
-        var result =
+        InspectionResult result =
                 new RuleBasedContentInspector(List.of(InspectionRule.literal("literal", ".*")))
                         .inspect(request("hello"));
         assertThat(result.findings()).isEmpty();
@@ -76,7 +77,7 @@ class RuleBasedContentInspectorTest {
     void interruptedRulesStop() {
         try {
             Thread.currentThread().interrupt();
-            var result =
+            InspectionResult result =
                     new RuleBasedContentInspector(List.of(InspectionRule.literal("x", "x")))
                             .inspect(request("x"));
             assertThat(result.failure()).isEqualTo(InspectionFailure.CANCELLED);

@@ -60,10 +60,10 @@ class InspectionServiceTest {
 
     @Test
     void emptyCoverageCannotPass() {
-        var providerResult = InspectionResult.completed(Set.of(), List.of());
-        var service = new InspectionService(List.of(inspector("one", request -> providerResult)));
+        InspectionResult providerResult = InspectionResult.completed(Set.of(), List.of());
+        InspectionService service = new InspectionService(List.of(inspector("one", request -> providerResult)));
 
-        var report = service.inspect(request());
+        InspectionReport report = service.inspect(request());
 
         assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
         assertThat(report.outcomes().get(0).result().failure())
@@ -72,10 +72,11 @@ class InspectionServiceTest {
 
     @Test
     void policySeesProviderEvidenceBeforeIncompleteCoverageIsReported() {
-        var finding = new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
-        var providerResult = InspectionResult.completed(Set.of(), List.of(finding));
+        InspectionFinding finding =
+                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+        InspectionResult providerResult = InspectionResult.completed(Set.of(), List.of(finding));
         AtomicReference<InspectionResult> evaluated = new AtomicReference<>();
-        var service = new InspectionService(
+        InspectionService service = new InspectionService(
                 List.of(inspector("one", request -> providerResult)),
                 result -> {
                     evaluated.set(result);
@@ -83,7 +84,7 @@ class InspectionServiceTest {
                 },
                 InspectionFailurePolicy.FAIL_OPEN);
 
-        var report = service.inspect(request());
+        InspectionReport report = service.inspect(request());
 
         assertThat(evaluated.get()).isEqualTo(providerResult);
         assertThat(report.allowedAfterFailure()).isTrue();
@@ -100,7 +101,7 @@ class InspectionServiceTest {
     })
     void nonOverridableProviderFailuresBypassPolicyAndFailOpen(InspectionFailure failure, boolean thrown) {
         AtomicInteger evaluations = new AtomicInteger();
-        var service = new InspectionService(
+        InspectionService service = new InspectionService(
                 List.of(inspector("one", request -> {
                     if (thrown) {
                         throw new InspectionException(failure);
@@ -120,13 +121,13 @@ class InspectionServiceTest {
 
     @Test
     void explicitFailOpenRetainsFailedStatus() {
-        var providerResult = InspectionResult.failed(InspectionFailure.TIMEOUT);
-        var service = new InspectionService(
+        InspectionResult providerResult = InspectionResult.failed(InspectionFailure.TIMEOUT);
+        InspectionService service = new InspectionService(
                 List.of(inspector("one", request -> providerResult)),
                 InspectionPolicy.blockFindings(),
                 InspectionFailurePolicy.FAIL_OPEN);
 
-        var report = service.inspect(request());
+        InspectionReport report = service.inspect(request());
 
         assertThat(report.allowedAfterFailure()).isTrue();
         assertThat(report.outcomes().get(0).result().status())
@@ -135,34 +136,35 @@ class InspectionServiceTest {
 
     @Test
     void findingBlocksEvenWhenLaterWorkFailedAndFailOpenEnabled() {
-        var finding =
+        InspectionFinding finding =
                 new InspectionFinding(
                         "s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
-        var providerResult = InspectionResult.failed(
+        InspectionResult providerResult = InspectionResult.failed(
                 InspectionFailure.TIMEOUT, Set.of(), List.of(finding));
-        var service = new InspectionService(
+        InspectionService service = new InspectionService(
                 List.of(inspector("one", request -> providerResult)),
                 InspectionPolicy.blockFindings(),
                 InspectionFailurePolicy.FAIL_OPEN);
 
-        var report = service.inspect(request());
+        InspectionReport report = service.inspect(request());
 
         assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
     }
 
     @Test
     void confirmedBlockShortCircuits() {
-        var finding = new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
-        var blockedResult = InspectionResult.completed(Set.of("s1"), List.of(finding));
-        var blockingInspector = inspector("one", request -> blockedResult);
+        InspectionFinding finding =
+                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+        InspectionResult blockedResult = InspectionResult.completed(Set.of("s1"), List.of(finding));
+        ContentInspector blockingInspector = inspector("one", request -> blockedResult);
         AtomicInteger laterInspectorCalls = new AtomicInteger();
-        var laterInspector = inspector("two", request -> {
+        ContentInspector laterInspector = inspector("two", request -> {
             laterInspectorCalls.incrementAndGet();
             return safe();
         });
-        var service = new InspectionService(List.of(blockingInspector, laterInspector));
+        InspectionService service = new InspectionService(List.of(blockingInspector, laterInspector));
 
-        var report = service.inspect(request());
+        InspectionReport report = service.inspect(request());
 
         assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
         assertThat(laterInspectorCalls).hasValue(0);
@@ -176,7 +178,7 @@ class InspectionServiceTest {
                     calls.incrementAndGet();
                     return safe();
                 };
-        var service =
+        InspectionService service =
                 new InspectionService(
                         List.of(
                                 inspector(
@@ -196,7 +198,7 @@ class InspectionServiceTest {
 
     @Test
     void interruptionIsNeverAllowed() {
-        var service = new InspectionService(
+        InspectionService service = new InspectionService(
                 List.of(inspector("one", request -> safe())),
                 InspectionPolicy.blockFindings(),
                 InspectionFailurePolicy.FAIL_OPEN);
@@ -212,7 +214,7 @@ class InspectionServiceTest {
 
     @Test
     void arbitraryProviderExceptionsAreSanitized() {
-        var report =
+        InspectionReport report =
                 new InspectionService(
                                 List.of(
                                         inspector(
@@ -228,7 +230,7 @@ class InspectionServiceTest {
 
     @Test
     void fatalErrorsAreNotSwallowed() {
-        var service =
+        InspectionService service =
                 new InspectionService(
                         List.of(
                                 inspector(

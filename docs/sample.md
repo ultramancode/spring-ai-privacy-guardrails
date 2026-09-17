@@ -1,7 +1,7 @@
 ---
 description: >-
-  Run the Privacy Boundary Inspector's Local Tool, RAG, and MCP scenarios to examine
-  privacy protection in model requests and tool calls.
+  Explore PII protection and role-based tool access with the Privacy Boundary
+  Inspector's Local Tool, RAG, MCP, and Security scenarios.
 ---
 
 # Sample / Demo Guide

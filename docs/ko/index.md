@@ -11,7 +11,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: 7e969bc0ecc8896307e16c6388c04ce8439998d526085802acae1a3633ac7d3c -->
+<!-- i18n-source-sha256: f3efa7e8f5c034cf66edcafa13eb3a4b05e6089479582aad6443d53f9f8c0049 -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -26,8 +26,10 @@ hide:
 도구 실행 전에 권한을 검사할 수 있습니다. 도구 권한 검사는 개인정보 보호 기능 없이도
 사용할 수 있습니다.
 
-Spring 공식 블로그에서 소개:
-[This Week in Spring — August 18, 2026](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/).
+**외부 소개**
+
+- **Spring 공식 블로그** — [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)에 소개
+- **Spring AI Community** — [Awesome Spring AI의 Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)에 소개
 
 ## 직접 확인하기
 

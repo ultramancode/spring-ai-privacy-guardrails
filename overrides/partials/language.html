@@ -1,0 +1,12 @@
+{% set language = config.theme.language | d("en", true) %}
+{% import "partials/languages/" ~ language ~ ".html" as lang %}
+{% import "partials/languages/en.html" as fallback %}
+
+{# Set the document language per page, keeping the configured theme translations. #}
+{% macro t(key) -%}
+  {%- if key == "language" and page and page.url[:3] == "ko/" -%}
+    ko
+  {%- else -%}
+    {{ lang.t(key) or fallback.t(key) or key }}
+  {%- endif -%}
+{%- endmacro %}

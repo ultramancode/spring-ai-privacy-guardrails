@@ -2,9 +2,43 @@
 
 {% block extrahead %}
   {{ super() }}
-  {% if page %}
+  {% if page and page.canonical_url %}
+    {% set is_korean = page.url[:3] == "ko/" %}
+    {% set share_title = config.site_name %}
+    {% if page.url != "" and page.url != "ko/" %}
+      {% set share_title = page.title ~ " - " ~ config.site_name %}
+    {% endif %}
+    {% set share_description = config.site_description %}
+    {% if page.meta and page.meta.description %}
+      {% set share_description = page.meta.description %}
+    {% endif %}
+    {% set share_image = config.site_url ~ "images/hero.png" %}
+    {% if is_korean %}
+      {% set share_image_alt = "Spring AI Privacy Guardrails의 개인정보 탐지·토큰화와 도구별 원문 공개 흐름" %}
+    {% else %}
+      {% set share_image_alt = "Spring AI Privacy Guardrails: PII detection, tokenization, and scoped disclosure to tools" %}
+    {% endif %}
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ config.site_name | e }}">
+    <meta property="og:title" content="{{ share_title | e }}">
+    <meta property="og:description" content="{{ share_description | e }}">
+    <meta property="og:url" content="{{ page.canonical_url | e }}">
+    <meta property="og:locale" content="{{ 'ko_KR' if is_korean else 'en_US' }}">
+    <meta property="og:image" content="{{ share_image | e }}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1600">
+    <meta property="og:image:height" content="820">
+    <meta property="og:image:alt" content="{{ share_image_alt | e }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ share_title | e }}">
+    <meta name="twitter:description" content="{{ share_description | e }}">
+    <meta name="twitter:image" content="{{ share_image | e }}">
+    <meta name="twitter:image:alt" content="{{ share_image_alt | e }}">
+
     {% for path in config.extra.translated_pages %}
       {% if page.url == path or page.url == ("ko/" ~ path) %}
+        <meta property="og:locale:alternate" content="{{ 'en_US' if is_korean else 'ko_KR' }}">
         <link rel="alternate" hreflang="en" href="{{ config.site_url ~ path }}">
         <link rel="alternate" hreflang="ko" href="{{ config.site_url ~ 'ko/' ~ path }}">
       {% endif %}

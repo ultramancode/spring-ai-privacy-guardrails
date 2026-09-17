@@ -7,16 +7,16 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 88663e59e275f807543cbdec0c03f6a0271e459b0660bf3c062ce24ad6d03ae2 -->
+<!-- i18n-source-sha256: 99287044ac8452a02eeb0e05338d08d3d16d0edff591e3d9253b1ccb1b71c0be -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
 </p>
 
-<p align="center">
-  Spring 공식 블로그에서 소개:
-  <a href="https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/">This Week in Spring — August 18, 2026</a>
-</p>
+**외부 소개**
+
+- **Spring 공식 블로그** — [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)에 소개
+- **Spring AI Community** — [Awesome Spring AI의 Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)에 소개
 
 <p align="center">
   <strong>데모 영상:</strong>
@@ -78,6 +78,8 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행하�
   다시 전달하기 전에 보호합니다.
 - **RAG**는 검색된 원문 문서와 모델이 전달받은 보호된 프롬프트를 비교합니다.
 - **MCP**는 Streamable HTTP를 통한 로컬 MCP 도구 호출에서 같은 보호 과정을 보여줍니다.
+- **Security**는 일반 직원과 고객 지원 담당자의 도구 공개·실행 권한을 비교하고,
+  허용된 호출에서 개인정보가 보호되는 모습을 보여줍니다.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델에서 관찰된 고정 예제 데이터의 개인정보 원문 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">

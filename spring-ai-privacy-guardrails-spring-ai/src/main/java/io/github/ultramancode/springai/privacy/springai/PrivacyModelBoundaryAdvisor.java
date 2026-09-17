@@ -11,10 +11,14 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.core.Ordered;
 import reactor.core.publisher.Flux;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -25,8 +29,31 @@ import java.util.Set;
  */
 public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
 
-    /** Tested terminal request position immediately before model execution. */
-    public static final int DEFAULT_ORDER = Ordered.LOWEST_PRECEDENCE - 1;
+    /** Leaves distinct downstream slots for tool authorization and content inspection. */
+    public static final int DEFAULT_ORDER = Ordered.LOWEST_PRECEDENCE - 3;
+    static final String MODEL_CONTENT_PROTECTION = "io.github.ultramancode.springai.privacy.model-content-protection";
+
+    /**
+     * Whether the current message list passed this boundary. This is provenance of
+     * the configured privacy transformation, not a guarantee that every PII was detected.
+     * Optional downstream integrations can use it without retaining the privacy session.
+     */
+    public static boolean isModelContentProtected(ChatClientRequest request) {
+        Object marker = request.context().get(MODEL_CONTENT_PROTECTION);
+        return marker instanceof ModelContentProtection protection
+                && protection.messages().equals(request.prompt().getInstructions());
+    }
+
+    private record ModelContentProtection(List<Message> messages) {
+        private ModelContentProtection {
+            messages = List.copyOf(messages);
+        }
+
+        @Override
+        public String toString() {
+            return "ModelContentProtection[content=<redacted>]";
+        }
+    }
 
     private final PrivacyService privacyService;
     private final PrivacyMessageTransformer messageTransformer;
@@ -177,7 +204,9 @@ public final class PrivacyModelBoundaryAdvisor implements CallAdvisor, StreamAdv
                 PrivacyEnforcementBoundary.MODEL,
                 PrivacyEnforcementOutcome.PROTECTED
         );
-        return protectedRequest;
+        Map<String, Object> context = new HashMap<>(protectedRequest.context());
+        context.put(MODEL_CONTENT_PROTECTION, new ModelContentProtection(protectedRequest.prompt().getInstructions()));
+        return protectedRequest.mutate().context(context).build();
     }
 
 }

@@ -49,11 +49,28 @@ public final class PrivacySecurityChatClientFactory {
      * @throws IllegalArgumentException when the supplied tool advisor order is incompatible with privacy
      */
     public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder) {
+        return builder(model, toolAdvisorBuilder, UnaryOperator.identity());
+    }
+
+    /**
+     * Adds a client-scoped terminal boundary. Return the supplied builder or its clone
+     * to preserve the managed tool configuration.
+     */
+    public ChatClient.Builder builderWithTerminalBoundary(ChatModel model, UnaryOperator<ChatClient.Builder> terminalConfigurer) {
+        return builder(model, this.authorizationFactory.defaultToolAdvisorBuilder(), terminalConfigurer);
+    }
+
+    /** Registers the terminal boundary before the existing privacy/authorization composition. */
+    public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
+            UnaryOperator<ChatClient.Builder> terminalConfigurer) {
         ToolCallingAdvisor.Builder<?> toolAdvisorBuilderCopy = Objects.requireNonNull(
                 toolAdvisorBuilder, "toolAdvisorBuilder must not be null").copy();
         int plannedToolOrder = toolAdvisorBuilderCopy.getAdvisorOrder();
         UnaryOperator<ChatClient.Builder> privacyAdvisorConfigurer = this.privacyConfigurer.apply(plannedToolOrder);
-        return this.authorizationFactory.createBuilder(model, toolAdvisorBuilderCopy, privacyAdvisorConfigurer, actualToolOrder -> {
+        Objects.requireNonNull(terminalConfigurer, "terminalConfigurer");
+        UnaryOperator<ChatClient.Builder> combinedConfigurer = builder -> privacyAdvisorConfigurer.apply(
+                Objects.requireNonNull(terminalConfigurer.apply(builder), "terminalConfigurer must not return null"));
+        return this.authorizationFactory.createBuilder(model, toolAdvisorBuilderCopy, combinedConfigurer, actualToolOrder -> {
             if (actualToolOrder != plannedToolOrder) {
                 throw new IllegalArgumentException("Tool advisor order changed after planning the privacy boundary: "
                         + plannedToolOrder + " to " + actualToolOrder);

@@ -86,6 +86,26 @@ public final class ToolAuthorizationChatClientFactory {
         return this.defaultToolAdvisorBuilder;
     }
 
+    /**
+     * Creates a scoped builder with an additional terminal boundary registered
+     * before the managed authorization advisors. The boundary must validate its
+     * actual placement; this hook does not certify arbitrary customizers.
+     * Return the supplied builder or its clone to preserve the managed tool configuration.
+     */
+    public ChatClient.Builder builderWithTerminalBoundary(ChatModel model, UnaryOperator<ChatClient.Builder> terminalConfigurer) {
+        return builder(model, this.defaultToolAdvisorBuilder, terminalConfigurer);
+    }
+
+    /**
+     * Variant preserving a caller-selected tool loop, including Tool Search.
+     * The configurer must return a non-null builder preserving the managed tool configuration.
+     */
+    public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
+            UnaryOperator<ChatClient.Builder> terminalConfigurer) {
+        return createBuilder(model, toolAdvisorBuilder,
+                Objects.requireNonNull(terminalConfigurer, "terminalConfigurer"), ignored -> { });
+    }
+
     ChatClient.Builder createBuilder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
             UnaryOperator<ChatClient.Builder> additionalAdvisorConfigurer, IntConsumer additionalOrderValidator) {
         Objects.requireNonNull(model, "model must not be null");
@@ -102,16 +122,18 @@ public final class ToolAuthorizationChatClientFactory {
         AuthorizedToolCallingAdvisorBuilder authorizedToolAdvisorBuilder = new AuthorizedToolCallingAdvisorBuilder(
                 toolAdvisorBuilder, this.boundary.toolCallingManager(), chainValidator, orderValidator);
         ChatClient.Builder builder = ChatClient.builder(model, this.observationRegistry,
-                this.chatClientObservationConvention, this.advisorObservationConvention, authorizedToolAdvisorBuilder)
-                .defaultAdvisors(chainValidator);
+                this.chatClientObservationConvention, this.advisorObservationConvention, authorizedToolAdvisorBuilder);
         if (!this.autoRegisterToolAdvisor) {
             builder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
         }
-        this.clientBuilderCustomizer.apply(builder);
-        // The privacy model boundary must validate the original callbacks before the
-        // definition advisor filters them. Their terminal order is intentionally equal.
-        additionalAdvisorConfigurer.apply(builder);
-        return builder.defaultAdvisors(this.boundary.toolAuthorizationAdvisor(),
+        builder = Objects.requireNonNull(this.clientBuilderCustomizer.apply(builder),
+                "clientBuilderCustomizer must not return null");
+        // Distinct terminal orders keep privacy validation before definition filtering,
+        // including when Spring AI copies a tool-loop chain.
+        builder = Objects.requireNonNull(additionalAdvisorConfigurer.apply(builder),
+                "additionalAdvisorConfigurer must not return null");
+        // Validate the returned builder too, even if a configurer replaced the original one.
+        return builder.defaultAdvisors(chainValidator, this.boundary.toolAuthorizationAdvisor(),
                 this.boundary.toolDefinitionAuthorizationAdvisor());
     }
 }

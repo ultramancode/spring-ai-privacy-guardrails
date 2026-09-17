@@ -138,7 +138,7 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
         AtomicInteger calls = new AtomicInteger();
         contextRunner().run(context -> {
             ChatClient.Builder builder = context.getBean(ToolAuthorizationChatClientFactory.class)
-                    .builder(context.getBean(OpenAiChatModel.class))
+                    .builderWithTerminalBoundary(context.getBean(OpenAiChatModel.class), ChatClient.Builder::clone)
                     .defaultTools(tool("customerLookup", calls), tool("adminDelete", new AtomicInteger()));
             ChatClient clonedClient = builder.clone().build();
             ChatClient mutatedClient = builder.build().mutate().build();
@@ -149,6 +149,27 @@ class ToolAuthorizationChatClientFactoryIntegrationTest extends ToolAuthorizatio
             // Each client calls the model once to request customerLookup and once to produce the final answer.
             assertThat(this.modelRequests).hasSize(4).allSatisfy(request ->
                     assertThat(request).doesNotContain("adminDelete"));
+        });
+    }
+
+    @ParameterizedTest(name = "streaming={0}")
+    @ValueSource(booleans = {false, true})
+    void replacementBuilderCannotBypassManagedToolAuthorization(boolean streaming) throws IOException {
+        startModelServer(finalResponse());
+        AtomicInteger toolCalls = new AtomicInteger();
+        contextRunner().run(context -> {
+            OpenAiChatModel model = context.getBean(OpenAiChatModel.class);
+            ChatClient client = context.getBean(ToolAuthorizationChatClientFactory.class)
+                    .builderWithTerminalBoundary(model, ignored -> ChatClient.builder(model))
+                    .defaultTools(tool("customerLookup", toolCalls))
+                    .build();
+            authenticate();
+
+            assertThatThrownBy(() -> executeRequest(client.prompt().user("Lookup"), streaming))
+                    .isInstanceOf(AuthorizationDeniedException.class)
+                    .hasMessageContaining("managed tool advisor");
+            assertThat(this.modelRequests).isEmpty();
+            assertThat(toolCalls).hasValue(0);
         });
     }
 

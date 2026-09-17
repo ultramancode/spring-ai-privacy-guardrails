@@ -1,0 +1,15 @@
+description = 'Dedicated HTTP content inspection with explicit guard-model protocols.'
+dependencies {
+    api project(':spring-ai-privacy-guardrails-inspection-core')
+    implementation "tools.jackson.core:jackson-databind:${providers.gradleProperty('jacksonVersion').get()}"
+}
+
+tasks.named('test') { useJUnitPlatform { excludeTags 'live' } }
+tasks.register('liveTest', Test) {
+    description = 'Runs synthetic-data inspection against an explicitly configured live model server.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'live' }
+    outputs.upToDateWhen { false }
+}

@@ -21,6 +21,7 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdviso
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -34,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /** Auto-configures core privacy services and the starter-managed Spring AI privacy boundary. */
@@ -44,6 +46,13 @@ public class PrivacyGuardrailsAutoConfiguration {
     private static final Pattern REGEX_MATCH_VALIDATOR_ID_SYNTAX = Pattern.compile(
             "[a-z0-9]+(?:-[a-z0-9]+)*"
     );
+
+    /** Optional integrations consume a JDK contract without depending on this starter. */
+    @Bean
+    @ConditionalOnMissingBean(name = "privacyModelContentProtection")
+    Predicate<ChatClientRequest> privacyModelContentProtection() {
+        return PrivacyModelBoundaryAdvisor::isModelContentProtected;
+    }
 
     @Bean
     @ConditionalOnMissingBean

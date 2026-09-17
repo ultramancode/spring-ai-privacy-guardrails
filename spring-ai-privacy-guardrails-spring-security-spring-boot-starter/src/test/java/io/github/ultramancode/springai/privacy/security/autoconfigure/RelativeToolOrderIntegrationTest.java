@@ -114,8 +114,8 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
             "false, true, -2147483395", "true, true, -2147483395",
             // Maximum: PrivacyModelBoundaryAdvisor.DEFAULT_ORDER - 2 leaves room for
             // PrivacyToolCallValidationAdvisor.
-            "false, false, 2147483644", "true, false, 2147483644",
-            "false, true, 2147483644", "true, true, 2147483644"
+            "false, false, 2147483642", "true, false, 2147483642",
+            "false, true, 2147483642", "true, true, 2147483642"
     })
     void toolSearchProtectsPiiAtSupportedOrders(boolean streaming, boolean outputEnabled, int toolOrder) throws IOException {
         String searchArguments = "{\\\"SEARCH_QUERY_PARAMETER\\\":\\\"Find EMP-0042\\\"}";
@@ -288,7 +288,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
     // T is the ToolAdvisor order supplied to the factory.
     // PrivacyChatClientConfigurer keeps the library's default orders for these advisors:
     // PrivacyInputAdvisor.DEFAULT_ORDER = -2_147_483_398
-    // PrivacyModelBoundaryAdvisor.DEFAULT_ORDER = Integer.MAX_VALUE - 1
+    // PrivacyModelBoundaryAdvisor.DEFAULT_ORDER = Integer.MAX_VALUE - 3
     @ParameterizedTest
     @ValueSource(ints = {
             // PrivacyToolContextAdvisor (T - 1) would have an order below Integer.MIN_VALUE.
@@ -298,10 +298,10 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
             -2_147_483_397,
             // PrivacyToolCallValidationAdvisor (T + 1) must have a smaller order value than
             // PrivacyModelBoundaryAdvisor (DEFAULT_ORDER). This value would make their orders equal.
-            Integer.MAX_VALUE - 2,
+            Integer.MAX_VALUE - 4,
             // ToolAdvisor (T) must have a smaller order value than PrivacyModelBoundaryAdvisor (DEFAULT_ORDER).
             // This value would make their orders equal.
-            Integer.MAX_VALUE - 1,
+            Integer.MAX_VALUE - 3,
             // The order of PrivacyToolCallValidationAdvisor (T + 1) would exceed Integer.MAX_VALUE.
             Integer.MAX_VALUE
     })

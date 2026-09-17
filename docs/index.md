@@ -46,6 +46,7 @@ See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 | [Configuration](configuration.md) | Starters, analyzers, output policy, tool disclosure, and processing limits. |
 | [Spring Security Tool Authorization](security.md) | Optional principal-aware tool discovery and execution checks, Tool Search, and asynchronous context. |
 | [Architecture](architecture.md) | Module boundaries, request sessions, evidence resolution, and execution lifecycle. |
+| [Content inspection](inspection.md) | Optional rule, ONNX and OpenAI-compatible text inspection. |
 | [Threat model](threat-model.md) | Protected assets, trust boundaries, controls, limitations, and separately managed areas. |
 | [Evaluation](evaluation.md) | Boundary tests, the deterministic analyzer baseline, and repository benchmarks. |
 

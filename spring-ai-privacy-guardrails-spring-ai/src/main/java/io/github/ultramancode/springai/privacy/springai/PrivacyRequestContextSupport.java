@@ -76,6 +76,7 @@ final class PrivacyRequestContextSupport {
     static ChatClientResponse stripInternalPrivacyEntries(ChatClientResponse response) {
         Objects.requireNonNull(response, "response must not be null");
         if (!response.context().containsKey(CONTEXT_HANDLE)
+                && !response.context().containsKey(PrivacyModelBoundaryAdvisor.MODEL_CONTENT_PROTECTION)
                 && !response.context().containsKey(CONTEXT_LIFECYCLE_MARKER)
                 && !PrivacyOutputContextSupport.hasInternalEntries(response.context())
                 && !PrivacyToolExecutionContextSupport.hasInternalEntries(response.context())) {
@@ -83,6 +84,7 @@ final class PrivacyRequestContextSupport {
         }
         Map<String, Object> context = new HashMap<>(response.context());
         context.remove(CONTEXT_HANDLE);
+        context.remove(PrivacyModelBoundaryAdvisor.MODEL_CONTENT_PROTECTION);
         context.remove(CONTEXT_LIFECYCLE_MARKER);
         PrivacyOutputContextSupport.removeInternalEntries(context);
         PrivacyToolExecutionContextSupport.removeInternalEntries(context);
@@ -93,6 +95,7 @@ final class PrivacyRequestContextSupport {
         Objects.requireNonNull(context, "context must not be null");
         Map<String, Object> applicationContext = new HashMap<>(context);
         applicationContext.remove(CONTEXT_HANDLE);
+        applicationContext.remove(PrivacyModelBoundaryAdvisor.MODEL_CONTENT_PROTECTION);
         applicationContext.remove(CONTEXT_LIFECYCLE_MARKER);
         PrivacyOutputContextSupport.removeInternalEntries(applicationContext);
         PrivacyToolExecutionContextSupport.removeInternalEntries(applicationContext);

@@ -4,6 +4,29 @@ plugins {
 }
 
 privacyBuild {
+    module('spring-ai-privacy-guardrails-inspection-core') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.inspection.core', 'Spring AI Privacy Guardrails Inspection Core')
+        module.denyAllExternalMainDependencies()
+        module.springIndependentPublication()
+    }
+    ['rules', 'onnx', 'openai-compatible'].each { backend ->
+        module("spring-ai-privacy-guardrails-inspection-${backend}") { module ->
+            module.publication("io.github.ultramancode.springai.privacy.inspection.${backend.replace('-', '')}", "Spring AI Privacy Guardrails Inspection ${backend}")
+            module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-core'
+            module.denyExternalGroup 'org.springframework'
+            module.springIndependentPublication()
+        }
+    }
+    module('spring-ai-privacy-guardrails-inspection-spring-ai') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.inspection.springai', 'Spring AI Privacy Guardrails Inspection Spring AI')
+        module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-core'
+        module.denyExternalGroup 'org.springframework.boot'
+    }
+    module('spring-ai-privacy-guardrails-inspection-spring-boot-starter') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.inspection.autoconfigure', 'Spring AI Privacy Guardrails Inspection Starter')
+        module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-spring-ai'
+    }
+
     module('spring-ai-privacy-guardrails-core') { module ->
         module.publication(
                 'io.github.ultramancode.springai.privacy.core',
@@ -120,6 +143,7 @@ privacyBuild {
     localizedDocument 'docs/architecture.md', 'docs/ko/architecture.md'
     localizedDocument 'docs/configuration.md', 'docs/ko/configuration.md'
     localizedDocument 'docs/evaluation.md', 'docs/ko/evaluation.md'
+    localizedDocument 'docs/inspection.md', 'docs/ko/inspection.md'
     localizedDocument 'docs/getting-started.md', 'docs/ko/getting-started.md'
     localizedDocument 'docs/sample.md', 'docs/ko/sample.md'
     localizedDocument 'docs/security.md', 'docs/ko/security.md'

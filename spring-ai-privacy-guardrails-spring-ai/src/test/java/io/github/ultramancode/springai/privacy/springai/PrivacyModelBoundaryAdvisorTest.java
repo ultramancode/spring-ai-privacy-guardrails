@@ -43,7 +43,7 @@ class PrivacyModelBoundaryAdvisorTest {
                 TestPrivacyServices.privacyService()
         );
 
-        assertThat(advisor.getOrder()).isEqualTo(Integer.MAX_VALUE - 1);
+        assertThat(advisor.getOrder()).isEqualTo(Integer.MAX_VALUE - 3);
         assertThat(new PrivacyModelBoundaryAdvisor(TestPrivacyServices.privacyService(), 123).getOrder())
                 .isEqualTo(123);
     }
@@ -64,6 +64,15 @@ class PrivacyModelBoundaryAdvisorTest {
             );
             when(chain.nextCall(any())).thenAnswer(invocation -> {
                 ChatClientRequest protectedRequest = invocation.getArgument(0);
+                assertThat(PrivacyModelBoundaryAdvisor.isModelContentProtected(protectedRequest)).isTrue();
+                ChatClientRequest changed = protectedRequest.mutate().prompt(new Prompt("Alice added later")).build();
+                assertThat(PrivacyModelBoundaryAdvisor.isModelContentProtected(changed)).isFalse();
+                assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(protectedRequest.context()))
+                        .doesNotContainKey(PrivacyModelBoundaryAdvisor.MODEL_CONTENT_PROTECTION);
+                ChatClientResponse markedResponse = new ChatClientResponse(
+                        TestPrivacyServices.response("ok").chatResponse(), protectedRequest.context());
+                assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(markedResponse).context())
+                        .doesNotContainKey(PrivacyModelBoundaryAdvisor.MODEL_CONTENT_PROTECTION);
                 String text = protectedRequest.prompt().getUserMessage().getText();
                 assertThat(text).doesNotContain("Alice");
                 assertThat(service.detokenize(session.handle(), text))

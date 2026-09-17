@@ -1,0 +1,16 @@
+description = 'Local Prompt Guard inspection using ONNX Runtime and a supplied tokenizer.'
+dependencies {
+    api project(':spring-ai-privacy-guardrails-inspection-core')
+    implementation "com.microsoft.onnxruntime:onnxruntime:${providers.gradleProperty('onnxRuntimeVersion').get()}"
+    implementation "ai.djl.huggingface:tokenizers:${providers.gradleProperty('djlVersion').get()}"
+}
+
+tasks.named('test') { useJUnitPlatform { excludeTags 'live' } }
+tasks.register('liveTest', Test) {
+    description = 'Verifies a provisioned Prompt Guard ONNX model against a local Python reference.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'live' }
+    outputs.upToDateWhen { false }
+}

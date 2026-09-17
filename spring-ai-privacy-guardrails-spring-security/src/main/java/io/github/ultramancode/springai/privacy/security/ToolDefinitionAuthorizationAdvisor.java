@@ -28,9 +28,9 @@ import java.util.stream.Collectors;
  */
 final class ToolDefinitionAuthorizationAdvisor implements CallAdvisor, StreamAdvisor {
 
-    // The combined factory registers the privacy model boundary first at this same order.
-    // Privacy validates the callback snapshot before this advisor removes unauthorized callbacks.
-    static final int DEFAULT_ORDER = Ordered.LOWEST_PRECEDENCE - 1;
+    // Distinct orders survive Spring AI's tool-loop chain copies. Privacy validates
+    // callbacks first; inspection examines the final message content afterward.
+    static final int DEFAULT_ORDER = Ordered.LOWEST_PRECEDENCE - 2;
 
     private final ToolCallingManager toolCallingManager;
 

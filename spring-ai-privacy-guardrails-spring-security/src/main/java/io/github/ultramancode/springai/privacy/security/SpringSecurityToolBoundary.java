@@ -90,7 +90,7 @@ public final class SpringSecurityToolBoundary {
      * Returns the advisor that filters tool callbacks before each model call.
      * Use it with the lifecycle advisor and a tool-calling advisor configured with
      * {@link #toolCallingManager()} when the model keeps its existing {@link ToolCallingManager}.
-     * When privacy advisors are also used, register this advisor after the privacy
+     * When privacy advisors are also used, its distinct default order follows the privacy
      * model boundary so callback snapshot validation precedes definition filtering.
      * Advisors that mutate tools must run before this advisor.
      *

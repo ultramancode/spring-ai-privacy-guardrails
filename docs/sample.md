@@ -1,3 +1,9 @@
+---
+description: >-
+  Explore PII protection and role-based tool access with the Privacy Boundary
+  Inspector's Local Tool, RAG, MCP, and Security scenarios.
+---
+
 # Sample / Demo Guide
 
 **English** | [한국어](ko/sample.md)

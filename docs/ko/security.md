@@ -1,9 +1,15 @@
+---
+description: >-
+  Spring AI 모델에 제공할 도구와 도구 실행에 Spring Security 권한 검사를 적용하는 방법을 설명합니다. 권한 검사만 사용하거나
+  개인정보 보호와 함께 구성할 수 있습니다.
+---
+
 # Spring Security 도구 권한
 
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: 7c5619b565a691d1dde8cceb16c2c89424b14127c8e7b0faa838c2a5d5154042 -->
+<!-- i18n-source-sha256: e0c1153b4601b52b8aa6b7a82026a77e80a3d23807e69ff360141e85916c4b01 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보

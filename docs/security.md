@@ -1,3 +1,9 @@
+---
+description: >-
+  Apply Spring Security authorization to tools exposed to and called by Spring AI
+  models, either on its own or together with privacy protection.
+---
+
 # Spring Security Tool Authorization
 
 **English** | [한국어](ko/security.md)

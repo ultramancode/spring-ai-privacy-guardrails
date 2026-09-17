@@ -1,3 +1,9 @@
+---
+description: >-
+  Understand Spring AI Privacy Guardrails modules, request sessions, model and tool
+  boundaries, execution flow, and resource cleanup.
+---
+
 # Architecture
 
 **English** | [한국어](ko/architecture.md)

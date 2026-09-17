@@ -1,9 +1,15 @@
+---
+description: >-
+  Privacy Boundary Inspector의 Local Tool, RAG, MCP, Security 시나리오로 개인정보 보호와 역할별 도구 접근 권한을
+  확인하는 방법을 설명합니다.
+---
+
 # 샘플 / 데모 가이드
 
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: 5daca371c8ca2ef2e2d5692ee6870349130a97776d939f5ae6c1370ec8129c1a -->
+<!-- i18n-source-sha256: bfca745891ec530683f549b7356e61448e4fdcbc708aad7413ee2cc361bfc20b -->
 
 샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
 보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수

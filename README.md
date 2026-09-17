@@ -10,10 +10,10 @@
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails execution boundaries" width="100%">
 </p>
 
-<p align="center">
-  Featured on the Spring Blog:
-  <a href="https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/">This Week in Spring — August 18, 2026</a>
-</p>
+**Featured In**
+
+- **Spring Blog** — Featured in [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
+- **Spring AI Community** — Listed in [Awesome Spring AI's Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
 
 <p align="center">
   <strong>Watch the demo:</strong>
@@ -79,6 +79,8 @@ Inspector**. Compare the values the model and tools actually receive:
   received by the model.
 - **MCP** shows the same protection through a local MCP tool call over
   Streamable HTTP.
+- **Security** compares tool visibility and execution permissions for a general
+  employee and customer support, with PII protection on the allowed call.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing no fixed-fixture raw PII at the model and one scoped tool disclosure" width="960">

@@ -10,7 +10,7 @@ repo_url = "https://github.com/ultramancode/spring-ai-privacy-guardrails"
 edit_uri = "edit/main/docs/"
 strict = true
 extra_css = ["stylesheets/extra.css"]
-extra_javascript = ["javascripts/consent.js"]
+extra_javascript = ["javascripts/consent.js", "javascripts/language.js"]
 
 nav = [
   { "English" = [
@@ -41,6 +41,17 @@ nav = [
 
 [project.extra]
 generator = false
+# Relative EN page URLs with matching ko/ pages; "" is the home page.
+translated_pages = [
+  "",
+  "getting-started/",
+  "sample/",
+  "configuration/",
+  "security/",
+  "architecture/",
+  "threat-model/",
+  "evaluation/",
+]
 
 [project.extra.analytics]
 provider = "google"
@@ -69,6 +80,7 @@ checked = true
 
 [project.theme]
 language = "en"
+custom_dir = "overrides"
 font = false
 logo = "images/privacy-mark.svg"
 favicon = "images/privacy-mark.png"

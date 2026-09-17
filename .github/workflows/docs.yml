@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'overrides/**'
       - 'zensical.toml'
       - 'requirements-docs.txt'
       - '.github/workflows/docs.yml'
   pull_request:
     paths:
       - 'docs/**'
+      - 'overrides/**'
       - 'zensical.toml'
       - 'requirements-docs.txt'
       - '.github/workflows/docs.yml'

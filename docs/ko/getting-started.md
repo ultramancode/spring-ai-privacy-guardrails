@@ -1,9 +1,15 @@
+---
+description: >-
+  Spring AI Privacy Guardrails의 스타터와 분석기를 선택하고 모델 요청, 로컬·MCP 도구 호출, 최종 응답에 개인정보 보호를
+  적용하는 방법을 설명합니다.
+---
+
 # 시작하기
 
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 37df2bb67b41172f5b45fd0b06b533b24f250cc152abd5368dfadb3c2823d890 -->
+<!-- i18n-source-sha256: efc5164e2cb3cea0c3600060c9d6f6947d39e50d11c8191df78e90442914aeda -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을

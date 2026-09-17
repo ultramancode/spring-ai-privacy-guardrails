@@ -1,3 +1,9 @@
+---
+description: >-
+  Review the protected assets, trust boundaries, security controls, limitations, and
+  application responsibilities of Spring AI Privacy Guardrails.
+---
+
 # Threat Model
 
 **English** | [한국어](ko/threat-model.md)

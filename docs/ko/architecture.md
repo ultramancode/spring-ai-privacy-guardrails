@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: f9bd6ee31269023e38848f4e85102b51318c012c35fbb440d4e49c2d627c0d35 -->
+<!-- i18n-source-sha256: 11d3aa2f5979e8e01a053784197e305de6ccb03f89e72b99ddac8728d0e1bfb8 -->
 
 ## 책임 범위
 
@@ -54,6 +54,10 @@ flowchart LR
     SAI["Spring AI 연동"] --> CORE
     OPEN["OpenNLP 연동"] --> CORE
     SEC["Spring Security 연동"]
+    BOUNDARY["Model request boundary"]
+    SAI --> BOUNDARY
+    SEC --> BOUNDARY
+    INSPECTION["Inspection integration"] --> BOUNDARY
 
     PRESBOOT["Presidio<br/>Spring Boot 스타터"] --> PRES
     BASE["기본<br/>Spring Boot 스타터"] --> SAI
@@ -78,6 +82,11 @@ Spring Security 연동은 Spring AI의 도구 호출 API와 `spring-security-cor
 개인정보 보호와 도구 권한 검사를 함께 사용하려면 개인정보 보호 스타터와 Spring
 Security 스타터를 함께 추가하고, 두 기능을 동일한 `ChatClient`에 적용하세요. `core`와
 기존 개인정보 보호 모듈에는 Spring Security 의존성이 추가되지 않습니다.
+
+`spring-ai-boundary`는 모델 호출 직전에 적용할 기능을 함께 구성하는 공통 모듈이며,
+Spring AI에만 의존합니다. 각 클라이언트에서 활성화한 기능을 개인정보 보호 →
+도구 정의 권한 검사 → 콘텐츠 검사 순서로 실행하며, 이 순서는 고정되어 있습니다.
+각 기능 모듈은 이 공통 모듈을 사용하므로 다른 기능 모듈 없이도 사용할 수 있습니다.
 
 테스트 지원 모듈은 애플리케이션에서 개인정보 보호 동작을 검증하기 위한 테스트 전용
 API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행 가능한 사용 예제를 위한

@@ -878,10 +878,9 @@ network or database I/O is needed, enqueue the work and return promptly.
 Non-fatal observer failures are ignored and cannot change privacy enforcement.
 
 The Spring Boot starter automatically connects the registered observer bean.
-When constructing `PrivacyModelBoundaryAdvisor`, `PrivacyToolCallbackFactory`,
-or `PrivacyOutputAdvisor` directly without the starter's auto-configuration,
-pass the observer as a constructor argument. Existing constructors that do not
-accept an observer do not deliver observation events.
+Without Boot, use `PrivacyChatClientConfigurer.builder(service).enforcementObserver(observer)`.
+Pass the same observer to the `PrivacyToolCallbackFactory` constructor for tool input
+and result events. Without an observer, no observation events are delivered.
 
 ## Stored Data and Diagnostics
 

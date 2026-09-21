@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 99287044ac8452a02eeb0e05338d08d3d16d0edff591e3d9253b1ccb1b71c0be -->
+<!-- i18n-source-sha256: 4278edadac1fca2fff5e8f7bc497d33cb5db2ae6b6e3a2a8b523f089b439ad3d -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -290,6 +290,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 | 모듈 | 목적 |
 | --- | --- |
 | `spring-ai-privacy-guardrails-core` | 분석기 SPI, 탐지 결과 해석, 세션, 정규식 분석과 개인정보 토큰화 |
+| `spring-ai-privacy-guardrails-spring-ai-boundary` | 개인정보 보호·도구 권한·콘텐츠 검사의 공통 모델 요청 경계 |
 | `spring-ai-privacy-guardrails-spring-ai` | Advisor와 도구별 원문 공개 경계 |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP 어댑터 |
 | `spring-ai-privacy-guardrails-opennlp` | 사용자 제공 OpenNLP 모델용 JVM 전용 어댑터 |

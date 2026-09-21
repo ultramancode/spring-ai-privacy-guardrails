@@ -305,6 +305,7 @@ dependencies. Add test support separately in the application's test scope.
 | Module | Purpose |
 | --- | --- |
 | `spring-ai-privacy-guardrails-core` | Analyzer SPI, detection resolution, sessions, regex analysis, and PII tokenization |
+| `spring-ai-privacy-guardrails-spring-ai-boundary` | Shared model request boundary for privacy, authorization, and inspection |
 | `spring-ai-privacy-guardrails-spring-ai` | Advisors and per-tool original-disclosure boundaries |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |

@@ -424,54 +424,23 @@ client.
 
 ## Without the Spring Boot Starter
 
-When using `spring-ai-privacy-guardrails-spring-security` directly, create a
-`SpringSecurityToolBoundary` and connect its advisors and `ToolCallingManager` to the
-`ChatClient`.
-
-The following example creates a client with **tool authorization only**, using
-your model, authorization policy, and customer lookup tool. When configuring a
-client directly without the starter, register the tool-calling advisor through
-`defaultAdvisors(...)` as well.
+The factories live in the runtime package
+`io.github.ultramancode.springai.privacy.security`. Use the same factory without
+Boot to wire the tool lifecycle, execution authorization and model request boundary.
 
 ```java
-ChatClient createAuthorizedClient(
-        ChatModel chatModel,
-        AuthorizationManager<ToolAuthorizationContext> authorizationManager,
-        ToolCallback customerLookupToolCallback
-) {
-    SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
-            ToolCallingManager.builder().build(), authorizationManager
-    ).build();
-
-    ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-            .toolCallingManager(boundary.toolCallingManager())
-            .build();
-
-    return ChatClient.builder(chatModel)
-            .defaultAdvisors(
-                    boundary.toolAuthorizationAdvisor(),
-                    toolCallingAdvisor,
-                    boundary.toolDefinitionAuthorizationAdvisor()
-            )
-            .defaultTools(customerLookupToolCallback)
-            .build();
-}
+SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
+        ToolCallingManager.builder().build(), authorizationManager).build();
+ToolAuthorizationChatClientFactory security = new ToolAuthorizationChatClientFactory(boundary);
+ChatClient client = security.builder(chatModel)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
-
-This example uses each advisor's default execution order. When adding other
-advisors, follow these ordering rules:
-
-- Set advisors that change the tool list to execute before
-  `boundary.toolDefinitionAuthorizationAdvisor()`. Callback additions and
-  replacements performed by your own advisors must finish before the earlier
-  `boundary.toolAuthorizationAdvisor()` captures the request's tool list.
-- When composing privacy advisors manually, definition authorization must run
-  after `PrivacyModelBoundaryAdvisor`, which protects content sent to the model.
-  These two advisors have the same default order value, so register
-  `PrivacyModelBoundaryAdvisor` first in `defaultAdvisors(...)`.
-
-The starter factories connect these components automatically. See
-[Configure the ChatClient](#configure-the-chatclient) for usage examples.
+For Privacy as well, create `new PrivacySecurityChatClientFactory(privacyConfigurer, security)`.
+`PrivacyChatClientConfigurer` lives in the `.privacy.springai` runtime package.
+Application advisors that add or replace tools must run before the authorization
+lifecycle captures the tool list. The common boundary guarantees the internal
+Privacy → Authorization order.
 
 ## Tool Search
 

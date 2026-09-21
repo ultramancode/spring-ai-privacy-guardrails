@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: e0c1153b4601b52b8aa6b7a82026a77e80a3d23807e69ff360141e85916c4b01 -->
+<!-- i18n-source-sha256: 5810eaad667fe92d40b17bce31f17906d00d0bcd0960b86854bb13d6ec2188bc -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -403,53 +403,22 @@ SpringSecurityToolBoundary springSecurityToolBoundary(
 
 ## Spring Boot 스타터 없이 구성
 
-`spring-ai-privacy-guardrails-spring-security`를 직접 사용한다면
-`SpringSecurityToolBoundary`를 만들고, 여기서 제공하는 Advisor와 `ToolCallingManager`를
-`ChatClient`에 연결하세요.
-
-아래 예시는 준비한 모델, 권한 정책과 고객 조회 도구로 **도구 권한 검사만 적용하는**
-클라이언트를 만듭니다. 스타터 없이 직접 구성할 때는 도구 호출 Advisor도
-`defaultAdvisors(...)`에 등록합니다.
+Factory는 `io.github.ultramancode.springai.privacy.security` 런타임 패키지에
+있습니다. 스타터 없이도 같은 Factory로 도구 생명주기, 실행 권한 검사와 모델 요청
+경계를 함께 연결합니다.
 
 ```java
-ChatClient createAuthorizedClient(
-        ChatModel chatModel,
-        AuthorizationManager<ToolAuthorizationContext> authorizationManager,
-        ToolCallback customerLookupToolCallback
-) {
-    SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
-            ToolCallingManager.builder().build(), authorizationManager
-    ).build();
-
-    ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-            .toolCallingManager(boundary.toolCallingManager())
-            .build();
-
-    return ChatClient.builder(chatModel)
-            .defaultAdvisors(
-                    boundary.toolAuthorizationAdvisor(),
-                    toolCallingAdvisor,
-                    boundary.toolDefinitionAuthorizationAdvisor()
-            )
-            .defaultTools(customerLookupToolCallback)
-            .build();
-}
+SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
+        ToolCallingManager.builder().build(), authorizationManager).build();
+ToolAuthorizationChatClientFactory security = new ToolAuthorizationChatClientFactory(boundary);
+ChatClient client = security.builder(chatModel)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
-
-이 예시는 각 Advisor의 기본 실행 순서를 사용합니다. 다른 Advisor도 함께 구성한다면
-다음 순서 조건을 지키세요.
-
-- 도구 목록을 변경하는 Advisor는 `boundary.toolDefinitionAuthorizationAdvisor()`보다
-  먼저 실행되도록 순서를 지정하세요. 사용자 정의 Advisor에서 콜백을 추가·교체하는 작업은
-  그보다 앞선
-  `boundary.toolAuthorizationAdvisor()`가 요청의 도구 목록을 확보하기 전에 끝내야 합니다.
-- 개인정보 보호 Advisor도 직접 조합한다면, 모델에 전달할 내용을 보호하는
-  `PrivacyModelBoundaryAdvisor` 다음에 도구 정의의 권한 검사가 실행되어야 합니다.
-  두 Advisor는 기본 실행 순서 값이 같으므로, `defaultAdvisors(...)`에
-  `PrivacyModelBoundaryAdvisor`를 먼저 등록하세요.
-
-스타터의 Factory는 이 구성을 자동으로 연결합니다.
-[ChatClient 구성](#chatclient-구성)에서 사용 예시를 확인할 수 있습니다.
+개인정보 보호도 사용하려면 `new PrivacySecurityChatClientFactory(privacyConfigurer, security)`를
+생성하세요. `PrivacyChatClientConfigurer`는 `.privacy.springai` 런타임 패키지에 있습니다.
+도구 목록을 변경하는 사용자 Advisor는 도구 권한 생명주기가 목록을 확보하기 전에
+실행되어야 합니다. 내부 Privacy → Authorization 순서는 공통 경계가 보장합니다.
 
 ## Tool Search
 

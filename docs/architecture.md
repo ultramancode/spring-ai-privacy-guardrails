@@ -55,6 +55,10 @@ flowchart LR
     SAI["Spring AI integration"] --> CORE
     OPEN["OpenNLP integration"] --> CORE
     SEC["Spring Security integration"]
+    BOUNDARY["Model request boundary"]
+    SAI --> BOUNDARY
+    SEC --> BOUNDARY
+    INSPECTION["Inspection integration"] --> BOUNDARY
 
     PRESBOOT["Presidio<br/>Spring Boot Starter"] --> PRES
     BASE["Base<br/>Spring Boot Starter"] --> SAI
@@ -83,6 +87,11 @@ To use privacy protection and tool authorization together, add a privacy
 starter alongside the Spring Security starter and apply both capabilities to
 the same `ChatClient`. No Spring Security dependency is added to `core` or any
 existing privacy module.
+
+The `spring-ai-boundary` module combines the features applied immediately before
+a model call and depends only on Spring AI. For each client, enabled features run
+in a fixed order: privacy, tool definition authorization, then content inspection.
+Feature modules use this shared module and can be used independently of each other.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
 Benchmarks and samples are repository-internal modules for performance

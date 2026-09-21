@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 1c7caae39ccd93080bd9e278bd103471a9d7dbe90eba899b14724336c6d121de -->
+<!-- i18n-source-sha256: f877570345aebd21698473776a11c4ae01989d213358b26573df56a91d0a508e -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -827,10 +827,10 @@ PrivacyEnforcementObserver privacyEnforcementObserver() {
 권장합니다. 옵저버 콜백에서 발생한 비치명적 오류는 무시되며 개인정보 보호 처리에는
 영향을 주지 않습니다.
 
-Spring Boot 스타터를 사용하면 등록한 옵저버 빈이 자동으로 연결됩니다. 스타터의 자동
-구성 없이 `PrivacyModelBoundaryAdvisor`, `PrivacyToolCallbackFactory`,
-`PrivacyOutputAdvisor`를 직접 생성하는 경우에는 옵저버를 생성자 인자로 전달해야
-합니다. 옵저버 인자가 없는 기존 생성자를 사용하면 관측 이벤트는 전달되지 않습니다.
+Spring Boot 스타터는 등록한 옵저버 빈을 자동으로 연결합니다. Boot 없이 구성할 때는
+`PrivacyChatClientConfigurer.builder(service).enforcementObserver(observer)`를 사용하세요.
+도구 입출력 이벤트도 받으려면 `PrivacyToolCallbackFactory` 생성자에 같은 옵저버를
+전달합니다. 옵저버를 지정하지 않으면 관측 이벤트는 전달되지 않습니다.
 
 ## 저장 데이터와 진단 정보
 

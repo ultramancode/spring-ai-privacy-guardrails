@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
@@ -48,7 +49,7 @@ class PrivacyOutputAdvisorTest {
         assertThat(advisor.getOrder()).isEqualTo(PrivacyOutputAdvisor.DEFAULT_ORDER)
                 .isLessThan(PrivacyToolContextAdvisor.DEFAULT_ORDER)
                 .isLessThan(ToolCallingAdvisor.DEFAULT_ORDER)
-                .isLessThan(PrivacyModelBoundaryAdvisor.DEFAULT_ORDER);
+                .isLessThan(ModelRequestBoundarySpec.DEFAULT_ORDER);
         assertThat(new PrivacyOutputAdvisor(
                 privacyService(),
                 PrivacyOutputAction.TOKENIZE,

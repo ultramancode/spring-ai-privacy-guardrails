@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.autoconfigure;
 
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.EntityTypeRegistry;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
@@ -23,7 +24,6 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserv
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementOutcome;
 import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
@@ -48,6 +48,7 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import reactor.core.publisher.Flux;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -62,8 +63,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.PatternSyntaxException;
-
-import reactor.core.publisher.Flux;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -115,7 +114,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
                         .hasSingleBean(PrivacyChatClientConfigurer.class)
                         .doesNotHaveBean(PrivacyLifecycleAdvisor.class)
                         .doesNotHaveBean(PrivacyInputAdvisor.class)
-                        .doesNotHaveBean(PrivacyModelBoundaryAdvisor.class)
                         .doesNotHaveBean(PrivacyToolContextAdvisor.class)
                         .doesNotHaveBean(PrivacyToolCallValidationAdvisor.class)
                         .doesNotHaveBean(EntityTypeRegistry.class)
@@ -139,12 +137,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
                 PiiAnalysisOptions.defaults()
         );
         PrivacyToolContextAdvisor weakToolContext = new PrivacyToolContextAdvisor(service);
-        PrivacyModelBoundaryAdvisor weakModelBoundary = new PrivacyModelBoundaryAdvisor(service);
 
         this.contextRunner
                 .withBean(PrivacyService.class, () -> service)
                 .withBean(PrivacyToolContextAdvisor.class, () -> weakToolContext)
-                .withBean(PrivacyModelBoundaryAdvisor.class, () -> weakModelBoundary)
                 .run(context -> {
                     ChatClient.Builder builder = mock(ChatClient.Builder.class);
                     context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
@@ -156,10 +152,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             .filteredOn(PrivacyToolContextAdvisor.class::isInstance)
                             .singleElement()
                             .isNotSameAs(weakToolContext);
-                    assertThat(advisors.getValue())
-                            .filteredOn(PrivacyModelBoundaryAdvisor.class::isInstance)
-                            .singleElement()
-                            .isNotSameAs(weakModelBoundary);
+                    ArgumentCaptor<Advisor[]> boundaryAdvisors = ArgumentCaptor.forClass(Advisor[].class);
+                    verify(builder).defaultAdvisors(boundaryAdvisors.capture());
+                    assertThat(boundaryAdvisors.getValue()).extracting(Advisor::getName)
+                            .containsExactly("ModelRequestBoundaryChainValidator", "ModelRequestBoundaryAdvisor");
                 });
     }
 
@@ -370,6 +366,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     verify(builder).defaultAdvisors(advisors.capture());
                     assertThat(context).doesNotHaveBean(PrivacyOutputAdvisor.class);
                     assertThat(advisors.getValue().stream()
+                            .filter(advisor -> !advisor.getName().equals("PrivacyAdvisorChainValidator"))
                             .map(Advisor::getClass)
                             .toList())
                             .isEqualTo(List.of(
@@ -377,8 +374,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                                     PrivacyInputAdvisor.class,
                                     PrivacyOutputAdvisor.class,
                                     PrivacyToolContextAdvisor.class,
-                                    PrivacyToolCallValidationAdvisor.class,
-                                    PrivacyModelBoundaryAdvisor.class
+                                    PrivacyToolCallValidationAdvisor.class
                             ));
                 });
     }
@@ -467,10 +463,8 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             .user("duplicate@example.test")
                             .call()
                             .content())
-                            .isInstanceOf(PrivacyGuardrailException.class)
-                            .hasMessage(
-                                    "PrivacyLifecycleAdvisor requires exactly one complete mandatory privacy advisor set"
-                            );
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessage("Exactly one managed model request boundary is required");
                     assertThat(model.prompts()).isEmpty();
                     assertThat(context.getBean(PrivacyService.class).activeSessionCount()).isZero();
                 });

@@ -1,5 +1,7 @@
-package io.github.ultramancode.springai.privacy.security.autoconfigure;
+package io.github.ultramancode.springai.privacy.security;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.AdvisorParams;
@@ -41,7 +43,14 @@ public final class ToolAuthorizationChatClientFactory {
     private final UnaryOperator<ChatClient.Builder> clientBuilderCustomizer;
     private final boolean autoRegisterToolAdvisor;
 
-    ToolAuthorizationChatClientFactory(SpringSecurityToolBoundary boundary,
+    /** Creates a programmatic client factory without requiring Spring Boot. */
+    public ToolAuthorizationChatClientFactory(SpringSecurityToolBoundary boundary) {
+        this(boundary, ToolCallingAdvisor.builder(), ObservationRegistry.NOOP,
+                null, null, UnaryOperator.identity(), true);
+    }
+
+    /** Creates a factory with application observation, defaults and client customization. */
+    public ToolAuthorizationChatClientFactory(SpringSecurityToolBoundary boundary,
             ToolCallingAdvisor.Builder<?> defaultToolAdvisorBuilder, ObservationRegistry observationRegistry,
             ChatClientObservationConvention chatClientObservationConvention,
             AdvisorObservationConvention advisorObservationConvention,
@@ -58,7 +67,7 @@ public final class ToolAuthorizationChatClientFactory {
     }
 
     /**
-     * Creates a fresh builder using the starter-managed tool advisor builder and client defaults.
+     * Creates a fresh builder using the managed tool advisor builder and client defaults.
      * @param model the shared model to call
      * @return a new builder with scoped tool authorization
      */
@@ -79,20 +88,31 @@ public final class ToolAuthorizationChatClientFactory {
      * @throws IllegalArgumentException when the tool order is outside the authorization boundaries
      */
     public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder) {
-        return createBuilder(model, toolAdvisorBuilder, UnaryOperator.identity(), ignored -> { });
+        return createBuilder(model, toolAdvisorBuilder, (clientBuilder, boundarySpec) -> { }, ignored -> { });
     }
 
     ToolCallingAdvisor.Builder<?> defaultToolAdvisorBuilder() {
         return this.defaultToolAdvisorBuilder;
     }
 
+    /** Creates a client with an additional contribution to the same model request boundary. */
+    public ChatClient.Builder builderWithBoundary(ChatModel model, ModelRequestBoundaryConfigurer configurer) {
+        return builder(model, this.defaultToolAdvisorBuilder, configurer);
+    }
+
+    /** Preserves a caller-selected tool loop, including Tool Search, while composing model stages. */
+    public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
+            ModelRequestBoundaryConfigurer configurer) {
+        return createBuilder(model, toolAdvisorBuilder, Objects.requireNonNull(configurer, "configurer"), ignored -> { });
+    }
+
     ChatClient.Builder createBuilder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
-            UnaryOperator<ChatClient.Builder> additionalAdvisorConfigurer, IntConsumer additionalOrderValidator) {
+            ModelRequestBoundaryConfigurer additionalConfigurer, IntConsumer additionalOrderValidator) {
         Objects.requireNonNull(model, "model must not be null");
         Objects.requireNonNull(toolAdvisorBuilder, "toolAdvisorBuilder must not be null");
         IntConsumer orderValidator = order -> {
             if (order <= this.boundary.toolAuthorizationAdvisor().getOrder()
-                    || order >= this.boundary.toolDefinitionAuthorizationAdvisor().getOrder()) {
+                    || order >= ModelRequestBoundarySpec.DEFAULT_ORDER) {
                 throw new IllegalArgumentException(
                         "Tool advisor must run after authorization lifecycle and before definition authorization");
             }
@@ -102,16 +122,15 @@ public final class ToolAuthorizationChatClientFactory {
         AuthorizedToolCallingAdvisorBuilder authorizedToolAdvisorBuilder = new AuthorizedToolCallingAdvisorBuilder(
                 toolAdvisorBuilder, this.boundary.toolCallingManager(), chainValidator, orderValidator);
         ChatClient.Builder builder = ChatClient.builder(model, this.observationRegistry,
-                this.chatClientObservationConvention, this.advisorObservationConvention, authorizedToolAdvisorBuilder)
-                .defaultAdvisors(chainValidator);
+                this.chatClientObservationConvention, this.advisorObservationConvention, authorizedToolAdvisorBuilder);
         if (!this.autoRegisterToolAdvisor) {
             builder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
         }
-        this.clientBuilderCustomizer.apply(builder);
-        // The privacy model boundary must validate the original callbacks before the
-        // definition advisor filters them. Their terminal order is intentionally equal.
-        additionalAdvisorConfigurer.apply(builder);
-        return builder.defaultAdvisors(this.boundary.toolAuthorizationAdvisor(),
-                this.boundary.toolDefinitionAuthorizationAdvisor());
+        builder = Objects.requireNonNull(this.clientBuilderCustomizer.apply(builder),
+                "clientBuilderCustomizer must not return null");
+        builder.defaultAdvisors(chainValidator);
+        ModelRequestBoundaryConfigurer composition = ModelRequestBoundaryConfigurer.compose(
+                this.boundary.modelRequestBoundaryConfigurer(), additionalConfigurer);
+        return composition.configure(builder);
     }
 }

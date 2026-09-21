@@ -1,5 +1,10 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.client.DefaultChatClient;
+import org.springframework.ai.chat.client.ChatClient;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -266,7 +271,7 @@ class PrivacyLifecycleAdvisorTest {
         }
         advisors.add(new PrivacyToolContextAdvisor(service));
         advisors.add(new PrivacyToolCallValidationAdvisor(service));
-        advisors.add(new PrivacyModelBoundaryAdvisor(service));
+        advisors.add((CallAdvisor) modelBoundary(service));
         when(chain.getCallAdvisors()).thenReturn(List.copyOf(advisors));
         return chain;
     }
@@ -285,9 +290,19 @@ class PrivacyLifecycleAdvisorTest {
         }
         advisors.add(new PrivacyToolContextAdvisor(service));
         advisors.add(new PrivacyToolCallValidationAdvisor(service));
-        advisors.add(new PrivacyModelBoundaryAdvisor(service));
+        advisors.add((StreamAdvisor) modelBoundary(service));
         when(chain.getStreamAdvisors()).thenReturn(List.copyOf(advisors));
         return chain;
+    }
+
+    private Advisor modelBoundary(PrivacyService service) {
+        ChatClient client = new PrivacyChatClientConfigurer(service)
+                .configure(ChatClient.builder(mock(ChatModel.class))).build();
+        DefaultChatClient.DefaultChatClientRequestSpec request =
+                (DefaultChatClient.DefaultChatClientRequestSpec) client.prompt();
+        return request.getAdvisors().stream()
+                .filter(advisor -> ModelRequestBoundarySpec.containsStageType(advisor, PrivacyModelRequestStage.class))
+                .findFirst().orElseThrow();
     }
 
     private ChatClientRequest request() {

@@ -1,12 +1,8 @@
 package io.github.ultramancode.springai.privacy.security;
 
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
 import io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.DefinitionResolvingModel;
 import io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.ResolvingToolLoopModel;
 import org.junit.jupiter.api.AfterEach;
@@ -68,20 +64,14 @@ class SpringSecurityToolMutationIntegrationTest {
         ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
                 .toolCallingManager(boundary.toolCallingManager())
                 .build();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        boundary.toolAuthorizationAdvisor(),
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .toolCallbackFactory(factory)
+                .build()
+                .forToolCallingAdvisorOrder(toolCallingAdvisor.getOrder())
+                .configure(ChatClient.builder(model))
+                .defaultAdvisors(boundary.toolAuthorizationAdvisor(),
                         lateToolInjectionAdvisor(lateInjectedTool),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service, factory),
-                        toolCallingAdvisor,
-                        new PrivacyToolCallValidationAdvisor(
-                                service,
-                                toolCallingAdvisor.getOrder() + 1
-                        ),
-                        new PrivacyModelBoundaryAdvisor(service, factory)
-                )
+                        toolCallingAdvisor)
                 .defaultTools(declaredCustomerLookup)
                 .build();
         useAuthentication(authentication("alice"));

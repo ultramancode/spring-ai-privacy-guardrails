@@ -66,14 +66,7 @@ class PrivacyChatClientIntegrationTest {
                 PiiAnalysisOptions.defaults()
         );
         RecordingPromptModel model = new RecordingPromptModel();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
                 .build();
 
         String result = chatClient.prompt().user("Find Alice").call().content();
@@ -90,14 +83,7 @@ class PrivacyChatClientIntegrationTest {
     void structuredOutputFormatAddedBySpringIsRejectedBeforeTheTerminalModelAdvisor() {
         PrivacyService service = TestPrivacyServices.privacyService();
         RecordingPromptModel model = new RecordingPromptModel();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
                 .build();
         StructuredOutputConverter<String> converter = new StructuredOutputConverter<>() {
             @Override
@@ -123,15 +109,10 @@ class PrivacyChatClientIntegrationTest {
     void partialProviderStreamFailureIsPreservedAndCleansTheLifecycleSession() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PartialFailureModel model = new PartialFailureModel();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyOutputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.TOKENIZE, "Response blocked by privacy guardrail.")
+                .build()
+                .configure(ChatClient.builder(model))
                 .build();
 
         assertThatThrownBy(() -> chatClient.prompt()
@@ -153,16 +134,11 @@ class PrivacyChatClientIntegrationTest {
                 service,
                 ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(lookupTool(toolInput));
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        ragAdvisor(),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service),
-                        new PrivacyOutputAdvisor(service, PrivacyOutputAction.TOKENIZE, "blocked")
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked")
+                .build()
+                .configure(ChatClient.builder(model))
+                .defaultAdvisors(ragAdvisor())
                 .defaultTools(scopedTool)
                 .build();
 
@@ -201,14 +177,7 @@ class PrivacyChatClientIntegrationTest {
                 ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
         );
         ProviderToolLoopModel model = new ProviderToolLoopModel();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
                 .defaultTools(factory.wrapProviders(sourceProvider, supplementalProvider))
                 .build();
 
@@ -245,15 +214,11 @@ class PrivacyChatClientIntegrationTest {
         ToolCallingAdvisor customToolAdvisor = ToolCallingAdvisor.builder()
                 .advisorOrder(0)
                 .build();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        customToolAdvisor,
-                        new PrivacyToolCallValidationAdvisor(service, customToolAdvisor.getOrder() + 1),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .build()
+                .forToolCallingAdvisorOrder(customToolAdvisor.getOrder())
+                .configure(ChatClient.builder(model))
+                .defaultAdvisors(customToolAdvisor)
                 .defaultTools(scopedTool)
                 .build();
 
@@ -275,16 +240,11 @@ class PrivacyChatClientIntegrationTest {
                 service,
                 ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(lookupTool(toolInput));
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        ragAdvisor(),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service),
-                        new PrivacyOutputAdvisor(service, PrivacyOutputAction.TOKENIZE, "blocked")
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked")
+                .build()
+                .configure(ChatClient.builder(model))
+                .defaultAdvisors(ragAdvisor())
                 .defaultTools(scopedTool)
                 .build();
 
@@ -312,14 +272,9 @@ class PrivacyChatClientIntegrationTest {
                 service,
                 ToolDisclosurePolicy.denyAll()
         ).wrap(lookupTool(toolInput));
-        ChatClient chatClient = ChatClient.builder(new SplitToolNameStreamModel())
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .build()
+                .configure(ChatClient.builder(new SplitToolNameStreamModel()))
                 .defaultTools(wrappedTool)
                 .build();
 
@@ -338,15 +293,10 @@ class PrivacyChatClientIntegrationTest {
                 service,
                 ToolDisclosurePolicy.denyAll()
         ).wrap(lookupTool(toolInput));
-        ChatClient chatClient = ChatClient.builder(new SafeToolCapableModel())
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        responseToolCallMutator(),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .build()
+                .configure(ChatClient.builder(new SafeToolCapableModel()))
+                .defaultAdvisors(responseToolCallMutator())
                 .defaultTools(wrappedTool)
                 .build();
 
@@ -366,14 +316,9 @@ class PrivacyChatClientIntegrationTest {
                 service,
                 ToolDisclosurePolicy.denyAll()
         ).wrap(lookupTool(toolInput));
-        ChatClient chatClient = ChatClient.builder(new MetadataToolCallStreamModel())
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .build()
+                .configure(ChatClient.builder(new MetadataToolCallStreamModel()))
                 .defaultTools(wrappedTool)
                 .build();
 
@@ -388,16 +333,11 @@ class PrivacyChatClientIntegrationTest {
     @Test
     void callLifecycleBoundaryProtectsPiiAddedAfterTheInnerOutputAdvisor() {
         PrivacyService service = TestPrivacyServices.privacyService();
-        ChatClient chatClient = ChatClient.builder(new RecordingPromptModel())
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        postOutputPiiAdvisor(),
-                        new PrivacyOutputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.TOKENIZE, "Response blocked by privacy guardrail.")
+                .build()
+                .configure(ChatClient.builder(new RecordingPromptModel()))
+                .defaultAdvisors(postOutputPiiAdvisor())
                 .build();
 
         String result = chatClient.prompt().user("hello").call().content();
@@ -411,16 +351,11 @@ class PrivacyChatClientIntegrationTest {
     @Test
     void streamLifecycleBoundaryProtectsPiiAddedAfterTheInnerOutputAdvisor() {
         PrivacyService service = TestPrivacyServices.privacyService();
-        ChatClient chatClient = ChatClient.builder(new RecordingPromptModel())
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        postOutputPiiAdvisor(),
-                        new PrivacyOutputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.TOKENIZE, "Response blocked by privacy guardrail.")
+                .build()
+                .configure(ChatClient.builder(new RecordingPromptModel()))
+                .defaultAdvisors(postOutputPiiAdvisor())
                 .build();
 
         String result = chatClient.prompt().user("hello").stream().content().collectList()
@@ -447,15 +382,11 @@ class PrivacyChatClientIntegrationTest {
                 1_000,
                 Duration.ofSeconds(1)
         );
-        ChatClient chatClient = ChatClient.builder(new FloodingToolStreamModel())
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyOutputAdvisor(service, PrivacyOutputAction.TOKENIZE, "blocked", limits),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked")
+                .responseInspectionLimits(limits)
+                .build()
+                .configure(ChatClient.builder(new FloodingToolStreamModel()))
                 .defaultTools(wrappedTool)
                 .build();
 
@@ -476,15 +407,8 @@ class PrivacyChatClientIntegrationTest {
                 ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(lookupTool(toolInput));
         CallAdvisor dynamicTools = dynamicToolsAdvisor(wrappedTool);
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        dynamicTools,
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
+                .defaultAdvisors(dynamicTools)
                 .build();
 
         String result = chatClient.prompt().user("Find Alice").call().content();

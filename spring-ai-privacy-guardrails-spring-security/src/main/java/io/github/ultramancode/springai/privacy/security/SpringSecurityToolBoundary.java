@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.security;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.model.ChatModel;
@@ -12,8 +13,8 @@ import java.util.Objects;
 
 /**
  * Provides request-scoped authorization for Spring AI tools. For selected ChatClients,
- * install the lifecycle and definition advisors together with a {@link ToolCallingAdvisor}
- * using {@link #toolCallingManager()}. The shared {@link ChatModel} keeps its existing
+ * use {@link ToolAuthorizationChatClientFactory} to install both the model request stage
+ * and the authorization-aware {@link ToolCallingAdvisor}. The shared {@link ChatModel} keeps its existing
  * {@link ToolCallingManager}.
  */
 public final class SpringSecurityToolBoundary {
@@ -21,7 +22,7 @@ public final class SpringSecurityToolBoundary {
     private final ToolAuthorizationSessionRegistry sessionRegistry;
     private final ToolCallingManager toolCallingManager;
     private final Advisor toolAuthorizationLifecycleAdvisor;
-    private final Advisor toolDefinitionAuthorizationAdvisor;
+    private final ToolDefinitionAuthorizationStage toolDefinitionAuthorizationStage;
 
     private SpringSecurityToolBoundary(
             ToolCallingManager delegate,
@@ -38,7 +39,7 @@ public final class SpringSecurityToolBoundary {
                 this.sessionRegistry,
                 contextHolderStrategy
         );
-        this.toolDefinitionAuthorizationAdvisor = new ToolDefinitionAuthorizationAdvisor(
+        this.toolDefinitionAuthorizationStage = new ToolDefinitionAuthorizationStage(
                 this.toolCallingManager
         );
     }
@@ -54,6 +55,7 @@ public final class SpringSecurityToolBoundary {
      * @param authorizationManager policy evaluated for definition exposure and tool execution
      * @return boundary builder
      */
+
     public static Builder builder(
             ToolCallingManager delegate,
             AuthorizationManager<ToolAuthorizationContext> authorizationManager
@@ -66,7 +68,7 @@ public final class SpringSecurityToolBoundary {
      * and reauthorizes tool execution.
      * Use it in the tool-calling advisor, including {@code ToolSearchToolCallingAdvisor}
      * where it also filters definitions before indexing. A {@link ChatModel} may keep its
-     * existing {@link ToolCallingManager} when {@link #toolDefinitionAuthorizationAdvisor()} is installed.
+     * existing {@link ToolCallingManager} when the managed client factory is used.
      * Alternatively, configure both the model and the tool-calling advisor with
      * the returned ToolCallingManager, and register {@link #toolAuthorizationAdvisor()}.
      *
@@ -86,18 +88,12 @@ public final class SpringSecurityToolBoundary {
         return this.toolAuthorizationLifecycleAdvisor;
     }
 
-    /**
-     * Returns the advisor that filters tool callbacks before each model call.
-     * Use it with the lifecycle advisor and a tool-calling advisor configured with
-     * {@link #toolCallingManager()} when the model keeps its existing {@link ToolCallingManager}.
-     * When privacy advisors are also used, register this advisor after the privacy
-     * model boundary so callback snapshot validation precedes definition filtering.
-     * Advisors that mutate tools must run before this advisor.
-     *
-     * @return model-facing tool definition authorization advisor
-     */
-    public Advisor toolDefinitionAuthorizationAdvisor() {
-        return this.toolDefinitionAuthorizationAdvisor;
+    /** Contributes authorization lifecycle and model-visible tool definition filtering. */
+    ModelRequestBoundaryConfigurer modelRequestBoundaryConfigurer() {
+        return (clientBuilder, boundarySpec) -> {
+            clientBuilder.defaultAdvisors(this.toolAuthorizationAdvisor());
+            boundarySpec.authorization(this.toolDefinitionAuthorizationStage);
+        };
     }
 
     int activeSessionCount() {

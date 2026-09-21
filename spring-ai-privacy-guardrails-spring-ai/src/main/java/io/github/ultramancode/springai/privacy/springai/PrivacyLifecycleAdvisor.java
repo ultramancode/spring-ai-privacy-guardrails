@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -114,7 +115,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
         requireExactlyOne(advisors, PrivacyInputAdvisor.class);
         requireExactlyOne(advisors, PrivacyToolContextAdvisor.class);
         requireExactlyOne(advisors, PrivacyToolCallValidationAdvisor.class);
-        requireExactlyOne(advisors, PrivacyModelBoundaryAdvisor.class);
+        requireExactlyOneModelStage(advisors);
         List<PrivacyOutputAdvisor> outputAdvisors = advisors.stream()
                 .filter(PrivacyOutputAdvisor.class::isInstance)
                 .map(PrivacyOutputAdvisor.class::cast)
@@ -127,6 +128,16 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
             );
         }
         return outputAdvisors.isEmpty() ? null : outputAdvisors.get(0);
+    }
+
+    private void requireExactlyOneModelStage(List<? extends Advisor> advisors) {
+        long count = advisors.stream()
+                .filter(advisor -> ModelRequestBoundarySpec.containsStageType(advisor, PrivacyModelRequestStage.class))
+                .count();
+        if (count != 1) {
+            throw new PrivacyGuardrailException(PrivacyFailureCode.TRANSFORMATION_CONFLICT, PrivacyPhase.SESSION,
+                    "PrivacyLifecycleAdvisor requires exactly one managed privacy model stage");
+        }
     }
 
     private void requireExactlyOne(

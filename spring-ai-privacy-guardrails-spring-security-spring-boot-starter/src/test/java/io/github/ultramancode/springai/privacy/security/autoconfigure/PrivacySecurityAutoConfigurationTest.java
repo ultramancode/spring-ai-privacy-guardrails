@@ -1,6 +1,8 @@
 package io.github.ultramancode.springai.privacy.security.autoconfigure;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;

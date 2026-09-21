@@ -144,15 +144,11 @@ class PrivacyToolSearchIntegrationTest {
         ToolSearchToolCallingAdvisor search = ToolSearchToolCallingAdvisor.builder()
                 .toolIndex(index).systemMessageSuffix("Search for tools before using them.")
                 .toolCallingManager(manager).build();
-        ChatClient client = ChatClient.builder(new SearchModel(manager, mode))
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service, factory),
-                        search,
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service, factory)
-                )
+        ChatClient client = PrivacyChatClientConfigurer.builder(service)
+                .toolCallbackFactory(factory)
+                .build()
+                .configure(ChatClient.builder(new SearchModel(manager, mode)))
+                .defaultAdvisors(search)
                 .defaultTools(business)
                 .build();
         return new Scenario(service, index, client, businessInput);

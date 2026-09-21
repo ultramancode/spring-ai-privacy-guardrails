@@ -46,6 +46,7 @@ jq -e \
         "spring-ai-privacy-guardrails-opennlp-spring-boot-starter",
         "spring-ai-privacy-guardrails-presidio",
         "spring-ai-privacy-guardrails-presidio-spring-boot-starter",
+        "spring-ai-privacy-guardrails-spring-ai-boundary",
         "spring-ai-privacy-guardrails-spring-ai",
         "spring-ai-privacy-guardrails-spring-boot-starter",
         "spring-ai-privacy-guardrails-spring-security",

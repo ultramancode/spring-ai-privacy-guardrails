@@ -1,13 +1,9 @@
 package io.github.ultramancode.springai.privacy.security;
 
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
 import io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.DefinitionResolvingModel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -252,19 +248,13 @@ class SpringSecurityToolSearchIntegrationTest {
                 boundary.toolCallingManager(),
                 "customerLookup"
         );
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        boundary.toolAuthorizationAdvisor(),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service, factory),
-                        toolSearchAdvisor,
-                        new PrivacyToolCallValidationAdvisor(
-                                service,
-                                toolSearchAdvisor.getOrder() + 1
-                        ),
-                        new PrivacyModelBoundaryAdvisor(service, factory)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .toolCallbackFactory(factory)
+                .build()
+                .forToolCallingAdvisorOrder(toolSearchAdvisor.getOrder())
+                .configure(ChatClient.builder(model))
+                .defaultAdvisors(boundary.toolAuthorizationAdvisor(),
+                        toolSearchAdvisor)
                 .defaultTools(authorizedCustomerLookup, unauthorizedAdminDelete)
                 .build();
         useAuthentication(authentication("alice"));
@@ -346,19 +336,13 @@ class SpringSecurityToolSearchIntegrationTest {
                 boundary.toolCallingManager(),
                 "adminDelete"
         );
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        boundary.toolAuthorizationAdvisor(),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service, factory),
-                        toolSearchAdvisor,
-                        new PrivacyToolCallValidationAdvisor(
-                                service,
-                                toolSearchAdvisor.getOrder() + 1
-                        ),
-                        new PrivacyModelBoundaryAdvisor(service, factory)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .toolCallbackFactory(factory)
+                .build()
+                .forToolCallingAdvisorOrder(toolSearchAdvisor.getOrder())
+                .configure(ChatClient.builder(model))
+                .defaultAdvisors(boundary.toolAuthorizationAdvisor(),
+                        toolSearchAdvisor)
                 .defaultTools(authorizedCustomerLookup, unauthorizedAdminDelete)
                 .build();
         useAuthentication(authentication("alice"));

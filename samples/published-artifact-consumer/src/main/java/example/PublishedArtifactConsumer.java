@@ -1,6 +1,6 @@
 package example;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
@@ -9,7 +9,7 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
-import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientFactory;
+import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
 import io.github.ultramancode.springai.privacy.test.ToolCallSnapshot;

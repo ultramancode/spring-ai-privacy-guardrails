@@ -10,17 +10,11 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
-import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -34,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /** Auto-configures core privacy services and the starter-managed Spring AI privacy boundary. */
@@ -44,6 +39,13 @@ public class PrivacyGuardrailsAutoConfiguration {
     private static final Pattern REGEX_MATCH_VALIDATOR_ID_SYNTAX = Pattern.compile(
             "[a-z0-9]+(?:-[a-z0-9]+)*"
     );
+
+    /** Optional integrations consume a JDK contract without depending on this starter. */
+    @Bean
+    @ConditionalOnMissingBean(name = "privacyModelContentProtection")
+    Predicate<ChatClientRequest> privacyModelContentProtection() {
+        return PrivacyChatClientConfigurer::isModelContentProtected;
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -208,38 +210,14 @@ public class PrivacyGuardrailsAutoConfiguration {
         PrivacyGuardrailsProperties.Output outputProperties = properties.getOutput();
         PrivacyResponseInspectionLimits responseInspectionLimits =
                 properties.getResponseInspection().limits();
-        // Capture settings once, but create a separate boundary for each selected builder.
-        boolean outputEnabled = outputProperties.isEnabled();
-        PrivacyOutputAction outputAction = outputProperties.getAction();
-        String outputBlockMessage = outputProperties.getBlockExceptionMessage();
-        return new PrivacyChatClientConfigurer(outputEnabled, toolOrder -> {
-            List<Advisor> advisors = new ArrayList<>();
-            advisors.add(new PrivacyLifecycleAdvisor(privacyService));
-            advisors.add(new PrivacyInputAdvisor(privacyService));
-            if (outputEnabled) {
-                advisors.add(new PrivacyOutputAdvisor(
-                        privacyService,
-                        outputAction,
-                        outputBlockMessage,
-                        responseInspectionLimits,
-                        configuredEnforcementObserver,
-                        toolOrder - 2
-                ));
-            }
-            advisors.add(new PrivacyToolContextAdvisor(privacyService, toolCallbackFactory, toolOrder - 1));
-            advisors.add(new PrivacyToolCallValidationAdvisor(
-                    privacyService,
-                    responseInspectionLimits,
-                    toolOrder + 1
-            ));
-            advisors.add(new PrivacyModelBoundaryAdvisor(
-                    privacyService,
-                    toolCallbackFactory,
-                    configuredEnforcementObserver,
-                    PrivacyModelBoundaryAdvisor.DEFAULT_ORDER
-            ));
-            return List.copyOf(advisors);
-        });
+        PrivacyChatClientConfigurer.Builder builder = PrivacyChatClientConfigurer.builder(privacyService)
+                .toolCallbackFactory(toolCallbackFactory)
+                .responseInspectionLimits(responseInspectionLimits)
+                .enforcementObserver(configuredEnforcementObserver);
+        if (outputProperties.isEnabled()) {
+            builder.outputProtection(outputProperties.getAction(), outputProperties.getBlockExceptionMessage());
+        }
+        return builder.build();
     }
 
     @Bean

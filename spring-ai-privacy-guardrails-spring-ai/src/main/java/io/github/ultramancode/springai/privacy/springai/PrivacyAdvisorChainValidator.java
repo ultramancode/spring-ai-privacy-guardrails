@@ -1,5 +1,6 @@
-package io.github.ultramancode.springai.privacy.autoconfigure;
+package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -21,19 +22,25 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 
 /**
- * Validates starter-managed privacy advisors and tool advisor placement in the sorted request chain.
+ * Validates the privacy advisors registered by {@link PrivacyChatClientConfigurer}
+ * and the tool advisor's position in the sorted request chain. Also verifies that
+ * one common model request boundary contains the configured privacy stage and
+ * follows the managed privacy advisors.
  *
  * <p>Validation runs for each call or stream subscription so advisors added to individual
  * requests are included. Priority ordering places this check before the managed privacy advisors.</p>
  */
 final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, PriorityOrdered {
 
-    private final List<Advisor> managedAdvisors;
+    private final List<Advisor> managedPrivacyAdvisors;
     private final int expectedToolOrder;
+    private final PrivacyModelRequestStage modelStage;
 
-    PrivacyAdvisorChainValidator(List<Advisor> managedAdvisors, int expectedToolOrder) {
-        this.managedAdvisors = List.copyOf(managedAdvisors);
+    PrivacyAdvisorChainValidator(List<Advisor> managedPrivacyAdvisors,
+            PrivacyModelRequestStage modelStage, int expectedToolOrder) {
+        this.managedPrivacyAdvisors = List.copyOf(managedPrivacyAdvisors);
         this.expectedToolOrder = expectedToolOrder;
+        this.modelStage = modelStage;
     }
 
     @Override
@@ -51,16 +58,16 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
     }
 
     private void validate(ChatClientRequest request, List<? extends Advisor> requestAdvisors) {
-        int previousAdvisorIndex = -1;
+        int lastManagedAdvisorIndex = -1;
         int toolContextIndex = -1;
         int toolCallValidationIndex = -1;
-        for (Advisor managedAdvisor : this.managedAdvisors) {
+        for (Advisor managedAdvisor : this.managedPrivacyAdvisors) {
             int advisorIndex = requireManagedAdvisorIndex(requestAdvisors, managedAdvisor);
-            if (advisorIndex <= previousAdvisorIndex) {
+            if (advisorIndex <= lastManagedAdvisorIndex) {
                 throw conflict("Privacy advisor order changed: " + managedAdvisor.getName()
-                        + " must follow the preceding managed privacy boundary");
+                        + " must follow the preceding managed privacy advisor");
             }
-            previousAdvisorIndex = advisorIndex;
+            lastManagedAdvisorIndex = advisorIndex;
             if (managedAdvisor instanceof PrivacyToolContextAdvisor) {
                 toolContextIndex = advisorIndex;
             }
@@ -69,6 +76,32 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
             }
         }
 
+        int modelBoundaryIndex = requireModelBoundaryIndex(requestAdvisors);
+        if (modelBoundaryIndex <= lastManagedAdvisorIndex) {
+            throw conflict("Privacy model stage must follow all managed privacy advisors");
+        }
+
+        validateToolAdvisorPlacement(request, requestAdvisors, toolContextIndex, toolCallValidationIndex);
+    }
+
+    private int requireModelBoundaryIndex(List<? extends Advisor> requestAdvisors) {
+        int modelBoundaryIndex = -1;
+        for (int i = 0; i < requestAdvisors.size(); i++) {
+            if (ModelRequestBoundarySpec.containsStage(requestAdvisors.get(i), modelStage)) {
+                if (modelBoundaryIndex >= 0) {
+                    throw conflict("Privacy requires exactly one managed model stage");
+                }
+                modelBoundaryIndex = i;
+            }
+        }
+        if (modelBoundaryIndex < 0) {
+            throw conflict("Privacy advisor layout is missing the registered model stage");
+        }
+        return modelBoundaryIndex;
+    }
+
+    private void validateToolAdvisorPlacement(ChatClientRequest request, List<? extends Advisor> requestAdvisors,
+            int toolContextIndex, int toolCallValidationIndex) {
         // Spring AI rejects multiple ToolAdvisors when it builds the request chain.
         int toolAdvisorIndex = -1;
         for (int i = 0; i < requestAdvisors.size(); i++) {

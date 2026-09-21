@@ -34,15 +34,8 @@ class PrivacyChatMemoryIntegrationTest {
             modelPrompt.set(prompt);
             return new ChatResponse(List.of(new Generation(new AssistantMessage("ok"))));
         };
-        ChatClient client = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        MessageChatMemoryAdvisor.builder(memory).build(),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient client = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(memory).build())
                 .build();
 
         String result = client.prompt()

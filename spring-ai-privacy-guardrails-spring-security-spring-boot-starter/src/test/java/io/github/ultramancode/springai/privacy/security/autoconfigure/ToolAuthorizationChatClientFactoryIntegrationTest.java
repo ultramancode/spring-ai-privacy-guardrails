@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.security.autoconfigure;
 
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;

@@ -1,6 +1,6 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;

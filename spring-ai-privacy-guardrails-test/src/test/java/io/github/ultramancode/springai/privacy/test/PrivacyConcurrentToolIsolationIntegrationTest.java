@@ -1,16 +1,12 @@
 package io.github.ultramancode.springai.privacy.test;
 
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
-import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -77,14 +73,9 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
                 customerLookup(toolBarrier, rawIdByLabel),
                 toolCallbackFactory
         );
-        ChatClient chatClient = ChatClient.builder(probe.wrapModel(model))
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(privacyService),
-                        new PrivacyInputAdvisor(privacyService),
-                        new PrivacyToolContextAdvisor(privacyService),
-                        new PrivacyToolCallValidationAdvisor(privacyService),
-                        new PrivacyModelBoundaryAdvisor(privacyService)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
+                .build()
+                .configure(ChatClient.builder(probe.wrapModel(model)))
                 .defaultTools(protectedTool)
                 .build();
 

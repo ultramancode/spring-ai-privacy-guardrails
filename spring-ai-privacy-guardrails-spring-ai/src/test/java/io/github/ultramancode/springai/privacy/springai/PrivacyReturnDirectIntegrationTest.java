@@ -42,14 +42,7 @@ class PrivacyReturnDirectIntegrationTest {
                 service,
                 ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(failingReturnDirectTool(toolInput));
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
                 .defaultTools(scopedTool)
                 .build();
 
@@ -159,15 +152,10 @@ class PrivacyReturnDirectIntegrationTest {
         );
         ToolCallback scopedTool = factory.wrap(returnDirectTool(toolInput));
         ToolCallback normalTool = factory.wrap(tool("search", false, "Bob search result"));
-        return ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyOutputAdvisor(service, action, "blocked"),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        return PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(action, "blocked")
+                .build()
+                .configure(ChatClient.builder(model))
                 .defaultTools(scopedTool, normalTool)
                 .build();
     }
@@ -180,15 +168,10 @@ class PrivacyReturnDirectIntegrationTest {
                 service,
                 ToolDisclosurePolicy.denyAll()
         );
-        return ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyOutputAdvisor(service, PrivacyOutputAction.REDACT, "blocked"),
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        return PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.REDACT, "blocked")
+                .build()
+                .configure(ChatClient.builder(model))
                 .defaultTools(
                         factory.wrap(tool("search", false, "Alice search result")),
                         factory.wrap(tool("downloadReceipt", true, "Bob receipt result")),

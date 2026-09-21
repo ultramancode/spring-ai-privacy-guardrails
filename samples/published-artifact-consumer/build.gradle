@@ -94,12 +94,13 @@ tasks.register('verifySecurityOnlyDependencies') {
                 .collect { module -> module.name }
                 .toSet()
         Set<String> expectedArtifacts = Set.of(
+                'spring-ai-privacy-guardrails-spring-ai-boundary',
                 'spring-ai-privacy-guardrails-spring-security',
                 'spring-ai-privacy-guardrails-spring-security-spring-boot-starter'
         )
         if (firstPartyArtifacts != expectedArtifacts) {
             throw new GradleException(
-                    "Expected only Security artifacts but resolved ${firstPartyArtifacts}"
+                    "Expected only Security and common boundary artifacts but resolved ${firstPartyArtifacts}"
             )
         }
     }

@@ -1,6 +1,7 @@
 description = 'Optional Spring Security authorization boundary for Spring AI tools.'
 
 dependencies {
+    api project(':spring-ai-privacy-guardrails-spring-ai-boundary')
     api platform("org.springframework.ai:spring-ai-bom:${providers.gradleProperty('springAiVersion').get()}")
     api 'org.springframework.ai:spring-ai-client-chat'
     api 'org.springframework.ai:spring-ai-model'

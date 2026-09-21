@@ -45,15 +45,8 @@ class PrivacyVectorStoreRagIntegrationTest {
                         .similarityThreshold(0.9)
                         .build())
                 .build();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        new PrivacyInputAdvisor(service),
-                        retrievalAdvisor,
-                        new PrivacyToolContextAdvisor(service),
-                        new PrivacyToolCallValidationAdvisor(service),
-                        new PrivacyModelBoundaryAdvisor(service)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
+                .defaultAdvisors(retrievalAdvisor)
                 .build();
 
         ChatClientResponse response = chatClient.prompt()

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.security.autoconfigure;
 
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;

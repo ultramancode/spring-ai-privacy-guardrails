@@ -25,7 +25,7 @@ import java.util.Set;
  * Makes the current privacy session available to tools and validates registered callbacks.
  * Register this advisor when tools can be supplied or injected dynamically. Wrap application
  * tool callbacks with {@link PrivacyToolCallbackFactory}. Spring AI Tool Search is also
- * supported; {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
+ * supported. {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
  * When customizing advisor order, ensure that custom advisors do not mutate tool options
  * after the final privacy check.
  */

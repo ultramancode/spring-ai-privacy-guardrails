@@ -16,8 +16,8 @@ import java.util.Objects;
 
 /**
  * Protects tool arguments and results according to a capability-scoped disclosure policy.
- * Only callbacks explicitly created by {@link PrivacyToolCallbackFactory} are protected;
- * raw callbacks registered directly with Spring AI are outside this boundary. Definition and
+ * Only callbacks explicitly created by {@link PrivacyToolCallbackFactory} are protected.
+ * Raw callbacks registered directly with Spring AI are outside this boundary. Definition and
  * metadata accessors are read once when the wrapper is created. Application-owned accessor
  * failures propagate unchanged, while invalid null contracts become safe typed failures.
  */

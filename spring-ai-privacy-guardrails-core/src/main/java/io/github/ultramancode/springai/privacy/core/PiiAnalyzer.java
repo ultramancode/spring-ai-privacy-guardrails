@@ -19,7 +19,7 @@ public interface PiiAnalyzer {
      * Analyzes source text without retaining or mutating it. Implementations are
      * shared by {@link PrivacyService} and must therefore be thread-safe and
      * reentrant. A blocking implementation must apply its own finite deadline and
-     * cooperate with thread interruption; request cancellation cannot forcibly stop
+     * cooperate with thread interruption. Request cancellation cannot forcibly stop
      * arbitrary synchronous analyzer code. Implementations must also bound their
      * work relative to the input and return at most {@link #MAX_RESULT_SPANS} spans.
      * The core validates this bound after the call, but cannot prevent a custom
@@ -27,7 +27,7 @@ public interface PiiAnalyzer {
      * analyzers stop while collecting results so they do not first materialize an
      * oversized list.
      *
-     * @param text non-null source text; the core service does not invoke analyzers for null or blank input
+     * @param text non-null source text. The core service does not invoke analyzers for null or blank input
      * @param options non-null validated analysis options
      * @return a non-null list containing only non-null spans whose ranges are
      * within the source text
@@ -109,7 +109,7 @@ public interface PiiAnalyzer {
      * Every configured analyzer must expose a distinct provider ID, so at most
      * one custom analyzer may retain the default.
      *
-     * @return stable provider ID; custom analyzers default to {@code CUSTOM}
+     * @return stable provider ID. Custom analyzers default to {@code CUSTOM}
      */
     default String providerId() {
         return "CUSTOM";

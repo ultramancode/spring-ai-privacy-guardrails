@@ -147,7 +147,7 @@ public final class PiiResolutionPolicy {
 
     /**
      * Returns canonical provider-specific confidence thresholds. These entries
-     * configure filtering only; they do not register analyzers.
+     * configure filtering only. They do not register analyzers.
      *
      * @return immutable provider-to-minimum-score map
      */
@@ -194,7 +194,7 @@ public final class PiiResolutionPolicy {
         /**
          * Selects providers whose evidence is always included with the primary.
          *
-         * @param supplementalProviders provider IDs; canonical duplicates are rejected
+         * @param supplementalProviders provider IDs. Canonical duplicates are rejected
          * and the values are used only by primary-based modes
          * @return this builder
          */
@@ -221,7 +221,7 @@ public final class PiiResolutionPolicy {
          * Sets provider-specific minimum confidence scores.
          *
          * @param providerMinimumScores provider IDs mapped to values between
-         * {@code 0.0} and {@code 1.0}; entries do not register analyzers
+         * {@code 0.0} and {@code 1.0}. Entries do not register analyzers
          * @return this builder
          */
         public Builder providerMinimumScores(Map<String, Double> providerMinimumScores) {

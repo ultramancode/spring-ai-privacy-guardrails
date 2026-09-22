@@ -223,7 +223,7 @@ final class PresidioResponseParser {
         return start >= 0 && end <= maxLength && start < end;
     }
 
-    /** Presidio uses Unicode code-point offsets; core spans use Java UTF-16 indices. */
+    /** Presidio uses Unicode code-point offsets. Core spans use Java UTF-16 indices. */
     private record Utf16OffsetIndex(int[] utf16OffsetByCodePoint, int utf16Length) {
 
         private static Utf16OffsetIndex from(String sourceText) {

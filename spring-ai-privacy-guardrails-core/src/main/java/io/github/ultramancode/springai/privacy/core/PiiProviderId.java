@@ -16,7 +16,7 @@ final class PiiProviderId {
 
     /**
      * Validates a provider ID and returns its uppercase canonical representation.
-     * Only ASCII letter case is insignificant; whitespace and punctuation are not
+     * Only ASCII letter case is insignificant. Whitespace and punctuation are not
      * repaired.
      */
     static String canonicalize(String providerId) {

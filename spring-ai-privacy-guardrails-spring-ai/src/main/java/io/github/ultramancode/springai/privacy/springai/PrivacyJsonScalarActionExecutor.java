@@ -97,7 +97,7 @@ final class PrivacyJsonScalarActionExecutor {
             return spans;
         }
         // Core stores a protected number as one typed value and validates supplied spans
-        // against Number.toString(); remap already-resolved plain-decimal evidence accordingly.
+        // against Number.toString(). Remap already-resolved plain-decimal evidence accordingly.
         int tokenizationLength = decimal.toString().length();
         return spans.stream()
                 .map(span -> new PiiSpan(span.entityType(), 0, tokenizationLength, span.score()))

@@ -53,7 +53,7 @@ public final class PrivacyChatClientConfigurer
         this.enforcementObserver = builder.enforcementObserver;
     }
 
-    /** Creates a programmatic configuration builder; output protection is initially disabled. */
+    /** Creates a programmatic configuration builder. Output protection is initially disabled. */
     public static Builder builder(PrivacyService service) {
         return new Builder(service);
     }
@@ -146,7 +146,7 @@ public final class PrivacyChatClientConfigurer
         }
     }
 
-    /** Settings shared by this configurer's clients; request state is never retained here. */
+    /** Settings shared by this configurer's clients. Request state is never retained here. */
     public static final class Builder {
         private final PrivacyService service;
         private PrivacyToolCallbackFactory expectedToolCallbackFactory;

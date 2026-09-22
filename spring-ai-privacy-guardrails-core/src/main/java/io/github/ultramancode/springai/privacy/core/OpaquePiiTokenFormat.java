@@ -10,7 +10,7 @@ public final class OpaquePiiTokenFormat {
     private static final String NONCE_REGEX = "[a-f0-9]{" + NONCE_HEX_CHARACTER_COUNT + "}";
     private static final String INDEX_REGEX = "[1-9]\\d*";
     private static final Pattern NONCE_PATTERN = Pattern.compile(NONCE_REGEX);
-    // The entity grammar has no length bound; this lookahead limits the type before the fixed-width nonce.
+    // The entity grammar has no length bound. This lookahead limits the type before the fixed-width nonce.
     private static final Pattern CANONICAL_TOKEN_PATTERN = Pattern.compile(
             "\\[\\[PII_(?=[A-Z0-9_]{1," + EntityTypeRegistry.MAX_ENTITY_TYPE_LENGTH
                     + "}_" + NONCE_REGEX + "_)"

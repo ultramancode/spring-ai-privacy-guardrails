@@ -174,7 +174,7 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
     ) {
         String body;
         try {
-            // Core entity names are canonical, not Presidio-native; the core resolver owns post-filtering.
+            // Core entity names are canonical, not Presidio-native. The core resolver owns post-filtering.
             body = this.objectMapper.writeValueAsString(requestBody);
         } catch (JacksonException serializationFailure) {
             throw new PresidioCallException(

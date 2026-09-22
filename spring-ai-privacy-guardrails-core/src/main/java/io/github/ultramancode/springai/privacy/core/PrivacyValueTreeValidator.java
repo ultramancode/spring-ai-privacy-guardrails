@@ -13,8 +13,8 @@ import java.util.Set;
 /** Validates and copies values accepted by the direct value-tree API. */
 final class PrivacyValueTreeValidator {
 
-    // Avoid rendering obviously oversized BigInteger and BigDecimal magnitudes;
-    // acceptNumber performs the exact decimal representation check afterward.
+    // Avoid rendering obviously oversized BigInteger and BigDecimal magnitudes.
+    // The acceptNumber method performs the exact decimal representation check afterward.
     private static final int MAX_NUMBER_BIT_LENGTH = BigInteger.TEN
             .pow(PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS)
             .bitLength();

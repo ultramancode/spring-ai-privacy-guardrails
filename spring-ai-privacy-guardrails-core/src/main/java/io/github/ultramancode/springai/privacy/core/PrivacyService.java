@@ -103,7 +103,7 @@ public final class PrivacyService {
     /**
      * Returns final resolved spans.
      *
-     * @param text source text; {@code null} or blank text produces an empty result
+     * @param text source text. {@code null} or blank text produces an empty result
      * @return resolved spans in source order
      */
     public List<ResolvedPiiSpan> analyze(String text) {
@@ -129,7 +129,7 @@ public final class PrivacyService {
     /**
      * Returns resolved spans together with successful providers and sanitized failures.
      *
-     * @param text source text; {@code null} or blank text produces an empty result
+     * @param text source text. {@code null} or blank text produces an empty result
      * @return detailed analysis result
      */
     public PiiAnalysisResult analyzeDetailed(String text) {
@@ -315,7 +315,7 @@ public final class PrivacyService {
      * {@code Byte}, {@code Short}, {@code Integer}, {@code Long}, {@code BigInteger},
      * {@code BigDecimal}, {@code Float}, or {@code Double}, lists, and maps with
      * string keys. Floating-point values must be finite. Inputs are validated and
-     * copied before transformation; unsupported values, reference cycles, and values
+     * copied before transformation. Unsupported values, reference cycles, and values
      * above the published {@code MAX_VALUE_TREE_*} limits are rejected.
      *
      * @param handle active session handle
@@ -363,7 +363,7 @@ public final class PrivacyService {
      * {@code Byte}, {@code Short}, {@code Integer}, {@code Long}, {@code BigInteger},
      * {@code BigDecimal}, {@code Float}, or {@code Double}, lists, and maps with
      * string keys. Floating-point values must be finite. Inputs are validated and
-     * copied before analysis; unsupported values, reference cycles, and values above
+     * copied before analysis. Unsupported values, reference cycles, and values above
      * the published {@code MAX_VALUE_TREE_*} limits are rejected.
      *
      * @param handle active session handle

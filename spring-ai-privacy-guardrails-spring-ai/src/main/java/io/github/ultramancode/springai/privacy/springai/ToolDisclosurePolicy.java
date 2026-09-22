@@ -15,7 +15,7 @@ public interface ToolDisclosurePolicy {
      * Decides which original entity types one exact tool may receive.
      *
      * @param toolDefinition immutable definition of the tool about to be wrapped
-     * @return disclosure scope; use {@link ToolDisclosureScope#none()} for default deny
+     * @return disclosure scope. Use {@link ToolDisclosureScope#none()} for default deny
      */
     ToolDisclosureScope scopeFor(ToolDefinition toolDefinition);
 
@@ -30,7 +30,7 @@ public interface ToolDisclosurePolicy {
 
     /**
      * Creates a least-privilege policy for exact, case-sensitive tool names.
-     * Every configured tool must declare at least one entity type; omitted tools
+     * Every configured tool must declare at least one entity type. Omitted tools
      * receive no original values.
      *
      * @param entityTypesByToolName tool names mapped to entity types they may receive as originals

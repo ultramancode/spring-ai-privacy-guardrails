@@ -22,7 +22,7 @@ import java.util.Objects;
 /**
  * Owns the privacy session around the advisors that execute inside its configured position
  * and applies the optional output policy when control returns to that position.
- * The default order wraps the standard privacy bundle; applications remain responsible for
+ * The default order wraps the standard privacy bundle. Applications remain responsible for
  * mutations performed by advisors placed outside it. Unrelated advisor classes and numeric
  * orders are application-owned and are not admission rules for this boundary.
  */

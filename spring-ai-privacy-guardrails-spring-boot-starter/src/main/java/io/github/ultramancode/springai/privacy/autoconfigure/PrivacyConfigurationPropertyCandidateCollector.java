@@ -93,7 +93,7 @@ final class PrivacyConfigurationPropertyCandidateCollector {
 
     /**
      * Uses the mapping semantics of one adapted source without exposing partial results.
-     * An empty optional means inspection failed; a present empty list means it succeeded
+     * An empty optional means inspection failed. A present empty list means it succeeded
      * with no candidates.
      */
     private static Optional<List<PropertyNameCandidate>> collectCandidatesUsingSourceMapping(

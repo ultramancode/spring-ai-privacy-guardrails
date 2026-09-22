@@ -19,7 +19,7 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
     /**
      * Compiles application-owned regex rules for repeated thread-safe analysis.
      *
-     * @param rules non-empty rule list; patterns are trusted configuration
+     * @param rules non-empty rule list. Patterns are trusted configuration
      */
     public RegexPiiAnalyzer(List<RegexPiiRule> rules) {
         Objects.requireNonNull(rules, "rules must not be null");

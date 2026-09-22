@@ -10,16 +10,18 @@
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails execution boundaries" width="100%">
 </p>
 
-**Featured In**
-
-- **Spring Blog** — Featured in [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
-- **Spring AI Community** — Listed in [Awesome Spring AI's Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
-
 <p align="center">
   <strong>Watch the demo:</strong>
   <a href="https://youtu.be/IeeA5ogIX_I">English</a> ·
   <a href="https://youtu.be/vir-x78e9j8">한국어</a>
 </p>
+
+**Featured In**
+
+- **Spring Blog** — Featured in [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
+- **Spring AI Community** — Listed in [Awesome Spring AI's Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
+
+<br>
 
 **Detect PII with built-in and pluggable analyzers. Control where original
 values may travel.**
@@ -305,6 +307,7 @@ dependencies. Add test support separately in the application's test scope.
 | Module | Purpose |
 | --- | --- |
 | `spring-ai-privacy-guardrails-core` | Analyzer SPI, detection resolution, sessions, regex analysis, and PII tokenization |
+| `spring-ai-privacy-guardrails-spring-ai-boundary` | Shared model-request boundary for privacy, authorization, and inspection stages |
 | `spring-ai-privacy-guardrails-spring-ai` | Advisors and per-tool original-disclosure boundaries |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |

@@ -44,10 +44,27 @@ class PrivacyModelRequestStageTest {
             assertThat(text).doesNotContain("Alice");
             assertThat(service.detokenize(session.handle(), text))
                     .isEqualTo("Retrieved customer: Alice");
+        }
+    }
+
+    @Test
+    void changedMessagesInvalidatePrivacyProcessingMarker() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
+
+        try (PrivacySession session = service.openSession()) {
+            ChatClientRequest request = activeRequest(
+                    new ChatClientRequest(new Prompt("Alice"), Map.of()),
+                    session.handle()
+            );
+            ChatClientRequest protectedRequest = stage.apply(request);
             assertThat(PrivacyModelRequestStage.hasPrivacyProcessedMessages(protectedRequest)).isTrue();
 
-            ChatClientRequest changed = protectedRequest.mutate().prompt(new Prompt("Alice added later")).build();
-            assertThat(PrivacyModelRequestStage.hasPrivacyProcessedMessages(changed)).isFalse();
+            ChatClientRequest changedRequest = protectedRequest.mutate()
+                    .prompt(new Prompt("Alice added later"))
+                    .build();
+
+            assertThat(PrivacyModelRequestStage.hasPrivacyProcessedMessages(changedRequest)).isFalse();
         }
     }
 

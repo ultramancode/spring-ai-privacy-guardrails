@@ -81,6 +81,12 @@ ChatClient chatClient(
 개인정보 보호 경계를 구성하며, 출력 보호가 활성화되어 있으면 출력 경계도 함께
 적용합니다.
 
+다른 모델 요청 기능과 함께 사용할 때는 `ModelRequestBoundaryConfigurer.compose(...)`로
+기능별 configurer를 합친 뒤 `configure(builder)`를 한 번 호출하세요. 공통 바운더리는
+개인정보 보호 → 도구 인가 → 모델 요청 최종 검사 순서로 실행하며, 등록하지 않은 단계는
+건너뜁니다. 각 기능을 따로 구성하면 바운더리가 중복 생성되어 요청 시 거부됩니다.
+여기서 최종 검사는 모델의 출력이 아니라 준비된 모델 요청을 검사하는 단계입니다.
+
 개인정보 보호와 도구 권한 검사를 함께 적용하려면 `PrivacySecurityChatClientFactory`로
 클라이언트를 생성하세요. 이 Factory는 개인정보 보호도 구성하므로 반환된 builder에
 `PrivacyChatClientConfigurer`를 추가로 적용하지 마세요. 도구 권한 검사만 필요하면
@@ -112,7 +118,7 @@ Spring AI의 표준 `UserMessage`, `SystemMessage`, `AssistantMessage`,
 순서를 변경하는 경우에 해당합니다. 기본 순서(`ToolCallingAdvisor.DEFAULT_ORDER`)를
 사용한다면 앞의 `configure(builder)` 구성으로 충분합니다.
 
-실행 순서를 변경할 때는 `advisorOrder(...)`와 `forToolCallingAdvisorOrder(...)`에
+실행 순서를 변경할 때는 `advisorOrder(...)`와 `forToolAdvisorOrder(...)`에
 같은 값을 전달하세요. 아래 예시는 도구 호출 순서를 `100`으로 설정하고, 도구 실행
 전후의 개인정보 보호 처리도 그에 맞춰 배치합니다.
 
@@ -131,8 +137,8 @@ ChatClient privacyClientWithCustomToolOrder(
     ChatClient.Builder builder = ChatClient.builder(chatModel)
             .defaultAdvisors(toolCallingAdvisor);
 
-    return privacyConfigurer.forToolCallingAdvisorOrder(toolOrder)
-            .apply(builder)
+    return privacyConfigurer.forToolAdvisorOrder(toolOrder)
+            .configure(builder)
             .build();
 }
 ```
@@ -827,10 +833,14 @@ PrivacyEnforcementObserver privacyEnforcementObserver() {
 권장합니다. 옵저버 콜백에서 발생한 비치명적 오류는 무시되며 개인정보 보호 처리에는
 영향을 주지 않습니다.
 
-Spring Boot 스타터를 사용하면 등록한 옵저버 빈이 자동으로 연결됩니다. 스타터의 자동
-구성 없이 `PrivacyModelBoundaryAdvisor`, `PrivacyToolCallbackFactory`,
-`PrivacyOutputAdvisor`를 직접 생성하는 경우에는 옵저버를 생성자 인자로 전달해야
-합니다. 옵저버 인자가 없는 기존 생성자를 사용하면 관측 이벤트는 전달되지 않습니다.
+Spring Boot 스타터를 사용하면 등록한 옵저버 빈이 자동으로 연결됩니다. 스타터 없이
+구성할 때는 `PrivacyChatClientConfigurer.builder(privacyService).enforcementObserver(observer)`로
+옵저버를 지정한 뒤 configurer를 생성하세요. 모델 요청의 개인정보 보호 처리 결과를
+받을 수 있고, 출력 보호를 활성화하면 출력 처리 결과도 받습니다.
+도구 이벤트를 받으려면 `PrivacyToolCallbackFactory`의 생성자에도 옵저버를 별도로
+전달해야 합니다. `PrivacyOutputAdvisor`를 직접 생성한다면
+옵저버를 받는 생성자를 사용하세요. 옵저버를 지정하지 않은 configurer와 구성 요소는
+관측 이벤트를 전달하지 않습니다.
 
 ## 저장 데이터와 진단 정보
 

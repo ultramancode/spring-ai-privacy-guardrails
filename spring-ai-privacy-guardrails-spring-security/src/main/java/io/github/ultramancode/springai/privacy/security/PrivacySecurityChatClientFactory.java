@@ -53,20 +53,34 @@ public final class PrivacySecurityChatClientFactory {
         return builder(model, toolAdvisorBuilder, (clientBuilder, boundarySpec) -> { });
     }
 
-    /** Adds a feature to the same client-scoped model request boundary. */
-    public ChatClient.Builder builderWithBoundary(ChatModel model, ModelRequestBoundaryConfigurer configurer) {
-        return builder(model, this.authorizationFactory.defaultToolAdvisorBuilder(), configurer);
+    /**
+     * Adds features to the same model request boundary using the default tool advisor builder.
+     * @param model the shared model to call
+     * @param additionalConfigurer additional features, such as inspection;
+     *         must not register privacy or authorization again
+     * @return a new builder with privacy, authorization and the additional features
+     */
+    public ChatClient.Builder builderWithBoundary(ChatModel model, ModelRequestBoundaryConfigurer additionalConfigurer) {
+        return builder(model, this.authorizationFactory.defaultToolAdvisorBuilder(), additionalConfigurer);
     }
 
-    /** Composes privacy, authorization and the supplied feature in fixed phase order. */
+    /**
+     * Composes privacy, authorization and additional features in one model request boundary.
+     * Do not apply another boundary configurer separately to the returned builder.
+     * @param model the shared model to call
+     * @param toolAdvisorBuilder tool advisor builder to copy and configure
+     * @param additionalConfigurer additional features, such as inspection;
+     *         must not register privacy or authorization again
+     * @return a new builder with the selected tool loop and combined boundary
+     */
     public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
-            ModelRequestBoundaryConfigurer configurer) {
+            ModelRequestBoundaryConfigurer additionalConfigurer) {
         ToolCallingAdvisor.Builder<?> toolAdvisorBuilderCopy = Objects.requireNonNull(
                 toolAdvisorBuilder, "toolAdvisorBuilder must not be null").copy();
         int plannedToolOrder = toolAdvisorBuilderCopy.getAdvisorOrder();
         ModelRequestBoundaryConfigurer privacyBoundaryConfigurer = this.privacyConfigurer.apply(plannedToolOrder);
         ModelRequestBoundaryConfigurer combinedConfigurer = ModelRequestBoundaryConfigurer.compose(
-                privacyBoundaryConfigurer, Objects.requireNonNull(configurer, "configurer"));
+                privacyBoundaryConfigurer, Objects.requireNonNull(additionalConfigurer, "additionalConfigurer"));
         return this.authorizationFactory.createBuilder(model, toolAdvisorBuilderCopy, combinedConfigurer, actualToolOrder -> {
             if (actualToolOrder != plannedToolOrder) {
                 throw new IllegalArgumentException("Tool advisor order changed after planning the privacy boundary: "

@@ -96,16 +96,27 @@ public final class ToolAuthorizationChatClientFactory {
 
     /**
      * Creates a builder that combines tool authorization and the supplied features
-     * in one model request boundary.
+     * in one model request boundary using the default tool advisor builder.
+     * @param model the shared model to call
+     * @param additionalConfigurer additional features; must not register authorization again
+     * @return a new builder with authorization and the additional features
      */
-    public ChatClient.Builder builderWithBoundary(ChatModel model, ModelRequestBoundaryConfigurer configurer) {
-        return builder(model, this.defaultToolAdvisorBuilder, configurer);
+    public ChatClient.Builder builderWithBoundary(ChatModel model, ModelRequestBoundaryConfigurer additionalConfigurer) {
+        return builder(model, this.defaultToolAdvisorBuilder, additionalConfigurer);
     }
 
-    /** Preserves a caller-selected tool loop, including Tool Search, while composing model stages. */
+    /**
+     * Preserves a caller-selected tool loop, including Tool Search, while composing model stages.
+     * Do not apply another boundary configurer separately to the returned builder.
+     * @param model the shared model to call
+     * @param toolAdvisorBuilder tool advisor builder to copy and configure
+     * @param additionalConfigurer additional features; must not register authorization again
+     * @return a new builder with the selected tool loop and combined boundary
+     */
     public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
-            ModelRequestBoundaryConfigurer configurer) {
-        return createBuilder(model, toolAdvisorBuilder, Objects.requireNonNull(configurer, "configurer"), ignored -> { });
+            ModelRequestBoundaryConfigurer additionalConfigurer) {
+        return createBuilder(model, toolAdvisorBuilder,
+                Objects.requireNonNull(additionalConfigurer, "additionalConfigurer"), ignored -> { });
     }
 
     ChatClient.Builder createBuilder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,

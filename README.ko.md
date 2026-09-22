@@ -7,10 +7,16 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 99287044ac8452a02eeb0e05338d08d3d16d0edff591e3d9253b1ccb1b71c0be -->
+<!-- i18n-source-sha256: f918155b94450b87fd0ca21da8cedc74bf2ab8ba36dbfbd5023b90e02f06fda5 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
+</p>
+
+<p align="center">
+  <strong>데모 영상:</strong>
+  <a href="https://youtu.be/vir-x78e9j8">한국어</a> ·
+  <a href="https://youtu.be/IeeA5ogIX_I">English</a>
 </p>
 
 **외부 소개**
@@ -18,11 +24,7 @@
 - **Spring 공식 블로그** — [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)에 소개
 - **Spring AI Community** — [Awesome Spring AI의 Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)에 소개
 
-<p align="center">
-  <strong>데모 영상:</strong>
-  <a href="https://youtu.be/vir-x78e9j8">한국어</a> ·
-  <a href="https://youtu.be/IeeA5ogIX_I">English</a>
-</p>
+<br>
 
 **내장 및 확장 가능한 분석기로 개인정보를 탐지하고, 원문 값이 어디까지 이동할 수
 있는지 통제합니다.**
@@ -290,6 +292,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 | 모듈 | 목적 |
 | --- | --- |
 | `spring-ai-privacy-guardrails-core` | 분석기 SPI, 탐지 결과 해석, 세션, 정규식 분석과 개인정보 토큰화 |
+| `spring-ai-privacy-guardrails-spring-ai-boundary` | 개인정보 보호·도구 인가·검사 단계를 구성하는 공통 모델 요청 바운더리 |
 | `spring-ai-privacy-guardrails-spring-ai` | Advisor와 도구별 원문 공개 경계 |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP 어댑터 |
 | `spring-ai-privacy-guardrails-opennlp` | 사용자 제공 OpenNLP 모델용 JVM 전용 어댑터 |

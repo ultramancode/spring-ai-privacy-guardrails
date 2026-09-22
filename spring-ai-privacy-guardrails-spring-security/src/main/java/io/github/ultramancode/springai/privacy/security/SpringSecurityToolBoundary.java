@@ -14,8 +14,8 @@ import java.util.Objects;
 /**
  * Provides request-scoped authorization for Spring AI tools. For selected ChatClients,
  * use {@link ToolAuthorizationChatClientFactory} to install both the model request stage
- * and the authorization-aware {@link ToolCallingAdvisor}. The shared {@link ChatModel} keeps its existing
- * {@link ToolCallingManager}.
+ * and the authorization-aware {@link ToolCallingAdvisor}. The shared {@link ChatModel}
+ * keeps its existing {@link ToolCallingManager}. The factory also works without Spring Boot.
  */
 public final class SpringSecurityToolBoundary {
 
@@ -55,7 +55,6 @@ public final class SpringSecurityToolBoundary {
      * @param authorizationManager policy evaluated for definition exposure and tool execution
      * @return boundary builder
      */
-
     public static Builder builder(
             ToolCallingManager delegate,
             AuthorizationManager<ToolAuthorizationContext> authorizationManager
@@ -68,7 +67,7 @@ public final class SpringSecurityToolBoundary {
      * and reauthorizes tool execution.
      * Use it in the tool-calling advisor, including {@code ToolSearchToolCallingAdvisor}
      * where it also filters definitions before indexing. A {@link ChatModel} may keep its
-     * existing {@link ToolCallingManager} when the managed client factory is used.
+     * existing {@link ToolCallingManager} when {@link ToolAuthorizationChatClientFactory} is used.
      * Alternatively, configure both the model and the tool-calling advisor with
      * the returned ToolCallingManager, and register {@link #toolAuthorizationAdvisor()}.
      *
@@ -139,8 +138,7 @@ public final class SpringSecurityToolBoundary {
         }
 
         /**
-         * Builds the authorization-aware tool-calling manager and advisors
-         * that share request-scoped authorization state.
+         * Builds the tool authorization components with shared request-scoped state.
          *
          * @return complete Spring Security tool boundary
          */

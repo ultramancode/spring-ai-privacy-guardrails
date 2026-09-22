@@ -102,16 +102,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
 
     private PrivacyOutputAdvisor validateBundleAndFindOutputAdvisor(List<? extends Advisor> advisors) {
         Objects.requireNonNull(advisors, "advisors must not be null");
-        long lifecycleCount = advisors.stream()
-                .filter(PrivacyLifecycleAdvisor.class::isInstance)
-                .count();
-        if (lifecycleCount != 1) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.TRANSFORMATION_CONFLICT,
-                    PrivacyPhase.SESSION,
-                    "PrivacyLifecycleAdvisor requires exactly one complete mandatory privacy advisor set"
-            );
-        }
+        requireExactlyOne(advisors, PrivacyLifecycleAdvisor.class);
         requireExactlyOne(advisors, PrivacyInputAdvisor.class);
         requireExactlyOne(advisors, PrivacyToolContextAdvisor.class);
         requireExactlyOne(advisors, PrivacyToolCallValidationAdvisor.class);

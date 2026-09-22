@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PrivacyVectorStoreRagIntegrationTest {
 
     @Test
-    void localVectorStoreRetrievalIsProtectedBeforeTheModelBoundary() {
+    void localVectorStoreRetrievalIsProtectedBeforeModelCall() {
         PrivacyService service = TestPrivacyServices.privacyService();
         VectorStore vectorStore = SimpleVectorStore.builder(new DeterministicEmbeddingModel()).build();
         vectorStore.add(List.of(

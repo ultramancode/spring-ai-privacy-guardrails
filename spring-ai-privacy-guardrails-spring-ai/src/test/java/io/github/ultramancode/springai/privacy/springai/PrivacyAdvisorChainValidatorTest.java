@@ -22,14 +22,14 @@ class PrivacyAdvisorChainValidatorTest {
 
     private final PrivacyService service = TestPrivacyServices.privacyService();
     private final PrivacyInputAdvisor inputAdvisor = new PrivacyInputAdvisor(service);
-    private final PrivacyModelRequestStage modelStage =
+    private final PrivacyModelRequestStage privacyStage =
             new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
     private final PrivacyAdvisorChainValidator validator =
-            new PrivacyAdvisorChainValidator(List.of(inputAdvisor), modelStage, 100);
+            new PrivacyAdvisorChainValidator(List.of(inputAdvisor), privacyStage, 100);
     private final ChatClientRequest request = new ChatClientRequest(new Prompt("Hello"), Map.of());
 
     @Test
-    void missingModelStageReportsMissingRegistrationBeforeContinuingCall() {
+    void adviseCallRejectsMissingPrivacyStage() {
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
         when(chain.getCallAdvisors()).thenReturn(List.of(inputAdvisor));
 
@@ -41,7 +41,7 @@ class PrivacyAdvisorChainValidatorTest {
     }
 
     @Test
-    void missingModelStageReportsMissingRegistrationBeforeContinuingStream() {
+    void adviseStreamRejectsMissingPrivacyStage() {
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
         when(chain.getStreamAdvisors()).thenReturn(List.of(inputAdvisor));
 

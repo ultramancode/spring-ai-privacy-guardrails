@@ -26,7 +26,7 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
      * the configured privacy transformation, not a guarantee that every PII was detected.
      * Optional downstream integrations can use it without retaining the privacy session.
      */
-    public static boolean isModelContentProtected(ChatClientRequest request) {
+    public static boolean hasPrivacyProcessedMessages(ChatClientRequest request) {
         Object marker = request.context().get(MODEL_CONTENT_PROTECTION);
         return marker instanceof ModelContentProtection protection
                 && protection.messages().equals(request.prompt().getInstructions());
@@ -46,16 +46,16 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
     private final PrivacyService privacyService;
     private final PrivacyMessageTransformer messageTransformer;
     private final PrivacyModelControlValidator modelControlValidator;
-    private final PrivacyToolCallbackFactory.Provenance requiredFactoryProvenance;
+    private final PrivacyToolCallbackFactory.Provenance expectedFactoryProvenance;
     private final PrivacyEnforcementNotifier enforcementNotifier;
 
-    PrivacyModelRequestStage(PrivacyService privacyService, PrivacyToolCallbackFactory requiredFactory,
+    PrivacyModelRequestStage(PrivacyService privacyService, PrivacyToolCallbackFactory expectedFactory,
             PrivacyEnforcementObserver enforcementObserver) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
-        if (requiredFactory != null && !requiredFactory.usesPrivacyService(privacyService)) {
-            throw new IllegalArgumentException("requiredFactory must use the same PrivacyService");
+        if (expectedFactory != null && !expectedFactory.usesPrivacyService(privacyService)) {
+            throw new IllegalArgumentException("expectedFactory must use the same PrivacyService");
         }
-        this.requiredFactoryProvenance = requiredFactory == null ? null : requiredFactory.provenance();
+        this.expectedFactoryProvenance = expectedFactory == null ? null : expectedFactory.provenance();
         this.messageTransformer = new PrivacyMessageTransformer(privacyService);
         this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
         this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
@@ -85,7 +85,7 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
                 ? PrivacyToolContextAdvisor.requirePrivacyWrappedToolNames(
                         request,
                         this.privacyService,
-                        this.requiredFactoryProvenance
+                        this.expectedFactoryProvenance
                 )
                 : Set.of();
         this.modelControlValidator.validateModelVisibleToolDefinitions(handle, request);

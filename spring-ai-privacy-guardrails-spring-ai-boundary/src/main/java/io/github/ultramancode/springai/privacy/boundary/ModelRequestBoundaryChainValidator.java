@@ -19,14 +19,14 @@ final class ModelRequestBoundaryChainValidator implements CallAdvisor, StreamAdv
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        boundary.validate(chain.getCallAdvisors(), false);
+        boundary.validateAdvisorChain(chain.getCallAdvisors(), false);
         return chain.nextCall(request);
     }
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
         return Flux.defer(() -> {
-            boundary.validate(chain.getStreamAdvisors(), false);
+            boundary.validateAdvisorChain(chain.getStreamAdvisors(), false);
             return chain.nextStream(request);
         });
     }

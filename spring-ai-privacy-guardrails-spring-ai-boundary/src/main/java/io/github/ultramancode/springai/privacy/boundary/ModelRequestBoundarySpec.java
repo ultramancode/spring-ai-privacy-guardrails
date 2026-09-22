@@ -13,7 +13,7 @@ import java.util.function.UnaryOperator;
  * Applications should compose feature configurers rather than implement request stages.
  */
 public final class ModelRequestBoundarySpec {
-    /** Position of the common boundary relative to application and tool advisors. */
+    /** Default order of the common model request boundary advisor. */
     public static final int DEFAULT_ORDER = Integer.MAX_VALUE - 3;
 
     private UnaryOperator<ChatClientRequest> privacy;
@@ -32,7 +32,7 @@ public final class ModelRequestBoundarySpec {
         privacy = Objects.requireNonNull(stage, "privacy stage");
     }
 
-    /** Registers the security module's model-visible tool definition filtering. */
+    /** Registers the security stage that removes unauthorized tools from the model request. */
     public void authorization(UnaryOperator<ChatClientRequest> stage) {
         if (authorization != null) {
             throw new IllegalStateException("Authorization stage already configured");
@@ -40,7 +40,10 @@ public final class ModelRequestBoundarySpec {
         authorization = Objects.requireNonNull(stage, "authorization stage");
     }
 
-    /** Registers final content inspection, which cannot replace the model request. */
+    /**
+     * Registers final inspection of the prepared model request.
+     * The inspection stage does not return a replacement request.
+     */
     public void inspection(Consumer<ChatClientRequest> stage) {
         if (inspection != null) {
             throw new IllegalStateException("Inspection stage already configured");

@@ -4,8 +4,6 @@ import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -34,13 +32,13 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
 
     private final List<Advisor> managedPrivacyAdvisors;
     private final int expectedToolOrder;
-    private final PrivacyModelRequestStage modelStage;
+    private final PrivacyModelRequestStage privacyStage;
 
     PrivacyAdvisorChainValidator(List<Advisor> managedPrivacyAdvisors,
-            PrivacyModelRequestStage modelStage, int expectedToolOrder) {
+            PrivacyModelRequestStage privacyStage, int expectedToolOrder) {
         this.managedPrivacyAdvisors = List.copyOf(managedPrivacyAdvisors);
         this.expectedToolOrder = expectedToolOrder;
-        this.modelStage = modelStage;
+        this.privacyStage = privacyStage;
     }
 
     @Override
@@ -87,7 +85,7 @@ final class PrivacyAdvisorChainValidator implements CallAdvisor, StreamAdvisor, 
     private int requireModelBoundaryIndex(List<? extends Advisor> requestAdvisors) {
         int modelBoundaryIndex = -1;
         for (int i = 0; i < requestAdvisors.size(); i++) {
-            if (ModelRequestBoundarySpec.containsStage(requestAdvisors.get(i), modelStage)) {
+            if (ModelRequestBoundarySpec.containsStage(requestAdvisors.get(i), privacyStage)) {
                 if (modelBoundaryIndex >= 0) {
                     throw conflict("Privacy requires exactly one managed model stage");
                 }

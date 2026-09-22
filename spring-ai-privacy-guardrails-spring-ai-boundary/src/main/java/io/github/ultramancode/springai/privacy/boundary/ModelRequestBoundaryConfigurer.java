@@ -15,13 +15,22 @@ import java.util.function.UnaryOperator;
 public interface ModelRequestBoundaryConfigurer extends UnaryOperator<ChatClient.Builder> {
 
     /** Registers supporting advisors and contributes stages to the selected client's plan. */
-    void contribute(ChatClient.Builder clientBuilder, ModelRequestBoundarySpec boundarySpec);
+    void contributeToBoundary(ChatClient.Builder clientBuilder, ModelRequestBoundarySpec boundarySpec);
 
-    /** Registers one immutable boundary on the supplied builder and returns that builder. */
+    /**
+     * Applies this configurer and registers a new model request boundary on the supplied builder.
+     *
+     * <p>To register multiple features in one boundary, combine their configurers with
+     * {@link #compose(ModelRequestBoundaryConfigurer...)} and call {@code configure(builder)}
+     * once on the combined configurer. This method does not find and extend an existing boundary.</p>
+     *
+     * @param clientBuilder the client builder to configure
+     * @return the supplied builder
+     */
     default ChatClient.Builder configure(ChatClient.Builder clientBuilder) {
         Objects.requireNonNull(clientBuilder, "client");
         ModelRequestBoundarySpec boundarySpec = new ModelRequestBoundarySpec();
-        contribute(clientBuilder, boundarySpec);
+        contributeToBoundary(clientBuilder, boundarySpec);
         ModelRequestBoundaryAdvisor boundaryAdvisor = new ModelRequestBoundaryAdvisor(boundarySpec.build());
         clientBuilder.defaultAdvisors(new ModelRequestBoundaryChainValidator(boundaryAdvisor), boundaryAdvisor);
         return clientBuilder;
@@ -33,23 +42,39 @@ public interface ModelRequestBoundaryConfigurer extends UnaryOperator<ChatClient
     }
 
     /**
-     * Allows application advisors after an inspection boundary, with a warning.
+     * Returns a new configurer that applies this configuration and sets whether
+     * application advisors may run after an inspection boundary. The current configurer is unchanged.
+     *
+     * <p>When allowed advisors are present, boundary execution logs a warning.
      * Content changed by those advisors is outside the final-inspection guarantee.
-     * This option never bypasses a stage's rejection or structural chain validation.
+     * This option does not bypass stage rejections or other chain validation.</p>
+     *
+     * @param allow whether to allow application advisors after an inspection boundary
+     * @return a new configurer with the selected setting
      */
     default ModelRequestBoundaryConfigurer allowAdvisorsAfterBoundary(boolean allow) {
         return (clientBuilder, boundarySpec) -> {
-            contribute(clientBuilder, boundarySpec);
+            contributeToBoundary(clientBuilder, boundarySpec);
             boundarySpec.allowAdvisorsAfterBoundary(allow);
         };
     }
 
-    /** Combines optional features; execution follows phase order, not contribution order. */
+    /**
+     * Combines feature configurers into a configurer for one model request boundary.
+     *
+     * <p>When applied, the returned configurer invokes the supplied configurers in
+     * argument order using the same boundary spec. During model requests, registered
+     * stages execute in privacy, authorization, then inspection order, regardless of
+     * registration order. Unconfigured stages are skipped.</p>
+     *
+     * @param configurers the feature configurers in registration order
+     * @return a configurer that contributes the selected features to the same boundary
+     */
     static ModelRequestBoundaryConfigurer compose(ModelRequestBoundaryConfigurer... configurers) {
         List<ModelRequestBoundaryConfigurer> selected = List.of(configurers);
         return (clientBuilder, boundarySpec) -> {
             for (ModelRequestBoundaryConfigurer configurer : selected) {
-                configurer.contribute(clientBuilder, boundarySpec);
+                configurer.contributeToBoundary(clientBuilder, boundarySpec);
             }
         };
     }

@@ -2,7 +2,6 @@ package io.github.ultramancode.springai.privacy.security;
 
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
-import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClient;
@@ -95,7 +94,10 @@ public final class ToolAuthorizationChatClientFactory {
         return this.defaultToolAdvisorBuilder;
     }
 
-    /** Creates a client with an additional contribution to the same model request boundary. */
+    /**
+     * Creates a builder that combines tool authorization and the supplied features
+     * in one model request boundary.
+     */
     public ChatClient.Builder builderWithBoundary(ChatModel model, ModelRequestBoundaryConfigurer configurer) {
         return builder(model, this.defaultToolAdvisorBuilder, configurer);
     }

@@ -6,7 +6,10 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
-/** Immutable, client-scoped stages executed in privacy, authorization, inspection order. */
+/**
+ * Holds a fixed configuration of stages for the client and executes them in
+ * privacy, authorization, then inspection order.
+ */
 final class ModelRequestBoundaryPlan {
 
     // A null stage means that feature was not configured for this client.

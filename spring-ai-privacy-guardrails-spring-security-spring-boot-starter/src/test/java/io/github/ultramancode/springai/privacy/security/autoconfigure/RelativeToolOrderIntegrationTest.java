@@ -1,6 +1,5 @@
 package io.github.ultramancode.springai.privacy.security.autoconfigure;
 
-import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;

@@ -67,7 +67,7 @@ class SpringSecurityToolMutationIntegrationTest {
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
                 .toolCallbackFactory(factory)
                 .build()
-                .forToolCallingAdvisorOrder(toolCallingAdvisor.getOrder())
+                .forToolAdvisorOrder(toolCallingAdvisor.getOrder())
                 .configure(ChatClient.builder(model))
                 .defaultAdvisors(boundary.toolAuthorizationAdvisor(),
                         lateToolInjectionAdvisor(lateInjectedTool),

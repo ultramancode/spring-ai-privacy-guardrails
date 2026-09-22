@@ -216,7 +216,7 @@ class PrivacyChatClientIntegrationTest {
                 .build();
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
                 .build()
-                .forToolCallingAdvisorOrder(customToolAdvisor.getOrder())
+                .forToolAdvisorOrder(customToolAdvisor.getOrder())
                 .configure(ChatClient.builder(model))
                 .defaultAdvisors(customToolAdvisor)
                 .defaultTools(scopedTool)

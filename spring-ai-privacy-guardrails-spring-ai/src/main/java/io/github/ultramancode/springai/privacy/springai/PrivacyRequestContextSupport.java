@@ -82,13 +82,10 @@ final class PrivacyRequestContextSupport {
                 && !PrivacyToolExecutionContextSupport.hasInternalEntries(response.context())) {
             return response;
         }
-        Map<String, Object> context = new HashMap<>(response.context());
-        context.remove(CONTEXT_HANDLE);
-        context.remove(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
-        context.remove(CONTEXT_LIFECYCLE_MARKER);
-        PrivacyOutputContextSupport.removeInternalEntries(context);
-        PrivacyToolExecutionContextSupport.removeInternalEntries(context);
-        return new ChatClientResponse(response.chatResponse(), context);
+        return new ChatClientResponse(
+                response.chatResponse(),
+                stripInternalPrivacyEntries(response.context())
+        );
     }
 
     static Map<String, Object> stripInternalPrivacyEntries(Map<String, Object> context) {

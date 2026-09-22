@@ -251,7 +251,7 @@ class SpringSecurityToolSearchIntegrationTest {
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
                 .toolCallbackFactory(factory)
                 .build()
-                .forToolCallingAdvisorOrder(toolSearchAdvisor.getOrder())
+                .forToolAdvisorOrder(toolSearchAdvisor.getOrder())
                 .configure(ChatClient.builder(model))
                 .defaultAdvisors(boundary.toolAuthorizationAdvisor(),
                         toolSearchAdvisor)
@@ -339,7 +339,7 @@ class SpringSecurityToolSearchIntegrationTest {
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
                 .toolCallbackFactory(factory)
                 .build()
-                .forToolCallingAdvisorOrder(toolSearchAdvisor.getOrder())
+                .forToolAdvisorOrder(toolSearchAdvisor.getOrder())
                 .configure(ChatClient.builder(model))
                 .defaultAdvisors(boundary.toolAuthorizationAdvisor(),
                         toolSearchAdvisor)

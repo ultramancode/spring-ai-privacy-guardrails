@@ -25,9 +25,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyModelRequestStageTest {
 
-
     @Test
-    void stageTokenizesContentAddedByDownstreamRagAdvisorBeforeModelCall() {
+    void stageTokenizesRetrievedContent() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
 
@@ -40,21 +39,38 @@ class PrivacyModelRequestStageTest {
                     session.handle()
             );
             ChatClientRequest protectedRequest = stage.apply(request);
-            assertThat(PrivacyModelRequestStage.isModelContentProtected(protectedRequest)).isTrue();
+
+            String text = protectedRequest.prompt().getUserMessage().getText();
+            assertThat(text).doesNotContain("Alice");
+            assertThat(service.detokenize(session.handle(), text))
+                    .isEqualTo("Retrieved customer: Alice");
+            assertThat(PrivacyModelRequestStage.hasPrivacyProcessedMessages(protectedRequest)).isTrue();
+
             ChatClientRequest changed = protectedRequest.mutate().prompt(new Prompt("Alice added later")).build();
-            assertThat(PrivacyModelRequestStage.isModelContentProtected(changed)).isFalse();
+            assertThat(PrivacyModelRequestStage.hasPrivacyProcessedMessages(changed)).isFalse();
+        }
+    }
+
+    @Test
+    void contextCleanupRemovesModelContentProtectionMarker() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
+
+        try (PrivacySession session = service.openSession()) {
+            ChatClientRequest request = activeRequest(
+                    new ChatClientRequest(new Prompt("hello"), Map.of()),
+                    session.handle()
+            );
+            ChatClientRequest protectedRequest = stage.apply(request);
+            assertThat(protectedRequest.context())
+                    .containsKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
+
             assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(protectedRequest.context()))
                     .doesNotContainKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
             ChatClientResponse markedResponse = new ChatClientResponse(
                     TestPrivacyServices.response("ok").chatResponse(), protectedRequest.context());
             assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(markedResponse).context())
                     .doesNotContainKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
-            String text = protectedRequest.prompt().getUserMessage().getText();
-            assertThat(text).doesNotContain("Alice");
-            assertThat(service.detokenize(session.handle(), text))
-                    .isEqualTo("Retrieved customer: Alice");
-
-
         }
     }
 
@@ -68,9 +84,8 @@ class PrivacyModelRequestStageTest {
                 .hasMessageContaining("PrivacyLifecycleAdvisor");
     }
 
-
     @Test
-    void finalBoundaryRejectsLateToolReplacementFromAnotherFactory() {
+    void stageRejectsToolCallbackFromAnotherFactory() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory expectedFactory = new PrivacyToolCallbackFactory(
                 service,
@@ -98,7 +113,7 @@ class PrivacyModelRequestStageTest {
     }
 
     @Test
-    void finalBoundaryRejectsLateCallbackReplacementFromTheSameFactory() {
+    void stageRejectsCallbackReplacementFromSameFactoryAfterSnapshot() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
                 service,
@@ -260,26 +275,6 @@ class PrivacyModelRequestStageTest {
                         .hasMessageNotContaining("Alice");
             }
         }
-    }
-
-
-
-
-    private ChatClientRequest toolRequest(
-            PrivacyService service,
-            PrivacySession session,
-            String text
-    ) {
-        ToolCallback callback = tool("customerLookup");
-        ToolCallback wrapped = new PrivacyToolCallbackFactory(service, ToolDisclosurePolicy.denyAll())
-                .wrap(callback);
-        ToolCallingChatOptions options = ToolCallingChatOptions.builder()
-                .toolCallbacks(List.of(wrapped))
-                .build();
-        return activeRequest(
-                new ChatClientRequest(new Prompt(List.of(new UserMessage(text)), options), Map.of()),
-                session.handle()
-        );
     }
 
     private ChatClientRequest activeRequest(

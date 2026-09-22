@@ -44,7 +44,7 @@ public class PrivacyGuardrailsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "privacyModelContentProtection")
     Predicate<ChatClientRequest> privacyModelContentProtection() {
-        return PrivacyChatClientConfigurer::isModelContentProtected;
+        return PrivacyChatClientConfigurer::hasPrivacyProcessedMessages;
     }
 
     @Bean

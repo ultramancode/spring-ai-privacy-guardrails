@@ -1,0 +1,285 @@
+package io.github.ultramancode.springai.privacy.inspection.springai;
+
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
+import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
+import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
+import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.github.ultramancode.springai.privacy.inspection.rules.InspectionRule;
+import io.github.ultramancode.springai.privacy.inspection.rules.RuleBasedContentInspector;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityAutoConfiguration;
+import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
+import io.github.ultramancode.springai.privacy.security.autoconfigure.ToolAuthorizationAutoConfiguration;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import org.springframework.ai.chat.client.advisor.toolsearch.ToolSearchToolCallingAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.toolsearch.ToolIndex;
+import org.springframework.ai.tool.toolsearch.ToolReference;
+import org.springframework.ai.tool.toolsearch.ToolSearchResponse;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolder;
+import reactor.core.publisher.Flux;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class CombinedInspectionIntegrationTest {
+
+    @Configuration(proxyBeanMethods = false)
+    static class Policy {
+        @Bean
+        AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+            return (authentication, context) -> new AuthorizationDecision(true);
+        }
+    }
+
+    private ApplicationContextRunner runner() {
+        return new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PrivacyGuardrailsAutoConfiguration.class,
+                        ToolAuthorizationAutoConfiguration.class,
+                        PrivacySecurityAutoConfiguration.class))
+                .withUserConfiguration(Policy.class)
+                .withBean(ToolCallingManager.class, () -> ToolCallingManager.builder().build())
+                .withBean(PiiAnalyzer.class, () -> (text, options) -> {
+                    int start = text.indexOf("Alice");
+                    return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
+                });
+    }
+
+    @ParameterizedTest(name = "streaming={0}, toolSearch={1}")
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void combinedFactoryInspectsProtectedToolResults(boolean streaming, boolean toolSearchEnabled) {
+        runner().run(context -> {
+            assertThat(context).hasNotFailed();
+            List<InspectionRequest> inspected = new CopyOnWriteArrayList<>();
+            AtomicInteger modelCalls = new AtomicInteger();
+            ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
+                    .builder(toolCallingModel(toolSearchEnabled, modelCalls), toolAdvisorBuilder(toolSearchEnabled),
+                            inspectionConfigurer(inspected))
+                    .defaultTools(context.getBean(PrivacyToolCallbackFactory.class).wrap(lookupTool()))
+                    .build();
+            UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken.authenticated(
+                    "test", "unused", List.of());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            try {
+                ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello Alice")
+                        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "fixture"));
+                if (streaming) {
+                    assertThatThrownBy(() -> request.stream().content()
+                            .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication))
+                            .collectList()
+                            .block(Duration.ofSeconds(10)))
+                            .isInstanceOf(InspectionBlockedException.class);
+                } else {
+                    assertThatThrownBy(() -> request.call().content())
+                            .isInstanceOf(InspectionBlockedException.class);
+                }
+                assertThat(modelCalls).hasValue(toolSearchEnabled ? 2 : 1);
+                assertThat(inspected).hasSize(toolSearchEnabled ? 3 : 2);
+                assertThat(inspected.get(inspected.size() - 1).segments())
+                        .anyMatch(s -> s.source() == ContentSegment.Source.TOOL && s.text().contains("attack"));
+            } finally {
+                SecurityContextHolder.clearContext();
+            }
+        });
+    }
+
+    @ParameterizedTest(name = "streaming={0}, privacyEnabled={1}")
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void clonedBoundaryBuilderStillBlocksBeforeModelCall(boolean streaming, boolean privacyEnabled) {
+        runner().run(context -> {
+            assertThat(context).hasNotFailed();
+            AtomicInteger modelCalls = new AtomicInteger();
+            ChatModel model = new ChatModel() {
+                @Override
+                public ChatResponse call(Prompt prompt) {
+                    modelCalls.incrementAndGet();
+                    return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
+                }
+
+                @Override
+                public Flux<ChatResponse> stream(Prompt prompt) {
+                    return Flux.defer(() -> Flux.just(call(prompt)));
+                }
+            };
+            InspectionChatClientConfigurer inspection =
+                    new InspectionChatClientConfigurer(new InspectionService(List.of(
+                            new RuleBasedContentInspector(List.of(InspectionRule.literal("attack", "attack"))))));
+            ChatClient.Builder builder = privacyEnabled
+                    ? context.getBean(PrivacySecurityChatClientFactory.class)
+                            .builderWithBoundary(model, inspection).clone()
+                    : context.getBean(ToolAuthorizationChatClientFactory.class)
+                            .builderWithBoundary(model, inspection).clone();
+            ChatClient.ChatClientRequestSpec request = builder.build().prompt().user("Alice attack");
+
+            if (streaming) {
+                assertThatThrownBy(() -> request.stream().content().collectList().block(Duration.ofSeconds(5)))
+                        .isInstanceOf(InspectionBlockedException.class);
+            } else {
+                assertThatThrownBy(() -> request.call().content())
+                        .isInstanceOf(InspectionBlockedException.class);
+            }
+            assertThat(modelCalls).hasValue(0);
+        });
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void privacyAndInspectionComposeWithoutBootOrSecurityAndLeaveOrdinaryClientsAlone(boolean streaming) {
+        PiiAnalyzer analyzer = (text, options) -> {
+            int start = text.indexOf("Alice");
+            return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
+        };
+        PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+        List<InspectionRequest> inspected = new CopyOnWriteArrayList<>();
+        List<String> prompts = new CopyOnWriteArrayList<>();
+        ChatModel model = new ChatModel() {
+            @Override
+            public ChatResponse call(Prompt prompt) {
+                prompts.add(prompt.getContents());
+                return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
+            }
+
+            @Override
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.defer(() -> Flux.just(call(prompt)));
+            }
+        };
+        ChatClient selected = ModelRequestBoundaryConfigurer.compose(
+                inspectionConfigurer(inspected), new PrivacyChatClientConfigurer(privacyService))
+                .configure(ChatClient.builder(model)).build();
+        ChatClient ordinary = ChatClient.builder(model).build();
+        for (ChatClient client : List.of(selected, ordinary)) {
+            ChatClient.ChatClientRequestSpec request = client.prompt().user("Alice");
+            if (streaming) {
+                request.stream().content().collectList().block(Duration.ofSeconds(5));
+            } else {
+                request.call().content();
+            }
+        }
+        assertThat(inspected).hasSize(1);
+        assertThat(prompts.get(0)).doesNotContain("Alice");
+        assertThat(prompts.get(1)).isEqualTo("Alice");
+    }
+
+    private InspectionChatClientConfigurer inspectionConfigurer(List<InspectionRequest> inspected) {
+        ContentInspector inspector = request -> {
+            request.requireProtected();
+            assertThat(request.segments())
+                    .allSatisfy(segment -> assertThat(segment.text()).doesNotContain("Alice"));
+            inspected.add(request);
+            List<InspectionFinding> findings = request.segments().stream()
+                    .filter(s -> s.text().contains("attack"))
+                    .map(s -> new InspectionFinding(s.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
+                    .toList();
+            return InspectionResult.completed(
+                    request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()), findings);
+        };
+        return new InspectionChatClientConfigurer(
+                new InspectionService(List.of(inspector)),
+                InspectionLimits.defaults(),
+                request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
+                        ? ContentSegment.Representation.PRIVACY_PROTECTED
+                        : ContentSegment.Representation.AS_RECEIVED,
+                ignored -> {});
+    }
+
+    private ChatModel toolCallingModel(boolean toolSearchEnabled, AtomicInteger modelCalls) {
+        return new ChatModel() {
+            @Override
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
+            @Override
+            public ChatResponse call(Prompt prompt) {
+                int round = modelCalls.incrementAndGet();
+                if (toolSearchEnabled && round == 1) {
+                    return toolCallResponse("toolSearchTool", "{\"query\":\"lookup\"}");
+                }
+                return toolCallResponse("lookup", "{}");
+            }
+
+            @Override
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.defer(() -> Flux.just(call(prompt)));
+            }
+        };
+    }
+
+    private ToolCallingAdvisor.Builder<?> toolAdvisorBuilder(boolean toolSearchEnabled) {
+        if (!toolSearchEnabled) {
+            return ToolCallingAdvisor.builder();
+        }
+        ToolIndex index = mock(ToolIndex.class);
+        when(index.search(any())).thenReturn(ToolSearchResponse.builder()
+                .addToolReference(ToolReference.builder().toolName("lookup").summary("Lookup").build())
+                .build());
+        return ToolSearchToolCallingAdvisor.builder().toolIndex(index).systemMessageSuffix("Search for tools.");
+    }
+
+    private ToolCallback lookupTool() {
+        return new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder().name("lookup").description("Lookup").inputSchema("{}").build();
+            }
+
+            @Override
+            public String call(String arguments) {
+                return "Alice attack";
+            }
+        };
+    }
+
+    private static ChatResponse toolCallResponse(String name, String arguments) {
+        return new ChatResponse(List.of(new Generation(AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + name, "function", name, arguments)))
+                .build())));
+    }
+}

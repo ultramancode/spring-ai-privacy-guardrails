@@ -1,0 +1,14 @@
+description = 'Managed model-bound text inspection for Spring AI.'
+dependencies {
+    api project(':spring-ai-privacy-guardrails-spring-ai-boundary')
+    api project(':spring-ai-privacy-guardrails-inspection-core')
+    api platform("org.springframework.ai:spring-ai-bom:${providers.gradleProperty('springAiVersion').get()}")
+    api 'org.springframework.ai:spring-ai-client-chat'
+    testImplementation project(':spring-ai-privacy-guardrails-inspection-rules')
+    testImplementation project(':spring-ai-privacy-guardrails-spring-boot-starter')
+    testImplementation 'org.springframework.boot:spring-boot-test'
+    testImplementation project(':spring-ai-privacy-guardrails-spring-security-spring-boot-starter')
+    testImplementation 'org.springframework.ai:spring-ai-tool-search-advisor'
+    testImplementation "io.projectreactor:reactor-test:${providers.gradleProperty('reactorTestVersion').get()}"
+    testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
+}

@@ -1,0 +1,16 @@
+description = 'Local text inspection with ONNX Runtime and model-specific adapters.'
+dependencies {
+    api project(':spring-ai-privacy-guardrails-inspection-core')
+    api "com.microsoft.onnxruntime:onnxruntime:${providers.gradleProperty('onnxRuntimeVersion').get()}"
+    implementation "ai.djl.huggingface:tokenizers:${providers.gradleProperty('djlVersion').get()}"
+}
+
+tasks.named('test') { useJUnitPlatform { excludeTags 'live' } }
+tasks.register('liveTest', Test) {
+    description = 'Verifies provisioned ONNX classifiers against local Python references.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'live' }
+    outputs.upToDateWhen { false }
+}

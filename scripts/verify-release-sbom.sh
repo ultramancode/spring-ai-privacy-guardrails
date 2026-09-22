@@ -42,6 +42,12 @@ jq -e \
     and (
       def expected_modules: [
         "spring-ai-privacy-guardrails-core",
+        "spring-ai-privacy-guardrails-inspection-core",
+        "spring-ai-privacy-guardrails-inspection-onnx",
+        "spring-ai-privacy-guardrails-inspection-openai-compatible",
+        "spring-ai-privacy-guardrails-inspection-rules",
+        "spring-ai-privacy-guardrails-inspection-spring-ai",
+        "spring-ai-privacy-guardrails-inspection-spring-boot-starter",
         "spring-ai-privacy-guardrails-opennlp",
         "spring-ai-privacy-guardrails-opennlp-spring-boot-starter",
         "spring-ai-privacy-guardrails-presidio",

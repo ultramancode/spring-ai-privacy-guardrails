@@ -1,0 +1,130 @@
+[
+  {
+    "repo": "protectai/deberta-v3-base-prompt-injection-v2",
+    "revision": "90c9989b1a342275dd0d1a95aad283c04e075671",
+    "window_tokens": 512,
+    "activation": "softmax",
+    "label_indices": [
+      1
+    ],
+    "tail_repetitions": 180,
+    "artifacts": {
+      "model.onnx": {
+        "path": "onnx/model.onnx",
+        "sha256": "f0ea7f239f765aedbde7c9e163a7cb38a79c5b8853d3f76db5152172047b228c"
+      },
+      "tokenizer.json": {
+        "path": "onnx/tokenizer.json",
+        "sha256": "752fe5f0d5678ad563e1bd2ecc1ddf7a3ba7e2024d0ac1dba1a72975e26dff2f"
+      },
+      "config.json": {
+        "path": "onnx/config.json",
+        "sha256": "3093743035223c46b1497a72e939e56fa0a50afbd7bafbf7eb8aad060b8d23f8"
+      },
+      "tokenizer_config.json": {
+        "path": "onnx/tokenizer_config.json",
+        "sha256": "77d3dd1a9c30397a06545251ed9274bd92e4a85feb98497eeed50c920f962274"
+      }
+    }
+  },
+  {
+    "repo": "pkchv/distilbert-prompt-injection-onnx",
+    "revision": "74c342dc4fd2abde48476b16503f78df19e24726",
+    "window_tokens": 512,
+    "activation": "softmax",
+    "label_indices": [
+      1
+    ],
+    "tail_repetitions": 180,
+    "artifacts": {
+      "model.onnx": {
+        "path": "onnx/model_quantized.onnx",
+        "sha256": "d357055051b1d48c229b3ac19667c4523528f130717d99de0b35e53f980a7f08"
+      },
+      "tokenizer.json": {
+        "path": "tokenizer.json",
+        "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+      },
+      "config.json": {
+        "path": "config.json",
+        "sha256": "f46b7a1f25daae15aa43ecbfc931207d1f07dc8b11ff222f9e3ef7cff30e7829"
+      },
+      "tokenizer_config.json": {
+        "path": "tokenizer_config.json",
+        "sha256": "77128cb6e818fc57e5d75f305bdc6b7ebf8c7e91228ec9d7f33f4fcb493bc0a7"
+      }
+    }
+  },
+  {
+    "repo": "tihilya/modernbert-base-prompt-injection-detection",
+    "revision": "179b25b752bf2924c08c3c350155ea2e07bd84cd",
+    "window_tokens": 2048,
+    "activation": "softmax",
+    "label_indices": [
+      1
+    ],
+    "tail_repetitions": 400,
+    "artifacts": {
+      "model.onnx": {
+        "path": "model.onnx",
+        "sha256": "2b801332a012c9845d72e837d43da5351434c5bf73ff6ff804bcd1638263441b"
+      },
+      "tokenizer.json": {
+        "path": "tokenizer.json",
+        "sha256": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
+      },
+      "config.json": {
+        "path": "config.json",
+        "sha256": "46211d3c234a43f063fc238e748fccf36b5d4e642eaef444cd4f167532e45048"
+      },
+      "tokenizer_config.json": {
+        "path": "tokenizer_config.json",
+        "sha256": "2966a59b9e9cf122279aec1249e22e5bc7ad8430c754e95031b13fd128d4e560"
+      }
+    }
+  },
+  {
+    "repo": "dannyliv/agent-guard-modernbert-base",
+    "revision": "950afbb0ab7eacd00ebccb6af519da667cc92381",
+    "window_tokens": 1024,
+    "activation": "sigmoid",
+    "label_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "tail_repetitions": 240,
+    "artifacts": {
+      "model.onnx": {
+        "path": "onnx/model.onnx",
+        "sha256": "dba35e0488e5037504d74aea40c4ada7bdd030163fd2fbb01c226a9fea5976c4"
+      },
+      "tokenizer.json": {
+        "path": "tokenizer.json",
+        "sha256": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
+      },
+      "config.json": {
+        "path": "config.json",
+        "sha256": "0d00732ca4d85c1a72bf472619fc8e52359f0ac79eeb9ed2adf6035b654f6d29"
+      },
+      "tokenizer_config.json": {
+        "path": "tokenizer_config.json",
+        "sha256": "2966a59b9e9cf122279aec1249e22e5bc7ad8430c754e95031b13fd128d4e560"
+      }
+    }
+  }
+]

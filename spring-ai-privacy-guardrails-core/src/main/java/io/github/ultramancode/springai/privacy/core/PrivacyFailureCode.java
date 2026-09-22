@@ -3,7 +3,7 @@ package io.github.ultramancode.springai.privacy.core;
 /**
  * Stable, privacy-safe category for a failure owned by this library.
  *
- * <p>The code describes what prevented privacy processing from continuing; it
+ * <p>The code describes what prevented privacy processing from continuing. It
  * does not prescribe whether the application should retry. Model-provider and
  * application-owned delegate failures normally propagate unchanged and do not
  * receive one of these codes.

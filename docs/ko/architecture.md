@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: f9bd6ee31269023e38848f4e85102b51318c012c35fbb440d4e49c2d627c0d35 -->
+<!-- i18n-source-sha256: 25ff0079a565a8825aeebc29ecd82bfc0b38151cf272afb805f4cc456a66d050 -->
 
 ## 책임 범위
 
@@ -75,6 +75,10 @@ Spring AI 연동 모듈은 `core`를 `ChatClient`, 모델 호출과 도구 실�
 Spring Security 연동은 Spring AI의 도구 호출 API와 `spring-security-core`를
 사용합니다. 전용 Spring Boot 스타터는 기본 스타터와 독립적으로 사용할 수 있습니다.
 
+두 연동 모듈은 `spring-ai-privacy-guardrails-spring-ai-boundary`에 의존합니다.
+이 공통 모듈은 모델 요청 단계를 개인정보 보호 → 도구 인가 → 최종 검사 순서로
+실행하며, 등록하지 않은 단계는 건너뜁니다.
+
 개인정보 보호와 도구 권한 검사를 함께 사용하려면 개인정보 보호 스타터와 Spring
 Security 스타터를 함께 추가하고, 두 기능을 동일한 `ChatClient`에 적용하세요. `core`와
 기존 개인정보 보호 모듈에는 Spring Security 의존성이 추가되지 않습니다.
@@ -94,6 +98,7 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 | 분석기 확장 | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | 도구 정책 | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI 연동 | `PrivacyChatClientConfigurer` |
+| 모델 요청 구성 | `ModelRequestBoundaryConfigurer` |
 | Spring Security 연동 | `ToolAuthorizationContext`, `SpringSecurityToolBoundary`, `ToolAuthorizationChatClientFactory`, `PrivacySecurityChatClientFactory` |
 | 테스트 지원 | `PrivacyTestProbe`, `PrivacyTestAssertions`, `PrivacyTestProbeAssert` |
 

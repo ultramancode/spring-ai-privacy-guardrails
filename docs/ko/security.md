@@ -404,12 +404,12 @@ SpringSecurityToolBoundary springSecurityToolBoundary(
 ## Spring Boot 스타터 없이 구성
 
 `spring-ai-privacy-guardrails-spring-security`를 직접 사용한다면
-`SpringSecurityToolBoundary`를 만들고, 여기서 제공하는 Advisor와 `ToolCallingManager`를
-`ChatClient`에 연결하세요.
+`SpringSecurityToolBoundary`를 만들어 `ToolAuthorizationChatClientFactory`에 전달하세요.
+Factory는 요청의 인증 정보를 확보하고, 모델에 도구를 공개하기 전과 도구를 실행하기
+전에 권한을 검사하도록 구성합니다.
 
 아래 예시는 준비한 모델, 권한 정책과 고객 조회 도구로 **도구 권한 검사만 적용하는**
-클라이언트를 만듭니다. 스타터 없이 직접 구성할 때는 도구 호출 Advisor도
-`defaultAdvisors(...)`에 등록합니다.
+클라이언트를 만듭니다.
 
 ```java
 ChatClient createAuthorizedClient(
@@ -421,35 +421,30 @@ ChatClient createAuthorizedClient(
             ToolCallingManager.builder().build(), authorizationManager
     ).build();
 
-    ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-            .toolCallingManager(boundary.toolCallingManager())
-            .build();
+    ToolAuthorizationChatClientFactory authorizationFactory =
+            new ToolAuthorizationChatClientFactory(boundary);
 
-    return ChatClient.builder(chatModel)
-            .defaultAdvisors(
-                    boundary.toolAuthorizationAdvisor(),
-                    toolCallingAdvisor,
-                    boundary.toolDefinitionAuthorizationAdvisor()
-            )
+    return authorizationFactory.builder(chatModel)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
 ```
 
-이 예시는 각 Advisor의 기본 실행 순서를 사용합니다. 다른 Advisor도 함께 구성한다면
-다음 순서 조건을 지키세요.
+Factory는 도구 호출 Advisor를 공통 모델 요청 바운더리 앞에 배치합니다.
+도구 Advisor를 따로 등록하지 말고, 도구 호출 루프를 변경할 때는 해당 builder를
+Factory에 전달하세요.
 
-- 도구 목록을 변경하는 Advisor는 `boundary.toolDefinitionAuthorizationAdvisor()`보다
-  먼저 실행되도록 순서를 지정하세요. 사용자 정의 Advisor에서 콜백을 추가·교체하는 작업은
-  그보다 앞선
-  `boundary.toolAuthorizationAdvisor()`가 요청의 도구 목록을 확보하기 전에 끝내야 합니다.
-- 개인정보 보호 Advisor도 직접 조합한다면, 모델에 전달할 내용을 보호하는
-  `PrivacyModelBoundaryAdvisor` 다음에 도구 정의의 권한 검사가 실행되어야 합니다.
-  두 Advisor는 기본 실행 순서 값이 같으므로, `defaultAdvisors(...)`에
-  `PrivacyModelBoundaryAdvisor`를 먼저 등록하세요.
+사용자 정의 Advisor에서 콜백을 추가·교체하는 작업은
+`boundary.toolAuthorizationAdvisor()`가 요청의 도구 목록을 확보하기 전에 끝내야 합니다.
 
-스타터의 Factory는 이 구성을 자동으로 연결합니다.
-[ChatClient 구성](#chatclient-구성)에서 사용 예시를 확인할 수 있습니다.
+Spring Boot 없이 개인정보 보호도 함께 적용하려면 개인정보 보호 연동 모듈의
+`PrivacyChatClientConfigurer`를 만들고, 위 인가 Factory와 함께
+`PrivacySecurityChatClientFactory`에 전달하세요.
+
+두 Factory 모두 `builderWithBoundary(model, additionalConfigurer)`와
+`builder(model, toolAdvisorBuilder, additionalConfigurer)`를 통해 모델 요청 최종 검사
+같은 추가 기능을 동일한 바운더리에 합칠 수 있습니다. 반환된 builder에 다른 바운더리
+configurer를 따로 적용하지 마세요.
 
 ## Tool Search
 

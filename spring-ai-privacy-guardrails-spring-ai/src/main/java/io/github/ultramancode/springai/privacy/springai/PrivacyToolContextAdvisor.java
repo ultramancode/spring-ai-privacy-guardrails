@@ -25,7 +25,7 @@ import java.util.Set;
  * Makes the current privacy session available to tools and validates registered callbacks.
  * Register this advisor when tools can be supplied or injected dynamically. Wrap application
  * tool callbacks with {@link PrivacyToolCallbackFactory}. Spring AI Tool Search is also
- * supported; {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
+ * supported. {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
  * When customizing advisor order, ensure that custom advisors do not mutate tool options
  * after the final privacy check.
  */
@@ -43,7 +43,7 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
             "PrivacyToolContextAdvisor rejected duplicate tool callback names";
 
     private final PrivacyService privacyService;
-    private final PrivacyToolCallbackFactory.Provenance requiredFactoryProvenance;
+    private final PrivacyToolCallbackFactory.Provenance expectedFactoryProvenance;
     private final int order;
 
     /**
@@ -71,34 +71,34 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
      * service-only constructor when multiple factories are intentional.
      *
      * @param privacyService service that owns request sessions and transformations
-     * @param requiredFactory factory whose wrappers are accepted, or {@code null} to
+     * @param expectedFactory factory whose wrappers are accepted, or {@code null} to
      * accept wrappers from any factory using the same service
      */
     public PrivacyToolContextAdvisor(
             PrivacyService privacyService,
-            PrivacyToolCallbackFactory requiredFactory
+            PrivacyToolCallbackFactory expectedFactory
     ) {
-        this(privacyService, requiredFactory, DEFAULT_ORDER);
+        this(privacyService, expectedFactory, DEFAULT_ORDER);
     }
 
     /**
      * Creates a factory-bound tool-context boundary at an application-selected order.
      *
      * @param privacyService service that owns request sessions and transformations
-     * @param requiredFactory factory whose wrappers are accepted, or {@code null} to
+     * @param expectedFactory factory whose wrappers are accepted, or {@code null} to
      * accept wrappers from any factory using the same service
      * @param order Spring AI advisor order
      */
     public PrivacyToolContextAdvisor(
             PrivacyService privacyService,
-            PrivacyToolCallbackFactory requiredFactory,
+            PrivacyToolCallbackFactory expectedFactory,
             int order
     ) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
-        if (requiredFactory != null && !requiredFactory.usesPrivacyService(privacyService)) {
-            throw new IllegalArgumentException("requiredFactory must use the same PrivacyService");
+        if (expectedFactory != null && !expectedFactory.usesPrivacyService(privacyService)) {
+            throw new IllegalArgumentException("expectedFactory must use the same PrivacyService");
         }
-        this.requiredFactoryProvenance = requiredFactory == null ? null : requiredFactory.provenance();
+        this.expectedFactoryProvenance = expectedFactory == null ? null : expectedFactory.provenance();
         this.order = order;
     }
 
@@ -136,7 +136,7 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
                     "Privacy context is unknown or already closed"
             );
         }
-        requirePrivacyWrappedToolNames(request, this.privacyService, this.requiredFactoryProvenance);
+        requirePrivacyWrappedToolNames(request, this.privacyService, this.expectedFactoryProvenance);
         ChatClientRequest attached = PrivacyRequestContextSupport.attachHandle(request, handle);
         return PrivacyToolExecutionContextSupport.attachValidatedToolCallbackSnapshot(attached);
     }
@@ -144,7 +144,7 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
     static Set<String> requirePrivacyWrappedToolNames(
             ChatClientRequest request,
             PrivacyService expectedService,
-            PrivacyToolCallbackFactory.Provenance requiredFactoryProvenance
+            PrivacyToolCallbackFactory.Provenance expectedFactoryProvenance
     ) {
         Objects.requireNonNull(request, "request must not be null");
         if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions toolCallingOptions)) {
@@ -183,8 +183,8 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
                         WRONG_SERVICE_MESSAGE
                 );
             }
-            if (requiredFactoryProvenance != null
-                    && !wrapper.hasFactoryProvenance(requiredFactoryProvenance)) {
+            if (expectedFactoryProvenance != null
+                    && !wrapper.hasFactoryProvenance(expectedFactoryProvenance)) {
                 throw new PrivacyGuardrailException(
                         PrivacyFailureCode.TRANSFORMATION_CONFLICT,
                         PrivacyPhase.TOOL_INPUT,

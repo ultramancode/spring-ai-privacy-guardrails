@@ -4,6 +4,11 @@ plugins {
 }
 
 privacyBuild {
+    module('spring-ai-privacy-guardrails-spring-ai-boundary') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.boundary', 'Spring AI Privacy Guardrails Model Request Boundary')
+        module.denyExternalGroup 'org.springframework.boot'
+    }
+
     module('spring-ai-privacy-guardrails-core') { module ->
         module.publication(
                 'io.github.ultramancode.springai.privacy.core',
@@ -56,6 +61,7 @@ privacyBuild {
     }
 
     module('spring-ai-privacy-guardrails-spring-ai') { module ->
+        module.dependsOnProject 'spring-ai-privacy-guardrails-spring-ai-boundary'
         module.publication(
                 'io.github.ultramancode.springai.privacy.springai',
                 'Spring AI Privacy Guardrails Spring AI Integration'
@@ -76,6 +82,7 @@ privacyBuild {
     }
 
     module('spring-ai-privacy-guardrails-spring-security') { module ->
+        module.dependsOnProject 'spring-ai-privacy-guardrails-spring-ai-boundary'
         module.publication(
                 'io.github.ultramancode.springai.privacy.security',
                 'Spring AI Privacy Guardrails Spring Security Integration'

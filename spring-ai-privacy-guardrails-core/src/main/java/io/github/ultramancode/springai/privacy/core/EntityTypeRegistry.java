@@ -40,7 +40,7 @@ public final class EntityTypeRegistry {
      * Creates a registry with explicit aliases and the library's built-in
      * canonical entity types.
      *
-     * @param aliases analyzer label to canonical entity-type mappings; keys and
+     * @param aliases analyzer label to canonical entity-type mappings. Keys and
      * values must use exact canonical label syntax before alias chains are resolved
      */
     public EntityTypeRegistry(Map<String, String> aliases) {

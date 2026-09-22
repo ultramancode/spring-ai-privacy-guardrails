@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -21,7 +22,7 @@ import java.util.Objects;
 /**
  * Owns the privacy session around the advisors that execute inside its configured position
  * and applies the optional output policy when control returns to that position.
- * The default order wraps the standard privacy bundle; applications remain responsible for
+ * The default order wraps the standard privacy bundle. Applications remain responsible for
  * mutations performed by advisors placed outside it. Unrelated advisor classes and numeric
  * orders are application-owned and are not admission rules for this boundary.
  */
@@ -101,20 +102,11 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
 
     private PrivacyOutputAdvisor validateBundleAndFindOutputAdvisor(List<? extends Advisor> advisors) {
         Objects.requireNonNull(advisors, "advisors must not be null");
-        long lifecycleCount = advisors.stream()
-                .filter(PrivacyLifecycleAdvisor.class::isInstance)
-                .count();
-        if (lifecycleCount != 1) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.TRANSFORMATION_CONFLICT,
-                    PrivacyPhase.SESSION,
-                    "PrivacyLifecycleAdvisor requires exactly one complete mandatory privacy advisor set"
-            );
-        }
+        requireExactlyOne(advisors, PrivacyLifecycleAdvisor.class);
         requireExactlyOne(advisors, PrivacyInputAdvisor.class);
         requireExactlyOne(advisors, PrivacyToolContextAdvisor.class);
         requireExactlyOne(advisors, PrivacyToolCallValidationAdvisor.class);
-        requireExactlyOne(advisors, PrivacyModelBoundaryAdvisor.class);
+        requireExactlyOneModelStage(advisors);
         List<PrivacyOutputAdvisor> outputAdvisors = advisors.stream()
                 .filter(PrivacyOutputAdvisor.class::isInstance)
                 .map(PrivacyOutputAdvisor.class::cast)
@@ -127,6 +119,16 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
             );
         }
         return outputAdvisors.isEmpty() ? null : outputAdvisors.get(0);
+    }
+
+    private void requireExactlyOneModelStage(List<? extends Advisor> advisors) {
+        long count = advisors.stream()
+                .filter(advisor -> ModelRequestBoundarySpec.containsStageType(advisor, PrivacyModelRequestStage.class))
+                .count();
+        if (count != 1) {
+            throw new PrivacyGuardrailException(PrivacyFailureCode.TRANSFORMATION_CONFLICT, PrivacyPhase.SESSION,
+                    "PrivacyLifecycleAdvisor requires exactly one managed privacy model stage");
+        }
     }
 
     private void requireExactlyOne(

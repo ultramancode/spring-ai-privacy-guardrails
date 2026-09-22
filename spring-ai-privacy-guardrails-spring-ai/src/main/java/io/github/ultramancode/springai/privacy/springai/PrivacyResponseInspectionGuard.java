@@ -118,8 +118,8 @@ final class PrivacyResponseInspectionGuard {
             return bytes.length;
         }
         if (mediaData instanceof CharSequence characters) {
-            // A Java char is one UTF-16 code unit; four bytes each safely overestimates UTF-8
-            // size without allocating an encoded byte array.
+            // A Java char is one UTF-16 code unit. Estimating four bytes per char safely
+            // overestimates UTF-8 size without allocating an encoded byte array.
             long length = characters.length();
             return length > Long.MAX_VALUE / 4 ? Long.MAX_VALUE : length * 4;
         }

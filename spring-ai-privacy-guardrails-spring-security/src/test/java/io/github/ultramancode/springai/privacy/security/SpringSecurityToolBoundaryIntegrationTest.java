@@ -1,11 +1,18 @@
 package io.github.ultramancode.springai.privacy.security;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
+import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.security.authorization.AuthorizationDecision;
@@ -13,12 +20,14 @@ import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.DefinitionResolvingModel;
 import static io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.ResolvingToolLoopModel;
 import static io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.authentication;
 import static io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.boundary;
@@ -38,6 +47,55 @@ class SpringSecurityToolBoundaryIntegrationTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void factoryInspectionReceivesProtectedMessagesAndOnlyAuthorizedTools(boolean streaming, boolean customToolOrder) {
+        SpringSecurityToolBoundary boundary = boundary((authentication, context) ->
+                new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup")));
+        PrivacyService service = privacyService();
+        PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(service, Set.of("customerLookup"));
+        PrivacyChatClientConfigurer privacyConfigurer = new PrivacyChatClientConfigurer(service, toolCallbackFactory);
+        ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
+        PrivacySecurityChatClientFactory privacySecurityFactory =
+                new PrivacySecurityChatClientFactory(privacyConfigurer, authorizationFactory);
+        DefinitionResolvingModel model = new DefinitionResolvingModel(ToolCallingManager.builder().build());
+        AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
+        ModelRequestBoundaryConfigurer inspectionConfigurer =
+                (clientBuilder, boundarySpec) -> boundarySpec.inspection(inspectedRequest::set);
+
+        ChatClient.Builder clientBuilder;
+        if (customToolOrder) {
+            ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
+            clientBuilder = privacySecurityFactory.builder(model, toolAdvisorBuilder, inspectionConfigurer);
+        } else {
+            clientBuilder = privacySecurityFactory.builderWithBoundary(model, inspectionConfigurer);
+        }
+        ToolCallback customerLookup = toolCallbackFactory.wrap(tool("customerLookup", ignored -> { }));
+        ToolCallback adminDelete = toolCallbackFactory.wrap(tool("adminDelete", ignored -> { }));
+        ChatClient client = clientBuilder.defaultTools(customerLookup, adminDelete).build();
+        useAuthentication(authentication("alice"));
+
+        ChatClient.ChatClientRequestSpec request = client.prompt().user("Find Alice");
+        String result;
+        if (streaming) {
+            result = request.stream().content().collectList()
+                    .map(parts -> String.join("", parts)).block(Duration.ofSeconds(5));
+        } else {
+            result = request.call().content();
+        }
+
+        assertThat(result).isEqualTo("done");
+        ChatClientRequest protectedRequest = inspectedRequest.get();
+        assertThat(protectedRequest).isNotNull();
+        assertThat(protectedRequest.prompt().getContents())
+                .doesNotContain("Alice")
+                .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+        ToolCallingChatOptions authorizedOptions = (ToolCallingChatOptions) protectedRequest.prompt().getOptions();
+        assertThat(authorizedOptions.getToolCallbacks())
+                .extracting(callback -> callback.getToolDefinition().name())
+                .containsExactly("customerLookup");
     }
 
     @Test

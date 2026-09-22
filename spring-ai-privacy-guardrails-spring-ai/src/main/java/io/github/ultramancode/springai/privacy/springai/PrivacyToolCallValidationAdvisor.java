@@ -20,7 +20,7 @@ import java.util.Set;
 
 /**
  * Validates model responses that pass through this advisor before tool execution. The
- * default order places it immediately inside {@link ToolCallingAdvisor}; applications
+ * default order places it immediately inside {@link ToolCallingAdvisor}. Applications
  * using a custom order own the placement and any response mutations performed after it.
  * When an outer {@link PrivacyOutputAdvisor} supplies response-inspection limits, the
  * default constructors adopt them. Limits explicitly supplied to this validator must

@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
  * @param maxRetries number of retries after the initial attempt
  * @param retryBackoff non-negative delay between retry attempts
  * @param maxResponseBytes positive maximum response-body size in bytes
- * @param headers additional HTTP request headers; {@code Content-Type} is managed by the adapter
+ * @param headers additional HTTP request headers. {@code Content-Type} is managed by the adapter
  */
 public record PresidioAnalyzerConfig(
         URI analyzerUrl,

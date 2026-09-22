@@ -1,12 +1,12 @@
 package io.github.ultramancode.springai.privacy.sample.config;
 
-import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoMcpToolLoop;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoRag;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoSecurityPolicy;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoToolLoop;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
-import io.github.ultramancode.springai.privacy.security.autoconfigure.PrivacySecurityChatClientFactory;
+import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;

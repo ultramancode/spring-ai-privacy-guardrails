@@ -1,0 +1,7 @@
+description = 'Client-scoped composition of model request boundaries for Spring AI.'
+
+dependencies {
+    api platform("org.springframework.ai:spring-ai-bom:${providers.gradleProperty('springAiVersion').get()}")
+    api 'org.springframework.ai:spring-ai-client-chat'
+    testImplementation "io.projectreactor:reactor-test:${providers.gradleProperty('reactorTestVersion').get()}"
+}

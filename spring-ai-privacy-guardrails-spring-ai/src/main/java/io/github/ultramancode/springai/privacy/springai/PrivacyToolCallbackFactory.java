@@ -14,7 +14,7 @@ import java.util.Set;
 
 /**
  * Creates a privacy-aware wrapper for a Spring AI tool callback. Every callback supplied
- * to a privacy-guarded {@code ChatClient} must be wrapped by this factory; Spring AI does
+ * to a privacy-guarded {@code ChatClient} must be wrapped by this factory. Spring AI does
  * not expose a safe global hook that can retroactively protect raw callbacks.
  */
 public final class PrivacyToolCallbackFactory {
@@ -117,7 +117,7 @@ public final class PrivacyToolCallbackFactory {
      * refresh behavior. Spring AI invokes the returned provider for each request, so
      * a changed MCP or application tool list is protected on its next resolution. The
      * source provider must return original, unwrapped callbacks. Source exceptions
-     * propagate unchanged; null snapshots or elements become safe contract failures.
+     * propagate unchanged. Null snapshots or elements become safe contract failures.
      *
      * @param toolCallbackProvider dynamic provider of original callbacks
      * @return dynamic provider that privacy-wraps each current callback snapshot
@@ -131,7 +131,7 @@ public final class PrivacyToolCallbackFactory {
      * callback set as one registration. Cross-provider duplicate names therefore fail
      * inside this privacy boundary before Spring AI validates the combined list. Every
      * source must return original, unwrapped callbacks. Source exceptions propagate
-     * unchanged; null snapshots or elements become safe contract failures.
+     * unchanged. Null snapshots or elements become safe contract failures.
      *
      * @param toolCallbackProviders dynamic providers to combine in argument order
      * @return one dynamic provider of privacy-wrapped callbacks

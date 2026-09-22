@@ -189,7 +189,7 @@ final class PrivacyProviderTextMetadataTransformer {
     }
 
     private static String mergeFragment(String previous, String current) {
-        // Providers may send the full text-so-far or only the new fragment; avoid duplicate prefixes.
+        // Providers may send the full text-so-far or only the new fragment. Avoid duplicate prefixes.
         if (previous == null || previous.isEmpty()) {
             return current;
         }

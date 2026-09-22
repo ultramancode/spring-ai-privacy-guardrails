@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  * Language, entity allowlist, and global score threshold used for one PII analysis.
  *
  * @param language analyzer language code in canonical lowercase form
- * @param includedEntityTypes exact uppercase canonical entity-type allowlist; an empty list
+ * @param includedEntityTypes exact uppercase canonical entity-type allowlist. An empty list
  * requests every type available from the configured analyzers
  * @param minimumScore global minimum confidence accepted from any analyzer, between
  * {@code 0.0} and {@code 1.0}
@@ -65,7 +65,7 @@ public record PiiAnalysisOptions(
      * Validates a 1-to-64-character provider-neutral language code composed of
      * ASCII alphanumeric segments separated by single hyphens or underscores,
      * then returns its lowercase canonical representation. ASCII letter case is
-     * insignificant; malformed separators and punctuation are not repaired.
+     * insignificant. Malformed separators and punctuation are not repaired.
      *
      * @param language language code to validate
      * @return canonical lowercase language code

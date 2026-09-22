@@ -6,7 +6,6 @@ import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
-import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -28,9 +27,6 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class PrivacyEnforcementObserverTest {
 
@@ -52,11 +48,10 @@ class PrivacyEnforcementObserverTest {
         PrivacyService service = TestPrivacyServices.privacyService();
         List<PrivacyEnforcementEvent> events = new ArrayList<>();
         PrivacyEnforcementObserver observer = events::add;
-        PrivacyModelBoundaryAdvisor modelBoundary = new PrivacyModelBoundaryAdvisor(
+        PrivacyModelRequestStage privacyStage = new PrivacyModelRequestStage(
                 service,
                 null,
-                observer,
-                PrivacyModelBoundaryAdvisor.DEFAULT_ORDER
+                observer
         );
         PrivacyToolCallbackFactory toolFactory = new PrivacyToolCallbackFactory(
                 service,
@@ -70,11 +65,8 @@ class PrivacyEnforcementObserverTest {
                 PrivacyResponseInspectionLimits.defaults(),
                 observer
         );
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        when(chain.nextCall(any())).thenReturn(TestPrivacyServices.response("safe"));
-
         try (PrivacySession session = service.openSession()) {
-            modelBoundary.adviseCall(activeRequest("Alice", session.handle()), chain);
+            privacyStage.apply(activeRequest("Alice", session.handle()));
 
             String personToken = service.tokenize(session.handle(), "Alice");
             ToolCallback protectedTool = toolFactory.wrap(tool(input -> {

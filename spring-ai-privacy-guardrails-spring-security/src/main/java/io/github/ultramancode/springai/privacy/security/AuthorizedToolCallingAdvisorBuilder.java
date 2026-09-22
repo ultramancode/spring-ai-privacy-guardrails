@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.security.autoconfigure;
+package io.github.ultramancode.springai.privacy.security;
 
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.model.tool.ToolCallingManager;

@@ -82,6 +82,13 @@ ChatClient chatClient(
 input, model calls, tool execution, and request lifecycle handling. When output
 protection is enabled, it also adds the output boundary.
 
+When combining privacy with another model-request feature, combine the feature
+configurers with `ModelRequestBoundaryConfigurer.compose(...)` before calling
+`configure(builder)` once. The shared boundary runs privacy, authorization, then
+inspection, skipping unconfigured stages. Configuring each feature separately
+creates duplicate boundaries, which are rejected at request time. Here,
+inspection checks the prepared model request, not the model's output.
+
 To combine privacy protection with tool authorization, create clients with
 `PrivacySecurityChatClientFactory`. This factory configures privacy protection,
 so do not also apply `PrivacyChatClientConfigurer` to the returned builder. For tool authorization
@@ -116,7 +123,7 @@ default order (`ToolCallingAdvisor.DEFAULT_ORDER`), the `configure(builder)`
 setup above is sufficient.
 
 Pass the same order to `advisorOrder(...)` and
-`forToolCallingAdvisorOrder(...)`. This example sets the tool-calling order to
+`forToolAdvisorOrder(...)`. This example sets the tool-calling order to
 `100` and positions privacy processing before and after tool execution accordingly.
 
 ```java
@@ -134,8 +141,8 @@ ChatClient privacyClientWithCustomToolOrder(
     ChatClient.Builder builder = ChatClient.builder(chatModel)
             .defaultAdvisors(toolCallingAdvisor);
 
-    return privacyConfigurer.forToolCallingAdvisorOrder(toolOrder)
-            .apply(builder)
+    return privacyConfigurer.forToolAdvisorOrder(toolOrder)
+            .configure(builder)
             .build();
 }
 ```
@@ -878,10 +885,15 @@ network or database I/O is needed, enqueue the work and return promptly.
 Non-fatal observer failures are ignored and cannot change privacy enforcement.
 
 The Spring Boot starter automatically connects the registered observer bean.
-When constructing `PrivacyModelBoundaryAdvisor`, `PrivacyToolCallbackFactory`,
-or `PrivacyOutputAdvisor` directly without the starter's auto-configuration,
-pass the observer as a constructor argument. Existing constructors that do not
-accept an observer do not deliver observation events.
+Without the starter, set the observer through
+`PrivacyChatClientConfigurer.builder(privacyService).enforcementObserver(observer)`
+before building the configurer. The observer receives model-request protection
+events and, when output protection is enabled, output-protection events.
+Pass the observer separately to the `PrivacyToolCallbackFactory` constructor
+for tool events.
+If constructing `PrivacyOutputAdvisor` directly, use a constructor that accepts
+the observer. Configurers and components created without an observer do not
+deliver observation events.
 
 ## Stored Data and Diagnostics
 

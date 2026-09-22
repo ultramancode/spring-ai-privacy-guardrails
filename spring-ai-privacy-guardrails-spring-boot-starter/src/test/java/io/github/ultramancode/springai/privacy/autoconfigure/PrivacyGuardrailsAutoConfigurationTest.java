@@ -1,5 +1,7 @@
 package io.github.ultramancode.springai.privacy.autoconfigure;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.EntityTypeRegistry;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
@@ -23,7 +25,6 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserv
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementOutcome;
 import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
@@ -32,6 +33,7 @@ import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -48,6 +50,7 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import reactor.core.publisher.Flux;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -62,8 +65,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.PatternSyntaxException;
-
-import reactor.core.publisher.Flux;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -115,7 +116,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
                         .hasSingleBean(PrivacyChatClientConfigurer.class)
                         .doesNotHaveBean(PrivacyLifecycleAdvisor.class)
                         .doesNotHaveBean(PrivacyInputAdvisor.class)
-                        .doesNotHaveBean(PrivacyModelBoundaryAdvisor.class)
                         .doesNotHaveBean(PrivacyToolContextAdvisor.class)
                         .doesNotHaveBean(PrivacyToolCallValidationAdvisor.class)
                         .doesNotHaveBean(EntityTypeRegistry.class)
@@ -133,18 +133,64 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
+    void autoConfiguredPredicateRecognizesPrivacyProcessedMessagesUntilTheyChange() {
+        PiiAnalyzer analyzer = (text, options) -> List.of();
+        AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
+        ModelRequestBoundaryConfigurer inspectionConfigurer =
+                (clientBuilder, boundarySpec) -> boundarySpec.inspection(inspectedRequest::set);
+
+        this.contextRunner
+                .withBean(PiiAnalyzer.class, () -> analyzer)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    @SuppressWarnings("unchecked")
+                    Predicate<ChatClientRequest> contentProtection =
+                            context.getBean("privacyModelContentProtection", Predicate.class);
+                    ChatClientRequest unprocessedRequest = new ChatClientRequest(new Prompt("hello"), Map.of());
+                    assertThat(contentProtection.test(unprocessedRequest)).isFalse();
+
+                    PrivacyChatClientConfigurer privacyConfigurer = context.getBean(PrivacyChatClientConfigurer.class);
+                    ModelRequestBoundaryConfigurer combinedConfigurer = ModelRequestBoundaryConfigurer.compose(
+                            privacyConfigurer, inspectionConfigurer);
+                    ChatClient client = combinedConfigurer.configure(ChatClient.builder(new CapturingChatModel())).build();
+
+                    client.prompt().user("hello").call().content();
+
+                    ChatClientRequest processedRequest = inspectedRequest.get();
+                    assertThat(processedRequest).isNotNull();
+                    assertThat(processedRequest.prompt().getContents()).isEqualTo("hello");
+                    assertThat(contentProtection.test(processedRequest)).isTrue();
+
+                    ChatClientRequest changedRequest = processedRequest.mutate()
+                            .prompt(new Prompt("changed after privacy processing"))
+                            .build();
+                    assertThat(contentProtection.test(changedRequest)).isFalse();
+                });
+    }
+
+    @Test
+    void autoConfigurationBacksOffForUserProvidedPrivacyModelContentProtection() {
+        Predicate<ChatClientRequest> applicationPredicate = request -> false;
+        this.contextRunner
+                .withBean("privacyModelContentProtection", Predicate.class, () -> applicationPredicate)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("privacyModelContentProtection"))
+                            .isSameAs(applicationPredicate);
+                });
+    }
+
+    @Test
     void explicitConfigurerIgnoresUnrelatedUserAdvisorBeans() {
         PrivacyService service = new PrivacyService(
                 List.of((text, options) -> List.of()),
                 PiiAnalysisOptions.defaults()
         );
         PrivacyToolContextAdvisor weakToolContext = new PrivacyToolContextAdvisor(service);
-        PrivacyModelBoundaryAdvisor weakModelBoundary = new PrivacyModelBoundaryAdvisor(service);
 
         this.contextRunner
                 .withBean(PrivacyService.class, () -> service)
                 .withBean(PrivacyToolContextAdvisor.class, () -> weakToolContext)
-                .withBean(PrivacyModelBoundaryAdvisor.class, () -> weakModelBoundary)
                 .run(context -> {
                     ChatClient.Builder builder = mock(ChatClient.Builder.class);
                     context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
@@ -156,10 +202,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             .filteredOn(PrivacyToolContextAdvisor.class::isInstance)
                             .singleElement()
                             .isNotSameAs(weakToolContext);
-                    assertThat(advisors.getValue())
-                            .filteredOn(PrivacyModelBoundaryAdvisor.class::isInstance)
-                            .singleElement()
-                            .isNotSameAs(weakModelBoundary);
+                    ArgumentCaptor<Advisor[]> boundaryAdvisors = ArgumentCaptor.forClass(Advisor[].class);
+                    verify(builder).defaultAdvisors(boundaryAdvisors.capture());
+                    assertThat(boundaryAdvisors.getValue()).extracting(Advisor::getName)
+                            .containsExactly("ModelRequestBoundaryChainValidator", "ModelRequestBoundaryAdvisor");
                 });
     }
 
@@ -369,17 +415,20 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     ArgumentCaptor<List<Advisor>> advisors = ArgumentCaptor.forClass(List.class);
                     verify(builder).defaultAdvisors(advisors.capture());
                     assertThat(context).doesNotHaveBean(PrivacyOutputAdvisor.class);
-                    assertThat(advisors.getValue().stream()
-                            .map(Advisor::getClass)
-                            .toList())
-                            .isEqualTo(List.of(
-                                    PrivacyLifecycleAdvisor.class,
-                                    PrivacyInputAdvisor.class,
-                                    PrivacyOutputAdvisor.class,
-                                    PrivacyToolContextAdvisor.class,
-                                    PrivacyToolCallValidationAdvisor.class,
-                                    PrivacyModelBoundaryAdvisor.class
-                            ));
+                    assertThat(advisors.getValue()).extracting(Advisor::getName)
+                            .containsExactly(
+                                    "PrivacyLifecycleAdvisor",
+                                    "PrivacyInputAdvisor",
+                                    "PrivacyOutputAdvisor",
+                                    "PrivacyToolContextAdvisor",
+                                    "PrivacyToolCallValidationAdvisor",
+                                    "PrivacyAdvisorChainValidator"
+                            );
+
+                    ArgumentCaptor<Advisor[]> boundaryAdvisors = ArgumentCaptor.forClass(Advisor[].class);
+                    verify(builder).defaultAdvisors(boundaryAdvisors.capture());
+                    assertThat(boundaryAdvisors.getValue()).extracting(Advisor::getName)
+                            .containsExactly("ModelRequestBoundaryChainValidator", "ModelRequestBoundaryAdvisor");
                 });
     }
 
@@ -467,10 +516,8 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             .user("duplicate@example.test")
                             .call()
                             .content())
-                            .isInstanceOf(PrivacyGuardrailException.class)
-                            .hasMessage(
-                                    "PrivacyLifecycleAdvisor requires exactly one complete mandatory privacy advisor set"
-                            );
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessage("Exactly one managed model request boundary is required");
                     assertThat(model.prompts()).isEmpty();
                     assertThat(context.getBean(PrivacyService.class).activeSessionCount()).isZero();
                 });

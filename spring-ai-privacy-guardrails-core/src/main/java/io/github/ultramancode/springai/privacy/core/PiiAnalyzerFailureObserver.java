@@ -2,7 +2,7 @@ package io.github.ultramancode.springai.privacy.core;
 
 /**
  * Receives sanitized analyzer failures, including failures tolerated by partial-analysis policies.
- * Callbacks run on the analysis caller's thread; implementations must be thread-safe and must not throw.
+ * Callbacks run on the analysis caller's thread. Implementations must be thread-safe and must not throw.
  */
 @FunctionalInterface
 public interface PiiAnalyzerFailureObserver {

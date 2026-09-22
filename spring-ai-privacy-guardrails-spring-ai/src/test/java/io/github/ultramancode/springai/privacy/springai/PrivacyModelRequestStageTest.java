@@ -10,49 +10,25 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.ChatClientAttributes;
-import org.springframework.ai.chat.client.advisor.ChatModelCallAdvisor;
-import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
-import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
-import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
-import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-class PrivacyModelBoundaryAdvisorTest {
+class PrivacyModelRequestStageTest {
 
     @Test
-    void defaultOrderIsTheRecommendedLateModelBoundary() {
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(
-                TestPrivacyServices.privacyService()
-        );
-
-        assertThat(advisor.getOrder()).isEqualTo(Integer.MAX_VALUE - 1);
-        assertThat(new PrivacyModelBoundaryAdvisor(TestPrivacyServices.privacyService(), 123).getOrder())
-                .isEqualTo(123);
-    }
-
-    @Test
-    void advisorTokenizesContentAddedByDownstreamRagAdvisorBeforeModelCall() {
+    void stageTokenizesRetrievedContent() {
         PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
 
         try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = activeRequest(
@@ -62,62 +38,71 @@ class PrivacyModelBoundaryAdvisorTest {
                     ),
                     session.handle()
             );
-            when(chain.nextCall(any())).thenAnswer(invocation -> {
-                ChatClientRequest protectedRequest = invocation.getArgument(0);
-                String text = protectedRequest.prompt().getUserMessage().getText();
-                assertThat(text).doesNotContain("Alice");
-                assertThat(service.detokenize(session.handle(), text))
-                        .isEqualTo("Retrieved customer: Alice");
-                return TestPrivacyServices.response("ok");
-            });
+            ChatClientRequest protectedRequest = stage.apply(request);
 
-            advisor.adviseCall(request, chain);
+            String text = protectedRequest.prompt().getUserMessage().getText();
+            assertThat(text).doesNotContain("Alice");
+            assertThat(service.detokenize(session.handle(), text))
+                    .isEqualTo("Retrieved customer: Alice");
         }
     }
 
     @Test
-    void advisorFailsClosedWhenInputSessionIsMissing() {
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(
-                TestPrivacyServices.privacyService()
-        );
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        ChatClientRequest request = new ChatClientRequest(new Prompt("Alice"), Map.of());
-
-        assertThatThrownBy(() -> advisor.adviseCall(request, chain))
-                .isInstanceOf(PrivacyGuardrailException.class)
-                .hasMessageContaining("PrivacyLifecycleAdvisor");
-    }
-
-    @Test
-    void advisorAllowsAdditionalApplicationAdvisorAfterTheBoundary() {
+    void changedMessagesInvalidatePrivacyProcessingMarker() {
         PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisor lateAdvisor = mock(CallAdvisor.class);
-        when(lateAdvisor.getOrder()).thenReturn(PrivacyModelBoundaryAdvisor.DEFAULT_ORDER);
-        ChatModelCallAdvisor modelAdvisor = mock(ChatModelCallAdvisor.class);
-        when(modelAdvisor.getOrder()).thenReturn(Integer.MAX_VALUE);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        when(chain.getCallAdvisors()).thenReturn(List.of(advisor, lateAdvisor, modelAdvisor));
-        when(chain.nextCall(any())).thenAnswer(invocation -> {
-            ChatClientRequest protectedRequest = invocation.getArgument(0);
-            assertThat(protectedRequest.prompt().getUserMessage().getText())
-                    .doesNotContain("Alice");
-            return TestPrivacyServices.response("ok");
-        });
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
 
         try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = activeRequest(
                     new ChatClientRequest(new Prompt("Alice"), Map.of()),
                     session.handle()
             );
+            ChatClientRequest protectedRequest = stage.apply(request);
+            assertThat(PrivacyModelRequestStage.hasPrivacyProcessedMessages(protectedRequest)).isTrue();
 
-            assertThat(advisor.adviseCall(request, chain)).isNotNull();
-            verify(chain).nextCall(any());
+            ChatClientRequest changedRequest = protectedRequest.mutate()
+                    .prompt(new Prompt("Alice added later"))
+                    .build();
+
+            assertThat(PrivacyModelRequestStage.hasPrivacyProcessedMessages(changedRequest)).isFalse();
         }
     }
 
     @Test
-    void finalBoundaryRejectsLateToolReplacementFromAnotherFactory() {
+    void contextCleanupRemovesModelContentProtectionMarker() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
+
+        try (PrivacySession session = service.openSession()) {
+            ChatClientRequest request = activeRequest(
+                    new ChatClientRequest(new Prompt("hello"), Map.of()),
+                    session.handle()
+            );
+            ChatClientRequest protectedRequest = stage.apply(request);
+            assertThat(protectedRequest.context())
+                    .containsKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
+
+            assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(protectedRequest.context()))
+                    .doesNotContainKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
+            ChatClientResponse markedResponse = new ChatClientResponse(
+                    TestPrivacyServices.response("ok").chatResponse(), protectedRequest.context());
+            assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(markedResponse).context())
+                    .doesNotContainKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
+        }
+    }
+
+    @Test
+    void stageFailsClosedWhenInputSessionIsMissing() {
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(TestPrivacyServices.privacyService(), null, PrivacyEnforcementObserver.noop());
+        ChatClientRequest request = new ChatClientRequest(new Prompt("Alice"), Map.of());
+
+        assertThatThrownBy(() -> stage.apply(request))
+                .isInstanceOf(PrivacyGuardrailException.class)
+                .hasMessageContaining("PrivacyLifecycleAdvisor");
+    }
+
+    @Test
+    void stageRejectsToolCallbackFromAnotherFactory() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory expectedFactory = new PrivacyToolCallbackFactory(
                 service,
@@ -127,8 +112,7 @@ class PrivacyModelBoundaryAdvisorTest {
                 service,
                 ToolDisclosurePolicy.denyAll()
         );
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service, expectedFactory);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, expectedFactory, PrivacyEnforcementObserver.noop());
         ToolCallingChatOptions options = ToolCallingChatOptions.builder()
                 .toolCallbacks(List.of(otherFactory.wrap(tool("customerLookup"))))
                 .build();
@@ -139,22 +123,20 @@ class PrivacyModelBoundaryAdvisorTest {
                     session.handle()
             );
 
-            assertThatThrownBy(() -> advisor.adviseCall(request, chain))
+            assertThatThrownBy(() -> stage.apply(request))
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasMessage("PrivacyToolContextAdvisor rejected a tool callback from another privacy factory");
-            verify(chain, never()).nextCall(any());
         }
     }
 
     @Test
-    void finalBoundaryRejectsLateCallbackReplacementFromTheSameFactory() {
+    void stageRejectsCallbackReplacementFromSameFactoryAfterSnapshot() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
                 service,
                 ToolDisclosurePolicy.denyAll()
         );
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service, factory);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, factory, PrivacyEnforcementObserver.noop());
         ToolCallingChatOptions originalOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(List.of(factory.wrap(tool("customerLookup"))))
                 .build();
@@ -171,18 +153,16 @@ class PrivacyModelBoundaryAdvisorTest {
                     .prompt(new Prompt(snapshotted.prompt().getInstructions(), replacementOptions))
                     .build();
 
-            assertThatThrownBy(() -> advisor.adviseCall(replaced, chain))
+            assertThatThrownBy(() -> stage.apply(replaced))
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasMessage("Tool callbacks changed after the privacy tool-context boundary");
-            verify(chain, never()).nextCall(any());
         }
     }
 
     @Test
-    void advisorRejectsPiiInHistoricalToolResponseNameBeforeModelCall() {
+    void stageRejectsPiiInHistoricalToolResponseNameBeforeModelCall() {
         PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
         ToolResponseMessage response = ToolResponseMessage.builder()
                 .responses(List.of(new ToolResponseMessage.ToolResponse(
                         "call-1", "Alice", "safe result"
@@ -194,23 +174,21 @@ class PrivacyModelBoundaryAdvisorTest {
                     new ChatClientRequest(new Prompt(List.of(response)), Map.of()),
                     session.handle()
             );
-            assertThatThrownBy(() -> advisor.adviseCall(request, chain))
+            assertThatThrownBy(() -> stage.apply(request))
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasMessage("Tool control field rejected by privacy guardrail")
                     .hasMessageNotContaining("Alice");
-            verify(chain, never()).nextCall(any());
         }
     }
 
     @Test
-    void advisorRejectsPiiInModelVisibleToolDefinitionsBeforeModelCall() {
+    void stageRejectsPiiInModelVisibleToolDefinitionsBeforeModelCall() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
                 service,
                 ToolDisclosurePolicy.denyAll()
         );
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
         ToolCallback callback = new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {
@@ -236,23 +214,21 @@ class PrivacyModelBoundaryAdvisorTest {
                     session.handle()
             );
 
-            assertThatThrownBy(() -> advisor.adviseCall(request, chain))
+            assertThatThrownBy(() -> stage.apply(request))
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasMessage("Tool definition rejected by privacy guardrail")
                     .hasMessageNotContaining("Alice");
-            verify(chain, never()).nextCall(any());
         }
     }
 
     @Test
-    void advisorRejectsNonblankMalformedJsonSchemasBeforeModelCall() {
+    void stageRejectsNonblankMalformedJsonSchemasBeforeModelCall() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
                 service,
                 ToolDisclosurePolicy.denyAll()
         );
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
         ToolCallingChatOptions objectShapedToolOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(List.of(factory.wrap(tool("customerLookup", "{not-json"))))
                 .build();
@@ -281,22 +257,20 @@ class PrivacyModelBoundaryAdvisorTest {
             )) {
                 ChatClientRequest activeRequest = activeRequest(request, session.handle());
 
-                assertThatThrownBy(() -> advisor.adviseCall(activeRequest, chain))
+                assertThatThrownBy(() -> stage.apply(activeRequest))
                         .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
                             assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
                             assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOKENIZATION);
                             assertThat(failure).hasMessage("Structured JSON payload is invalid");
                         });
             }
-            verify(chain, never()).nextCall(any());
         }
     }
 
     @Test
-    void advisorRejectsLateStructuredOutputContextBeforeModelCall() {
+    void stageRejectsLateStructuredOutputContextBeforeModelCall() {
         PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
 
         try (PrivacySession session = service.openSession()) {
             for (Map.Entry<String, String> augmentation : Map.of(
@@ -312,126 +286,12 @@ class PrivacyModelBoundaryAdvisorTest {
                         session.handle()
                 );
 
-                assertThatThrownBy(() -> advisor.adviseCall(request, chain))
+                assertThatThrownBy(() -> stage.apply(request))
                         .isInstanceOf(PrivacyGuardrailException.class)
                         .hasMessage("Terminal model augmentation rejected by privacy guardrail")
                         .hasMessageNotContaining("Alice");
             }
-            verify(chain, never()).nextCall(any());
         }
-    }
-
-    @Test
-    void callBoundaryPreservesTheModelProviderFailure() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        IllegalStateException raw = new IllegalStateException(
-                "provider response contained Alice",
-                new IllegalArgumentException("Alice cause")
-        );
-        raw.addSuppressed(new IllegalStateException("Alice suppressed"));
-        when(chain.nextCall(any())).thenThrow(raw);
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest request = activeRequest(
-                    new ChatClientRequest(new Prompt("hello"), Map.of()),
-                    session.handle()
-            );
-
-            assertThatThrownBy(() -> advisor.adviseCall(request, chain)).isSameAs(raw);
-        }
-    }
-
-    @Test
-    void streamBoundaryPreservesFailureAfterAPartialFrame() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
-        IllegalStateException raw = new IllegalStateException("provider response contained Alice");
-        when(chain.nextStream(any())).thenReturn(Flux.concat(
-                Flux.just(TestPrivacyServices.response("partial")),
-                Flux.error(raw)
-        ));
-        AtomicInteger emitted = new AtomicInteger();
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest request = activeRequest(
-                    new ChatClientRequest(new Prompt("hello"), Map.of()),
-                    session.handle()
-            );
-
-            assertThatThrownBy(() -> advisor.adviseStream(request, chain)
-                    .doOnNext(ignored -> emitted.incrementAndGet())
-                    .collectList()
-                    .block())
-                    .isSameAs(raw);
-            assertThat(emitted).hasValue(1);
-        }
-    }
-
-    @Test
-    void modelBoundaryPreservesProviderGuardrailAndFatalFailures() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        PrivacyGuardrailException guardrail = new PrivacyGuardrailException(
-                PrivacyFailureCode.TRANSFORMATION_CONFLICT,
-                PrivacyPhase.TOKENIZATION,
-                "safe"
-        );
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest request = activeRequest(
-                    new ChatClientRequest(new Prompt("hello"), Map.of()),
-                    session.handle()
-            );
-            when(chain.nextCall(any())).thenThrow(guardrail);
-            assertThatThrownBy(() -> advisor.adviseCall(request, chain)).isSameAs(guardrail);
-
-            LinkageError fatal = new LinkageError("fatal");
-            doThrow(fatal).when(chain).nextCall(any());
-            assertThatThrownBy(() -> advisor.adviseCall(request, chain)).isSameAs(fatal);
-        }
-    }
-
-    @Test
-    void streamBoundaryPreservesIncrementalFramesWhileApplyingPreAggregationGuard() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelBoundaryAdvisor advisor = new PrivacyModelBoundaryAdvisor(service);
-        StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
-        when(chain.nextStream(any())).thenReturn(Flux.concat(
-                Flux.just(TestPrivacyServices.response("first")),
-                Flux.never()
-        ));
-
-        try (PrivacySession session = service.openSession()) {
-            List<ChatClientResponse> first = advisor.adviseStream(
-                    toolRequest(service, session, "hello"),
-                    chain
-            ).take(1).collectList().block();
-
-            assertThat(first).singleElement().satisfies(response -> assertThat(
-                    response.chatResponse().getResult().getOutput().getText()
-            ).isEqualTo("first"));
-        }
-    }
-
-    private ChatClientRequest toolRequest(
-            PrivacyService service,
-            PrivacySession session,
-            String text
-    ) {
-        ToolCallback callback = tool("customerLookup");
-        ToolCallback wrapped = new PrivacyToolCallbackFactory(service, ToolDisclosurePolicy.denyAll())
-                .wrap(callback);
-        ToolCallingChatOptions options = ToolCallingChatOptions.builder()
-                .toolCallbacks(List.of(wrapped))
-                .build();
-        return activeRequest(
-                new ChatClientRequest(new Prompt(List.of(new UserMessage(text)), options), Map.of()),
-                session.handle()
-        );
     }
 
     private ChatClientRequest activeRequest(

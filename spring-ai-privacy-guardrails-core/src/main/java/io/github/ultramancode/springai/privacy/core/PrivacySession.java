@@ -21,7 +21,7 @@ public final class PrivacySession implements AutoCloseable {
         return this.handle;
     }
 
-    /** Removes the session mapping from the owning service; repeated calls are safe. */
+    /** Removes the session mapping from the owning service. Repeated calls are safe. */
     @Override
     public void close() {
         this.registry.close(this.handle);

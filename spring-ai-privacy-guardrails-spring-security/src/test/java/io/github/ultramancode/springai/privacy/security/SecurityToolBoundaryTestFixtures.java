@@ -1,21 +1,16 @@
 package io.github.ultramancode.springai.privacy.security;
 
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
-import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -63,25 +58,9 @@ final class SecurityToolBoundaryTestFixtures {
             ChatModel model,
             ToolCallback... callbacks
     ) {
-        // Mirror production wiring: the tool-authorization lifecycle advisor captures request state, while
-        // ToolCallingAdvisor uses the paired authorization-aware manager.
-        ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-                .toolCallingManager(boundary.toolCallingManager())
-                .build();
-        return ChatClient.builder(model)
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(service),
-                        boundary.toolAuthorizationAdvisor(),
-                        new PrivacyInputAdvisor(service),
-                        new PrivacyToolContextAdvisor(service, factory),
-                        toolCallingAdvisor,
-                        // Validate model-generated tool calls immediately inside the tool loop.
-                        new PrivacyToolCallValidationAdvisor(
-                                service,
-                                toolCallingAdvisor.getOrder() + 1
-                        ),
-                        new PrivacyModelBoundaryAdvisor(service, factory)
-                )
+        PrivacyChatClientConfigurer privacy = new PrivacyChatClientConfigurer(service, factory);
+        ToolAuthorizationChatClientFactory security = new ToolAuthorizationChatClientFactory(boundary);
+        return new PrivacySecurityChatClientFactory(privacy, security).builder(model)
                 .defaultTools((Object[]) callbacks)
                 .build();
     }

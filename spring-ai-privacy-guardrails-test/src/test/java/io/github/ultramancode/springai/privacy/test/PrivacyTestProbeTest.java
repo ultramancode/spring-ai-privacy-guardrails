@@ -1,18 +1,14 @@
 package io.github.ultramancode.springai.privacy.test;
 
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
-import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyModelBoundaryAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextFactoryTestAccess;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -54,14 +50,9 @@ class PrivacyTestProbeTest {
                 ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
         );
         ToolCallback protectedTool = probe.wrapTool(customerLookup(), toolCallbackFactory);
-        ChatClient chatClient = ChatClient.builder(probe.wrapModel(new ToolLoopModel()))
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(privacyService),
-                        new PrivacyInputAdvisor(privacyService),
-                        new PrivacyToolContextAdvisor(privacyService),
-                        new PrivacyToolCallValidationAdvisor(privacyService),
-                        new PrivacyModelBoundaryAdvisor(privacyService)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
+                .build()
+                .configure(ChatClient.builder(probe.wrapModel(new ToolLoopModel())))
                 .defaultTools(protectedTool)
                 .build();
 
@@ -116,14 +107,9 @@ class PrivacyTestProbeTest {
     void probeRecordsStreamingInvocations() {
         PrivacyService privacyService = privacyService();
         PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        ChatClient chatClient = ChatClient.builder(probe.wrapModel(new EchoModel()))
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(privacyService),
-                        new PrivacyInputAdvisor(privacyService),
-                        new PrivacyToolContextAdvisor(privacyService),
-                        new PrivacyToolCallValidationAdvisor(privacyService),
-                        new PrivacyModelBoundaryAdvisor(privacyService)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
+                .build()
+                .configure(ChatClient.builder(probe.wrapModel(new EchoModel())))
                 .build();
 
         String response = chatClient.prompt().user("Find Alice").stream().content().blockFirst();
@@ -249,14 +235,9 @@ class PrivacyTestProbeTest {
                 ToolDisclosurePolicy.denyAll()
         );
         ToolCallback protectedTool = probe.wrapTool(customerLookup(), toolCallbackFactory);
-        ChatClient chatClient = ChatClient.builder(probe.wrapModel(new ToolLoopModel()))
-                .defaultAdvisors(
-                        new PrivacyLifecycleAdvisor(privacyService),
-                        new PrivacyInputAdvisor(privacyService),
-                        new PrivacyToolContextAdvisor(privacyService),
-                        new PrivacyToolCallValidationAdvisor(privacyService),
-                        new PrivacyModelBoundaryAdvisor(privacyService)
-                )
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
+                .build()
+                .configure(ChatClient.builder(probe.wrapModel(new ToolLoopModel())))
                 .defaultTools(protectedTool)
                 .build();
 

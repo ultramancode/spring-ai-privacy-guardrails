@@ -28,7 +28,7 @@ import java.util.Objects;
  * owns the single response-protection pass at the point where control returns to the
  * lifecycle advisor. Return-direct tool generations are identified from Spring AI's
  * final generation metadata, restored internally, and then subjected to the configured
- * output action. The default order is part of the tested standard layout; applications
+ * output action. The default order is part of the tested standard layout. Applications
  * using custom advisor composition own any response mutations performed outside the
  * lifecycle boundary.
  */

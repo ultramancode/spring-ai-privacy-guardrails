@@ -1,6 +1,7 @@
 description = 'Spring AI Advisors and ToolCallback wrappers for privacy guardrails.'
 
 dependencies {
+    api project(':spring-ai-privacy-guardrails-spring-ai-boundary')
     api platform("org.springframework.ai:spring-ai-bom:${providers.gradleProperty('springAiVersion').get()}")
     api project(':spring-ai-privacy-guardrails-core')
     api 'org.springframework.ai:spring-ai-client-chat'

@@ -9,9 +9,9 @@ package io.github.ultramancode.springai.privacy.core;
  * @param entityType canonical uppercase entity type assigned to each match
  * @param pattern Java regular expression evaluated against the complete source text
  * @param score confidence assigned to every match, between {@code 0.0} and {@code 1.0}
- * @param captureGroup capture group whose range becomes the PII span; {@code 0} selects
+ * @param captureGroup capture group whose range becomes the PII span. {@code 0} selects
  * the complete match
- * @param matchValidator optional validator applied to the selected capture-group candidate;
+ * @param matchValidator optional validator applied to the selected capture-group candidate.
  * {@code null} preserves format-only matching
  */
 public record RegexPiiRule(

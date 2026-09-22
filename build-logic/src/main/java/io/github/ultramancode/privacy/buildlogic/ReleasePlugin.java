@@ -326,8 +326,8 @@ public final class ReleasePlugin implements Plugin<Project> {
             ));
         });
         // CycloneDX adds the direct BOM as an outgoing artifact when its task is
-        // created. Realize these tasks before Gradle can consume that variant;
-        // otherwise mixed task selections (for example POM generation + SBOM)
+        // created. Realize these tasks before Gradle can consume that variant.
+        // Otherwise mixed task selections (for example POM generation + SBOM)
         // can observe the configuration first and make the plugin's mutation illegal.
         project.getTasks().named("cyclonedxDirectBom", CyclonedxDirectTask.class)
                 .get()

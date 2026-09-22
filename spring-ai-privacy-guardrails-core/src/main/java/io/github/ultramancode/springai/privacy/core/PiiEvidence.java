@@ -9,7 +9,7 @@ import java.util.Objects;
  * The core evidence resolver applies provider-specific aliases and trust before
  * the evidence enters a resolved span exposed by {@link PrivacyService}.
  *
- * @param entityType exact uppercase entity label; evidence returned by
+ * @param entityType exact uppercase entity label. Evidence returned by
  * {@link PrivacyService} contains the resolved canonical type
  * @param start inclusive source-text offset
  * @param end exclusive source-text offset

@@ -1,0 +1,10 @@
+description = 'Opt-in Spring Boot configuration for content inspection.'
+dependencies {
+    api project(':spring-ai-privacy-guardrails-inspection-spring-ai')
+    api platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
+    api 'org.springframework.boot:spring-boot-starter'
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${providers.gradleProperty('springBootVersion').get()}"
+    testImplementation 'org.springframework.boot:spring-boot-test'
+    testImplementation project(':spring-ai-privacy-guardrails-inspection-rules')
+    testImplementation project(':spring-ai-privacy-guardrails-spring-boot-starter')
+}

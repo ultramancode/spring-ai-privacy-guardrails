@@ -2,17 +2,16 @@ package io.github.ultramancode.springai.privacy.inspection.core;
 
 import java.util.Objects;
 
-/** One ordered text unit. IDs are diagnostic identifiers, never source text. */
+/**
+ * One logical text unit in an inspection request, identified independently for findings and completion.
+ * Segments retain request order and are not grouped by role. A segment need not correspond to an entire
+ * chat message; providers may split it into internal windows without changing its identity.
+ * IDs are diagnostic identifiers, never source text.
+ */
 public record ContentSegment(
-        String id, Source source, Role role, Representation representation, String text) {
+        String id, Role role, PrivacyProcessingStatus privacyProcessingStatus, String text) {
 
-    public enum Source {
-        USER,
-        RETRIEVED,
-        TOOL,
-        UNKNOWN
-    }
-
+    /** Message role, when known; does not establish the text's original source or trustworthiness. */
     public enum Role {
         USER,
         SYSTEM,
@@ -21,18 +20,20 @@ public record ContentSegment(
         UNKNOWN
     }
 
-    /** Identifies the text's state at the inspection boundary. */
-    public enum Representation {
-        RAW,
-        AS_RECEIVED,
-        PRIVACY_PROTECTED
+    /** Privacy processing status supplied by trusted application integration for this segment's text. */
+    public enum PrivacyProcessingStatus {
+        /** Whether privacy processing completed for this text is unknown. */
+        UNKNOWN,
+        /** The caller knows that privacy processing has not been applied to this text. */
+        UNPROCESSED,
+        /** Configured privacy processing completed; this does not guarantee that all PII was detected. */
+        PROCESSED
     }
 
     public ContentSegment {
         requireIdentifier(id);
-        Objects.requireNonNull(source, "source");
         Objects.requireNonNull(role, "role");
-        Objects.requireNonNull(representation, "representation");
+        Objects.requireNonNull(privacyProcessingStatus, "privacyProcessingStatus");
         Objects.requireNonNull(text, "text");
     }
 
@@ -47,12 +48,10 @@ public record ContentSegment(
     public String toString() {
         return "ContentSegment[id="
                 + id
-                + ", source="
-                + source
                 + ", role="
                 + role
-                + ", representation="
-                + representation
+                + ", privacyProcessingStatus="
+                + privacyProcessingStatus
                 + ", text=<redacted>]";
     }
 }

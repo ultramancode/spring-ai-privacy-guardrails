@@ -17,7 +17,7 @@ public final class InspectionRequest {
         this.limits = Objects.requireNonNull(limits, "limits");
         Objects.requireNonNull(segments, "segments");
         if (segments.isEmpty() || segments.size() > limits.maxSegments()) {
-            throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+            throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
         }
         this.segments = List.copyOf(segments);
         Set<String> ids = new HashSet<>();
@@ -29,7 +29,7 @@ public final class InspectionRequest {
             characters += segment.text().length();
         }
         if (characters > limits.maxCharacters()) {
-            throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+            throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
         }
     }
 
@@ -45,7 +45,7 @@ public final class InspectionRequest {
         checkInterrupted();
         long remaining = limits.timeout().toNanos() - (System.nanoTime() - startedNanos);
         if (remaining <= 0) {
-            throw new InspectionException(InspectionFailure.TIMEOUT);
+            throw new InspectionException(InspectionFailureCode.TIMEOUT);
         }
         return Duration.ofNanos(remaining);
     }
@@ -56,25 +56,26 @@ public final class InspectionRequest {
 
     public static void checkInterrupted() {
         if (Thread.currentThread().isInterrupted()) {
-            throw new InspectionException(InspectionFailure.CANCELLED);
+            throw new InspectionException(InspectionFailureCode.CANCELLED);
         }
     }
 
     /**
-     * Requires every segment to be marked {@link ContentSegment.Representation#PRIVACY_PROTECTED}.
+     * Requires every segment to be marked {@link ContentSegment.PrivacyProcessingStatus#PROCESSED}.
      *
-     * <p>Checks the supplied representation markers; it does not detect or transform personal data.
+     * <p>Checks the supplied privacy processing status; it does not detect or transform personal data.
+     * UNKNOWN and UNPROCESSED segments are both rejected.
      *
-     * @throws InspectionException with {@link InspectionFailure#DISCLOSURE_DENIED} if any segment
-     *         is not marked as privacy-protected
+     * @throws InspectionException with {@link InspectionFailureCode#DISCLOSURE_DENIED} if any segment
+     *         is not marked as privacy-processed
      */
-    public void requireProtected() {
+    public void requirePrivacyProcessed() {
         if (segments.stream()
                 .anyMatch(
                         s ->
-                                s.representation()
-                                        != ContentSegment.Representation.PRIVACY_PROTECTED)) {
-            throw new InspectionException(InspectionFailure.DISCLOSURE_DENIED);
+                                s.privacyProcessingStatus()
+                                        != ContentSegment.PrivacyProcessingStatus.PROCESSED)) {
+            throw new InspectionException(InspectionFailureCode.DISCLOSURE_DENIED);
         }
     }
 

@@ -4,14 +4,18 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Objects;
 
-/** Explicit endpoint and model contract; the endpoint is the full chat/completions URL. */
+/**
+ * Explicit endpoint and model contract; the endpoint is the full chat/completions URL.
+ * Content with UNKNOWN or UNPROCESSED privacy processing status requires explicit opt-in.
+ * PROCESSED records completion of configured privacy processing, not a guarantee that all PII was detected.
+ */
 public record OpenAiCompatibleInspectionConfig(
         URI endpoint,
         String model,
         String apiKey,
         Duration requestTimeout,
         int maxResponseBytes,
-        boolean allowRawContent) {
+        boolean allowUnprocessedContent) {
 
     public OpenAiCompatibleInspectionConfig {
         Objects.requireNonNull(endpoint, "endpoint");
@@ -59,8 +63,8 @@ public record OpenAiCompatibleInspectionConfig(
 
     @Override
     public String toString() {
-        return "OpenAiCompatibleInspectionConfig[endpoint=<configured>, model=<configured>, apiKey=<redacted>, allowRawContent="
-                + allowRawContent
+        return "OpenAiCompatibleInspectionConfig[endpoint=<configured>, model=<configured>, apiKey=<redacted>, allowUnprocessedContent="
+                + allowUnprocessedContent
                 + "]";
     }
 }

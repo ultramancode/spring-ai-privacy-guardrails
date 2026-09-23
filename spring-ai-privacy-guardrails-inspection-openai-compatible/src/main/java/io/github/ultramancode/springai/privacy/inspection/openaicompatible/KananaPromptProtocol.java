@@ -1,7 +1,7 @@
 package io.github.ultramancode.springai.privacy.inspection.openaicompatible;
 
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 
 import java.util.List;
@@ -9,11 +9,6 @@ import java.util.Map;
 
 /** Kanana Safeguard-Prompt's single-user-turn, single-token classification contract. */
 final class KananaPromptProtocol implements GuardModelProtocol {
-
-    @Override
-    public String id() {
-        return "kanana-prompt";
-    }
 
     @Override
     public boolean acceptsLengthFinish() {
@@ -48,7 +43,7 @@ final class KananaPromptProtocol implements GuardModelProtocol {
                             InspectionFinding.Category.PROMPT_LEAKING,
                             "UNSAFE-A2",
                             null);
-            default -> throw new InspectionException(InspectionFailure.INVALID_RESPONSE);
+            default -> throw new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
         };
     }
 }

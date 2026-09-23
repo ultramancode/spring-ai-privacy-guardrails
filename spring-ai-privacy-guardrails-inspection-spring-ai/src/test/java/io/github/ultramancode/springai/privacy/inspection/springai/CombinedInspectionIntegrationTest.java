@@ -121,7 +121,7 @@ class CombinedInspectionIntegrationTest {
                 assertThat(modelCalls).hasValue(toolSearchEnabled ? 2 : 1);
                 assertThat(inspected).hasSize(toolSearchEnabled ? 3 : 2);
                 assertThat(inspected.get(inspected.size() - 1).segments())
-                        .anyMatch(s -> s.source() == ContentSegment.Source.TOOL && s.text().contains("attack"));
+                        .anyMatch(s -> s.role() == ContentSegment.Role.TOOL && s.text().contains("attack"));
             } finally {
                 SecurityContextHolder.clearContext();
             }
@@ -208,7 +208,7 @@ class CombinedInspectionIntegrationTest {
 
     private InspectionChatClientConfigurer inspectionConfigurer(List<InspectionRequest> inspected) {
         ContentInspector inspector = request -> {
-            request.requireProtected();
+            request.requirePrivacyProcessed();
             assertThat(request.segments())
                     .allSatisfy(segment -> assertThat(segment.text()).doesNotContain("Alice"));
             inspected.add(request);
@@ -223,8 +223,8 @@ class CombinedInspectionIntegrationTest {
                 new InspectionService(List.of(inspector)),
                 InspectionLimits.defaults(),
                 request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
-                        ? ContentSegment.Representation.PRIVACY_PROTECTED
-                        : ContentSegment.Representation.AS_RECEIVED,
+                        ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                        : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
                 ignored -> {});
     }
 

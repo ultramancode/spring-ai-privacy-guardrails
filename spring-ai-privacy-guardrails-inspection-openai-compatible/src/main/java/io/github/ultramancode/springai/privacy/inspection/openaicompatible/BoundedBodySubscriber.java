@@ -1,7 +1,7 @@
 package io.github.ultramancode.springai.privacy.inspection.openaicompatible;
 
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 
 import java.io.ByteArrayOutputStream;
 import java.net.http.HttpResponse;
@@ -46,7 +46,7 @@ final class BoundedBodySubscriber implements HttpResponse.BodySubscriber<byte[]>
         long incomingBytes = buffers.stream().mapToLong(ByteBuffer::remaining).sum();
         if (incomingBytes > maxResponseBytes - (long) responseBuffer.size()) {
             subscription.cancel();
-            bodyFuture.completeExceptionally(new InspectionException(InspectionFailure.LIMIT_EXCEEDED));
+            bodyFuture.completeExceptionally(new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED));
             return;
         }
         for (ByteBuffer buffer : buffers) {

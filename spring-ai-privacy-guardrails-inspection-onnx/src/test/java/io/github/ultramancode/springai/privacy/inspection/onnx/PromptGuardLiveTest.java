@@ -5,7 +5,7 @@ import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OrtEnvironment;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionDecision;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
@@ -104,11 +104,11 @@ class PromptGuardLiveTest {
                             .as(name + " mask " + w)
                             .isEqualTo(reference.getProperty(window + "attention_mask.sha256"));
                 }
-                InspectionResult result = inspector.inspect(request(text, 16));
+                InspectionResult result = inspector.inspect(request(text));
                 assertThat(result.status())
                         .as(name + " completion: " + result.failure())
                         .isEqualTo(InspectionResult.Status.COMPLETED);
-                assertThat(result.inspectedSegmentIds()).containsExactly("synthetic");
+                assertThat(result.completedSegmentIds()).containsExactly("synthetic");
                 assertThat(result.findings()).as(name + " scored windows").hasSize(windows);
                 for (int w = 0; w < windows; w++) {
                     double expected =
@@ -134,9 +134,9 @@ class PromptGuardLiveTest {
         try (OnnxContentInspector inspector =
                 new OnnxContentInspector(OnnxInspectionConfig.defaults(model), new PromptGuard2Model(tokenizer))) {
             InspectionService service = new InspectionService(List.of(inspector));
-            assertThat(service.inspect(request(text("case.0."), 16)).decision())
+            assertThat(service.inspect(request(text("case.0."))).decision())
                     .isEqualTo(InspectionDecision.ALLOW);
-            assertThat(service.inspect(request(text("case.1."), 16)).decision())
+            assertThat(service.inspect(request(text("case.1."))).decision())
                     .isEqualTo(InspectionDecision.BLOCK);
         }
     }
@@ -147,12 +147,15 @@ class PromptGuardLiveTest {
         assertThat(Integer.parseInt(reference.getProperty("case.7.windows"))).isGreaterThan(1);
         try (OnnxContentInspector inspector =
                 new OnnxContentInspector(OnnxInspectionConfig.defaults(model), new PromptGuard2Model(tokenizer))) {
-            InspectionResult complete = inspector.inspect(request(text("case.7."), 16));
+            InspectionResult complete = inspector.inspect(request(text("case.7.")));
             assertThat(complete.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(complete.findings()).isNotEmpty();
-            InspectionResult limited = inspector.inspect(request(text("case.7."), 1));
-            assertThat(limited.failure()).isEqualTo(InspectionFailure.LIMIT_EXCEEDED);
-            assertThat(limited.inspectedSegmentIds()).isEmpty();
+        }
+        try (OnnxContentInspector inspector = new OnnxContentInspector(
+                new OnnxInspectionConfig(model, 2, 1), new PromptGuard2Model(tokenizer))) {
+            InspectionResult limited = inspector.inspect(request(text("case.7.")));
+            assertThat(limited.failure()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED);
+            assertThat(limited.completedSegmentIds()).isEmpty();
         }
     }
 
@@ -162,16 +165,15 @@ class PromptGuardLiveTest {
                 StandardCharsets.UTF_8);
     }
 
-    private static InspectionRequest request(String text, int chunks) {
+    private static InspectionRequest request(String text) {
         return new InspectionRequest(
                 List.of(
                         new ContentSegment(
                                 "synthetic",
-                                ContentSegment.Source.USER,
                                 ContentSegment.Role.USER,
-                                ContentSegment.Representation.RAW,
+                                ContentSegment.PrivacyProcessingStatus.UNPROCESSED,
                                 text)),
-                new InspectionLimits(4, 131072, chunks, Duration.ofSeconds(60)));
+                new InspectionLimits(4, 131072, Duration.ofSeconds(60)));
     }
 
     static String fileHash(Path file) throws Exception {

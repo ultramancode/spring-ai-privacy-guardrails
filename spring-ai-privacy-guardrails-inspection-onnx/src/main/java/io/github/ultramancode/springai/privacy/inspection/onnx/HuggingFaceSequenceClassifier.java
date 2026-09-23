@@ -8,7 +8,7 @@ import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 import ai.onnxruntime.TensorInfo;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 
 import java.nio.file.Files;
@@ -29,7 +29,7 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
 
     record Label(int index, InspectionFinding.Category category, String code) { }
 
-    private final String providerId;
+    private final String modelId;
     private final HuggingFaceTokenizer tokenizer;
     private final int maxTokens;
     private final int outputClassCount;
@@ -38,12 +38,12 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
     private final double threshold;
     private Set<String> inputNames;
 
-    HuggingFaceSequenceClassifier(String providerId, Path tokenizerPath, int maxTokens, int overlapTokens,
+    HuggingFaceSequenceClassifier(String modelId, Path tokenizerPath, int maxTokens, int overlapTokens,
             int outputClassCount, Activation activation, List<Label> labels, double threshold) {
-        this(providerId, tokenizerPath, null, maxTokens, overlapTokens, outputClassCount, activation, labels, threshold);
+        this(modelId, tokenizerPath, null, maxTokens, overlapTokens, outputClassCount, activation, labels, threshold);
     }
 
-    HuggingFaceSequenceClassifier(String providerId, Path tokenizerPath, Path tokenizerConfigPath,
+    HuggingFaceSequenceClassifier(String modelId, Path tokenizerPath, Path tokenizerConfigPath,
             int maxTokens, int overlapTokens, int outputClassCount, Activation activation,
             List<Label> labels, double threshold) {
         if (maxTokens < 4 || overlapTokens < 0 || overlapTokens > maxTokens / 2) {
@@ -52,7 +52,7 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
         if (!Double.isFinite(threshold) || threshold <= 0 || threshold > 1) {
             throw new IllegalArgumentException("threshold must be finite, greater than 0 and at most 1");
         }
-        this.providerId = Objects.requireNonNull(providerId, "providerId");
+        this.modelId = Objects.requireNonNull(modelId, "modelId");
         this.maxTokens = maxTokens;
         this.outputClassCount = outputClassCount;
         this.activation = Objects.requireNonNull(activation, "activation");
@@ -64,7 +64,7 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
             }
         }
         if (tokenizerConfigPath != null && !Files.isRegularFile(tokenizerConfigPath)) {
-            throw new InspectionException(InspectionFailure.CONFIGURATION);
+            throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }
         try {
             Map<String, String> options = Map.of(
@@ -77,13 +77,13 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
                     ? HuggingFaceTokenizer.newInstance(tokenizerPath, options)
                     : HuggingFaceTokenizer.newInstance(tokenizerPath, tokenizerConfigPath.toString(), options);
         } catch (Exception ex) {
-            throw new InspectionException(InspectionFailure.CONFIGURATION);
+            throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }
     }
 
     @Override
-    public String providerId() {
-        return providerId;
+    public String modelId() {
+        return modelId;
     }
 
     @Override
@@ -91,12 +91,12 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
         Set<String> modelInputNames = inputs.keySet();
         if (!modelInputNames.containsAll(Set.of("input_ids", "attention_mask"))
                 || !Set.of("input_ids", "attention_mask", "token_type_ids").containsAll(modelInputNames)) {
-            throw new InspectionException(InspectionFailure.CONFIGURATION);
+            throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }
         for (NodeInfo input : inputs.values()) {
             TensorInfo tensor = (TensorInfo) input.getInfo();
             if (tensor.getShape()[1] > 0 && tensor.getShape()[1] != maxTokens) {
-                throw new InspectionException(InspectionFailure.CONFIGURATION);
+                throw new InspectionException(InspectionFailureCode.CONFIGURATION);
             }
         }
         NodeInfo output = outputs.get("logits");
@@ -104,7 +104,7 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
                 || tensor.type != OnnxJavaType.FLOAT || tensor.getShape().length != 2
                 || tensor.getShape()[0] > 1
                 || (tensor.getShape()[1] > 0 && tensor.getShape()[1] != outputClassCount)) {
-            throw new InspectionException(InspectionFailure.CONFIGURATION);
+            throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }
         inputNames = Set.copyOf(modelInputNames);
     }
@@ -112,12 +112,12 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
     @Override
     public List<Map<String, long[]>> encode(String text, int maxWindows) {
         if (maxWindows < 1) {
-            throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+            throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
         }
         Encoding first = tokenizer.encode(text);
         Encoding[] overflow = first.getOverflowing();
         if (overflow.length >= maxWindows) {
-            throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+            throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
         }
         List<Map<String, long[]>> windows = new ArrayList<>();
         windows.add(inputs(first));
@@ -129,7 +129,7 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
 
     private Map<String, long[]> inputs(Encoding encoding) {
         if (encoding.getIds().length == 0 || encoding.getIds().length > maxTokens) {
-            throw new InspectionException(InspectionFailure.MODEL_ERROR);
+            throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
         }
         Map<String, long[]> inputValues = new HashMap<>();
         inputValues.put("input_ids", encoding.getIds());
@@ -143,15 +143,15 @@ class HuggingFaceSequenceClassifier implements OnnxInspectionModel {
     @Override
     public List<InspectionFinding> decode(String segmentId, OrtSession.Result outputs) throws OrtException {
         Object logitsValue = outputs.get("logits")
-                .orElseThrow(() -> new InspectionException(InspectionFailure.MODEL_ERROR)).getValue();
+                .orElseThrow(() -> new InspectionException(InspectionFailureCode.MODEL_ERROR)).getValue();
         if (!(logitsValue instanceof float[][] batch) || batch.length != 1 || batch[0].length != outputClassCount) {
-            throw new InspectionException(InspectionFailure.MODEL_ERROR);
+            throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
         }
         float[] logits = batch[0];
         double maximumLogit = Double.NEGATIVE_INFINITY;
         for (float logit : logits) {
             if (!Float.isFinite(logit)) {
-                throw new InspectionException(InspectionFailure.MODEL_ERROR);
+                throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
             }
             maximumLogit = Math.max(maximumLogit, logit);
         }

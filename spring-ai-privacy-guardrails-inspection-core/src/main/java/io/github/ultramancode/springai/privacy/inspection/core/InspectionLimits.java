@@ -8,13 +8,10 @@ import java.util.Objects;
  *
  * @param maxSegments maximum number of text segments in the request
  * @param maxCharacters maximum combined text length in UTF-16 code units
- * @param maxChunks maximum chunks per inspector across all request segments, such as ONNX
- *        windows or remote segment requests
  * @param timeout total time budget shared by all inspectors, starting when the
  *        {@link InspectionRequest} is constructed
  */
-public record InspectionLimits(
-        int maxSegments, int maxCharacters, int maxChunks, Duration timeout) {
+public record InspectionLimits(int maxSegments, int maxCharacters, Duration timeout) {
 
     public InspectionLimits {
         Objects.requireNonNull(timeout, "timeout");
@@ -24,9 +21,6 @@ public record InspectionLimits(
         if (maxCharacters < 1 || maxCharacters > 10_000_000) {
             throw new IllegalArgumentException("maxCharacters must be between 1 and 10000000");
         }
-        if (maxChunks < 1 || maxChunks > 10_000) {
-            throw new IllegalArgumentException("maxChunks must be between 1 and 10000");
-        }
         if (timeout.isNegative()
                 || timeout.isZero()
                 || timeout.compareTo(Duration.ofHours(1)) > 0) {
@@ -35,6 +29,6 @@ public record InspectionLimits(
     }
 
     public static InspectionLimits defaults() {
-        return new InspectionLimits(64, 131_072, 256, Duration.ofSeconds(10));
+        return new InspectionLimits(64, 131_072, Duration.ofSeconds(10));
     }
 }

@@ -12,7 +12,7 @@ public interface ContentInspector {
      * Inspects the supplied segments within the request's limits and shared deadline.
      *
      * <p>A {@link InspectionResult.Status#COMPLETED} result must include every request segment ID
-     * in {@link InspectionResult#inspectedSegmentIds()}, even when no findings were produced.
+     * in {@link InspectionResult#completedSegmentIds()}, even when no findings were produced.
      * Failed results must preserve fully inspected segment IDs and findings collected before
      * the failure, including evidence from an incompletely inspected segment.
      *
@@ -21,13 +21,13 @@ public interface ContentInspector {
      */
     InspectionResult inspect(InspectionRequest request);
 
-    /** Stable diagnostic identifier, unique within an inspection service. */
-    default String providerId() {
+    /** Stable, payload-free instance identifier, unique within a service; not a model or protocol ID. */
+    default String inspectorId() {
         return "custom";
     }
 
-    /** Conservative default for custom implementations whose execution boundary is unknown. */
-    default boolean requiresProtectedContent() {
+    /** Requires the configured privacy transformation to have run; custom implementations default to true. */
+    default boolean requiresPrivacyProcessedContent() {
         return true;
     }
 }

@@ -5,12 +5,14 @@ import ai.onnxruntime.OrtSession;
 import ai.onnxruntime.OrtException;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.InputStream;
@@ -78,25 +80,24 @@ class OnnxContentInspectorTest {
         }
     }
 
-    private InspectionRequest request(String text, int chunks) {
+    private InspectionRequest request(String text) {
         return new InspectionRequest(
                 List.of(
                         new ContentSegment(
                                 "s1",
-                                ContentSegment.Source.UNKNOWN,
                                 ContentSegment.Role.USER,
-                                ContentSegment.Representation.RAW,
+                                ContentSegment.PrivacyProcessingStatus.UNPROCESSED,
                                 text)),
-                new InspectionLimits(4, 131072, chunks, Duration.ofSeconds(10)));
+                new InspectionLimits(4, 131072, Duration.ofSeconds(10)));
     }
 
     @Test
     void realOnnxAndTokenizerClassifyBothFixtureLabels() throws Exception {
         try (OnnxContentInspector inspector = inspector()) {
-            InspectionResult benign = inspector.inspect(request("hello world", 16));
+            InspectionResult benign = inspector.inspect(request("hello world"));
             assertThat(benign.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(benign.findings()).isEmpty();
-            InspectionResult malicious = inspector.inspect(request("hello attack", 16));
+            InspectionResult malicious = inspector.inspect(request("hello attack"));
             assertThat(malicious.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(malicious.findings())
                     .singleElement()
@@ -112,19 +113,21 @@ class OnnxContentInspectorTest {
     @Test
     void tailBeyond512TokensIsNotSilentlyTruncated() throws Exception {
         try (OnnxContentInspector inspector = inspector()) {
-            InspectionResult result = inspector.inspect(request("hello ".repeat(1100) + "attack", 16));
+            InspectionResult result = inspector.inspect(request("hello ".repeat(1100) + "attack"));
             assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
-            assertThat(result.inspectedSegmentIds()).containsExactly("s1");
+            assertThat(result.completedSegmentIds()).containsExactly("s1");
             assertThat(result.findings()).isNotEmpty();
         }
     }
 
     @Test
     void exceedingWindowBudgetFailsWithoutClaimingCompleteCoverage() throws Exception {
-        try (OnnxContentInspector inspector = inspector()) {
-            InspectionResult result = inspector.inspect(request("hello ".repeat(1100) + "attack", 1));
-            assertThat(result.failure()).isEqualTo(InspectionFailure.LIMIT_EXCEEDED);
-            assertThat(result.inspectedSegmentIds()).isEmpty();
+        Artifacts artifacts = config();
+        try (OnnxContentInspector inspector = new OnnxContentInspector(
+                new OnnxInspectionConfig(artifacts.model(), 2, 1), new PromptGuard2Model(artifacts.tokenizer()))) {
+            InspectionResult result = inspector.inspect(request("hello ".repeat(1100) + "attack"));
+            assertThat(result.failure()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED);
+            assertThat(result.completedSegmentIds()).isEmpty();
         }
     }
 
@@ -133,8 +136,8 @@ class OnnxContentInspectorTest {
         OnnxContentInspector inspector = inspector();
         inspector.close();
         inspector.close();
-        assertThat(inspector.inspect(request("hello", 16)).failure())
-                .isEqualTo(InspectionFailure.CONFIGURATION);
+        assertThat(inspector.inspect(request("hello")).failure())
+                .isEqualTo(InspectionFailureCode.CONFIGURATION);
     }
 
     @Test
@@ -142,8 +145,7 @@ class OnnxContentInspectorTest {
         try (OnnxContentInspector inspector = inspector()) {
             try {
                 Thread.currentThread().interrupt();
-                assertThatThrownBy(() -> inspector.inspect(request("hello", 16)))
-                        .hasMessageContaining("CANCELLED");
+                assertThat(inspector.inspect(request("hello")).failure()).isEqualTo(InspectionFailureCode.CANCELLED);
                 assertThat(Thread.currentThread().isInterrupted()).isTrue();
             } finally {
                 Thread.interrupted();
@@ -163,7 +165,7 @@ class OnnxContentInspectorTest {
         try (OnnxContentInspector inspector = new OnnxContentInspector(
                 OnnxInspectionConfig.defaults(fixture("inspection-int32")),
                 new ProtectAiDebertaV2Model(artifacts.tokenizer()))) {
-            InspectionResult result = inspector.inspect(request("hello attack", 1));
+            InspectionResult result = inspector.inspect(request("hello attack"));
             assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(result.findings()).singleElement().satisfies(finding ->
                     assertThat(finding.category()).isEqualTo(InspectionFinding.Category.PROMPT_INJECTION));
@@ -188,10 +190,10 @@ class OnnxContentInspectorTest {
         try (OnnxContentInspector inspector = new OnnxContentInspector(
                 OnnxInspectionConfig.defaults(artifacts.model()), model)) {
             assertThat(model.encode("hello", 1).get(0).get("input_ids")).hasSize(8192).endsWith(7, 7);
-            InspectionResult result = inspector.inspect(request("hello ".repeat(6000) + "attack", 1));
+            InspectionResult result = inspector.inspect(request("hello ".repeat(6000) + "attack"));
             assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(result.findings()).hasSize(1);
-            assertThat(result.inspectedSegmentIds()).containsExactly("s1");
+            assertThat(result.completedSegmentIds()).containsExactly("s1");
         }
     }
 
@@ -205,7 +207,7 @@ class OnnxContentInspectorTest {
                         new HuggingFaceSequenceClassifier.Label(2, InspectionFinding.Category.PROMPT_LEAKING, "C")), 0.5);
         try (OnnxContentInspector inspector = new OnnxContentInspector(
                 OnnxInspectionConfig.defaults(fixture("inspection-multilabel")), model)) {
-            InspectionResult result = inspector.inspect(request("hello attack", 1));
+            InspectionResult result = inspector.inspect(request("hello attack"));
             assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(result.findings()).extracting(InspectionFinding::code).containsExactly("A", "B");
         }
@@ -220,8 +222,9 @@ class OnnxContentInspectorTest {
                 .isInstanceOf(InspectionException.class).hasMessageContaining("CONFIGURATION");
     }
 
-    @Test
-    void laterWindowFailureKeepsEarlierEvidenceAndOnlyFullyCoveredSegments() throws Exception {
+    @ParameterizedTest
+    @EnumSource(value = InspectionFailureCode.class, names = {"MODEL_ERROR", "CANCELLED"})
+    void laterWindowFailureKeepsEarlierEvidenceAndOnlyFullyCoveredSegments(InspectionFailureCode failure) throws Exception {
         Artifacts artifacts = config();
         OnnxInspectionModel model = new HuggingFaceSequenceClassifier("failure-fixture", artifacts.tokenizer(),
                 512, 64, 2, HuggingFaceSequenceClassifier.Activation.SOFTMAX,
@@ -231,23 +234,30 @@ class OnnxContentInspectorTest {
             @Override
             public List<InspectionFinding> decode(String segmentId, OrtSession.Result outputs) throws OrtException {
                 if (++runs == 3) {
-                    throw new InspectionException(InspectionFailure.MODEL_ERROR);
+                    if (failure == InspectionFailureCode.CANCELLED) {
+                        Thread.currentThread().interrupt();
+                    }
+                    throw new InspectionException(failure);
                 }
                 return super.decode(segmentId, outputs);
             }
         };
         InspectionRequest request = new InspectionRequest(List.of(
-                new ContentSegment("complete", ContentSegment.Source.USER, ContentSegment.Role.USER,
-                        ContentSegment.Representation.RAW, "hello"),
-                new ContentSegment("partial", ContentSegment.Source.USER, ContentSegment.Role.USER,
-                        ContentSegment.Representation.RAW, "attack ".repeat(700))),
-                new InspectionLimits(4, 131072, 16, Duration.ofSeconds(10)));
+                new ContentSegment("complete", ContentSegment.Role.USER,
+                        ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "hello"),
+                new ContentSegment("partial", ContentSegment.Role.USER,
+                        ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "attack ".repeat(700))),
+                new InspectionLimits(4, 131072, Duration.ofSeconds(10)));
         try (OnnxContentInspector inspector = new OnnxContentInspector(
-                OnnxInspectionConfig.defaults(artifacts.model()), model)) {
+                "local-guard", OnnxInspectionConfig.defaults(artifacts.model()), model)) {
+            assertThat(inspector.inspectorId()).isEqualTo("local-guard");
             InspectionResult result = inspector.inspect(request);
-            assertThat(result.failure()).isEqualTo(InspectionFailure.MODEL_ERROR);
-            assertThat(result.inspectedSegmentIds()).containsExactly("complete");
+            assertThat(result.failure()).isEqualTo(failure);
+            assertThat(result.completedSegmentIds()).containsExactly("complete");
             assertThat(result.findings()).extracting(InspectionFinding::segmentId).containsExactly("partial");
+            assertThat(Thread.currentThread().isInterrupted()).isEqualTo(failure == InspectionFailureCode.CANCELLED);
+        } finally {
+            Thread.interrupted();
         }
     }
 

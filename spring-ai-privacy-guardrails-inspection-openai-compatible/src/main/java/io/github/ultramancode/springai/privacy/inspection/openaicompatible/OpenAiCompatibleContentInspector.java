@@ -3,7 +3,7 @@ package io.github.ultramancode.springai.privacy.inspection.openaicompatible;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
@@ -36,11 +36,13 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
                     .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                     .build();
     private final OpenAiCompatibleInspectionConfig config;
+    private final String inspectorId;
     private final GuardModelProtocol protocol;
     private final HttpClient client;
 
     private OpenAiCompatibleContentInspector(
-            OpenAiCompatibleInspectionConfig config, GuardModelProtocol protocol) {
+            String inspectorId, OpenAiCompatibleInspectionConfig config, GuardModelProtocol protocol) {
+        this.inspectorId = ContentSegment.requireIdentifier(inspectorId);
         this.config = Objects.requireNonNull(config, "config");
         this.protocol = protocol;
         this.client =
@@ -51,36 +53,45 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
     }
 
     public static OpenAiCompatibleContentInspector kanana(OpenAiCompatibleInspectionConfig config) {
-        return new OpenAiCompatibleContentInspector(config, new KananaPromptProtocol());
+        return kanana("kanana-prompt", config);
+    }
+
+    /** Configures a distinct inspector instance, independent of the model or endpoint name. */
+    public static OpenAiCompatibleContentInspector kanana(
+            String inspectorId, OpenAiCompatibleInspectionConfig config) {
+        return new OpenAiCompatibleContentInspector(inspectorId, config, new KananaPromptProtocol());
     }
 
     /** Explicit strict JSON inspection protocol for instruction models. */
     public static OpenAiCompatibleContentInspector jsonGuard(
             OpenAiCompatibleInspectionConfig config) {
-        return new OpenAiCompatibleContentInspector(config, new JsonGuardProtocol());
+        return jsonGuard("json-guard", config);
+    }
+
+    /** Configures a distinct inspector instance using the strict JSON protocol. */
+    public static OpenAiCompatibleContentInspector jsonGuard(
+            String inspectorId, OpenAiCompatibleInspectionConfig config) {
+        return new OpenAiCompatibleContentInspector(inspectorId, config, new JsonGuardProtocol());
     }
 
     @Override
-    public String providerId() {
-        return protocol.id();
+    public String inspectorId() {
+        return inspectorId;
     }
 
     @Override
-    public boolean requiresProtectedContent() {
-        return !config.allowRawContent();
+    public boolean requiresPrivacyProcessedContent() {
+        return !config.allowUnprocessedContent();
     }
 
     @Override
     public InspectionResult inspect(InspectionRequest request) {
-        if (requiresProtectedContent()) {
-            request.requireProtected();
+        if (requiresPrivacyProcessedContent()) {
+            request.requirePrivacyProcessed();
         }
-        Set<String> inspectedSegmentIds = new HashSet<>();
+        Set<String> completedSegmentIds = new HashSet<>();
         List<InspectionFinding> findings = new ArrayList<>();
         try {
-            if (request.segments().size() > request.limits().maxChunks()) {
-                throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
-            }
             for (ContentSegment segment : request.segments()) {
                 request.checkActive();
                 String output = requestClassification(request, segment.text());
@@ -88,18 +99,16 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
                 if (finding != null) {
                     findings.add(finding);
                 }
-                inspectedSegmentIds.add(segment.id());
+                completedSegmentIds.add(segment.id());
             }
             request.checkActive();
-            return InspectionResult.completed(inspectedSegmentIds, findings);
+            return InspectionResult.completed(completedSegmentIds, findings);
         } catch (InspectionException ex) {
-            if (ex.failure() == InspectionFailure.CANCELLED) {
-                throw ex;
-            }
-            return InspectionResult.failed(ex.failure(), inspectedSegmentIds, findings);
+            return InspectionResult.failed(ex.failure(), completedSegmentIds, findings);
         } catch (RuntimeException ex) {
-            InspectionRequest.checkInterrupted();
-            return InspectionResult.failed(InspectionFailure.INVALID_RESPONSE, inspectedSegmentIds, findings);
+            return InspectionResult.failed(Thread.currentThread().isInterrupted()
+                    ? InspectionFailureCode.CANCELLED : InspectionFailureCode.INVALID_RESPONSE,
+                    completedSegmentIds, findings);
         }
     }
 
@@ -142,10 +151,10 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
         } catch (InterruptedException ex) {
             pending.cancel(true);
             Thread.currentThread().interrupt();
-            throw new InspectionException(InspectionFailure.CANCELLED);
+            throw new InspectionException(InspectionFailureCode.CANCELLED);
         } catch (TimeoutException ex) {
             pending.cancel(true);
-            throw new InspectionException(InspectionFailure.TIMEOUT);
+            throw new InspectionException(InspectionFailureCode.TIMEOUT);
         } catch (ExecutionException ex) {
             pending.cancel(true);
             Throwable cause = ex.getCause();
@@ -154,10 +163,10 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
                     throw new InspectionException(failure.failure());
                 }
                 if (cause instanceof HttpTimeoutException) {
-                    throw new InspectionException(InspectionFailure.TIMEOUT);
+                    throw new InspectionException(InspectionFailureCode.TIMEOUT);
                 }
             }
-            throw new InspectionException(InspectionFailure.TRANSPORT_ERROR);
+            throw new InspectionException(InspectionFailureCode.TRANSPORT_ERROR);
         } catch (RuntimeException ex) {
             pending.cancel(true);
             throw ex;
@@ -166,7 +175,7 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
 
     private String extractClassificationOutput(HttpResponse<byte[]> response) {
         if (response.statusCode() != 200) {
-            throw new InspectionException(InspectionFailure.HTTP_ERROR);
+            throw new InspectionException(InspectionFailureCode.HTTP_ERROR);
         }
         JsonNode root = JSON.readTree(response.body());
         JsonNode choices = root == null ? null : root.get("choices");
@@ -195,6 +204,6 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
     }
 
     private static InspectionException invalidResponse() {
-        return new InspectionException(InspectionFailure.INVALID_RESPONSE);
+        return new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
     }
 }

@@ -1,7 +1,7 @@
 package io.github.ultramancode.springai.privacy.inspection.openaicompatible;
 
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.DeserializationFeature;
@@ -26,11 +26,6 @@ final class JsonGuardProtocol implements GuardModelProtocol {
             Return exactly one JSON object: {"verdict":"SAFE"} or {"verdict":"UNSAFE"}.
             Do not add explanations or markdown.
             """;
-
-    @Override
-    public String id() {
-        return "json-guard";
-    }
 
     @Override
     public boolean acceptsLengthFinish() {
@@ -58,7 +53,7 @@ final class JsonGuardProtocol implements GuardModelProtocol {
                     || !node.isObject()
                     || node.size() != 1
                     || !node.path("verdict").isString()) {
-                throw new InspectionException(InspectionFailure.INVALID_RESPONSE);
+                throw new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
             }
             return switch (node.path("verdict").asString()) {
                 case "SAFE" -> null;
@@ -68,10 +63,10 @@ final class JsonGuardProtocol implements GuardModelProtocol {
                                 InspectionFinding.Category.PROMPT_ATTACK,
                                 "UNSAFE",
                                 null);
-                default -> throw new InspectionException(InspectionFailure.INVALID_RESPONSE);
+                default -> throw new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
             };
         } catch (RuntimeException ex) {
-            throw new InspectionException(InspectionFailure.INVALID_RESPONSE);
+            throw new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
         }
     }
 }

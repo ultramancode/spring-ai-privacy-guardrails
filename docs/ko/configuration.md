@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 1c7caae39ccd93080bd9e278bd103471a9d7dbe90eba899b14724336c6d121de -->
+<!-- i18n-source-sha256: ebd32c62838f1334f7337384bde05ea489a68e946917b315e9492910a3a31de3 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.

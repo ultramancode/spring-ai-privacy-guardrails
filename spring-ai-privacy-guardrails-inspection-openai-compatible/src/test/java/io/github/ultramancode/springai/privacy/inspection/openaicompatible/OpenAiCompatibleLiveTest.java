@@ -42,16 +42,15 @@ class OpenAiCompatibleLiveTest {
                             List.of(
                                     new ContentSegment(
                                             "synthetic",
-                                            ContentSegment.Source.USER,
                                             ContentSegment.Role.USER,
-                                            ContentSegment.Representation.RAW,
+                                            ContentSegment.PrivacyProcessingStatus.UNPROCESSED,
                                             text)),
-                            new InspectionLimits(4, 4096, 4, Duration.ofSeconds(90)));
+                            new InspectionLimits(4, 4096, Duration.ofSeconds(90)));
             InspectionResult result = inspector.inspect(request);
             assertThat(result.status())
                     .as("Real model protocol completion")
                     .isEqualTo(InspectionResult.Status.COMPLETED);
-            assertThat(result.inspectedSegmentIds()).containsExactly("synthetic");
+            assertThat(result.completedSegmentIds()).containsExactly("synthetic");
         }
     }
 }

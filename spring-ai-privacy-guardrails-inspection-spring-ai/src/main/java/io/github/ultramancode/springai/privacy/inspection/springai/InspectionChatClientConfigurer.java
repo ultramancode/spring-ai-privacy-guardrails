@@ -3,13 +3,11 @@ package io.github.ultramancode.springai.privacy.inspection.springai;
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.Objects;
 import java.util.WeakHashMap;
-import java.util.function.Consumer;
 
 /**
  * Client-scoped final text inspection. Use {@link ModelRequestBoundaryConfigurer#compose}
@@ -20,26 +18,27 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
 
     private final InspectionService service;
     private final InspectionLimits limits;
-    private final ContentRepresentationResolver representationResolver;
-    private final Consumer<InspectionReport> observer;
+    private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
+    private final InspectionObserver observer;
     private final WeakHashMap<ChatClient.Builder, Boolean> configuredBuilders = new WeakHashMap<>();
 
     public InspectionChatClientConfigurer(InspectionService service) {
         this(
                 service,
                 InspectionLimits.defaults(),
-                ContentRepresentationResolver.asReceived(),
+                PrivacyProcessingStatusResolver.unknown(),
                 ignored -> {});
     }
 
     public InspectionChatClientConfigurer(
             InspectionService service,
             InspectionLimits limits,
-            ContentRepresentationResolver representationResolver,
-            Consumer<InspectionReport> observer) {
+            PrivacyProcessingStatusResolver privacyProcessingStatusResolver,
+            InspectionObserver observer) {
         this.service = Objects.requireNonNull(service, "service");
         this.limits = Objects.requireNonNull(limits, "limits");
-        this.representationResolver = Objects.requireNonNull(representationResolver, "representationResolver");
+        this.privacyProcessingStatusResolver =
+                Objects.requireNonNull(privacyProcessingStatusResolver, "privacyProcessingStatusResolver");
         this.observer = Objects.requireNonNull(observer, "observer");
     }
 
@@ -54,7 +53,7 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
             if (configuredBuilders.containsKey(builder)) {
                 throw new IllegalStateException("Builder already configured for inspection");
             }
-            boundary.inspection(new ContentInspectionStage(service, limits, representationResolver, observer));
+            boundary.inspection(new ContentInspectionStage(service, limits, privacyProcessingStatusResolver, observer));
             configuredBuilders.put(builder, true);
         }
     }

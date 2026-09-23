@@ -19,17 +19,14 @@ public class InspectionProperties {
     /** Maximum combined text length in UTF-16 code units per model-bound request. */
     private int maxCharacters = 131_072;
 
-    /** Maximum ONNX windows or remote segment requests per inspector and inspection request. */
-    private int maxChunks = 256;
-
     /** Timeout shared by all inspectors for one model-bound request. */
     private Duration timeout = Duration.ofSeconds(10);
 
     /** Policy applied to operational inspection failures. */
-    private InspectionFailurePolicy failurePolicy = InspectionFailurePolicy.BLOCK;
+    private InspectionFailurePolicy failurePolicy = InspectionFailurePolicy.FAIL_CLOSED;
 
     public InspectionLimits limits() {
-        return new InspectionLimits(maxSegments, maxCharacters, maxChunks, timeout);
+        return new InspectionLimits(maxSegments, maxCharacters, timeout);
     }
 
     public boolean isEnabled() {
@@ -54,14 +51,6 @@ public class InspectionProperties {
 
     public void setMaxCharacters(int value) {
         maxCharacters = value;
-    }
-
-    public int getMaxChunks() {
-        return maxChunks;
-    }
-
-    public void setMaxChunks(int value) {
-        maxChunks = value;
     }
 
     public Duration getTimeout() {

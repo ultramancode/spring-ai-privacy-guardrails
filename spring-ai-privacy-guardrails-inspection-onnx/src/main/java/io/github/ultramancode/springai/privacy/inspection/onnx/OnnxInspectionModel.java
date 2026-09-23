@@ -15,7 +15,8 @@ import java.util.Map;
  * An inspector owns its adapter and serializes validation, encoding, decoding and close.
  */
 public interface OnnxInspectionModel extends AutoCloseable {
-    String providerId();
+    /** Default diagnostic ID for this model adapter; an inspector may use a distinct instance ID. */
+    String modelId();
 
     /** Checks the provisioned graph before the first request; reject incompatible exports. */
     void validate(Map<String, NodeInfo> inputs, Map<String, NodeInfo> outputs);

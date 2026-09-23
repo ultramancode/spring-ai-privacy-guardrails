@@ -2,7 +2,10 @@ package io.github.ultramancode.springai.privacy.inspection.core;
 
 import java.util.Objects;
 
-/** Provider-specific evidence normalized to a category; no matching text is retained. */
+/**
+ * Inspector-specific evidence normalized to a category; no matching text is retained.
+ * A non-null score is local to the inspector/model and is not comparable across models.
+ */
 public record InspectionFinding(String segmentId, Category category, String code, Double score) {
 
     public enum Category {

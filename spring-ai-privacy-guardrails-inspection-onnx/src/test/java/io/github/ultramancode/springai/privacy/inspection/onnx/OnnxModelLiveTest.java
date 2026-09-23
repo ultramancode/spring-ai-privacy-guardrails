@@ -58,12 +58,12 @@ class OnnxModelLiveTest {
                 List<Map<String, long[]>> windows = model.encode(input, 16);
                 assertThat(windows).as(name + " " + prefix).hasSize(Integer.parseInt(reference.getProperty(prefix + "windows")));
                 InspectionRequest request = new InspectionRequest(List.of(new ContentSegment("synthetic",
-                        ContentSegment.Source.USER, ContentSegment.Role.USER, ContentSegment.Representation.RAW, input)),
-                        new InspectionLimits(4, 131072, 16, Duration.ofMinutes(2)));
+                        ContentSegment.Role.USER, ContentSegment.PrivacyProcessingStatus.UNPROCESSED, input)),
+                        new InspectionLimits(4, 131072, Duration.ofMinutes(2)));
                 InspectionResult result = inspector.inspect(request);
                 assertThat(result.status()).as(name + " " + prefix + " failure=" + result.failure())
                         .isEqualTo(InspectionResult.Status.COMPLETED);
-                assertThat(result.inspectedSegmentIds()).containsExactly("synthetic");
+                assertThat(result.completedSegmentIds()).containsExactly("synthetic");
                 int findingIndex = 0;
                 for (int window = 0; window < windows.size(); window++) {
                     String windowPrefix = prefix + "window." + window + ".";

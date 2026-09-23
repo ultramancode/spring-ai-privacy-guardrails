@@ -1,8 +1,9 @@
 package io.github.ultramancode.springai.privacy.inspection.springai;
 
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
+import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailurePolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientAttributes;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -44,6 +46,8 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -188,6 +192,53 @@ class InspectionChatClientIntegrationTest {
         assertThat(model.calls).hasValue(0);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void preservesMessageOrderAndSeparatesEachToolResponseWithoutGroupingByRole(boolean streaming) {
+        AtomicReference<InspectionRequest> inspected = new AtomicReference<>();
+        ContentInspector inspector = new ContentInspector() {
+            public boolean requiresPrivacyProcessedContent() { return false; }
+
+            public InspectionResult inspect(InspectionRequest request) {
+                inspected.set(request);
+                return InspectionResult.completed(
+                        request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()),
+                        List.of());
+            }
+        };
+        RecordingModel model = new RecordingModel();
+        ChatClient client = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)))
+                .configure(ChatClient.builder(model)).build();
+        Prompt prompt = new Prompt(List.of(
+                new SystemMessage("instructions"),
+                new UserMessage("first user text"),
+                new UserMessage("second user text"),
+                new AssistantMessage("assistant text"),
+                ToolResponseMessage.builder().responses(List.of(
+                        new ToolResponseMessage.ToolResponse("call-1", "firstTool", "first tool result"),
+                        new ToolResponseMessage.ToolResponse("call-2", "secondTool", "second tool result")))
+                        .build()));
+
+        if (streaming) {
+            StepVerifier.create(client.prompt(prompt).stream().content())
+                    .expectNext("done").verifyComplete();
+        } else {
+            assertThat(client.prompt(prompt).call().content()).isEqualTo("done");
+        }
+
+        List<ContentSegment> segments = inspected.get().segments();
+        assertThat(segments).extracting(ContentSegment::role).containsExactly(
+                ContentSegment.Role.SYSTEM, ContentSegment.Role.USER, ContentSegment.Role.USER,
+                ContentSegment.Role.ASSISTANT, ContentSegment.Role.TOOL, ContentSegment.Role.TOOL);
+        assertThat(segments).extracting(ContentSegment::text).containsExactly(
+                "instructions", "first user text", "second user text", "assistant text",
+                "first tool result", "second tool result");
+        assertThat(segments).extracting(ContentSegment::id).doesNotHaveDuplicates();
+        assertThat(segments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
+                .isEqualTo(ContentSegment.PrivacyProcessingStatus.UNKNOWN));
+        assertThat(model.calls).hasValue(1);
+    }
+
     @ParameterizedTest(name = "{0}, streaming={2}")
     @MethodSource("unsupportedMessages")
     void rejectsUnsupportedContentBeforeBusinessModel(String description, Message message, boolean streaming) {
@@ -196,7 +247,7 @@ class InspectionChatClientIntegrationTest {
         if (streaming) {
             StepVerifier.create(request.stream().content())
                     .expectErrorMatches(error -> error instanceof InspectionException failure
-                            && failure.failure() == InspectionFailure.UNSUPPORTED_CONTENT)
+                            && failure.failure() == InspectionFailureCode.UNSUPPORTED_CONTENT)
                     .verify(Duration.ofSeconds(5));
         } else {
             assertThatThrownBy(() -> request.call().content()).hasMessageContaining("UNSUPPORTED_CONTENT");
@@ -331,7 +382,7 @@ class InspectionChatClientIntegrationTest {
         CountDownLatch interrupted = new CountDownLatch(1);
         ContentInspector blocking =
                 new ContentInspector() {
-                    public boolean requiresProtectedContent() {
+                    public boolean requiresPrivacyProcessedContent() {
                         return false;
                     }
 
@@ -344,7 +395,7 @@ class InspectionChatClientIntegrationTest {
                             interrupted.countDown();
                         }
                         InspectionRequest.checkInterrupted();
-                        return InspectionResult.failed(InspectionFailure.TIMEOUT);
+                        return InspectionResult.failed(InspectionFailureCode.TIMEOUT);
                     }
                 };
         RecordingModel model = new RecordingModel();

@@ -5,9 +5,11 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionDecision;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailurePolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
@@ -82,25 +84,24 @@ class OpenAiCompatibleContentInspectorTest {
                                 + "/v1/chat/completions");
     }
 
-    private OpenAiCompatibleInspectionConfig config(boolean raw, Duration timeout, int bytes) {
+    private OpenAiCompatibleInspectionConfig config(boolean allowUnprocessedContent, Duration timeout, int bytes) {
         return new OpenAiCompatibleInspectionConfig(
-                endpoint, "test-model", "test-key", timeout, bytes, raw);
+                endpoint, "test-model", "test-key", timeout, bytes, allowUnprocessedContent);
     }
 
-    private InspectionRequest request(ContentSegment.Representation form, String text) {
+    private InspectionRequest request(ContentSegment.PrivacyProcessingStatus status, String text) {
         return new InspectionRequest(
                 List.of(
                         new ContentSegment(
                                 "s1",
-                                ContentSegment.Source.USER,
                                 ContentSegment.Role.USER,
-                                form,
+                                status,
                                 text)),
                 InspectionLimits.defaults());
     }
 
-    private InspectionRequest protectedRequest() {
-        return request(ContentSegment.Representation.PRIVACY_PROTECTED, "customer [PII:1]");
+    private InspectionRequest privacyProcessedRequest() {
+        return request(ContentSegment.PrivacyProcessingStatus.PROCESSED, "customer [PII:1]");
     }
 
     private static String envelope(String content) {
@@ -126,7 +127,7 @@ class OpenAiCompatibleContentInspectorTest {
     @Test
     void strictKananaMappingAndDedicatedHttpEnvelope() throws Exception {
         OpenAiCompatibleContentInspector inspector = start("<SAFE>");
-        assertThat(inspector.inspect(protectedRequest()).findings()).isEmpty();
+        assertThat(inspector.inspect(privacyProcessedRequest()).findings()).isEmpty();
         JsonNode sent = JSON.readTree(received.get());
         assertThat(sent.path("messages").size()).isEqualTo(1);
         assertThat(sent.path("messages").get(0).path("role").asString()).isEqualTo("user");
@@ -135,44 +136,44 @@ class OpenAiCompatibleContentInspectorTest {
         assertThat(sent.path("add_generation_prompt").asBoolean()).isFalse();
         assertThat(sent.path("skip_special_tokens").asBoolean()).isFalse();
         response.set(envelope("<UNSAFE-A1>"));
-        assertThat(inspector.inspect(protectedRequest()).findings())
+        assertThat(inspector.inspect(privacyProcessedRequest()).findings())
                 .singleElement()
                 .extracting(InspectionFinding::category)
                 .isEqualTo(InspectionFinding.Category.PROMPT_INJECTION);
         response.set(envelope("<UNSAFE-A2>"));
-        assertThat(inspector.inspect(protectedRequest()).findings())
+        assertThat(inspector.inspect(privacyProcessedRequest()).findings())
                 .singleElement()
                 .extracting(InspectionFinding::category)
                 .isEqualTo(InspectionFinding.Category.PROMPT_LEAKING);
     }
 
     @Test
-    void unprotectedContentNeverLeavesByDefault() throws Exception {
+    void unknownOrUnprocessedContentNeverLeavesByDefault() throws Exception {
         OpenAiCompatibleContentInspector inspector = start("<SAFE>");
         assertThatThrownBy(
                         () ->
                                 inspector.inspect(
-                                        request(ContentSegment.Representation.RAW, "raw secret")))
+                                        request(ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "raw secret")))
                 .hasMessageContaining("DISCLOSURE_DENIED");
         assertThatThrownBy(
                         () ->
                                 inspector.inspect(
                                         request(
-                                                ContentSegment.Representation.AS_RECEIVED,
+                                                ContentSegment.PrivacyProcessingStatus.UNKNOWN,
                                                 "raw secret")))
                 .hasMessageContaining("DISCLOSURE_DENIED");
         assertThat(calls).hasValue(0);
     }
 
     @Test
-    void explicitlyAuthorizedRawContentCanBeSent() throws Exception {
+    void explicitlyAuthorizedUnprocessedContentCanBeSent() throws Exception {
         start("<SAFE>");
         OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.kanana(config(true, Duration.ofSeconds(2), 4096));
         assertThat(
                         inspector
                                 .inspect(
-                                        request(ContentSegment.Representation.RAW, "synthetic raw"))
+                                        request(ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "synthetic raw"))
                                 .status())
                 .isEqualTo(InspectionResult.Status.COMPLETED);
         assertThat(received.get()).contains("synthetic raw");
@@ -192,7 +193,7 @@ class OpenAiCompatibleContentInspectorTest {
                         envelope("<SAFE>") + "{}",
                         "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"<SAFE>\",\"tool_calls\":[{}]}}]}")) {
             response.set(body);
-            InspectionReport report = new InspectionService(List.of(inspector)).inspect(protectedRequest());
+            InspectionReport report = new InspectionService(List.of(inspector)).inspect(privacyProcessedRequest());
             assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
             assertThat(report.outcomes().get(0).result().status())
                     .isEqualTo(InspectionResult.Status.FAILED);
@@ -205,13 +206,13 @@ class OpenAiCompatibleContentInspectorTest {
         OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofSeconds(2), 128));
         response.set("secret".repeat(300));
-        InspectionResult result = inspector.inspect(protectedRequest());
-        assertThat(result.failure()).isEqualTo(InspectionFailure.LIMIT_EXCEEDED);
+        InspectionResult result = inspector.inspect(privacyProcessedRequest());
+        assertThat(result.failure()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED);
         assertThat(result.toString()).doesNotContain("secret");
         status = 503;
         response.set("raw failure details");
-        assertThat(inspector.inspect(protectedRequest()).failure())
-                .isEqualTo(InspectionFailure.HTTP_ERROR);
+        assertThat(inspector.inspect(privacyProcessedRequest()).failure())
+                .isEqualTo(InspectionFailureCode.HTTP_ERROR);
     }
 
     @Test
@@ -222,8 +223,8 @@ class OpenAiCompatibleContentInspectorTest {
                     Map.of("role", "assistant", "content", "<SAFE>", "tool_calls", malformedToolCalls);
             Map<String, Object> choice = Map.of("finish_reason", "stop", "message", message);
             response.set(JSON.writeValueAsString(Map.of("choices", List.of(choice))));
-            assertThat(inspector.inspect(protectedRequest()).failure())
-                    .isEqualTo(InspectionFailure.INVALID_RESPONSE);
+            assertThat(inspector.inspect(privacyProcessedRequest()).failure())
+                    .isEqualTo(InspectionFailureCode.INVALID_RESPONSE);
         }
     }
 
@@ -233,8 +234,8 @@ class OpenAiCompatibleContentInspectorTest {
         delayMillis = 500;
         OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofMillis(50), 4096));
-        assertThat(inspector.inspect(protectedRequest()).failure())
-                .isEqualTo(InspectionFailure.TIMEOUT);
+        assertThat(inspector.inspect(privacyProcessedRequest()).failure())
+                .isEqualTo(InspectionFailureCode.TIMEOUT);
     }
 
     @Test
@@ -243,6 +244,12 @@ class OpenAiCompatibleContentInspectorTest {
         CountDownLatch releaseBody = new CountDownLatch(1);
         startServer(exchange -> {
             try {
+                if (calls.get() == 1) {
+                    byte[] bytes = envelope("<UNSAFE-A1>").getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, bytes.length);
+                    exchange.getResponseBody().write(bytes);
+                    return;
+                }
                 byte[] bytes = envelope("<SAFE>").getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, bytes.length);
@@ -258,16 +265,18 @@ class OpenAiCompatibleContentInspectorTest {
         });
         OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofSeconds(10), 4096));
+        InspectionService service = new InspectionService(List.of(inspector),
+                (id, findings) -> InspectionDecision.ALLOW, InspectionFailurePolicy.FAIL_OPEN);
         CountDownLatch done = new CountDownLatch(1);
-        AtomicReference<InspectionFailure> failure = new AtomicReference<>();
+        AtomicReference<InspectionException> failure = new AtomicReference<>();
         AtomicBoolean interruptRestored = new AtomicBoolean();
         Thread worker =
                 new Thread(
                         () -> {
                             try {
-                                inspector.inspect(protectedRequest());
+                                service.inspect(twoSegments());
                             } catch (InspectionException ex) {
-                                failure.set(ex.failure());
+                                failure.set(ex);
                                 interruptRestored.set(Thread.currentThread().isInterrupted());
                             } finally {
                                 done.countDown();
@@ -278,9 +287,13 @@ class OpenAiCompatibleContentInspectorTest {
             assertThat(partialBodyFlushed.await(5, TimeUnit.SECONDS)).isTrue();
             worker.interrupt();
             assertThat(done.await(2, TimeUnit.SECONDS)).isTrue();
-            assertThat(failure.get()).isEqualTo(InspectionFailure.CANCELLED);
+            assertThat(failure.get()).isNotNull();
+            assertThat(failure.get().failure()).isEqualTo(InspectionFailureCode.CANCELLED);
+            InspectionResult partial = failure.get().report().orElseThrow().outcomes().get(0).result();
+            assertThat(partial.completedSegmentIds()).containsExactly("first");
+            assertThat(partial.findings()).extracting(InspectionFinding::segmentId).containsExactly("first");
             assertThat(interruptRestored).isTrue();
-            assertThat(calls).hasValue(1);
+            assertThat(calls).hasValue(2);
         } finally {
             releaseBody.countDown();
             if (worker.isAlive()) {
@@ -295,8 +308,7 @@ class OpenAiCompatibleContentInspectorTest {
         OpenAiCompatibleContentInspector inspector = start("<SAFE>");
         try {
             Thread.currentThread().interrupt();
-            assertThatThrownBy(() -> inspector.inspect(protectedRequest()))
-                    .hasMessageContaining("CANCELLED");
+            assertThat(inspector.inspect(privacyProcessedRequest()).failure()).isEqualTo(InspectionFailureCode.CANCELLED);
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
             assertThat(calls).hasValue(0);
         } finally {
@@ -310,10 +322,10 @@ class OpenAiCompatibleContentInspectorTest {
         OpenAiCompatibleContentInspector inspector =
                 OpenAiCompatibleContentInspector.jsonGuard(
                         config(false, Duration.ofSeconds(2), 4096));
-        assertThat(inspector.inspect(protectedRequest()).status())
+        assertThat(inspector.inspect(privacyProcessedRequest()).status())
                 .isEqualTo(InspectionResult.Status.COMPLETED);
         response.set(envelope("{\"verdict\":\"UNSAFE\"}"));
-        assertThat(inspector.inspect(protectedRequest()).findings()).hasSize(1);
+        assertThat(inspector.inspect(privacyProcessedRequest()).findings()).hasSize(1);
         for (String content :
                 List.of(
                         "{\"verdict\":\"SAFE\",\"reason\":\"extra\"}",
@@ -323,11 +335,11 @@ class OpenAiCompatibleContentInspectorTest {
                         "{\"verdict\":\"SAFE\"} {}",
                         "{\"verdict\":\"UNSAFE\",\"verdict\":\"SAFE\"}")) {
             response.set(envelope(content));
-            assertThat(inspector.inspect(protectedRequest()).status())
+            assertThat(inspector.inspect(privacyProcessedRequest()).status())
                     .isEqualTo(InspectionResult.Status.FAILED);
         }
         response.set(envelope("{\"verdict\":\"SAFE\"}").replace("\"stop\"", "\"length\""));
-        assertThat(inspector.inspect(protectedRequest()).status())
+        assertThat(inspector.inspect(privacyProcessedRequest()).status())
                 .isEqualTo(InspectionResult.Status.FAILED);
     }
 
@@ -336,5 +348,60 @@ class OpenAiCompatibleContentInspectorTest {
         start("<SAFE>");
         assertThat(config(false, Duration.ofSeconds(2), 4096).toString())
                 .doesNotContain("test-key", endpoint.toString());
+    }
+
+    @Test
+    void sameProtocolInstancesHaveDistinctIdentityAndPolicy() throws Exception {
+        start("<UNSAFE-A1>");
+        OpenAiCompatibleInspectionConfig config = config(false, Duration.ofSeconds(2), 4096);
+        InspectionService service = new InspectionService(List.of(
+                OpenAiCompatibleContentInspector.kanana("observe", config),
+                OpenAiCompatibleContentInspector.kanana("enforce", config)),
+                (id, findings) -> "observe".equals(id) || findings.isEmpty()
+                        ? InspectionDecision.ALLOW : InspectionDecision.BLOCK,
+                InspectionFailurePolicy.FAIL_CLOSED);
+
+        InspectionReport report = service.inspect(privacyProcessedRequest());
+
+        assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
+        assertThat(report.outcomes()).extracting(InspectionReport.Outcome::inspectorId)
+                .containsExactly("observe", "enforce");
+        assertThat(report.outcomes()).allSatisfy(outcome -> assertThat(outcome.result().findings()).hasSize(1));
+        assertThat(calls).hasValue(2);
+    }
+
+    @Test
+    void laterHttpFailurePreservesFindingAndCannotFailOpenPastContentBlock() throws Exception {
+        startServer(exchange -> {
+            try {
+                byte[] bytes = (calls.get() == 1 ? envelope("<UNSAFE-A1>") : "{bad json")
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+            } finally {
+                exchange.close();
+            }
+        });
+        var inspector = OpenAiCompatibleContentInspector.kanana(config(false, Duration.ofSeconds(2), 4096));
+        InspectionService service = new InspectionService(List.of(inspector),
+                InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);
+
+        InspectionReport report = service.inspect(twoSegments());
+
+        assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
+        InspectionResult result = report.outcomes().get(0).result();
+        assertThat(result.failure()).isEqualTo(InspectionFailureCode.INVALID_RESPONSE);
+        assertThat(result.completedSegmentIds()).containsExactly("first");
+        assertThat(result.findings()).extracting(InspectionFinding::segmentId).containsExactly("first");
+        assertThat(calls).hasValue(2);
+    }
+
+    private InspectionRequest twoSegments() {
+        return new InspectionRequest(List.of(
+                new ContentSegment("first", ContentSegment.Role.USER,
+                        ContentSegment.PrivacyProcessingStatus.PROCESSED, "synthetic attack"),
+                new ContentSegment("second", ContentSegment.Role.TOOL,
+                        ContentSegment.PrivacyProcessingStatus.PROCESSED, "synthetic tool result")),
+                InspectionLimits.defaults());
     }
 }

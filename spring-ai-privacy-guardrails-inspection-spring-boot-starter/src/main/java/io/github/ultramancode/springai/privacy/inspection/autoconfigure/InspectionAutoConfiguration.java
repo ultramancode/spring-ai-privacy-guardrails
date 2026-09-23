@@ -4,8 +4,9 @@ import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
-import io.github.ultramancode.springai.privacy.inspection.springai.ContentRepresentationResolver;
+import io.github.ultramancode.springai.privacy.inspection.springai.PrivacyProcessingStatusResolver;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -48,26 +49,27 @@ public class InspectionAutoConfiguration {
     InspectionChatClientConfigurer inspectionChatClientConfigurer(
             InspectionService service,
             InspectionProperties properties,
-            ObjectProvider<ContentRepresentationResolver> resolver) {
+            ObjectProvider<PrivacyProcessingStatusResolver> resolver,
+            ObjectProvider<InspectionObserver> observer) {
         return new InspectionChatClientConfigurer(
                 service,
                 properties.limits(),
-                resolver.getIfAvailable(ContentRepresentationResolver::asReceived),
-                ignored -> {});
+                resolver.getIfAvailable(PrivacyProcessingStatusResolver::unknown),
+                observer.getIfAvailable(InspectionObserver::noop));
     }
 
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnBean(name = "privacyModelContentProtection")
     static class PrivacyIntegration {
         @Bean
-        @ConditionalOnMissingBean(ContentRepresentationResolver.class)
-        ContentRepresentationResolver privacyInspectionRepresentationResolver(
+        @ConditionalOnMissingBean(PrivacyProcessingStatusResolver.class)
+        PrivacyProcessingStatusResolver privacyInspectionProcessingStatusResolver(
                 @Qualifier("privacyModelContentProtection")
-                        Predicate<ChatClientRequest> protectedContent) {
+                        Predicate<ChatClientRequest> privacyProcessedMessages) {
             return request ->
-                    protectedContent.test(request)
-                            ? ContentSegment.Representation.PRIVACY_PROTECTED
-                            : ContentSegment.Representation.AS_RECEIVED;
+                    privacyProcessedMessages.test(request)
+                            ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                            : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         }
     }
 }

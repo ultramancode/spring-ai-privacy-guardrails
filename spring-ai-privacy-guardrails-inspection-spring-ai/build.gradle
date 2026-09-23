@@ -5,6 +5,7 @@ dependencies {
     api platform("org.springframework.ai:spring-ai-bom:${providers.gradleProperty('springAiVersion').get()}")
     api 'org.springframework.ai:spring-ai-client-chat'
     testImplementation project(':spring-ai-privacy-guardrails-inspection-rules')
+    testImplementation project(':spring-ai-privacy-guardrails-inspection-openai-compatible')
     testImplementation project(':spring-ai-privacy-guardrails-spring-boot-starter')
     testImplementation 'org.springframework.boot:spring-boot-test'
     testImplementation project(':spring-ai-privacy-guardrails-spring-security-spring-boot-starter')

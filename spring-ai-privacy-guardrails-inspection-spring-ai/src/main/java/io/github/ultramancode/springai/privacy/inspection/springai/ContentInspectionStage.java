@@ -3,7 +3,7 @@ package io.github.ultramancode.springai.privacy.inspection.springai;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionDecision;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
@@ -26,32 +26,43 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
 
     private final InspectionService service;
     private final InspectionLimits limits;
-    private final ContentRepresentationResolver representationResolver;
-    private final Consumer<InspectionReport> observer;
+    private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
+    private final InspectionObserver observer;
 
     ContentInspectionStage(
             InspectionService service,
             InspectionLimits limits,
-            ContentRepresentationResolver representationResolver) {
-        this(service, limits, representationResolver, ignored -> {});
+            PrivacyProcessingStatusResolver privacyProcessingStatusResolver) {
+        this(service, limits, privacyProcessingStatusResolver, ignored -> {});
     }
 
     ContentInspectionStage(
             InspectionService service,
             InspectionLimits limits,
-            ContentRepresentationResolver representationResolver,
-            Consumer<InspectionReport> observer) {
+            PrivacyProcessingStatusResolver privacyProcessingStatusResolver,
+            InspectionObserver observer) {
         this.service = Objects.requireNonNull(service, "service");
         this.limits = Objects.requireNonNull(limits, "limits");
-        this.representationResolver = Objects.requireNonNull(representationResolver, "representationResolver");
+        this.privacyProcessingStatusResolver =
+                Objects.requireNonNull(privacyProcessingStatusResolver, "privacyProcessingStatusResolver");
         this.observer = Objects.requireNonNull(observer, "observer");
     }
 
     @Override
     public void accept(ChatClientRequest request) {
-        InspectionReport report = service.inspect(new InspectionRequest(extractSegments(request), limits));
+        InspectionReport report;
         try {
-            observer.accept(report);
+            report = service.inspect(new InspectionRequest(extractSegments(request), limits));
+        } catch (InspectionException failure) {
+            try {
+                observer.onFailure(failure);
+            } catch (RuntimeException ignored) {
+                /* Observability cannot change enforcement. */
+            }
+            throw failure;
+        }
+        try {
+            observer.onInspection(report);
         } catch (RuntimeException ignored) {
             /* Observability cannot change enforcement. */
         }
@@ -61,6 +72,7 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
         }
     }
 
+    /** Extracts one segment per supported message text, or per response body in a tool response message. */
     private List<ContentSegment> extractSegments(ChatClientRequest request) {
         // Spring AI's terminal model advisor appends output-format instructions after
         // this boundary. Until that protocol is supported, never claim they were inspected.
@@ -74,8 +86,8 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
             }
         }
         List<ContentSegment> segments = new ArrayList<>();
-        ContentSegment.Representation representation =
-                Objects.requireNonNull(representationResolver.resolve(request), "representation");
+        ContentSegment.PrivacyProcessingStatus privacyProcessingStatus =
+                Objects.requireNonNull(privacyProcessingStatusResolver.resolve(request), "privacyProcessingStatus");
         for (Message message : request.prompt().getInstructions()) {
             if (message.getClass() == ToolResponseMessage.class) {
                 for (ToolResponseMessage.ToolResponse response :
@@ -84,8 +96,7 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
                             segments,
                             response.responseData(),
                             ContentSegment.Role.TOOL,
-                            ContentSegment.Source.TOOL,
-                            representation);
+                            privacyProcessingStatus);
                 }
             } else if (message.getClass() == UserMessage.class) {
                 if (!((UserMessage) message).getMedia().isEmpty()) {
@@ -95,15 +106,13 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
                         segments,
                         message.getText(),
                         ContentSegment.Role.USER,
-                        ContentSegment.Source.UNKNOWN,
-                        representation);
+                        privacyProcessingStatus);
             } else if (message.getClass() == SystemMessage.class) {
                 addSegment(
                         segments,
                         message.getText(),
                         ContentSegment.Role.SYSTEM,
-                        ContentSegment.Source.UNKNOWN,
-                        representation);
+                        privacyProcessingStatus);
             } else if (message.getClass() == AssistantMessage.class) {
                 if (!((AssistantMessage) message).getMedia().isEmpty()) {
                     throw unsupportedContent();
@@ -113,8 +122,7 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
                         segments,
                         message.getText(),
                         ContentSegment.Role.ASSISTANT,
-                        ContentSegment.Source.UNKNOWN,
-                        representation);
+                        privacyProcessingStatus);
             } else {
                 throw unsupportedContent();
             }
@@ -126,22 +134,20 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
             List<ContentSegment> segments,
             String text,
             ContentSegment.Role role,
-            ContentSegment.Source source,
-            ContentSegment.Representation representation) {
+            ContentSegment.PrivacyProcessingStatus privacyProcessingStatus) {
         if (segments.size() >= limits.maxSegments()) {
-            throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+            throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
         }
         segments.add(
                 new ContentSegment(
                         "segment-" + segments.size(),
-                        source,
                         role,
-                        representation,
+                        privacyProcessingStatus,
                         text == null ? "" : text));
     }
 
     private static InspectionException unsupportedContent() {
-        return new InspectionException(InspectionFailure.UNSUPPORTED_CONTENT);
+        return new InspectionException(InspectionFailureCode.UNSUPPORTED_CONTENT);
     }
 
 }

@@ -9,7 +9,7 @@ import ai.onnxruntime.OrtLoggingLevel;
 import ai.onnxruntime.OrtSession;
 import ai.onnxruntime.TensorInfo;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 
@@ -39,7 +39,7 @@ final class OnnxInspectionRuntime implements AutoCloseable {
 
     OnnxInspectionRuntime(OnnxInspectionConfig config, OnnxInspectionModel model) {
         if (!Files.isRegularFile(config.model())) {
-            throw new InspectionException(InspectionFailure.CONFIGURATION);
+            throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }
         OrtSession loaded = null;
         try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
@@ -52,11 +52,11 @@ final class OnnxInspectionRuntime implements AutoCloseable {
                 if (!(node.getInfo() instanceof TensorInfo tensor)
                         || (tensor.type != OnnxJavaType.INT64 && tensor.type != OnnxJavaType.INT32)
                         || tensor.getShape().length != 2 || tensor.getShape()[0] > 1) {
-                    throw new InspectionException(InspectionFailure.CONFIGURATION);
+                    throw new InspectionException(InspectionFailureCode.CONFIGURATION);
                 }
             }
             if (inputs.isEmpty()) {
-                throw new InspectionException(InspectionFailure.CONFIGURATION);
+                throw new InspectionException(InspectionFailureCode.CONFIGURATION);
             }
             model.validate(Map.copyOf(inputs), Map.copyOf(loaded.getOutputInfo()));
             this.inputInfo = Map.copyOf(inputs);
@@ -68,29 +68,29 @@ final class OnnxInspectionRuntime implements AutoCloseable {
                 } catch (OrtException ignored) {
                 }
             }
-            throw new InspectionException(InspectionFailure.CONFIGURATION);
+            throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }
     }
 
     List<InspectionFinding> infer(Map<String, long[]> window, String segmentId,
             OnnxInspectionModel model, InspectionRequest request) throws OrtException {
         if (!window.keySet().equals(inputInfo.keySet())) {
-            throw new InspectionException(InspectionFailure.MODEL_ERROR);
+            throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
         }
         long deadline = System.nanoTime() + request.remaining().toNanos();
         Map<String, OnnxTensor> inputs = new HashMap<>();
         OrtSession.RunOptions runOptions = new OrtSession.RunOptions();
         AtomicBoolean runOptionsClosed = new AtomicBoolean();
-        AtomicReference<InspectionFailure> terminationReason = new AtomicReference<>();
+        AtomicReference<InspectionFailureCode> terminationReason = new AtomicReference<>();
         Thread caller = Thread.currentThread();
         ScheduledFuture<?> watchdog =
                 WATCHDOG.scheduleAtFixedRate(
                         () -> {
-                            InspectionFailure failure;
+                            InspectionFailureCode failure;
                             if (caller.isInterrupted()) {
-                                failure = InspectionFailure.CANCELLED;
+                                failure = InspectionFailureCode.CANCELLED;
                             } else if (System.nanoTime() - deadline >= 0) {
-                                failure = InspectionFailure.TIMEOUT;
+                                failure = InspectionFailureCode.TIMEOUT;
                             } else {
                                 return;
                             }
@@ -114,7 +114,7 @@ final class OnnxInspectionRuntime implements AutoCloseable {
                 long[] values = entry.getValue();
                 long[] shape = info.getShape();
                 if (values == null || values.length == 0 || (shape[1] > 0 && shape[1] != values.length)) {
-                    throw new InspectionException(InspectionFailure.MODEL_ERROR);
+                    throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
                 }
                 OnnxTensor tensor;
                 if (info.type == OnnxJavaType.INT64) {
@@ -155,7 +155,7 @@ final class OnnxInspectionRuntime implements AutoCloseable {
         try {
             session.close();
         } catch (OrtException ex) {
-            throw new InspectionException(InspectionFailure.MODEL_ERROR);
+            throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
         }
     }
 }

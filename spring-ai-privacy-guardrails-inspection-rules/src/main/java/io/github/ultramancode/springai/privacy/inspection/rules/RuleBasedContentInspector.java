@@ -3,7 +3,7 @@ package io.github.ultramancode.springai.privacy.inspection.rules;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
@@ -35,18 +35,18 @@ public final class RuleBasedContentInspector implements ContentInspector {
     }
 
     @Override
-    public String providerId() {
+    public String inspectorId() {
         return id;
     }
 
     @Override
-    public boolean requiresProtectedContent() {
+    public boolean requiresPrivacyProcessedContent() {
         return false;
     }
 
     @Override
     public InspectionResult inspect(InspectionRequest request) {
-        Set<String> inspectedSegmentIds = new HashSet<>();
+        Set<String> completedSegmentIds = new HashSet<>();
         List<InspectionFinding> findings = new ArrayList<>();
         try {
             for (ContentSegment segment : request.segments()) {
@@ -54,19 +54,19 @@ public final class RuleBasedContentInspector implements ContentInspector {
                     request.checkActive();
                     if (rule.matches(segment.text())) {
                         if (findings.size() >= 10_000) {
-                            throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+                            throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
                         }
                         findings.add(
                                 new InspectionFinding(
                                         segment.id(), rule.category(), rule.id(), null));
                     }
                 }
-                inspectedSegmentIds.add(segment.id());
+                completedSegmentIds.add(segment.id());
             }
             request.checkActive();
-            return InspectionResult.completed(inspectedSegmentIds, findings);
+            return InspectionResult.completed(completedSegmentIds, findings);
         } catch (InspectionException ex) {
-            return InspectionResult.failed(ex.failure(), inspectedSegmentIds, findings);
+            return InspectionResult.failed(ex.failure(), completedSegmentIds, findings);
         }
     }
 }

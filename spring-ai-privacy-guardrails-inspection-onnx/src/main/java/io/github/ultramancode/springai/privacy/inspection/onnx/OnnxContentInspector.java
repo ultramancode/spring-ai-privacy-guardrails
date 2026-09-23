@@ -3,7 +3,7 @@ package io.github.ultramancode.springai.privacy.inspection.onnx;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
-import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
@@ -23,15 +23,24 @@ import java.util.concurrent.locks.ReentrantLock;
  * Do not share an adapter between inspectors. Close when no longer used.
  */
 public final class OnnxContentInspector implements ContentInspector, AutoCloseable {
+    private final String inspectorId;
+    private final int maxWindows;
     private final OnnxInspectionModel model;
     private final OnnxInspectionRuntime runtime;
     private final ReentrantLock lock = new ReentrantLock();
     private boolean closed;
 
     public OnnxContentInspector(OnnxInspectionConfig config, OnnxInspectionModel model) {
+        this(null, config, model);
+    }
+
+    /** Configures an instance ID; null uses the adapter's model ID. */
+    public OnnxContentInspector(String inspectorId, OnnxInspectionConfig config, OnnxInspectionModel model) {
         Objects.requireNonNull(config, "config");
+        this.maxWindows = config.maxWindows();
         this.model = Objects.requireNonNull(model, "model");
         try {
+            this.inspectorId = ContentSegment.requireIdentifier(inspectorId == null ? model.modelId() : inspectorId);
             this.runtime = new OnnxInspectionRuntime(config, model);
         } catch (RuntimeException | Error failure) {
             model.close();
@@ -40,64 +49,62 @@ public final class OnnxContentInspector implements ContentInspector, AutoCloseab
     }
 
     @Override
-    public String providerId() {
-        return model.providerId();
+    public String inspectorId() {
+        return inspectorId;
     }
 
     @Override
-    public boolean requiresProtectedContent() {
+    public boolean requiresPrivacyProcessedContent() {
         return false;
     }
 
     @Override
     public InspectionResult inspect(InspectionRequest request) {
-        Set<String> inspectedSegmentIds = new HashSet<>();
+        Set<String> completedSegmentIds = new HashSet<>();
         List<InspectionFinding> findings = new ArrayList<>();
         boolean acquired = false;
         try {
             acquired = lock.tryLock(request.remaining().toNanos(), TimeUnit.NANOSECONDS);
             if (!acquired) {
-                throw new InspectionException(InspectionFailure.TIMEOUT);
+                throw new InspectionException(InspectionFailureCode.TIMEOUT);
             }
             if (closed) {
-                throw new InspectionException(InspectionFailure.CONFIGURATION);
+                throw new InspectionException(InspectionFailureCode.CONFIGURATION);
             }
-            int chunks = 0;
+            int windowCount = 0;
             for (ContentSegment segment : request.segments()) {
                 request.checkActive();
-                List<Map<String, long[]>> windows = model.encode(segment.text(), request.limits().maxChunks() - chunks);
-                if (windows.isEmpty() || windows.size() > request.limits().maxChunks() - chunks) {
-                    throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+                List<Map<String, long[]>> windows = model.encode(segment.text(), maxWindows - windowCount);
+                if (windows.isEmpty() || windows.size() > maxWindows - windowCount) {
+                    throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
                 }
-                chunks += windows.size();
+                windowCount += windows.size();
                 for (Map<String, long[]> window : windows) {
                     request.checkActive();
                     List<InspectionFinding> windowFindings = runtime.infer(window, segment.id(), model, request);
                     for (InspectionFinding finding : windowFindings) {
                         if (!segment.id().equals(finding.segmentId())) {
-                            throw new InspectionException(InspectionFailure.MODEL_ERROR);
+                            throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
                         }
                         findings.add(finding);
                         if (findings.size() >= 10_000) {
-                            throw new InspectionException(InspectionFailure.LIMIT_EXCEEDED);
+                            throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
                         }
                     }
                 }
-                inspectedSegmentIds.add(segment.id());
+                completedSegmentIds.add(segment.id());
             }
             request.checkActive();
-            return InspectionResult.completed(inspectedSegmentIds, findings);
+            return InspectionResult.completed(completedSegmentIds, findings);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new InspectionException(InspectionFailure.CANCELLED);
+            return InspectionResult.failed(InspectionFailureCode.CANCELLED, completedSegmentIds, findings);
         } catch (InspectionException ex) {
-            if (ex.failure() == InspectionFailure.CANCELLED) {
-                throw ex;
-            }
-            return InspectionResult.failed(ex.failure(), inspectedSegmentIds, findings);
+            return InspectionResult.failed(ex.failure(), completedSegmentIds, findings);
         } catch (Exception ex) {
-            InspectionRequest.checkInterrupted();
-            return InspectionResult.failed(InspectionFailure.MODEL_ERROR, inspectedSegmentIds, findings);
+            return InspectionResult.failed(Thread.currentThread().isInterrupted()
+                    ? InspectionFailureCode.CANCELLED : InspectionFailureCode.MODEL_ERROR,
+                    completedSegmentIds, findings);
         } finally {
             if (acquired) {
                 lock.unlock();

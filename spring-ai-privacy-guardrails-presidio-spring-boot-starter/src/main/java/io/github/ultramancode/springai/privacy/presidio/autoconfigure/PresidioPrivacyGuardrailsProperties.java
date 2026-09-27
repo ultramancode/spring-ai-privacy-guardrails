@@ -24,6 +24,8 @@ public class PresidioPrivacyGuardrailsProperties {
     private Duration retryBackoff = PresidioAnalyzerConfig.DEFAULT_RETRY_BACKOFF;
     /** Maximum Presidio response-body size in bytes. */
     private int maxResponseBytes = PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES;
+    /** Maximum JSON container depth in a Presidio response, including the root array. */
+    private int maxResponseDepth = PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH;
     /** Additional HTTP headers sent to the Presidio service. */
     private Map<String, String> headers = new LinkedHashMap<>();
 
@@ -73,6 +75,14 @@ public class PresidioPrivacyGuardrailsProperties {
 
     public void setMaxResponseBytes(int maxResponseBytes) {
         this.maxResponseBytes = maxResponseBytes;
+    }
+
+    public int getMaxResponseDepth() {
+        return this.maxResponseDepth;
+    }
+
+    public void setMaxResponseDepth(int maxResponseDepth) {
+        this.maxResponseDepth = maxResponseDepth;
     }
 
     public Map<String, String> getHeaders() {

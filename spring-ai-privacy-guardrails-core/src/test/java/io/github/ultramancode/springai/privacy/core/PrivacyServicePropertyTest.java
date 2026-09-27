@@ -79,7 +79,11 @@ class PrivacyServicePropertyTest {
     private static PiiAnalyzer fullTextAnalyzer() {
         return new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of(new PiiSpan("SYNTHETIC", 0, text.length(), 1.0));
             }
 

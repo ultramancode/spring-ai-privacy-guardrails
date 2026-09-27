@@ -173,7 +173,11 @@ class CoreContractTest {
 
         PiiAnalyzer analyzer = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of();
             }
 
@@ -190,7 +194,7 @@ class CoreContractTest {
 
     @Test
     void entityAllowlistDoesNotImplicitlyTrustAnalyzerOutputTypes() {
-        PiiAnalyzer analyzer = (text, options) -> List.of(new PiiSpan("CUSTOMER_ID", 0, 1, 1.0));
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(new PiiSpan("CUSTOMER_ID", 0, 1, 1.0));
 
         assertThatThrownBy(() -> new PrivacyService(
                 List.of(analyzer),

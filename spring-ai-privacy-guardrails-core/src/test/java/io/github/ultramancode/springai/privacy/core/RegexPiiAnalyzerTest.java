@@ -27,11 +27,26 @@ class RegexPiiAnalyzerTest {
                 new RegexPiiRule("EMPLOYEE_ID", "\\bEMP-\\d{4}\\b", 0.9, 0)
         ));
 
-        List<PiiSpan> spans = analyzer.analyze("Owner EMP-1234 approved it.", PiiAnalysisOptions.defaults());
+        List<PiiSpan> spans = analyzer.analyze(
+                "Owner EMP-1234 approved it.", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        );
 
         assertThat(spans).containsExactly(
                 new PiiSpan("EMPLOYEE_ID", 6, 14, 0.9)
         );
+    }
+
+    @Test
+    void batchAnalysisAppliesTheSpanLimitAcrossTexts() {
+        RegexPiiAnalyzer analyzer = new RegexPiiAnalyzer(List.of(
+                new RegexPiiRule("CHARACTER", ".", 1.0, 0)
+        ));
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
+
+        assertThatThrownBy(() -> analyzer.analyzeSegments(
+                List.of("a", "b"), PiiAnalysisOptions.defaults(), limits
+        )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure ->
+                assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
     }
 
     @Test
@@ -53,7 +68,9 @@ class RegexPiiAnalyzerTest {
                 new RegexPiiRule("TICKET_ID", "ticket[:=]\\s*(TKT-\\d{3})", 0.8, 1)
         ));
 
-        List<PiiSpan> spans = analyzer.analyze("internal ticket: TKT-123 is linked", PiiAnalysisOptions.defaults());
+        List<PiiSpan> spans = analyzer.analyze(
+                "internal ticket: TKT-123 is linked", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        );
 
         assertThat(spans).containsExactly(
                 new PiiSpan("TICKET_ID", 17, 24, 0.8)
@@ -72,7 +89,9 @@ class RegexPiiAnalyzerTest {
                 )
         ));
 
-        assertThat(analyzer.analyze("Owner EMP-1234 approved it.", PiiAnalysisOptions.defaults()))
+        assertThat(analyzer.analyze(
+                "Owner EMP-1234 approved it.", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .containsExactly(new PiiSpan("EMPLOYEE_ID", 6, 14, 0.9));
     }
 
@@ -90,7 +109,8 @@ class RegexPiiAnalyzerTest {
 
         assertThat(analyzer.analyze(
                 "EMP-1234 and EMP-5670",
-                PiiAnalysisOptions.defaults()
+                PiiAnalysisOptions.defaults(),
+                PrivacyProcessingLimits.defaults()
         )).containsExactly(new PiiSpan("EMPLOYEE_ID", 13, 21, 0.9));
     }
 
@@ -112,7 +132,8 @@ class RegexPiiAnalyzerTest {
 
         assertThat(analyzer.analyze(
                 "internal ticket: TKT-123 is linked",
-                PiiAnalysisOptions.defaults()
+                PiiAnalysisOptions.defaults(),
+                PrivacyProcessingLimits.defaults()
         )).containsExactly(new PiiSpan("TICKET_ID", 17, 24, 0.8));
         assertThat(receivedCandidate).hasValue("TKT-123");
     }
@@ -132,7 +153,9 @@ class RegexPiiAnalyzerTest {
                 )
         ));
 
-        assertThatThrownBy(() -> analyzer.analyze(candidate, PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                candidate, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Regex match validator failed for entity type EMPLOYEE_ID")
                 .hasMessageNotContaining(candidate);
@@ -141,7 +164,11 @@ class RegexPiiAnalyzerTest {
         PrivacyService service = new PrivacyService(
                 List.of(analyzer, new PiiAnalyzer() {
                     @Override
-                    public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+                    public List<PiiSpan> analyze(
+                            String text,
+                            PiiAnalysisOptions options,
+                            PrivacyProcessingLimits limits
+                    ) {
                         return List.of();
                     }
 
@@ -155,7 +182,8 @@ class RegexPiiAnalyzerTest {
                 PiiResolutionPolicy.builder()
                         .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
                         .build(),
-                observedFailure::set
+                observedFailure::set,
+                PrivacyProcessingLimits.defaults()
         );
 
         assertThat(service.analyze(candidate)).isEmpty();
@@ -184,7 +212,9 @@ class RegexPiiAnalyzerTest {
                 new RegexPiiRule("TICKET_ID", "(?:ticket:(TKT-\\d{3})|public)", 0.8, 1)
         ));
 
-        assertThatThrownBy(() -> analyzer.analyze("public", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "public", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("capture group 1")
                 .hasMessageContaining("TICKET_ID")

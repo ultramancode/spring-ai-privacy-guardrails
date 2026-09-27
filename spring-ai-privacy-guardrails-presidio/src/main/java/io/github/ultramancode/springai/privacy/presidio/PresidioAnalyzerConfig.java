@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
  * @param maxRetries number of retries after the initial attempt
  * @param retryBackoff non-negative delay between retry attempts
  * @param maxResponseBytes positive maximum response-body size in bytes
+ * @param maxResponseDepth positive maximum JSON container depth in the response, counting the root array as one
  * @param headers additional HTTP request headers. {@code Content-Type} is managed by the adapter
  */
 public record PresidioAnalyzerConfig(
@@ -26,6 +27,7 @@ public record PresidioAnalyzerConfig(
         int maxRetries,
         Duration retryBackoff,
         int maxResponseBytes,
+        int maxResponseDepth,
         Map<String, String> headers
 ) {
 
@@ -45,6 +47,9 @@ public record PresidioAnalyzerConfig(
 
     /** Default maximum response-body size in bytes. */
     public static final int DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+    /** Default maximum JSON container depth in a Presidio response. */
+    public static final int DEFAULT_MAX_RESPONSE_DEPTH = 64;
 
     /** Validates and defensively copies Presidio HTTP settings. */
     public PresidioAnalyzerConfig {
@@ -68,6 +73,9 @@ public record PresidioAnalyzerConfig(
         }
         if (maxResponseBytes <= 0) {
             throw new IllegalArgumentException("maxResponseBytes must be positive");
+        }
+        if (maxResponseDepth <= 0) {
+            throw new IllegalArgumentException("maxResponseDepth must be positive");
         }
         if (!"http".equalsIgnoreCase(analyzerUrl.getScheme())
                 && !"https".equalsIgnoreCase(analyzerUrl.getScheme())) {
@@ -120,6 +128,7 @@ public record PresidioAnalyzerConfig(
                 DEFAULT_MAX_RETRIES,
                 DEFAULT_RETRY_BACKOFF,
                 DEFAULT_MAX_RESPONSE_BYTES,
+                DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of()
         );
     }
@@ -155,6 +164,7 @@ public record PresidioAnalyzerConfig(
                 + ", maxRetries=" + this.maxRetries
                 + ", retryBackoff=" + this.retryBackoff
                 + ", maxResponseBytes=" + this.maxResponseBytes
+                + ", maxResponseDepth=" + this.maxResponseDepth
                 + ", headerCount=" + this.headers.size() + "]";
     }
 }

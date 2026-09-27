@@ -9,64 +9,71 @@ import java.util.Set;
 @FunctionalInterface
 public interface PiiAnalyzer {
 
-    /** Hard maximum number of spans retained from one complete analysis operation. */
-    int MAX_RESULT_SPANS = 100_000;
-
-    /** Hard maximum number of independent texts accepted by one segmented analysis operation. */
-    int MAX_ANALYSIS_SEGMENTS = 100_000;
-
     /**
      * Analyzes source text without retaining or mutating it. Implementations are
      * shared by {@link PrivacyService} and must therefore be thread-safe and
-     * reentrant. A blocking implementation must apply its own finite deadline and
-     * cooperate with thread interruption. Request cancellation cannot forcibly stop
-     * arbitrary synchronous analyzer code. Implementations must also bound their
-     * work relative to the input and return at most {@link #MAX_RESULT_SPANS} spans.
-     * The core validates this bound after the call, but cannot prevent a custom
-     * analyzer from allocating an excessive result before it returns. Built-in
-     * analyzers stop while collecting results so they do not first materialize an
-     * oversized list.
+     * reentrant. Blocking implementations must set a finite deadline and cooperate
+     * with thread interruption.
+     *
+     * <p>If adding another span would exceed the supplied
+     * {@link PrivacyProcessingLimits#maxResultSpans() maxResultSpans} limit,
+     * implementations must throw a {@link PrivacyGuardrailException} with
+     * failure code {@link PrivacyFailureCode#PAYLOAD_LIMIT_EXCEEDED}.
+     * {@link PrivacyService} also enforces the total span limit across analyzers.</p>
      *
      * @param text non-null source text. The core service does not invoke analyzers for null or blank input
      * @param options non-null validated analysis options
+     * @param limits non-null processing limits for this analysis
      * @return a non-null list containing only non-null spans whose ranges are
      * within the source text
      */
-    List<PiiSpan> analyze(String text, PiiAnalysisOptions options);
+    List<PiiSpan> analyze(
+            String text,
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits
+    );
 
     /**
-     * Analyzes independent source texts without allowing state retained while
-     * analyzing one text, or offsets calculated for it, to affect another. The
-     * result at each index belongs only to the source text at the same index. If
-     * an analyzer processes several texts in one batch, it must return a separate
-     * result list for each text in the same order, with offsets measured from the
-     * start of that text. The default implementation calls
-     * {@link #analyze(String, PiiAnalysisOptions)} once per text. Implementations
-     * that override this method must not modify the input list or keep references
-     * to the list or its texts after the method returns.
+     * Analyzes independent source texts in one batch. Results must follow input
+     * order, with offsets measured from the start of each source text. State from
+     * analyzing one text must not affect another text's results.
+     * Implementations that override this method must not modify the input list
+     * or keep references to the list or its texts after the method returns.
      *
-     * <p>When invoked through {@link PrivacyService}, this method receives only
-     * non-null, non-blank texts: at most {@link #MAX_ANALYSIS_SEGMENTS} items with
-     * a combined length no greater than
-     * {@link PrivacyService#MAX_TEXT_INPUT_CHARACTERS}. Implementations must return
-     * no more than {@link #MAX_RESULT_SPANS} spans in total.</p>
+     * <p>The default implementation analyzes each text with the supplied limits
+     * and copies the returned span list before analyzing the next text.</p>
      *
-     * @param texts non-null, read-only independent source texts
+     * <p>{@link PrivacyService} passes only non-null, non-blank texts within the
+     * configured {@link PrivacyProcessingLimits#maxAnalysisSegments() maxAnalysisSegments}
+     * and combined {@link PrivacyProcessingLimits#maxTextCharacters() maxTextCharacters}
+     * limits. It validates the {@link PrivacyProcessingLimits#maxResultSpans() maxResultSpans}
+     * limit on the returned results.</p>
+     *
+     * @param texts non-null list of independent source texts with no null elements
      * @param options non-null validated analysis options shared by the texts
+     * @param limits non-null processing limits for this batch
      * @return a non-null result list with exactly one non-null span list per text
+     * @throws PrivacyGuardrailException if the segment limit is exceeded or another
+     * detected span would exceed the batch span limit. The failure code is
+     * {@link PrivacyFailureCode#PAYLOAD_LIMIT_EXCEEDED}
      */
     default List<List<PiiSpan>> analyzeSegments(
             List<String> texts,
-            PiiAnalysisOptions options
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits
     ) {
         Objects.requireNonNull(texts, "texts must not be null");
         Objects.requireNonNull(options, "options must not be null");
-        if (texts.size() > MAX_ANALYSIS_SEGMENTS) {
-            throw new IllegalArgumentException("texts exceeded the safe segment limit");
+        Objects.requireNonNull(limits, "limits must not be null");
+        if (texts.size() > limits.maxAnalysisSegments()) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analysis exceeded the configured segment limit"
+            );
         }
-
         List<List<PiiSpan>> results = new ArrayList<>(texts.size());
-        long spanCount = 0L;
+        int spanCount = 0;
         for (String text : texts) {
             if (Thread.currentThread().isInterrupted()) {
                 throw new PrivacyGuardrailException(
@@ -77,7 +84,8 @@ public interface PiiAnalyzer {
             }
             List<PiiSpan> spans = analyze(
                     Objects.requireNonNull(text, "texts must not contain null values"),
-                    options
+                    options,
+                    limits
             );
             if (spans == null) {
                 throw new PrivacyGuardrailException(
@@ -86,16 +94,15 @@ public interface PiiAnalyzer {
                         "PII analyzer returned a null segmented result"
                 );
             }
-            long updatedSpanCount = spanCount + spans.size();
-            if (updatedSpanCount > MAX_RESULT_SPANS) {
+            if (spans.size() > limits.maxResultSpans() - spanCount) {
                 throw new PrivacyGuardrailException(
-                        PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
+                        PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                         PrivacyPhase.ANALYSIS,
-                        "PII analyzer segmented result exceeded the safe span limit"
+                        "PII analyzer segmented result exceeded the configured span limit"
                 );
             }
             List<PiiSpan> snapshot = new ArrayList<>(spans);
-            spanCount = updatedSpanCount;
+            spanCount += spans.size();
             results.add(snapshot);
         }
         return List.copyOf(results);

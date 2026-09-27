@@ -49,7 +49,7 @@ public enum PrivacyFailureCode {
     /** A value or framework structure could not be transformed without ambiguity or data loss. */
     TRANSFORMATION_CONFLICT,
 
-    /** A hard non-stream processing, result, or transformation size limit was exceeded. */
+    /** A configured privacy processing limit was exceeded. */
     PAYLOAD_LIMIT_EXCEEDED,
 
     /** A call or stream response exceeded its configured privacy-inspection limit. */

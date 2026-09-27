@@ -7,6 +7,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyFailureSanitizer;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -75,7 +76,7 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
         this.config = Objects.requireNonNull(config, "config must not be null");
         this.httpClient = Objects.requireNonNull(httpClient, "httpClient must not be null");
         this.objectMapper = new ObjectMapper();
-        this.responseParser = new PresidioResponseParser(config.maxResponseBytes());
+        this.responseParser = new PresidioResponseParser(config.maxResponseBytes(), config.maxResponseDepth());
     }
 
     @Override
@@ -84,16 +85,21 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
     }
 
     @Override
-    public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+    public List<PiiSpan> analyze(
+            String text,
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits
+    ) {
         Objects.requireNonNull(text, "text must not be null");
         Objects.requireNonNull(options, "options must not be null");
+        Objects.requireNonNull(limits, "limits must not be null");
         if (text.isBlank()) {
             return List.of();
         }
 
         return analyzeWithRetry(
                 new PresidioAnalyzeRequest<>(text, options.language()),
-                responseBody -> this.responseParser.parse(responseBody, text)
+                responseBody -> this.responseParser.parse(responseBody, text, limits.maxResultSpans())
         );
     }
 
@@ -107,12 +113,18 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
     @Override
     public List<List<PiiSpan>> analyzeSegments(
             List<String> texts,
-            PiiAnalysisOptions options
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits
     ) {
         Objects.requireNonNull(texts, "texts must not be null");
         Objects.requireNonNull(options, "options must not be null");
-        if (texts.size() > PiiAnalyzer.MAX_ANALYSIS_SEGMENTS) {
-            throw new IllegalArgumentException("texts exceeded the safe segment limit");
+        Objects.requireNonNull(limits, "limits must not be null");
+        if (texts.size() > limits.maxAnalysisSegments()) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analysis exceeded the configured segment limit"
+            );
         }
 
         List<List<PiiSpan>> results = new ArrayList<>(texts.size());
@@ -136,7 +148,11 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
         List<String> requestTexts = List.copyOf(nonBlankTexts);
         List<List<PiiSpan>> analyzedResults = analyzeWithRetry(
                 new PresidioAnalyzeRequest<>(requestTexts, options.language()),
-                responseBody -> this.responseParser.parseSegments(responseBody, requestTexts)
+                responseBody -> this.responseParser.parseSegments(
+                        responseBody,
+                        requestTexts,
+                        limits.maxResultSpans()
+                )
         );
         for (int index = 0; index < analyzedResults.size(); index++) {
             results.set(nonBlankSourceIndexes.get(index), analyzedResults.get(index));
@@ -158,6 +174,10 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
                 sleepBeforeRetry(this.config.retryBackoff());
             } catch (Throwable failure) {
                 PrivacyFailureSanitizer.rethrowIfFatal(failure);
+                if (failure instanceof PrivacyGuardrailException privacyFailure
+                        && privacyFailure.code() == PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED) {
+                    throw privacyFailure;
+                }
                 throw new PresidioCallException(
                         "Presidio analyzer execution failed",
                         false,
@@ -228,7 +248,7 @@ public final class PresidioAnalyzer implements PiiAnalyzer {
             }
             if (BoundedBodySubscriber.isBodyLimitExceeded(failure)) {
                 throw new PresidioCallException(
-                        "Presidio analyzer response exceeded the safe size limit",
+                        "Presidio analyzer response exceeded the configured byte limit",
                         false,
                         PrivacyFailureCode.ANALYZER_RESPONSE_INVALID
                 );

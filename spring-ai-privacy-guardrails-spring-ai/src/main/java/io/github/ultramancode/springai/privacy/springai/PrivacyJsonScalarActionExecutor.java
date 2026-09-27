@@ -58,7 +58,7 @@ final class PrivacyJsonScalarActionExecutor {
                 ).value();
             };
         } catch (PrivacyGuardrailException failure) {
-            throw PrivacyJsonPayloadTransformer.remapOutputLimit(failure, phase);
+            throw PrivacyJsonPayloadTransformer.remapProcessingLimit(failure, phase);
         }
     }
 
@@ -86,7 +86,7 @@ final class PrivacyJsonScalarActionExecutor {
                     !Objects.equals(protectedScalar, disclosedScalar)
             );
         } catch (PrivacyGuardrailException failure) {
-            throw PrivacyJsonPayloadTransformer.remapOutputLimit(failure, phase);
+            throw PrivacyJsonPayloadTransformer.remapProcessingLimit(failure, phase);
         }
     }
 

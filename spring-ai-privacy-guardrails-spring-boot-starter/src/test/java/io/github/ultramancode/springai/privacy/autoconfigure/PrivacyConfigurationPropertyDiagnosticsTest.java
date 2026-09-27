@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ExtendWith(OutputCaptureExtension.class)
 class PrivacyConfigurationPropertyDiagnosticsTest {
 
-    private final PiiAnalyzer emptyAnalyzer = (text, options) -> List.of();
+    private final PiiAnalyzer emptyAnalyzer = (text, options, processingLimits) -> List.of();
 
     private final ApplicationContextRunner diagnosticsRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -60,6 +60,10 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
         assertDiagnosticSchemaMatches(
                 PrivacyGuardrailsProperties.class,
                 PrivacyConfigurationPropertyDiagnostics.ROOT_PROPERTIES
+        );
+        assertDiagnosticSchemaMatches(
+                PrivacyGuardrailsProperties.Processing.class,
+                PrivacyConfigurationPropertyDiagnostics.PROCESSING_PROPERTIES
         );
         assertDiagnosticSchemaMatches(
                 PrivacyGuardrailsProperties.Output.class,
@@ -334,7 +338,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
-    void doesNotTreatDottedPropertyNamesAsLegacyEnvironmentNames(CapturedOutput output) {
+    void doesNotTreatDottedPropertyNamesAsEnvironmentNames(CapturedOutput output) {
         this.diagnosticsRunner
                 .withPropertyValues(
                         "spring.ai.privacy.analysis.minimum.score=0.5",
@@ -374,7 +378,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
-    void recognizesLegacyCompatibleSystemEnvironmentNames(CapturedOutput output) {
+    void recognizesUnderscoreSeparatedSystemEnvironmentNames(CapturedOutput output) {
         withPrivacySystemEnvironment(Map.of(
                 "SPRING_AI_PRIVACY_OUTPUT_ENABLED", "true",
                 "SPRING_AI_PRIVACY_RESPONSE_INSPECTION_MAX_CHARACTERS", "8",
@@ -403,7 +407,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
-    void recognizesStandardAndLegacyEnvironmentNamesInTheSameSource(
+    void recognizesCompactAndUnderscoreSeparatedEnvironmentNamesInTheSameSource(
             CapturedOutput output
     ) {
         withPrivacySystemEnvironment(Map.of(
@@ -424,7 +428,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
-    void warnsWhenStandardRootAndLegacyPropertyFormsAreMixed(CapturedOutput output) {
+    void warnsForMixedEnvironmentNamingConventions(CapturedOutput output) {
         withPrivacySystemEnvironment(Map.of(
                 "SPRING_AI_PRIVACY_OUTPUT_ENABLED", "true",
                 "SPRING_AI_PRIVACY_RESPONSEINSPECTION_MAX_CHARACTERS", "87654321"

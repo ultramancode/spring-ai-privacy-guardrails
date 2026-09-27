@@ -24,11 +24,21 @@ final class PrivacyConfigurationPropertyDiagnostics {
     private static final int ROOT_ELEMENTS = ROOT.getNumberOfElements();
 
     static final List<String> ROOT_PROPERTIES = List.of(
+            "processing",
             "output",
             "response-inspection",
             "analysis",
             "regex",
             "tools"
+    );
+    static final List<String> PROCESSING_PROPERTIES = List.of(
+            "max-text-characters",
+            "max-output-characters",
+            "max-value-tree-characters",
+            "max-value-tree-nodes",
+            "max-depth",
+            "max-analysis-segments",
+            "max-result-spans"
     );
     static final List<String> OUTPUT_PROPERTIES = List.of(
             "enabled",
@@ -111,6 +121,13 @@ final class PrivacyConfigurationPropertyDiagnostics {
         }
         String propertyRoot = ROOT + "." + rootMatch.expected();
         return switch (rootMatch.expected()) {
+            case "processing" -> diagnoseFixedPropertyPath(
+                    name,
+                    propertyIndex,
+                    propertyRoot,
+                    PROCESSING_PROPERTIES,
+                    context
+            );
             case "output" -> diagnoseFixedPropertyPath(
                     name,
                     propertyIndex,
@@ -433,8 +450,8 @@ final class PrivacyConfigurationPropertyDiagnostics {
     }
 
     /**
-     * Builds safe display and binding-compatible comparison forms for one element and
-     * for the legacy sequence produced from operating-system environment variable names.
+     * Builds display and comparison forms for property elements, including compound
+     * names split by Boot's system-environment mapping.
      */
     private static List<SegmentVariant> candidateSegmentVariants(
             ConfigurationPropertyName name,

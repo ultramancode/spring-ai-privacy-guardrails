@@ -1,6 +1,5 @@
 package io.github.ultramancode.springai.privacy.springai;
 
-import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
@@ -16,7 +15,6 @@ import java.util.Objects;
 final class PrivacyJsonScalarBatchAnalyzer {
 
     static final int TARGET_BATCH_CHARACTERS = 32_768;
-    private static final int MAX_ANALYSIS_CHARACTERS = PrivacyService.MAX_TEXT_INPUT_CHARACTERS;
 
     private PrivacyJsonScalarBatchAnalyzer() {
     }
@@ -29,16 +27,19 @@ final class PrivacyJsonScalarBatchAnalyzer {
         Objects.requireNonNull(privacyService, "privacyService must not be null");
         Objects.requireNonNull(analysisTexts, "analysisTexts must not be null");
         Objects.requireNonNull(phase, "phase must not be null");
-        requireAnalysisSizeWithinLimit(analysisTexts, phase);
 
         Map<String, List<PiiSpan>> spansByText = new LinkedHashMap<>();
         List<String> batch = new ArrayList<>();
-        int batchCharacters = 0;
-        AnalysisResultBudget resultBudget = new AnalysisResultBudget(phase);
+        long batchCharacters = 0;
+        int maxBatchSegments = privacyService.processingLimits().maxAnalysisSegments();
+        AnalysisResultBudget resultBudget = new AnalysisResultBudget(
+                phase,
+                privacyService.processingLimits().maxResultSpans()
+        );
         for (String text : analysisTexts) {
             if (!batch.isEmpty()
-                    && batchCharacters + text.length()
-                    > TARGET_BATCH_CHARACTERS) {
+                    && (batch.size() >= maxBatchSegments
+                    || batchCharacters + text.length() > TARGET_BATCH_CHARACTERS)) {
                 analyzeBatch(privacyService, batch, spansByText, resultBudget);
                 batch.clear();
                 batchCharacters = 0;
@@ -51,25 +52,6 @@ final class PrivacyJsonScalarBatchAnalyzer {
         }
 
         return Map.copyOf(spansByText);
-    }
-
-    private static void requireAnalysisSizeWithinLimit(
-            List<String> analysisTexts,
-            PrivacyPhase phase
-    ) {
-        long analysisCharacters = 0L;
-        for (String analysisText : analysisTexts) {
-            String text = Objects.requireNonNull(
-                    analysisText,
-                    "analysisTexts must not contain null values"
-            );
-            analysisCharacters += text.length();
-            PrivacyJsonPayloadTransformer.requireWithinLimit(
-                    analysisCharacters,
-                    MAX_ANALYSIS_CHARACTERS,
-                    phase
-            );
-        }
     }
 
     private static void analyzeBatch(
@@ -104,17 +86,19 @@ final class PrivacyJsonScalarBatchAnalyzer {
     private static final class AnalysisResultBudget {
 
         private final PrivacyPhase phase;
+        private final int maxResultSpans;
         private int spanCount;
 
-        private AnalysisResultBudget(PrivacyPhase phase) {
+        private AnalysisResultBudget(PrivacyPhase phase, int maxResultSpans) {
             this.phase = phase;
+            this.maxResultSpans = maxResultSpans;
         }
 
         private void accept(int additionalSpans) {
             long updatedSpanCount = (long) this.spanCount + additionalSpans;
             PrivacyJsonPayloadTransformer.requireWithinLimit(
                     updatedSpanCount,
-                    PiiAnalyzer.MAX_RESULT_SPANS,
+                    this.maxResultSpans,
                     this.phase
             );
             this.spanCount = (int) updatedSpanCount;

@@ -193,7 +193,8 @@ public class PrivacyGuardrailsAutoConfiguration {
                         properties.getAnalysis().getEntityAliases()
                 )),
                 resolutionPolicy,
-                failureObserver.getIfAvailable(PiiAnalyzerFailureObserver::noop)
+                failureObserver.getIfAvailable(PiiAnalyzerFailureObserver::noop),
+                properties.getProcessing().limits()
         );
     }
 

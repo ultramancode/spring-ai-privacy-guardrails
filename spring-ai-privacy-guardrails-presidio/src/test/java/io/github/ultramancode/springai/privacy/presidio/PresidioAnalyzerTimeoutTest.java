@@ -3,6 +3,7 @@ package io.github.ultramancode.springai.privacy.presidio;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureMetadata;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -37,7 +38,9 @@ class PresidioAnalyzerTimeoutTest {
                 .thenReturn(retryAttempt);
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(), httpClient);
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessage("Presidio analyzer call timed out")
                 .hasNoCause()
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure -> {
@@ -58,7 +61,9 @@ class PresidioAnalyzerTimeoutTest {
                 ));
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(), httpClient);
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessage("Presidio analyzer call timed out")
                 .hasNoCause()
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure -> {
@@ -75,6 +80,7 @@ class PresidioAnalyzerTimeoutTest {
                 1,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of()
         );
     }

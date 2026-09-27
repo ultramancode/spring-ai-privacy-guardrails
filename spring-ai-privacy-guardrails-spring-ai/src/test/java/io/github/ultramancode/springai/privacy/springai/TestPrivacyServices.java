@@ -1,6 +1,7 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
@@ -22,7 +23,7 @@ final class TestPrivacyServices {
     }
 
     static PrivacyService privacyService() {
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             List<PiiSpan> spans = new ArrayList<>();
             for (String name : List.of("Alice", "Bob")) {
                 int from = 0;
@@ -67,7 +68,11 @@ final class TestPrivacyServices {
     ) {
         return new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 singleAnalysisCalls.incrementAndGet();
                 return List.of();
             }
@@ -75,7 +80,8 @@ final class TestPrivacyServices {
             @Override
             public List<List<PiiSpan>> analyzeSegments(
                     List<String> texts,
-                    PiiAnalysisOptions options
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
             ) {
                 segmentedAnalysisCalls.incrementAndGet();
                 return operation.apply(texts);

@@ -1,42 +1,20 @@
 package io.github.ultramancode.springai.privacy.core;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /** Public facade for PII analysis, transformation, and privacy session lifecycle. */
 public final class PrivacyService {
 
-    /** Hard maximum UTF-16 code units accepted for analysis or supplied-span resolution. */
-    public static final int MAX_TEXT_INPUT_CHARACTERS = 1_000_000;
-
-    /** Hard maximum for text produced by a privacy transformation that changes content. */
-    public static final int MAX_TRANSFORMED_TEXT_CHARACTERS = 8_000_000;
-
-    /** Hard maximum container nesting depth accepted by direct value-tree operations. */
-    public static final int MAX_VALUE_TREE_DEPTH = 128;
-
-    /** Hard maximum node count, including map keys, accepted by direct value-tree operations. */
-    public static final int MAX_VALUE_TREE_NODES = 100_000;
-
-    /** Hard maximum UTF-16 length of one string value or map key in a value tree. */
-    public static final int MAX_VALUE_TREE_STRING_CHARACTERS = 250_000;
-
-    /** Hard maximum character length of one numeric representation in a value tree. */
-    public static final int MAX_VALUE_TREE_NUMBER_CHARACTERS = 1_000;
-
-    /**
-     * Hard maximum aggregate character count of strings, map keys, and numeric
-     * representations accepted by one direct value-tree operation.
-     */
-    public static final int MAX_VALUE_TREE_INPUT_CHARACTERS = 1_000_000;
-
+    private final PrivacyProcessingLimits processingLimits;
     private final PiiAnalysisCoordinator analysisCoordinator;
     private final PrivacyContextRegistry contextRegistry;
     private final PrivacyTextTransformer textTransformer;
     private final PrivacyValueTreeTransformer valueTreeTransformer;
 
     /**
-     * Creates a service with the default entity registry and resolution policy.
+     * Creates a service with the default entity registry, resolution policy, and processing limits.
      *
      * @param analyzers analyzer instances shared across requests
      * @param options analysis language, included entity types, and score options
@@ -47,12 +25,13 @@ public final class PrivacyService {
                 options,
                 EntityTypeRegistry.defaults(),
                 PiiResolutionPolicy.defaults(),
-                PiiAnalyzerFailureObserver.noop()
+                PiiAnalyzerFailureObserver.noop(),
+                PrivacyProcessingLimits.defaults()
         );
     }
 
     /**
-     * Creates a service with explicit entity and resolution policies.
+     * Creates a service with explicit entity and resolution policies and default processing limits.
      *
      * @param analyzers analyzer instances shared across requests
      * @param options analysis language, included entity types, and score options
@@ -65,39 +44,72 @@ public final class PrivacyService {
             EntityTypeRegistry entityTypeRegistry,
             PiiResolutionPolicy resolutionPolicy
     ) {
-        this(analyzers, options, entityTypeRegistry, resolutionPolicy, PiiAnalyzerFailureObserver.noop());
+        this(analyzers, options, entityTypeRegistry, resolutionPolicy,
+                PiiAnalyzerFailureObserver.noop(), PrivacyProcessingLimits.defaults());
     }
 
     /**
-     * Creates a service with explicit policies and a sanitized analyzer failure observer.
+     * Creates a service with explicit processing limits and the default entity and resolution policies.
+     *
+     * @param analyzers analyzer instances shared across requests
+     * @param options analysis language, included entity types, and score options
+     * @param processingLimits limits for input, output, value trees, and analysis
+     */
+    public PrivacyService(
+            List<PiiAnalyzer> analyzers,
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits processingLimits
+    ) {
+        this(analyzers, options, EntityTypeRegistry.defaults(), PiiResolutionPolicy.defaults(),
+                PiiAnalyzerFailureObserver.noop(), processingLimits);
+    }
+
+    /**
+     * Creates a service with explicit policies, an analyzer failure observer, and processing limits.
      *
      * @param analyzers analyzer instances shared across requests
      * @param options analysis language, included entity types, and score options
      * @param entityTypeRegistry canonical entity aliases and configured entity types
      * @param resolutionPolicy provider, failure, overlap, and conflict policy
      * @param failureObserver observer for sanitized analyzer failure events
+     * @param processingLimits limits for input, output, value trees, and analysis
      */
     public PrivacyService(
             List<PiiAnalyzer> analyzers,
             PiiAnalysisOptions options,
             EntityTypeRegistry entityTypeRegistry,
             PiiResolutionPolicy resolutionPolicy,
-            PiiAnalyzerFailureObserver failureObserver
+            PiiAnalyzerFailureObserver failureObserver,
+            PrivacyProcessingLimits processingLimits
     ) {
+        this.processingLimits = Objects.requireNonNull(
+                processingLimits, "processingLimits must not be null");
         this.analysisCoordinator = new PiiAnalysisCoordinator(
                 analyzers,
                 options,
                 entityTypeRegistry,
                 resolutionPolicy,
-                failureObserver
+                failureObserver,
+                this.processingLimits
         );
         this.contextRegistry = new PrivacyContextRegistry();
-        this.textTransformer = new PrivacyTextTransformer(this.analysisCoordinator);
+        this.textTransformer = new PrivacyTextTransformer(
+                this.analysisCoordinator, this.processingLimits);
         this.valueTreeTransformer = new PrivacyValueTreeTransformer(
                 this.analysisCoordinator,
                 this.textTransformer,
-                resolutionPolicy.typeConflictFallback()
+                resolutionPolicy.typeConflictFallback(),
+                this.processingLimits
         );
+    }
+
+    /**
+     * Returns the processing limits used by this service.
+     *
+     * @return the immutable processing limits supplied at construction
+     */
+    public PrivacyProcessingLimits processingLimits() {
+        return this.processingLimits;
     }
 
     /**
@@ -111,15 +123,13 @@ public final class PrivacyService {
     }
 
     /**
-     * Returns resolved spans for independent source texts. Each text is analyzed
-     * independently, and every span offset is relative to that text. Results
-     * preserve input order and contain one span list for each source text.
-     * {@code null} or blank elements produce empty span lists without invoking
-     * configured analyzers.
+     * Analyzes each source text independently. Span offsets are relative to each text,
+     * and results preserve input order. {@code null} or blank elements produce empty
+     * span lists without invoking analyzers. The number of texts and their combined
+     * length must fit the configured {@link PrivacyProcessingLimits#maxAnalysisSegments()}
+     * and {@link PrivacyProcessingLimits#maxTextCharacters()} limits.
      *
-     * @param texts independent source texts, limited to at most
-     *              {@link PiiAnalyzer#MAX_ANALYSIS_SEGMENTS} items with a combined
-     *              length no greater than {@link #MAX_TEXT_INPUT_CHARACTERS}
+     * @param texts independent source texts
      * @return immutable per-text resolved spans in input order
      */
     public List<List<ResolvedPiiSpan>> analyzeSegments(List<String> texts) {
@@ -310,13 +320,13 @@ public final class PrivacyService {
     }
 
     /**
-     * Recursively restores all current-session tokens in a JSON-compatible value tree.
+     * Restores all current-session tokens in a JSON-compatible value tree, including map keys.
      * Accepted values are {@code null}, booleans, strings, numbers of type
      * {@code Byte}, {@code Short}, {@code Integer}, {@code Long}, {@code BigInteger},
      * {@code BigDecimal}, {@code Float}, or {@code Double}, lists, and maps with
      * string keys. Floating-point values must be finite. Inputs are validated and
      * copied before transformation. Unsupported values, reference cycles, and values
-     * above the published {@code MAX_VALUE_TREE_*} limits are rejected.
+     * above the configured processing limits are rejected.
      *
      * @param handle active session handle
      * @param valueTree JSON-compatible value tree
@@ -332,9 +342,9 @@ public final class PrivacyService {
     }
 
     /**
-     * Recursively detokenizes only values belonging to explicitly allowed entity types.
-     * The same accepted types, validation, copying, and limits as
-     * {@link #detokenizeValueTree(PrivacyContextHandle, Object)} apply.
+     * Restores known tokens for the specified entity types in a value tree.
+     * Accepts the same input types and applies the same validation, copying, and limits as
+     * {@link #detokenizeValueTree(PrivacyContextHandle, Object)}.
      *
      * @param handle active session handle
      * @param valueTree JSON-compatible value tree
@@ -356,15 +366,12 @@ public final class PrivacyService {
     }
 
     /**
-     * Recursively tokenizes strings and detected JSON-compatible numeric scalars.
+     * Tokenizes PII found in the string keys, string values, and numbers of a value tree.
      * A protected number becomes an opaque token and is restored to its original
-     * numeric type only by recursive detokenization with sufficient disclosure scope.
-     * Accepted values are {@code null}, booleans, strings, numbers of type
-     * {@code Byte}, {@code Short}, {@code Integer}, {@code Long}, {@code BigInteger},
-     * {@code BigDecimal}, {@code Float}, or {@code Double}, lists, and maps with
-     * string keys. Floating-point values must be finite. Inputs are validated and
-     * copied before analysis. Unsupported values, reference cycles, and values above
-     * the published {@code MAX_VALUE_TREE_*} limits are rejected.
+     * numeric type by value-tree detokenization when its entity type is allowed.
+     * Accepts the same input types and follows the same validation and limit rules as
+     * {@link #detokenizeValueTree(PrivacyContextHandle, Object)}. Inputs are copied
+     * before analysis.
      *
      * @param handle active session handle
      * @param valueTree JSON-compatible value tree
@@ -382,13 +389,14 @@ public final class PrivacyService {
      * Protects one pre-analyzed JSON-compatible string or numeric scalar.
      * Numeric values retain their original type when no supplied span is protected.
      * Multiple distinct protected entity types in one numeric scalar use the configured
-     * type-conflict fallback entity type.
+     * type-conflict fallback entity type. Numeric representations must fit the
+     * configured value-tree character limit. Returned tokens must fit the output limit.
      *
      * @param handle active session handle
      * @param scalar JSON-compatible string or finite numeric scalar
      * @param spans caller-supplied spans to validate and resolve
      * @return the tokenized scalar, or the original numeric value when no span remains
-     * @throws PrivacyGuardrailException if the session is not active
+     * @throws PrivacyGuardrailException if the session is not active or a processing limit is exceeded
      * @throws IllegalArgumentException if scalar is not supported
      */
     public Object tokenizeScalar(PrivacyContextHandle handle, Object scalar, List<PiiSpan> spans) {

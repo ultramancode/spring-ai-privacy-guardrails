@@ -1,8 +1,9 @@
 package io.github.ultramancode.springai.privacy.presidio;
 
-import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
+import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
+import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
@@ -10,7 +11,6 @@ import tools.jackson.core.ObjectReadContext;
 import tools.jackson.core.StreamReadConstraints;
 import tools.jackson.core.json.JsonFactory;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -20,29 +20,22 @@ import java.util.Set;
 /** Parses and validates Presidio response payloads against the adapter contract. */
 final class PresidioResponseParser {
 
-    private static final int MAX_RESPONSE_DEPTH = 64;
-    private static final int MAX_RESPONSE_NAME_CHARACTERS = 256;
-    private static final int MAX_RESPONSE_STRING_CHARACTERS = 250_000;
-    private static final int MAX_RESPONSE_NUMBER_CHARACTERS = 1_000;
-    // Four required scalar fields use ten JSON tokens. Segmented responses may add
-    // two array tokens per source text. The remaining budget covers ignored fields.
-    private static final long MAX_RESPONSE_TOKENS = 1_300_002L;
     private final JsonFactory jsonFactory;
 
-    PresidioResponseParser(int maxResponseBytes) {
+    PresidioResponseParser(int maxResponseBytes, int maxResponseDepth) {
         this.jsonFactory = JsonFactory.builder()
                 .streamReadConstraints(StreamReadConstraints.builder()
                         .maxDocumentLength(maxResponseBytes)
-                        .maxStringLength(MAX_RESPONSE_STRING_CHARACTERS)
-                        .maxNameLength(MAX_RESPONSE_NAME_CHARACTERS)
-                        .maxNumberLength(MAX_RESPONSE_NUMBER_CHARACTERS)
-                        .maxNestingDepth(MAX_RESPONSE_DEPTH)
-                        .maxTokenCount(MAX_RESPONSE_TOKENS)
+                        .maxStringLength(maxResponseBytes)
+                        .maxNameLength(maxResponseBytes)
+                        .maxNumberLength(maxResponseBytes)
+                        .maxNestingDepth(maxResponseDepth)
+                        .maxTokenCount(maxResponseBytes)
                         .build())
                 .build();
     }
 
-    List<PiiSpan> parse(byte[] responseBody, String sourceText) {
+    List<PiiSpan> parse(byte[] responseBody, String sourceText, int maxResultSpans) {
         Utf16OffsetIndex offsetIndex = Utf16OffsetIndex.from(
                 Objects.requireNonNull(sourceText, "sourceText must not be null")
         );
@@ -50,7 +43,7 @@ final class PresidioResponseParser {
             if (parser.nextToken() != JsonToken.START_ARRAY) {
                 throw invalidResponseContract();
             }
-            List<PiiSpan> spans = readSpans(parser, offsetIndex, new SpanBudget());
+            List<PiiSpan> spans = readSpans(parser, offsetIndex, new SpanBudget(maxResultSpans));
             if (parser.nextToken() != null) {
                 throw invalidResponseContract();
             }
@@ -66,14 +59,18 @@ final class PresidioResponseParser {
         }
     }
 
-    List<List<PiiSpan>> parseSegments(byte[] responseBody, List<String> sourceTexts) {
+    List<List<PiiSpan>> parseSegments(
+            byte[] responseBody,
+            List<String> sourceTexts,
+            int maxResultSpans
+    ) {
         Objects.requireNonNull(sourceTexts, "sourceTexts must not be null");
         try (JsonParser parser = this.jsonFactory.createParser(ObjectReadContext.empty(), responseBody)) {
             if (parser.nextToken() != JsonToken.START_ARRAY) {
                 throw invalidResponseContract();
             }
 
-            SpanBudget spanBudget = new SpanBudget();
+            SpanBudget spanBudget = new SpanBudget(maxResultSpans);
             List<List<PiiSpan>> results = new ArrayList<>(sourceTexts.size());
             for (String sourceText : sourceTexts) {
                 if (parser.nextToken() != JsonToken.START_ARRAY) {
@@ -179,32 +176,24 @@ final class PresidioResponseParser {
         if (token != JsonToken.VALUE_NUMBER_INT) {
             throw invalidResponseContract();
         }
-        Number value = parser.getNumberValue();
-        if (value instanceof Byte || value instanceof Short || value instanceof Integer) {
-            return value.intValue();
+        try {
+            // Parsing offsets directly as int avoids creating arbitrary-precision integers.
+            return Integer.parseInt(parser.getString());
+        } catch (NumberFormatException ignored) {
+            throw invalidResponseContract();
         }
-        if (value instanceof Long longValue) {
-            try {
-                return Math.toIntExact(longValue);
-            } catch (ArithmeticException ignored) {
-                throw invalidResponseContract();
-            }
-        }
-        if (value instanceof BigInteger bigInteger) {
-            try {
-                return bigInteger.intValueExact();
-            } catch (ArithmeticException ignored) {
-                throw invalidResponseContract();
-            }
-        }
-        throw invalidResponseContract();
     }
 
     private static Double readScore(JsonParser parser, JsonToken token) throws JacksonException {
         if (token != JsonToken.VALUE_NUMBER_INT && token != JsonToken.VALUE_NUMBER_FLOAT) {
             throw invalidResponseContract();
         }
-        double score = parser.getNumberValue().doubleValue();
+        double score;
+        try {
+            score = Double.parseDouble(parser.getString());
+        } catch (NumberFormatException ignored) {
+            throw invalidResponseContract();
+        }
         if (!Double.isFinite(score) || score < 0.0 || score > 1.0) {
             throw invalidResponseContract();
         }
@@ -256,11 +245,20 @@ final class PresidioResponseParser {
 
     private static final class SpanBudget {
 
+        private final int maxResultSpans;
         private int spanCount;
 
+        private SpanBudget(int maxResultSpans) {
+            this.maxResultSpans = maxResultSpans;
+        }
+
         private void accept() {
-            if (this.spanCount >= PiiAnalyzer.MAX_RESULT_SPANS) {
-                throw invalidResponseContract();
+            if (this.spanCount >= this.maxResultSpans) {
+                throw new PrivacyGuardrailException(
+                        PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                        PrivacyPhase.ANALYSIS,
+                        "Presidio analyzer result exceeded the configured span limit"
+                );
             }
             this.spanCount++;
         }

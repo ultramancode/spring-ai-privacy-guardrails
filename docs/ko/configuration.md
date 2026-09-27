@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 1c7caae39ccd93080bd9e278bd103471a9d7dbe90eba899b14724336c6d121de -->
+<!-- i18n-source-sha256: 4075dc6285e64094e2b54dfc303aafaf563b9721fb0b5e71f194bb396edbb94e -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -173,6 +173,13 @@ builder를 전달하세요. Factory가 실행 순서에 맞춰 개인정보 보�
 | `output.enabled` | `false` | 출력 보호를 활성화합니다. |
 | `output.action` | `TOKENIZE` | `TOKENIZE`, `REDACT` 또는 유형이 지정된 예외를 던지는 `BLOCK`을 선택합니다. |
 | `output.block-exception-message` | `Response blocked by privacy guardrail.` | `BLOCK` 예외에 사용할 안전한 메시지입니다. |
+| `processing.max-text-characters` | `1000000` | 텍스트나 JSON 문서 하나의 최대 길이입니다. 배치 분석에서는 모든 텍스트의 길이를 합산합니다. |
+| `processing.max-output-characters` | `8000000` | 변환 결과의 최대 길이입니다. 원문을 그대로 반환할 때도 적용합니다. |
+| `processing.max-value-tree-characters` | `1000000` | 값 트리나 JSON 문서 하나의 최대 누적 길이입니다. 문자열 값·맵 키·숫자 표현의 길이를 합산합니다. |
+| `processing.max-value-tree-nodes` | `100000` | 값 트리나 JSON 문서 하나의 최대 노드 수입니다. 컨테이너·스칼라 값·맵 키를 포함합니다. |
+| `processing.max-depth` | `128` | 값 트리나 JSON 문서 하나의 최대 중첩 깊이입니다. |
+| `processing.max-analysis-segments` | `100000` | 한 번의 배치 분석에 전달하는 텍스트의 최대 개수입니다. |
+| `processing.max-result-spans` | `100000` | 한 번의 분석에서 수집하는 탐지 범위의 최대 개수입니다. 여러 분석기의 결과를 합산합니다. |
 | `response-inspection.max-stream-frames` | `1024` | 스트리밍 응답 하나에서 검사할 최대 프레임 수입니다. |
 | `response-inspection.max-characters` | `1000000` | 호출 또는 스트리밍 응답 하나에서 검사하는 텍스트 기반 콘텐츠의 최대 누적 문자 수입니다. |
 | `response-inspection.max-media-bytes` | `16777216` | 응답 하나에서 허용하는 미디어 데이터의 최대 누적 바이트 수입니다. |
@@ -189,7 +196,8 @@ builder를 전달하세요. Factory가 실행 순서에 맞춰 개인정보 보�
 | `presidio.timeout` | `5s` | 응답 본문 수신 완료까지 포함해 각 HTTP 요청 시도와 상태 확인에 적용되는 제한 시간입니다. |
 | `presidio.max-retries` | `1` | 첫 시도 이후의 재시도 횟수입니다. |
 | `presidio.retry-backoff` | `300ms` | 시도 사이의 대기 시간입니다. |
-| `presidio.max-response-bytes` | `8388608` | 검증을 위해 보존할 Presidio 응답 본문의 최대 바이트 수입니다. |
+| `presidio.max-response-bytes` | `8388608` | Presidio 응답 본문의 최대 바이트 수입니다. |
+| `presidio.max-response-depth` | `64` | Presidio 응답의 최대 JSON 중첩 깊이입니다. |
 | `presidio.headers` | 비어 있음 | Presidio 요청에 추가할 HTTP 헤더입니다. `Content-Type`은 라이브러리가 관리하므로 설정할 수 없습니다. |
 | `opennlp.enabled` | `false` | 사용자가 제공한 로컬 OpenNLP 모델을 활성화합니다. |
 | `opennlp.tokenizer-model` | 미설정 | 선택적인 tokenizer 모델 리소스입니다. 설정하지 않으면 `SimpleTokenizer`를 사용합니다. |
@@ -329,6 +337,9 @@ spring:
 
 ### 구조화된 JSON
 
+일반 메시지나 도구 결과가 JSON 형식이 아니더라도 평문으로 개인정보 보호를 적용할 수
+있습니다. 구조화된 JSON이 반드시 필요한 경계에서만 잘못된 JSON을 거부합니다.
+
 구조화된 JSON에서는 속성 이름과 문자열 값, 숫자 값을 분석합니다. 비어 있거나
 공백으로만 이루어진 속성 이름과 문자열 값은 분석하지 않습니다. 각 항목은 독립적으로
 분석하며, 탐지한 문자열의 시작·끝 위치는 해당 항목의 텍스트를 기준으로 계산합니다.
@@ -339,28 +350,20 @@ spring:
 
 ### 사용자 정의 분석기
 
-이 절은 `PiiAnalyzer`를 직접 구현하거나 분석 메서드를 직접 호출할 때 참고하세요.
-스타터에서 제공하는 분석기만 사용하는 경우에는 건너뛰어도 됩니다.
+`PiiAnalyzer`의 `analyze(text, options, limits)`를 구현해 텍스트 하나의 탐지 범위를
+반환합니다.
 
 사용자 정의 분석기는 여러 요청에서 공유될 수 있으므로 스레드 안전(thread-safe)하고
 재진입 가능하게 구현해야 합니다. 각 분석기는 고유한 분석기 ID를 제공해야 하며,
 블로킹 작업에는 유한한 제한 시간을 적용하고 스레드 중단 요청도 적절히 처리해야 합니다.
 
-`PiiAnalyzer.analyzeSegments(...)`는 서로 독립된 여러 텍스트를 받습니다.
-기본 구현은 각 텍스트에 대해 `analyze(...)`를 호출합니다.
+`PiiAnalyzer.analyzeSegments(texts, options, limits)`의 기본 구현은 각 텍스트에 대해
+`analyze(...)`를 호출합니다. 외부 서비스의 배치 API를 사용하려면 이 메서드를
+재정의할 수 있습니다. 결과는 입력 순서에 맞춰 텍스트별로 반환하고, 탐지 범위의
+시작·끝 위치는 해당 텍스트를 기준으로 계산해야 합니다.
 
-텍스트 배열을 받는 외부 분석 서비스를 사용하는 경우에는 `analyzeSegments(...)`를
-재정의해 여러 텍스트를 한 번의 요청으로 처리할 수 있습니다. 재정의한 구현은 입력
-순서에 맞춰 텍스트별 결과를 반환하고, 탐지한 범위의 시작·끝 위치를 해당 텍스트를
-기준으로 계산해야 합니다. 애플리케이션에서도 `PrivacyService.analyzeSegments(...)`를
-직접 호출해 여러 텍스트를 같은 방식으로 분석할 수 있습니다.
-
-한 번의 `PrivacyService.analyzeSegments(...)` 호출에는 최대 100,000개의 텍스트
-(`PiiAnalyzer.MAX_ANALYSIS_SEGMENTS`)를 전달할 수 있으며, 전체 입력 길이는
-`PrivacyService.MAX_TEXT_INPUT_CHARACTERS`를 초과할 수 없습니다. 반환할 수 있는
-탐지 범위의 총합은 최대 100,000개(`PiiAnalyzer.MAX_RESULT_SPANS`)입니다. 사용자 정의
-분석기도 처리 중 생성하는 임시 데이터와 결과 크기에 적절한 한도를 적용해야 합니다.
-텍스트 크기 제한은 [입력·응답 처리 제한](#입력응답-처리-제한)을 참고하세요.
+결과를 수집할 때는 전달받은 `limits`를 준수해야 합니다. 배치 분석에서는 결과 수 제한을
+배치 전체에 적용합니다.
 
 ## Regex 분석기
 
@@ -439,6 +442,7 @@ spring:
         max-retries: 1
         retry-backoff: 300ms
         max-response-bytes: 8388608
+        max-response-depth: 64
         headers:
           X-API-Key: ${PRESIDIO_API_KEY}
 ```
@@ -456,9 +460,10 @@ spring:
 전송 실패, `timeout` 초과, HTTP 408/429와 5xx 응답은 `max-retries` 설정에 따라
 재시도하며, 그 밖의 4xx 응답은 즉시 실패합니다.
 
-`max-response-bytes`는 Presidio 응답 본문의 최대 크기이며 기본값은 8 MiB입니다.
-이 값을 늘리면 응답 처리에 필요한 최대 메모리도 증가할 수 있습니다. 크기 제한을
-초과하거나 올바르게 처리할 수 없는 응답은 분석 실패로 처리합니다.
+`max-response-depth`는 Presidio 응답에 적용합니다. 애플리케이션의 값 트리나
+JSON 문서에는 `processing.max-depth`를 적용합니다.
+Presidio 응답이 크기나 깊이 제한을 초과하면 `ANALYZER_RESPONSE_INVALID`로 처리하고
+설정된 분석기 실패 정책을 따릅니다.
 
 Spring Boot의 상태 점검 기능을 사용하는 경우 Presidio 서비스의 상태도 함께 확인할
 수 있습니다.
@@ -652,27 +657,18 @@ spring:
 제한은 데이터 크기만 확인하며, 이미지나 오디오 내용에서 개인정보를 탐지하지는
 않습니다.
 
-설정으로 변경할 수 없는 처리 상한도 있습니다. 지나치게 크거나 복잡한 입력으로 인한
-메모리 사용을 제한하기 위한 값이며, `output.enabled=false`인 경우에도 적용됩니다.
+`processing.*`는 개인정보를 분석하거나 변환할 때 적용하는 제한입니다.
+`output.enabled=false`여도 적용되며, 각 설정에는 양의 정수를 지정합니다.
 
-| 제한 적용 지점 | 측정 대상 | 최대치 |
-| --- | --- | ---: |
-| Spring AI 경계 | JSON 파싱 또는 평문 처리 전의 전체 페이로드 길이(UTF-16 코드 단위) | 1,000,000 |
-| `core` 텍스트 처리 | 자동 분석하거나 호출자가 제공한 탐지 범위(span)로 처리하는 단일 텍스트 길이(UTF-16 코드 단위) | 1,000,000 |
-| `core` 세그먼트 분석 | 한 번의 `analyzeSegments(...)` 호출에 전달된 모든 텍스트의 길이 합계(UTF-16 코드 단위) | 1,000,000 |
-| `core` 값 트리 처리 | 단일 값 트리에 포함된 문자열, 맵 키 및 숫자 표현 길이의 합계(UTF-16 코드 단위) | 1,000,000 |
-| JSON 또는 값 트리 처리 | 단일 JSON 문서 또는 `core` 값 트리의 노드 수 | 100,000 |
-| JSON 또는 값 트리 처리 | 단일 JSON 문서 또는 `core` 값 트리의 중첩 깊이 | 128 |
-| 개인정보 변환 | 한 번의 변환으로 생성되는 전체 출력 길이(UTF-16 코드 단위) | 8,000,000 |
+문자열 길이는 Java `String.length()` 기준인 UTF-16 코드 단위로 계산합니다.
+JSON의 출력 길이에는 JSON 구문과 이스케이프 문자도 포함합니다. 값 트리의 출력 길이는
+결과에 포함된 문자열 값과 맵 키의 길이를 합산합니다.
 
-텍스트 길이는 Java `String.length()` 기준입니다. 일반적인 글자는 대부분 UTF-16 코드
-단위 1개로 계산하지만, 여러 이모지는 화면에 한 글자로 보여도 2개로 계산됩니다.
+JSON에서 추출한 텍스트는 최대 `processing.max-analysis-segments`개씩 묶어 분석합니다.
+`processing.max-result-spans`는 문서 전체의 최종 탐지 범위 수에 적용합니다.
 
-안전 상한을 초과하면 처리 또는 결과 전달 전에 `PAYLOAD_LIMIT_EXCEEDED` 오류가
-발생합니다.
-
-일반 메시지나 도구 결과가 JSON 형식이 아니더라도 평문으로 개인정보 보호를 적용할 수
-있습니다. 구조화된 JSON이 반드시 필요한 경계에서만 잘못된 JSON을 거부합니다.
+처리 제한을 초과하면 `ALLOW_PARTIAL`이나 fallback 정책과 관계없이
+`PAYLOAD_LIMIT_EXCEEDED`로 작업을 중단합니다.
 
 ## `core` 모듈 직접 사용
 

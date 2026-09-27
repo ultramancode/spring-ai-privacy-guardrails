@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import opennlp.tools.ml.model.SequenceClassificationModel;
 import opennlp.tools.namefind.NameFinderME;
 import opennlp.tools.namefind.NameSample;
@@ -44,7 +45,7 @@ class OpenNlpPiiAnalyzerTest {
         OpenNlpPiiAnalyzer analyzer = analyzer();
         String text = "🙂 Alice joined";
 
-        List<PiiSpan> spans = analyzer.analyze(text, PiiAnalysisOptions.defaults());
+        List<PiiSpan> spans = analyzer.analyze(text, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults());
 
         assertThat(spans).anySatisfy(span -> {
             assertThat(span.entityType()).isEqualTo("PERSON");
@@ -62,7 +63,8 @@ class OpenNlpPiiAnalyzerTest {
 
         List<List<PiiSpan>> results = analyzer.analyzeSegments(
                 texts,
-                PiiAnalysisOptions.defaults()
+                PiiAnalysisOptions.defaults(),
+                PrivacyProcessingLimits.defaults()
         );
 
         assertThat(results).hasSize(2);
@@ -75,11 +77,24 @@ class OpenNlpPiiAnalyzerTest {
     }
 
     @Test
+    void analyzeSegmentsUsesTheConfiguredSpanLimit() {
+        OpenNlpPiiAnalyzer analyzer = analyzer();
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
+
+        assertThatThrownBy(() -> analyzer.analyzeSegments(
+                List.of("Alice joined", "Bob joined"), PiiAnalysisOptions.defaults(), limits
+        )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure ->
+                assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
+    }
+
+    @Test
     void analyzeSegmentsReusesBatchLocalFindersAndMatchesIndependentAnalysis() throws IOException {
         List<String> texts = List.of("Alice joined", "Bob called", "Alice left");
         OpenNlpPiiAnalyzer independentAnalyzer = analyzer();
         List<List<PiiSpan>> independentResults = texts.stream()
-                .map(text -> independentAnalyzer.analyze(text, PiiAnalysisOptions.defaults()))
+                .map(text -> independentAnalyzer.analyze(
+                        text, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+                ))
                 .toList();
         AtomicInteger finderInitializations = new AtomicInteger();
         TokenNameFinderModel countingModel = new TokenNameFinderModel(
@@ -98,7 +113,8 @@ class OpenNlpPiiAnalyzerTest {
 
         List<List<PiiSpan>> segmentedResults = segmentedAnalyzer.analyzeSegments(
                 texts,
-                PiiAnalysisOptions.defaults()
+                PiiAnalysisOptions.defaults(),
+                PrivacyProcessingLimits.defaults()
         );
 
         assertThat(segmentedResults).isEqualTo(independentResults);
@@ -128,7 +144,8 @@ class OpenNlpPiiAnalyzerTest {
 
         assertThatThrownBy(() -> analyzer.analyze(
                 "Alice",
-                PiiAnalysisOptions.builder().language("ko").build()
+                PiiAnalysisOptions.builder().language("ko").build(),
+                PrivacyProcessingLimits.defaults()
         )).isInstanceOf(PrivacyGuardrailException.class)
                 .hasMessage("OpenNLP analyzer language does not match the requested language");
     }
@@ -153,10 +170,12 @@ class OpenNlpPiiAnalyzerTest {
     void analyzeRejectsNullInputsBeforeBlankShortCircuit() {
         OpenNlpPiiAnalyzer analyzer = analyzer();
 
-        assertThatThrownBy(() -> analyzer.analyze("", null))
+        assertThatThrownBy(() -> analyzer.analyze("", null, PrivacyProcessingLimits.defaults()))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("options must not be null");
-        assertThatThrownBy(() -> analyzer.analyze(null, PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                null, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("text must not be null");
     }
@@ -186,7 +205,9 @@ class OpenNlpPiiAnalyzerTest {
                 List.of(new OpenNlpEntityModel("PERSON", modelThrowing(injectedFailure)))
         );
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .isInstanceOfSatisfying(PrivacyGuardrailException.class, sanitized -> {
                     assertThat(sanitized.code()).isEqualTo(PrivacyFailureCode.ANALYZER_EXECUTION_FAILED);
                     assertThat(sanitized.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
@@ -205,7 +226,9 @@ class OpenNlpPiiAnalyzerTest {
                 List.of(new OpenNlpEntityModel("PERSON", modelThrowing(fatal)))
         );
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .isSameAs(fatal);
     }
 
@@ -215,8 +238,12 @@ class OpenNlpPiiAnalyzerTest {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             List<Future<List<PiiSpan>>> futures = List.of(
-                    executor.submit(() -> analyzer.analyze("Alice joined", PiiAnalysisOptions.defaults())),
-                    executor.submit(() -> analyzer.analyze("Bob joined", PiiAnalysisOptions.defaults()))
+                    executor.submit(() -> analyzer.analyze(
+                            "Alice joined", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+                    )),
+                    executor.submit(() -> analyzer.analyze(
+                            "Bob joined", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+                    ))
             );
 
             PiiSpan alice = futures.get(0).get().get(0);

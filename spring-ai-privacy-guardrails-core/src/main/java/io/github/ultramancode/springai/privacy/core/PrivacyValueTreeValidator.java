@@ -13,23 +13,21 @@ import java.util.Set;
 /** Validates and copies values accepted by the direct value-tree API. */
 final class PrivacyValueTreeValidator {
 
-    // Avoid rendering obviously oversized BigInteger and BigDecimal magnitudes.
-    // The acceptNumber method performs the exact decimal representation check afterward.
-    private static final int MAX_NUMBER_BIT_LENGTH = BigInteger.TEN
-            .pow(PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS)
-            .bitLength();
-
     private final PrivacyPhase phase;
+    private final PrivacyProcessingLimits limits;
     private final Set<Object> activeContainers = Collections.newSetFromMap(new IdentityHashMap<>());
-    private int nodeCount;
+    private long nodeCount;
     private long inputCharacters;
 
-    private PrivacyValueTreeValidator(PrivacyPhase phase) {
+    private PrivacyValueTreeValidator(PrivacyPhase phase, PrivacyProcessingLimits limits) {
         this.phase = phase;
+        this.limits = limits;
     }
 
-    static Object validateAndCopy(Object valueTree, PrivacyPhase phase) {
-        return new PrivacyValueTreeValidator(phase).validateValue(valueTree, 0);
+    static Object validateAndCopy(
+            Object valueTree, PrivacyPhase phase, PrivacyProcessingLimits limits
+    ) {
+        return new PrivacyValueTreeValidator(phase, limits).validateValue(valueTree, 0);
     }
 
     static boolean isSupportedNumber(Number number) {
@@ -107,40 +105,37 @@ final class PrivacyValueTreeValidator {
     }
 
     private void acceptNode() {
-        if (++this.nodeCount > PrivacyService.MAX_VALUE_TREE_NODES) {
+        if (++this.nodeCount > this.limits.maxValueTreeNodes()) {
             throw limitExceeded("Value tree node limit exceeded");
         }
     }
 
     private void acceptString(String text) {
-        if (text.length() > PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS) {
-            throw limitExceeded("Value tree string length limit exceeded");
-        }
         acceptInputCharacters(text.length());
     }
 
     private void acceptNumber(Number number) {
-        if ((number instanceof BigInteger integer && integer.bitLength() > MAX_NUMBER_BIT_LENGTH)
+        // A decimal representation needs at least one digit for every four magnitude bits.
+        // Reject magnitudes that cannot fit the character limit before converting them to text.
+        long maximumBits = 4L * this.limits.maxValueTreeCharacters();
+        if ((number instanceof BigInteger integer && integer.bitLength() > maximumBits)
                 || (number instanceof BigDecimal decimal
-                    && decimal.unscaledValue().bitLength() > MAX_NUMBER_BIT_LENGTH)) {
+                    && decimal.unscaledValue().bitLength() > maximumBits)) {
             throw limitExceeded("Value tree numeric representation limit exceeded");
         }
         String representation = number.toString();
-        if (representation.length() > PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS) {
-            throw limitExceeded("Value tree numeric representation limit exceeded");
-        }
         acceptInputCharacters(representation.length());
     }
 
     private void acceptInputCharacters(int additionalCharacters) {
         this.inputCharacters += additionalCharacters;
-        if (this.inputCharacters > PrivacyService.MAX_VALUE_TREE_INPUT_CHARACTERS) {
+        if (this.inputCharacters > this.limits.maxValueTreeCharacters()) {
             throw limitExceeded("Value tree input content limit exceeded");
         }
     }
 
     private void requireDepth(int depth) {
-        if (depth > PrivacyService.MAX_VALUE_TREE_DEPTH) {
+        if (depth > this.limits.maxDepth()) {
             throw limitExceeded("Value tree nesting depth limit exceeded");
         }
     }

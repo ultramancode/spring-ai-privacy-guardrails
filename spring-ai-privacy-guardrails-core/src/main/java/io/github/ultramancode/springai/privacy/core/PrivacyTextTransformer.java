@@ -11,9 +11,14 @@ import java.util.regex.Matcher;
 final class PrivacyTextTransformer {
 
     private final PiiAnalysisCoordinator analysisCoordinator;
+    private final PrivacyProcessingLimits processingLimits;
 
-    PrivacyTextTransformer(PiiAnalysisCoordinator analysisCoordinator) {
+    PrivacyTextTransformer(
+            PiiAnalysisCoordinator analysisCoordinator,
+            PrivacyProcessingLimits processingLimits
+    ) {
         this.analysisCoordinator = analysisCoordinator;
+        this.processingLimits = processingLimits;
     }
 
     PiiTokenizationResult analyzeAndTokenize(String text, PrivacyContext context) {
@@ -40,9 +45,9 @@ final class PrivacyTextTransformer {
     }
 
     String redact(String text) {
-        PiiAnalysisCoordinator.requireTextInputWithinLimit(text);
+        this.analysisCoordinator.requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
-            return text;
+            return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
         return redactPrepared(text, protectionSpans(this.analysisCoordinator.analyze(text)));
     }
@@ -61,9 +66,9 @@ final class PrivacyTextTransformer {
     }
 
     String redact(String text, PrivacyContext context) {
-        PiiAnalysisCoordinator.requireTextInputWithinLimit(text);
+        this.analysisCoordinator.requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
-            return text;
+            return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
         List<ProtectionSpan> spans = excludeKnownTokens(
                 text,
@@ -74,7 +79,7 @@ final class PrivacyTextTransformer {
     }
 
     boolean containsPii(String text, PrivacyContext context) {
-        PiiAnalysisCoordinator.requireTextInputWithinLimit(text);
+        this.analysisCoordinator.requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
             return false;
         }
@@ -96,10 +101,10 @@ final class PrivacyTextTransformer {
 
     String detokenize(String text, PrivacyContext context, Set<String> allowedEntityTypes) {
         if (text == null || text.isBlank()) {
-            return text;
+            return requireOutputWithinLimit(text, PrivacyPhase.DETOKENIZATION);
         }
         if (!context.hasTokens()) {
-            return text;
+            return requireOutputWithinLimit(text, PrivacyPhase.DETOKENIZATION);
         }
 
         Matcher matcher = OpaquePiiTokenFormat.canonicalTokenPattern().matcher(text);
@@ -113,7 +118,7 @@ final class PrivacyTextTransformer {
             if (detokenizedText == null) {
                 detokenizedText = new StringBuilder(Math.min(
                         text.length(),
-                        PrivacyService.MAX_TRANSFORMED_TEXT_CHARACTERS
+                        this.processingLimits.maxOutputCharacters()
                 ));
             }
             appendBounded(detokenizedText, text, cursor, matcher.start(), PrivacyPhase.DETOKENIZATION);
@@ -121,7 +126,7 @@ final class PrivacyTextTransformer {
             cursor = matcher.end();
         }
         if (detokenizedText == null) {
-            return text;
+            return requireOutputWithinLimit(text, PrivacyPhase.DETOKENIZATION);
         }
         appendBounded(detokenizedText, text, cursor, text.length(), PrivacyPhase.DETOKENIZATION);
         return detokenizedText.toString();
@@ -130,32 +135,35 @@ final class PrivacyTextTransformer {
     private String tokenizePrepared(String text, List<ProtectionSpan> spans, PrivacyContext context) {
         List<ProtectionSpan> preparedSpans = excludeKnownTokens(text, spans, context);
         if (preparedSpans.isEmpty()) {
-            return text;
+            return requireOutputWithinLimit(text, PrivacyPhase.TOKENIZATION);
         }
 
         List<ProtectionSpan> ordered = orderedSpans(preparedSpans);
+        // Reject guaranteed overflow before creating mappings, then check actual token lengths.
         int capacity = boundedTransformedLength(
                 text,
                 ordered,
                 PrivacyPhase.TOKENIZATION,
-                span -> OpaquePiiTokenFormat.maximumGeneratedTokenLength(span.entityType())
+                span -> OpaquePiiTokenFormat.minimumGeneratedTokenLength(span.entityType())
         );
         StringBuilder tokenizedText = new StringBuilder(capacity);
         int cursor = 0;
         for (ProtectionSpan span : ordered) {
-            tokenizedText.append(text, cursor, span.start());
-            tokenizedText.append(context.tokenFor(
+            appendBounded(tokenizedText, text, cursor, span.start(), PrivacyPhase.TOKENIZATION);
+            String token = context.tokenFor(
                     span.entityType(),
                     text.substring(span.start(), span.end())
-            ));
+            );
+            appendBounded(tokenizedText, token, PrivacyPhase.TOKENIZATION);
             cursor = span.end();
         }
-        return tokenizedText.append(text, cursor, text.length()).toString();
+        appendBounded(tokenizedText, text, cursor, text.length(), PrivacyPhase.TOKENIZATION);
+        return tokenizedText.toString();
     }
 
-    private static String redactPrepared(String text, List<ProtectionSpan> spans) {
+    private String redactPrepared(String text, List<ProtectionSpan> spans) {
         if (spans.isEmpty()) {
-            return text;
+            return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
 
         List<ProtectionSpan> ordered = orderedSpans(spans);
@@ -234,7 +242,7 @@ final class PrivacyTextTransformer {
                 .toList();
     }
 
-    private static int boundedTransformedLength(
+    private int boundedTransformedLength(
             String text,
             List<ProtectionSpan> spans,
             PrivacyPhase phase,
@@ -243,8 +251,8 @@ final class PrivacyTextTransformer {
         long length = text.length();
         for (ProtectionSpan span : spans) {
             length += (long) replacementLength.applyAsInt(span) - (span.end() - span.start());
-            requireOutputLength(length, phase);
         }
+        requireOutputLength(length, phase);
         return (int) length;
     }
 
@@ -252,12 +260,12 @@ final class PrivacyTextTransformer {
         return "[REDACTED_" + entityType + "]";
     }
 
-    private static void appendBounded(StringBuilder target, String value, PrivacyPhase phase) {
+    private void appendBounded(StringBuilder target, String value, PrivacyPhase phase) {
         requireOutputLength((long) target.length() + value.length(), phase);
         target.append(value);
     }
 
-    private static void appendBounded(
+    private void appendBounded(
             StringBuilder target,
             String value,
             int start,
@@ -268,12 +276,19 @@ final class PrivacyTextTransformer {
         target.append(value, start, end);
     }
 
-    private static void requireOutputLength(long length, PrivacyPhase phase) {
-        if (length > PrivacyService.MAX_TRANSFORMED_TEXT_CHARACTERS) {
+    private String requireOutputWithinLimit(String text, PrivacyPhase phase) {
+        if (text != null) {
+            requireOutputLength(text.length(), phase);
+        }
+        return text;
+    }
+
+    void requireOutputLength(long length, PrivacyPhase phase) {
+        if (length > this.processingLimits.maxOutputCharacters()) {
             throw new PrivacyGuardrailException(
                     PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                     phase,
-                    "Privacy text transformation exceeded the bounded output limit"
+                    "Privacy text transformation exceeded the configured output limit"
             );
         }
     }

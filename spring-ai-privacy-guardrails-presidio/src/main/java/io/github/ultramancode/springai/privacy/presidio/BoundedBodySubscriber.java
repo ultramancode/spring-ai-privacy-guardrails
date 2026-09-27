@@ -11,7 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 
-/** Collects an HTTP body with backpressure and cancels before exceeding a hard byte limit. */
+/** Collects an HTTP body with backpressure up to the configured byte limit. */
 final class BoundedBodySubscriber implements HttpResponse.BodySubscriber<byte[]> {
 
     private final int maxBytes;

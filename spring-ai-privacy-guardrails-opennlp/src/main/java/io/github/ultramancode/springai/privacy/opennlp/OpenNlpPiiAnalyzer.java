@@ -7,6 +7,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyFailureSanitizer;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import opennlp.tools.namefind.NameFinderME;
 import opennlp.tools.tokenize.SimpleTokenizer;
 import opennlp.tools.tokenize.Tokenizer;
@@ -83,14 +84,19 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
     }
 
     @Override
-    public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+    public List<PiiSpan> analyze(
+            String text,
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits
+    ) {
         Objects.requireNonNull(text, "text must not be null");
         Objects.requireNonNull(options, "options must not be null");
+        Objects.requireNonNull(limits, "limits must not be null");
         if (text.isBlank()) {
             return List.of();
         }
         try {
-            return analyzeText(text, options);
+            return analyzeText(text, options, limits.maxResultSpans());
         } catch (OpenNlpAnalysisException failure) {
             throw failure;
         } catch (Throwable failure) {
@@ -113,12 +119,17 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
     @Override
     public List<List<PiiSpan>> analyzeSegments(
             List<String> texts,
-            PiiAnalysisOptions options
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits
     ) {
         Objects.requireNonNull(texts, "texts must not be null");
         Objects.requireNonNull(options, "options must not be null");
-        if (texts.size() > PiiAnalyzer.MAX_ANALYSIS_SEGMENTS) {
-            throw new IllegalArgumentException("texts exceeded the safe segment limit");
+        Objects.requireNonNull(limits, "limits must not be null");
+        if (texts.size() > limits.maxAnalysisSegments()) {
+            throw new OpenNlpAnalysisException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    "PII analysis exceeded the configured segment limit"
+            );
         }
         boolean hasNonBlankText = false;
         for (String text : texts) {
@@ -143,7 +154,7 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
                     .map(entityModel -> new NameFinderME(entityModel.model()))
                     .toList();
             List<List<PiiSpan>> results = new ArrayList<>(texts.size());
-            long spanCount = 0L;
+            int spanCount = 0;
             for (String text : texts) {
                 rejectInterruptedAnalysis();
                 if (text.isBlank()) {
@@ -157,7 +168,7 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
                             text,
                             tokenizer,
                             finders,
-                            PiiAnalyzer.MAX_RESULT_SPANS - spanCount
+                            limits.maxResultSpans() - spanCount
                     );
                 } finally {
                     // NameFinderME retains adaptive state. Clear that state between
@@ -165,12 +176,6 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
                     finders.forEach(NameFinderME::clearAdaptiveData);
                 }
                 spanCount += spans.size();
-                if (spanCount > PiiAnalyzer.MAX_RESULT_SPANS) {
-                    throw new OpenNlpAnalysisException(
-                            PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
-                            "OpenNLP analyzer segmented result exceeded the safe span limit"
-                    );
-                }
                 results.add(spans);
             }
             return List.copyOf(results);
@@ -186,20 +191,20 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
         }
     }
 
-    private List<PiiSpan> analyzeText(String text, PiiAnalysisOptions options) {
+    private List<PiiSpan> analyzeText(String text, PiiAnalysisOptions options, int maxResultSpans) {
         requireLanguage(options);
         Tokenizer tokenizer = this.tokenizerFactory.get();
         List<NameFinderME> finders = this.entityModels.stream()
                 .map(entityModel -> new NameFinderME(entityModel.model()))
                 .toList();
-        return analyzeText(text, tokenizer, finders, PiiAnalyzer.MAX_RESULT_SPANS);
+        return analyzeText(text, tokenizer, finders, maxResultSpans);
     }
 
     private List<PiiSpan> analyzeText(
             String text,
             Tokenizer tokenizer,
             List<NameFinderME> finders,
-            long maximumResultSpans
+            int maxResultSpans
     ) {
         Span[] tokenPositions = tokenizer.tokenizePos(text);
         if (tokenPositions.length == 0) {
@@ -217,10 +222,10 @@ public final class OpenNlpPiiAnalyzer implements PiiAnalyzer {
             Span[] entities = finder.find(tokens);
             double[] probabilities = finder.probs(entities);
             for (int index = 0; index < entities.length; index++) {
-                if (spans.size() >= maximumResultSpans) {
+                if (spans.size() >= maxResultSpans) {
                     throw new OpenNlpAnalysisException(
-                            PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
-                            "OpenNLP analyzer result exceeded the safe span limit"
+                            PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                            "OpenNLP analyzer result exceeded the configured span limit"
                     );
                 }
                 Span entity = entities[index];

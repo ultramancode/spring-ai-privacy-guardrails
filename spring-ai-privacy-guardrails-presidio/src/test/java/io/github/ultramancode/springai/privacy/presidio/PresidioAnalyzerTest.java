@@ -8,12 +8,15 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisResult;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailure;
+import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureObserver;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureMetadata;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailurePolicy;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
+import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
 import org.junit.jupiter.api.AfterEach;
@@ -70,7 +73,9 @@ class PresidioAnalyzerTest {
                 """);
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        List<PiiSpan> spans = analyzer.analyze("Alice", PiiAnalysisOptions.defaults());
+        List<PiiSpan> spans = analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        );
 
         assertThat(spans).containsExactly(new PiiSpan("PERSON", 0, 5, 0.98));
     }
@@ -96,7 +101,8 @@ class PresidioAnalyzerTest {
 
         List<List<PiiSpan>> results = analyzer.analyzeSegments(
                 List.of("🙂 Alice", "safe@example.com"),
-                PiiAnalysisOptions.defaults()
+                PiiAnalysisOptions.defaults(),
+                PrivacyProcessingLimits.defaults()
         );
 
         assertThat(requests).hasValue(1);
@@ -120,7 +126,8 @@ class PresidioAnalyzerTest {
 
         List<List<PiiSpan>> results = analyzer.analyzeSegments(
                 List.of("  ", "Alice"),
-                PiiAnalysisOptions.defaults()
+                PiiAnalysisOptions.defaults(),
+                PrivacyProcessingLimits.defaults()
         );
 
         Map<String, Object> body = this.objectMapper.readValue(requestBody.get(), REQUEST_TYPE);
@@ -142,7 +149,8 @@ class PresidioAnalyzerTest {
 
         assertThatThrownBy(() -> analyzer.analyzeSegments(
                 List.of("first", "second"),
-                PiiAnalysisOptions.defaults()
+                PiiAnalysisOptions.defaults(),
+                PrivacyProcessingLimits.defaults()
         )).hasMessageContaining("expected contract")
                 .hasNoCause()
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure ->
@@ -158,7 +166,9 @@ class PresidioAnalyzerTest {
                 """);
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .isInstanceOfSatisfying(PresidioCallException.class, failure ->
                         assertThat(failure.code()).isEqualTo(PrivacyFailureCode.ANALYZER_RESPONSE_INVALID)
                 );
@@ -171,7 +181,9 @@ class PresidioAnalyzerTest {
                 """);
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        List<PiiSpan> spans = analyzer.analyze("🙂 Alice", PiiAnalysisOptions.defaults());
+        List<PiiSpan> spans = analyzer.analyze(
+                "🙂 Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        );
 
         assertThat(spans).containsExactly(new PiiSpan("PERSON", 3, 8, 0.98));
     }
@@ -182,7 +194,7 @@ class PresidioAnalyzerTest {
         startServer(200, "[]", requestBody);
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        analyzer.analyze("Alice", PiiAnalysisOptions.defaults());
+        analyzer.analyze("Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults());
 
         Map<String, Object> body = this.objectMapper.readValue(requestBody.get(), REQUEST_TYPE);
         assertThat(body)
@@ -197,7 +209,11 @@ class PresidioAnalyzerTest {
         startServer(200, "[]", requestBody);
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        analyzer.analyze("123-45-6789", PiiAnalysisOptions.builder().includedEntityTypes(List.of("NATIONAL_ID")).build());
+        analyzer.analyze(
+                "123-45-6789",
+                PiiAnalysisOptions.builder().includedEntityTypes(List.of("NATIONAL_ID")).build(),
+                PrivacyProcessingLimits.defaults()
+        );
 
         Map<String, Object> body = this.objectMapper.readValue(requestBody.get(), REQUEST_TYPE);
         assertThat(body).doesNotContainKey("entities");
@@ -233,7 +249,9 @@ class PresidioAnalyzerTest {
         startServer(500, "error");
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessageContaining("HTTP 500")
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure -> {
                     assertThat(failure.code()).isEqualTo(PrivacyFailureCode.ANALYZER_UNAVAILABLE);
@@ -246,7 +264,9 @@ class PresidioAnalyzerTest {
         startSlowServer();
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(Duration.ofMillis(50)));
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessageContaining("timed out")
                 .hasNoCause()
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure -> {
@@ -264,7 +284,7 @@ class PresidioAnalyzerTest {
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(Duration.ofSeconds(5)));
         ExecutorService analysisExecutor = Executors.newSingleThreadExecutor();
         Future<Throwable> analysisFailure = analysisExecutor.submit(() -> catchThrowable(
-                () -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults())
+                () -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults())
         ));
 
         try {
@@ -297,7 +317,7 @@ class PresidioAnalyzerTest {
         AtomicBoolean interruptRestored = new AtomicBoolean();
         Thread analysisThread = new Thread(() -> {
             try {
-                analyzer.analyze("Alice", PiiAnalysisOptions.defaults());
+                analyzer.analyze("Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults());
             } catch (Throwable failure) {
                 observedFailure.set(failure);
                 interruptRestored.set(Thread.currentThread().isInterrupted());
@@ -334,7 +354,9 @@ class PresidioAnalyzerTest {
         startServer(200, "not-json");
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessageContaining("parse")
                 .hasMessageNotContaining("Alice")
                 .hasNoCause()
@@ -345,11 +367,14 @@ class PresidioAnalyzerTest {
 
     @Test
     void analyzeCancelsAnOversizedResponseBeforeUnboundedBuffering() throws IOException {
-        startServer(200, "x".repeat(PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES + 1));
-        PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
+        int responseByteLimit = 64 * 1024;
+        startServer(200, "x".repeat(responseByteLimit + 1));
+        PresidioAnalyzer analyzer = new PresidioAnalyzer(config(responseByteLimit));
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
-                .hasMessage("Presidio analyzer response exceeded the safe size limit")
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
+                .hasMessage("Presidio analyzer response exceeded the configured byte limit")
                 .hasMessageNotContaining("Alice")
                 .hasNoCause()
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure ->
@@ -366,54 +391,71 @@ class PresidioAnalyzerTest {
         PresidioAnalyzer acceptingAnalyzer = new PresidioAnalyzer(config(responseBytes));
         PresidioAnalyzer rejectingAnalyzer = new PresidioAnalyzer(config(responseBytes - 1));
 
-        assertThat(acceptingAnalyzer.analyze("A", PiiAnalysisOptions.defaults()))
+        assertThat(acceptingAnalyzer.analyze("A", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()))
                 .containsExactly(new PiiSpan("PERSON", 0, 1, 1.0));
-        assertThatThrownBy(() -> rejectingAnalyzer.analyze("A", PiiAnalysisOptions.defaults()))
-                .hasMessage("Presidio analyzer response exceeded the safe size limit")
+        assertThatThrownBy(() -> rejectingAnalyzer.analyze(
+                "A", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
+                .hasMessage("Presidio analyzer response exceeded the configured byte limit")
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure ->
                         assertThat(failure.code())
                                 .isEqualTo(PrivacyFailureCode.ANALYZER_RESPONSE_INVALID));
     }
 
     @Test
-    void analyzeRejectsResponseCardinalityBeforeRetainingAnExtraSpan() throws IOException {
-        String item = "{\"entity_type\":\"PERSON\",\"start\":0,\"end\":1,\"score\":1}";
-        StringBuilder response = new StringBuilder("[");
-        for (int index = 0; index <= PiiAnalyzer.MAX_RESULT_SPANS; index++) {
-            if (index > 0) {
-                response.append(',');
-            }
-            response.append(item);
-        }
-        response.append(']');
-        assertThat(response.length()).isLessThan(PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES);
-        startServer(200, response.toString());
-        PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
-
-        assertThatThrownBy(() -> analyzer.analyze("A", PiiAnalysisOptions.defaults()))
-                .hasMessageContaining("expected contract")
-                .hasNoCause()
-                .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure ->
-                        assertThat(failure.code())
-                                .isEqualTo(PrivacyFailureCode.ANALYZER_RESPONSE_INVALID));
-    }
-
-    @Test
-    void analyzeRejectsDeepUnknownResponseMetadataWithinTheTransportLimit() throws IOException {
-        StringBuilder nested = new StringBuilder("0");
-        for (int index = 0; index < 65; index++) {
-            nested.insert(0, "{\"nested\":").append('}');
+    void analyzeUsesConfiguredDepthForUnknownResponseMetadata() throws IOException {
+        StringBuilder nestedMetadata = new StringBuilder("0");
+        for (int index = 0; index < 3; index++) {
+            nestedMetadata.insert(0, "{\"nested\":").append('}');
         }
         startServer(200, "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":1,"
-                + "\"score\":1,\"metadata\":" + nested + "}]");
-        PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
+                + "\"score\":1,\"metadata\":" + nestedMetadata + "}]");
+        PresidioAnalyzerConfig baseConfig = config();
+        PresidioAnalyzerConfig rejectingConfig = new PresidioAnalyzerConfig(
+                baseConfig.analyzerUrl(), baseConfig.timeout(), 0, Duration.ZERO,
+                baseConfig.maxResponseBytes(), 4, Map.of());
+        PresidioAnalyzer analyzer = new PresidioAnalyzer(rejectingConfig);
 
-        assertThatThrownBy(() -> analyzer.analyze("A", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "A", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessageContaining("parse")
                 .hasNoCause()
                 .isInstanceOfSatisfying(PiiAnalyzerFailureMetadata.class, failure ->
                         assertThat(failure.code())
                                 .isEqualTo(PrivacyFailureCode.ANALYZER_RESPONSE_INVALID));
+        PresidioAnalyzerConfig acceptingConfig = new PresidioAnalyzerConfig(
+                baseConfig.analyzerUrl(), baseConfig.timeout(), 0, Duration.ZERO,
+                baseConfig.maxResponseBytes(), 5, Map.of());
+        assertThat(new PresidioAnalyzer(acceptingConfig).analyze(
+                "A", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
+                .containsExactly(new PiiSpan("PERSON", 0, 1, 1.0));
+    }
+
+    @Test
+    void spanLimitFailureIsNotRetriedOrIgnoredByAllowPartial() throws IOException {
+        AtomicInteger requests = new AtomicInteger();
+        startServer(exchange -> {
+            requests.incrementAndGet();
+            respond(exchange, 200, "[" +
+                    "{\"entity_type\":\"PERSON\",\"start\":0,\"end\":1,\"score\":1}," +
+                    "{\"entity_type\":\"PERSON\",\"start\":1,\"end\":2,\"score\":1}]");
+        });
+        PresidioAnalyzer analyzer = new PresidioAnalyzer(config(3, Map.of()));
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
+        PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
+                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+                .build();
+        PiiAnalyzer successfulAnalyzer = (text, options, processingLimits) -> List.of();
+        PrivacyService service = new PrivacyService(
+                List.of(successfulAnalyzer, analyzer), PiiAnalysisOptions.defaults(),
+                EntityTypeRegistry.defaults(), policy, PiiAnalyzerFailureObserver.noop(), limits);
+
+        assertThatThrownBy(() -> service.analyze("AB"))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure ->
+                        assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
+        assertThat(requests).hasValue(1);
     }
 
     @Test
@@ -422,7 +464,9 @@ class PresidioAnalyzerTest {
                 + "\"start\":0,\"end\":1,\"score\":1}]");
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        assertThatThrownBy(() -> analyzer.analyze("A", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "A", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessageContaining("expected contract")
                 .hasNoCause();
     }
@@ -436,7 +480,9 @@ class PresidioAnalyzerTest {
         });
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(3, Map.of()));
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessageContaining("expected contract")
                 .hasMessageNotContaining("Alice");
         assertThat(requests).hasValue(1);
@@ -457,7 +503,9 @@ class PresidioAnalyzerTest {
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
         for (String response : invalidResponses) {
-            assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+            assertThatThrownBy(() -> analyzer.analyze(
+                    "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+            ))
                     .as("response: %s", response)
                     .hasMessageContaining("expected contract")
                     .hasMessageNotContaining("Alice");
@@ -480,7 +528,9 @@ class PresidioAnalyzerTest {
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
         for (String response : invalidResponses) {
-            assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+            assertThatThrownBy(() -> analyzer.analyze(
+                    "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+            ))
                     .as("response: %s", response)
                     .hasMessageContaining("expected contract")
                     .hasMessageNotContaining("Alice");
@@ -493,7 +543,9 @@ class PresidioAnalyzerTest {
         startServer(200, "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":99,\"score\":0.9}]");
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config());
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessageContaining("expected contract")
                 .hasMessageNotContaining("Alice");
     }
@@ -502,10 +554,12 @@ class PresidioAnalyzerTest {
     void analyzeRejectsNullInputsBeforeBlankShortCircuit() {
         PresidioAnalyzer analyzer = new PresidioAnalyzer("http://localhost:5002");
 
-        assertThatThrownBy(() -> analyzer.analyze("", null))
+        assertThatThrownBy(() -> analyzer.analyze("", null, PrivacyProcessingLimits.defaults()))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("options must not be null");
-        assertThatThrownBy(() -> analyzer.analyze(null, PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                null, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("text must not be null");
     }
@@ -515,15 +569,21 @@ class PresidioAnalyzerTest {
         URI uri = URI.create("http://localhost:5002");
 
         assertThatThrownBy(() -> new PresidioAnalyzerConfig(
-                uri, null, 0, Duration.ZERO, PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES, Map.of()
+                uri, null, 0, Duration.ZERO,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH, Map.of()
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("timeout must not be null");
         assertThatThrownBy(() -> new PresidioAnalyzerConfig(
-                uri, Duration.ofSeconds(1), 0, null, PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES, Map.of()
+                uri, Duration.ofSeconds(1), 0, null,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH, Map.of()
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("retryBackoff must not be null");
         assertThatThrownBy(() -> new PresidioAnalyzerConfig(
-                uri, Duration.ofSeconds(1), 0, Duration.ZERO, PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES, null
+                uri, Duration.ofSeconds(1), 0, Duration.ZERO,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH, null
         )).isInstanceOf(NullPointerException.class)
                 .hasMessage("headers must not be null");
     }
@@ -536,6 +596,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 0,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of()
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("maxResponseBytes must be positive");
@@ -551,6 +612,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of("X-API-Key", "secret@example.com\nleak")
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("header names and values must use valid HTTP syntax")
@@ -561,6 +623,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of("Invalid Header", "safe")
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("header names and values must use valid HTTP syntax");
@@ -570,6 +633,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of(" X-API-Key", "safe")
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("header names and values must use valid HTTP syntax");
@@ -579,6 +643,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of("X-API-Key ", "safe")
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("header names and values must use valid HTTP syntax");
@@ -588,6 +653,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of("X-API-Key", "first", "x-api-key", "second")
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("header names must be unique ignoring case");
@@ -601,10 +667,13 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of("Host", "secret@example.com")
         ));
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessage("Could not create Presidio analyzer request")
                 .hasMessageNotContaining("secret@example.com")
                 .hasNoCause();
@@ -618,6 +687,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of("content-TYPE", "text/plain")
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Content-Type is managed by the Presidio adapter");
@@ -634,7 +704,8 @@ class PresidioAnalyzerTest {
 
         assertThatThrownBy(() -> analyzer.analyze(
                 "Alice",
-                PiiAnalysisOptions.builder().language("ko").build()
+                PiiAnalysisOptions.builder().language("ko").build(),
+                PrivacyProcessingLimits.defaults()
         )).hasMessageContaining("HTTP 422");
         assertThat(requests).hasValue(1);
     }
@@ -658,7 +729,9 @@ class PresidioAnalyzerTest {
 
         for (int index = 0; index < statuses.size(); index++) {
             PrivacyFailureCode expectedCode = expectedCodes.get(index);
-            assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+            assertThatThrownBy(() -> analyzer.analyze(
+                    "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+            ))
                     .hasMessageNotContaining("Alice")
                     .hasMessageNotContaining("synthetic-secret-response")
                     .hasNoCause()
@@ -696,7 +769,7 @@ class PresidioAnalyzerTest {
         });
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(2, Map.of()));
 
-        assertThat(analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThat(analyzer.analyze("Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()))
                 .containsExactly(new PiiSpan("PERSON", 0, 5, 0.9));
         assertThat(requests).hasValue(2);
     }
@@ -710,7 +783,9 @@ class PresidioAnalyzerTest {
         });
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(2, Map.of()));
 
-        assertThatThrownBy(() -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults()))
+        assertThatThrownBy(() -> analyzer.analyze(
+                "Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults()
+        ))
                 .hasMessage("Presidio analyzer returned HTTP 503")
                 .hasMessageNotContaining("Alice")
                 .hasMessageNotContaining("synthetic-secret-response")
@@ -732,7 +807,11 @@ class PresidioAnalyzerTest {
         PresidioAnalyzer analyzer = new PresidioAnalyzer(config(2, Map.of()));
         PiiAnalyzer fallback = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of();
             }
 
@@ -749,7 +828,8 @@ class PresidioAnalyzerTest {
                 PiiResolutionPolicy.builder()
                         .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
                         .build(),
-                observed::set
+                observed::set,
+                PrivacyProcessingLimits.defaults()
         );
 
         PiiAnalysisResult result = service.analyzeDetailed("Alice");
@@ -777,7 +857,7 @@ class PresidioAnalyzerTest {
                 Map.of("X-API-Key", "secret")
         ));
 
-        analyzer.analyze("Alice", PiiAnalysisOptions.defaults());
+        analyzer.analyze("Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults());
 
         assertThat(apiKey).hasValue("secret");
     }
@@ -790,6 +870,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of("Authorization", "Bearer synthetic-secret")
         );
 
@@ -818,6 +899,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of()
         );
 
@@ -836,7 +918,7 @@ class PresidioAnalyzerTest {
         ExecutorService executor = virtualThreadExecutor();
         try {
             List<PiiSpan> result = executor.submit(
-                    () -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults())
+                    () -> analyzer.analyze("Alice", PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults())
             ).get();
             assertThat(result).containsExactly(new PiiSpan("PERSON", 0, 5, 0.9));
         } finally {
@@ -865,6 +947,7 @@ class PresidioAnalyzerTest {
                 maxRetries,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of()
         );
     }
@@ -876,6 +959,7 @@ class PresidioAnalyzerTest {
                 0,
                 Duration.ZERO,
                 maxResponseBytes,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 Map.of()
         );
     }
@@ -887,6 +971,7 @@ class PresidioAnalyzerTest {
                 maxRetries,
                 Duration.ZERO,
                 PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_BYTES,
+                PresidioAnalyzerConfig.DEFAULT_MAX_RESPONSE_DEPTH,
                 headers
         );
     }

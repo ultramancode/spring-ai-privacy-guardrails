@@ -48,7 +48,7 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void autoConfigurationDoesNotCreatePresidioAnalyzerByDefault() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> assertThat(context)
@@ -75,7 +75,8 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
                         "spring.ai.privacy.presidio.analyzer-url=http://localhost:5002",
                         "spring.ai.privacy.presidio.timeout=2s",
                         "spring.ai.privacy.presidio.max-retries=3",
-                        "spring.ai.privacy.presidio.max-response-bytes=4096"
+                        "spring.ai.privacy.presidio.max-response-bytes=4096",
+                        "spring.ai.privacy.presidio.max-response-depth=5"
                 )
                 .run(context -> {
                     assertThat(context).hasSingleBean(PresidioAnalyzer.class);
@@ -91,6 +92,9 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
                     assertThat(properties.getTimeout()).isEqualTo(Duration.ofSeconds(2));
                     assertThat(properties.getMaxRetries()).isEqualTo(3);
                     assertThat(properties.getMaxResponseBytes()).isEqualTo(4096);
+                    assertThat(properties.getMaxResponseDepth()).isEqualTo(5);
+                    assertThat(context.getBean(PresidioAnalyzerConfig.class).maxResponseDepth())
+                            .isEqualTo(5);
                     assertThat(context.getBean(PresidioAnalyzerConfig.class).maxResponseBytes())
                             .isEqualTo(4096);
                 });
@@ -126,6 +130,20 @@ class PresidioPrivacyGuardrailsAutoConfigurationTest {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasRootCauseMessage("maxResponseBytes must be positive");
+                });
+    }
+
+    @Test
+    void nonPositiveResponseDepthFailsStartup() {
+        this.contextRunner
+                .withPropertyValues(
+                        "spring.ai.privacy.presidio.enabled=true",
+                        "spring.ai.privacy.presidio.max-response-depth=0"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasRootCauseMessage("maxResponseDepth must be positive");
                 });
     }
 

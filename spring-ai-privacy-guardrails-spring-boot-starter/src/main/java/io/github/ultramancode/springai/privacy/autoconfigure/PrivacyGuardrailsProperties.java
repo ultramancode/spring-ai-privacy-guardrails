@@ -4,6 +4,7 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailurePolicy;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionMode;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
@@ -21,6 +22,9 @@ import java.util.Objects;
 @ConfigurationProperties("spring.ai.privacy")
 public class PrivacyGuardrailsProperties {
 
+    /** Configurable privacy processing limits. */
+    private final Processing processing = new Processing();
+
     /** Optional output-boundary settings. */
     private final Output output = new Output();
     /** Model-response inspection limits shared by call, stream, and tool-execution boundaries. */
@@ -31,6 +35,10 @@ public class PrivacyGuardrailsProperties {
     private final Regex regex = new Regex();
     /** Tool boundary policy settings. */
     private final Tools tools = new Tools();
+
+    public Processing getProcessing() {
+        return this.processing;
+    }
 
     public Output getOutput() {
         return this.output;
@@ -50,6 +58,92 @@ public class PrivacyGuardrailsProperties {
 
     public Tools getTools() {
         return this.tools;
+    }
+
+    /** Per-service limits for input, output, value trees, and analysis. */
+    public static class Processing {
+        private int maxTextCharacters = PrivacyProcessingLimits.DEFAULT_MAX_TEXT_CHARACTERS;
+        private int maxOutputCharacters = PrivacyProcessingLimits.DEFAULT_MAX_OUTPUT_CHARACTERS;
+        private int maxValueTreeCharacters = PrivacyProcessingLimits.DEFAULT_MAX_VALUE_TREE_CHARACTERS;
+        private int maxValueTreeNodes = PrivacyProcessingLimits.DEFAULT_MAX_VALUE_TREE_NODES;
+        private int maxDepth = PrivacyProcessingLimits.DEFAULT_MAX_DEPTH;
+        private int maxAnalysisSegments = PrivacyProcessingLimits.DEFAULT_MAX_ANALYSIS_SEGMENTS;
+        private int maxResultSpans = PrivacyProcessingLimits.DEFAULT_MAX_RESULT_SPANS;
+
+        public int getMaxTextCharacters() {
+            return this.maxTextCharacters;
+        }
+
+        public void setMaxTextCharacters(int value) {
+            this.maxTextCharacters = requirePositive(value, "processing.max-text-characters");
+        }
+
+        public int getMaxOutputCharacters() {
+            return this.maxOutputCharacters;
+        }
+
+        public void setMaxOutputCharacters(int value) {
+            this.maxOutputCharacters = requirePositive(value, "processing.max-output-characters");
+        }
+
+        public int getMaxValueTreeCharacters() {
+            return this.maxValueTreeCharacters;
+        }
+
+        public void setMaxValueTreeCharacters(int value) {
+            this.maxValueTreeCharacters = requirePositive(value, "processing.max-value-tree-characters");
+        }
+
+        public int getMaxValueTreeNodes() {
+            return this.maxValueTreeNodes;
+        }
+
+        public void setMaxValueTreeNodes(int value) {
+            this.maxValueTreeNodes = requirePositive(value, "processing.max-value-tree-nodes");
+        }
+
+        public int getMaxDepth() {
+            return this.maxDepth;
+        }
+
+        public void setMaxDepth(int value) {
+            this.maxDepth = requirePositive(value, "processing.max-depth");
+        }
+
+        public int getMaxAnalysisSegments() {
+            return this.maxAnalysisSegments;
+        }
+
+        public void setMaxAnalysisSegments(int value) {
+            this.maxAnalysisSegments = requirePositive(value, "processing.max-analysis-segments");
+        }
+
+        public int getMaxResultSpans() {
+            return this.maxResultSpans;
+        }
+
+        public void setMaxResultSpans(int value) {
+            this.maxResultSpans = requirePositive(value, "processing.max-result-spans");
+        }
+
+        PrivacyProcessingLimits limits() {
+            return new PrivacyProcessingLimits(
+                    this.maxTextCharacters,
+                    this.maxOutputCharacters,
+                    this.maxValueTreeCharacters,
+                    this.maxValueTreeNodes,
+                    this.maxDepth,
+                    this.maxAnalysisSegments,
+                    this.maxResultSpans
+            );
+        }
+
+        private static int requirePositive(int value, String property) {
+            if (value <= 0) {
+                throw new IllegalArgumentException(property + " must be positive");
+            }
+            return value;
+        }
     }
 
     /** Properties for optional application-facing output protection. */

@@ -46,15 +46,15 @@ public final class OpaquePiiTokenFormat {
         return CANONICAL_TOKEN_PATTERN;
     }
 
-    static int maximumGeneratedTokenLength(String entityType) {
+    static int minimumGeneratedTokenLength(String entityType) {
         String canonicalType = EntityTypeRegistry.requireValidEntityType(entityType);
-        // Assume Integer.MAX_VALUE so output-limit checks include the longest generated index.
+        // The shortest generated token has a one-digit index.
         return "[[PII_".length()
                 + canonicalType.length()
                 + 1
                 + NONCE_HEX_CHARACTER_COUNT
                 + 1
-                + Integer.toString(Integer.MAX_VALUE).length()
+                + 1
                 + "]]".length();
     }
 

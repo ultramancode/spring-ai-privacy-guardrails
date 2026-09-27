@@ -146,7 +146,7 @@ class PrivacySessionTest {
     }
 
     private PrivacyService privacyService() {
-        PiiAnalyzer analyzer = (text, options) -> List.of("Alice", "Bob").stream()
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of("Alice", "Bob").stream()
                 .filter(text::contains)
                 .map(name -> {
                     int start = text.indexOf(name);

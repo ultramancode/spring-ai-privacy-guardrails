@@ -33,7 +33,11 @@ class PrivacyServiceResolutionTest {
         }
         PiiAnalyzer timedOut = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 throw new RetriedTimeout();
             }
 
@@ -50,7 +54,8 @@ class PrivacyServiceResolutionTest {
                 PiiResolutionPolicy.builder()
                         .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
                         .build(),
-                observed::add
+                observed::add,
+                PrivacyProcessingLimits.defaults()
         );
 
         PiiAnalysisResult result = service.analyzeDetailed("Alice");
@@ -109,7 +114,11 @@ class PrivacyServiceResolutionTest {
         List<PiiAnalysisOptions> received = new ArrayList<>();
         PiiAnalyzer analyzer = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 received.add(options);
                 return List.of(new PiiSpan("PERSON", 0, 5, 0.9));
             }
@@ -248,7 +257,11 @@ class PrivacyServiceResolutionTest {
         AtomicInteger fallbackCalls = new AtomicInteger();
         PiiAnalyzer fallback = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 fallbackCalls.incrementAndGet();
                 return List.of(new PiiSpan("PERSON", 0, 5, 0.95));
             }
@@ -281,7 +294,11 @@ class PrivacyServiceResolutionTest {
         AtomicInteger fallbackCalls = new AtomicInteger();
         PiiAnalyzer interruptedPrimary = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Alice leaked from an interrupted provider");
             }
@@ -293,7 +310,11 @@ class PrivacyServiceResolutionTest {
         };
         PiiAnalyzer fallback = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 fallbackCalls.incrementAndGet();
                 return List.of();
             }
@@ -479,7 +500,11 @@ class PrivacyServiceResolutionTest {
     private PiiAnalyzer namedAnalyzer(String providerId, List<PiiSpan> spans) {
         return new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return spans;
             }
 
@@ -496,14 +521,19 @@ class PrivacyServiceResolutionTest {
     ) {
         return new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of();
             }
 
             @Override
             public List<List<PiiSpan>> analyzeSegments(
                     List<String> texts,
-                    PiiAnalysisOptions options
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
             ) {
                 return operation.apply(texts, options);
             }
@@ -518,7 +548,11 @@ class PrivacyServiceResolutionTest {
     private PiiAnalyzer failingAnalyzer(String providerId) {
         return new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 throw new IllegalStateException("unavailable for " + text);
             }
 

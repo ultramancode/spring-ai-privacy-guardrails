@@ -1,9 +1,9 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -13,23 +13,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PrivacyValueTreeLimitsTest {
 
     @Test
-    void valueTreeAcceptsTheMaximumContainerDepth() {
-        PrivacyService service = serviceWithNoopAnalyzer();
-        Object input = nestedLists(PrivacyService.MAX_VALUE_TREE_DEPTH);
+    void valueTreeUsesTheConfiguredDepthLimit() {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxDepth(2).build();
+        PrivacyService service = new PrivacyService(
+                List.of((text, options, processingLimits) -> List.of()), PiiAnalysisOptions.defaults(), limits);
+        Object accepted = nestedLists(2);
+        Object rejected = nestedLists(3);
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(service.tokenizeValueTree(session.handle(), input)).isEqualTo(input);
-        }
-    }
-
-    @Test
-    void valueTreeRejectsContainerDepthPastTheLimit() {
-        PrivacyService service = serviceWithNoopAnalyzer();
-        Object input = nestedLists(PrivacyService.MAX_VALUE_TREE_DEPTH + 1);
-
-        try (PrivacySession session = service.openSession()) {
+            assertThat(service.tokenizeValueTree(session.handle(), accepted)).isEqualTo(accepted);
+            assertThat(service.detokenizeValueTree(session.handle(), accepted)).isEqualTo(accepted);
             assertValueTreeLimitFailure(
-                    () -> service.tokenizeValueTree(session.handle(), input),
+                    () -> service.tokenizeValueTree(session.handle(), rejected),
                     PrivacyPhase.TOKENIZATION
             );
         }
@@ -37,15 +32,11 @@ class PrivacyValueTreeLimitsTest {
 
     @Test
     void valueTreeCountsTheRootAndElementsAgainstTheNodeLimit() {
-        PrivacyService service = serviceWithNoopAnalyzer();
-        List<Object> accepted = Collections.nCopies(
-                PrivacyService.MAX_VALUE_TREE_NODES - 1,
-                null
-        );
-        List<Object> rejected = Collections.nCopies(
-                PrivacyService.MAX_VALUE_TREE_NODES,
-                null
-        );
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxValueTreeNodes(3).build();
+        PrivacyService service = new PrivacyService(
+                List.of((text, options, processingLimits) -> List.of()), PiiAnalysisOptions.defaults(), limits);
+        List<Object> accepted = Collections.nCopies(2, null);
+        List<Object> rejected = Collections.nCopies(3, null);
 
         try (PrivacySession session = service.openSession()) {
             assertThat(service.tokenizeValueTree(session.handle(), accepted)).isEqualTo(accepted);
@@ -57,27 +48,19 @@ class PrivacyValueTreeLimitsTest {
     }
 
     @Test
-    void valueTreeEnforcesPerValueAndCumulativeInputLimits() {
-        PrivacyService service = serviceWithNoopAnalyzer();
-        String maximumValue = "a".repeat(PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS);
-        List<String> maximumAggregate = Collections.nCopies(
-                PrivacyService.MAX_VALUE_TREE_INPUT_CHARACTERS
-                        / PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS,
-                maximumValue
-        );
-        List<String> oversizedAggregate = new ArrayList<>(maximumAggregate);
-        oversizedAggregate.add("x");
+    void valueTreeCharacterLimitIncludesAllStringValues() {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxValueTreeCharacters(5).build();
+        PrivacyService service = new PrivacyService(
+                List.of((text, options, processingLimits) -> List.of()), PiiAnalysisOptions.defaults(), limits);
+        String singleValue = "aaaaa";
+        List<String> maximumAggregate = List.of("aa", "aaa");
+        List<String> oversizedAggregate = List.of("aa", "aaaa");
 
         try (PrivacySession session = service.openSession()) {
+            assertThat(service.tokenizeValueTree(session.handle(), singleValue))
+                    .isEqualTo(singleValue);
             assertThat(service.tokenizeValueTree(session.handle(), maximumAggregate))
                     .isEqualTo(maximumAggregate);
-            assertValueTreeLimitFailure(
-                    () -> service.tokenizeValueTree(
-                            session.handle(),
-                            "a".repeat(PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS + 1)
-                    ),
-                    PrivacyPhase.TOKENIZATION
-            );
             assertValueTreeLimitFailure(
                     () -> service.tokenizeValueTree(session.handle(), oversizedAggregate),
                     PrivacyPhase.TOKENIZATION
@@ -86,29 +69,44 @@ class PrivacyValueTreeLimitsTest {
     }
 
     @Test
-    void valueTreeEnforcesTheNumberRepresentationLimit() {
-        PrivacyService service = serviceWithNoopAnalyzer();
-        BigInteger maximumNumber = new BigInteger(
-                "1".repeat(PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS)
-        );
-        BigInteger oversizedNumber = new BigInteger(
-                "1".repeat(PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS + 1)
-        );
+    void valueTreeNumbersRespectTheConfiguredCharacterLimit() {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxValueTreeCharacters(5).build();
+        PrivacyService service = new PrivacyService(
+                List.of((text, options, processingLimits) -> List.of()), PiiAnalysisOptions.defaults(), limits);
+        BigInteger accepted = new BigInteger("11111");
+        BigInteger rejected = new BigInteger("111111");
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(service.tokenizeValueTree(session.handle(), maximumNumber))
-                    .isEqualTo(maximumNumber);
+            assertThat(service.tokenizeValueTree(session.handle(), accepted)).isEqualTo(accepted);
             assertValueTreeLimitFailure(
-                    () -> service.tokenizeValueTree(session.handle(), oversizedNumber),
+                    () -> service.tokenizeValueTree(session.handle(), rejected),
                     PrivacyPhase.TOKENIZATION
             );
         }
     }
 
     @Test
+    void numericScalarTokenizationRejectsOversizedNumbers() {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxValueTreeCharacters(5).build();
+        PrivacyService service = new PrivacyService(
+                List.of((text, options, processingLimits) -> List.of()), PiiAnalysisOptions.defaults(), limits);
+        BigInteger oversized = new BigInteger("111111");
+
+        try (PrivacySession session = service.openSession()) {
+            assertThatThrownBy(() -> service.tokenizeScalar(
+                    session.handle(), oversized, List.of()))
+                    .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                        assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                        assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                    });
+        }
+    }
+
+    @Test
     void valueTreeDetokenizationEnforcesTheCumulativeOutputLimit() {
-        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
-        String original = "x".repeat(PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS);
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxOutputCharacters(200).build();
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults(), limits);
+        String original = "x".repeat(100);
 
         try (PrivacySession session = service.openSession()) {
             String token = service.tokenize(
@@ -116,12 +114,11 @@ class PrivacyValueTreeLimitsTest {
                     original,
                     List.of(new PiiSpan("SECRET", 0, original.length(), 1.0))
             );
-            int acceptedCopies = PrivacyService.MAX_TRANSFORMED_TEXT_CHARACTERS / original.length();
-            List<String> accepted = Collections.nCopies(acceptedCopies, token);
-            List<String> rejected = Collections.nCopies(acceptedCopies + 1, token);
+            List<String> accepted = Collections.nCopies(2, token);
+            List<String> rejected = Collections.nCopies(3, token);
 
             assertThat(service.detokenizeValueTree(session.handle(), accepted))
-                    .isEqualTo(Collections.nCopies(acceptedCopies, original));
+                    .isEqualTo(Collections.nCopies(2, original));
             assertValueTreeLimitFailure(
                     () -> service.detokenizeValueTree(session.handle(), rejected),
                     PrivacyPhase.DETOKENIZATION
@@ -130,35 +127,19 @@ class PrivacyValueTreeLimitsTest {
     }
 
     @Test
-    void valueTreeEnforcesTheCumulativeResolvedSpanLimit() {
-        PiiAnalyzer analyzer = (text, options) -> {
-            List<PiiSpan> spans = new ArrayList<>(text.length());
-            for (int index = 0; index < text.length(); index++) {
-                spans.add(new PiiSpan("PII", index, index + 1, 1.0));
-            }
-            return spans;
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String accepted = "a".repeat(PiiAnalyzer.MAX_RESULT_SPANS);
-        List<String> rejected = List.of(
-                "a".repeat(PiiAnalyzer.MAX_RESULT_SPANS / 2),
-                "b".repeat(PiiAnalyzer.MAX_RESULT_SPANS / 2 + 1)
-        );
+    void valueTreeSpanLimitAppliesAcrossValues() {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(new PiiSpan("PII", 0, 1, 1.0));
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(2).build();
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(service.tokenizeValueTree(session.handle(), accepted)).isInstanceOf(String.class);
+            Object protectedValues = service.tokenizeValueTree(session.handle(), List.of("a", "b"));
+            assertThat(service.detokenizeValueTree(session.handle(), protectedValues)).isEqualTo(List.of("a", "b"));
             assertValueTreeLimitFailure(
-                    () -> service.tokenizeValueTree(session.handle(), rejected),
+                    () -> service.tokenizeValueTree(session.handle(), List.of("a", "b", "c")),
                     PrivacyPhase.TOKENIZATION
             );
         }
-    }
-
-    private static PrivacyService serviceWithNoopAnalyzer() {
-        return new PrivacyService(
-                List.of((text, options) -> List.of()),
-                PiiAnalysisOptions.defaults()
-        );
     }
 
     private static Object nestedLists(int depth) {
@@ -170,19 +151,13 @@ class PrivacyValueTreeLimitsTest {
     }
 
     private static void assertValueTreeLimitFailure(
-            ThrowingOperation operation,
+            ThrowingCallable operation,
             PrivacyPhase phase
     ) {
-        assertThatThrownBy(operation::run)
+        assertThatThrownBy(operation)
                 .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
                     assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
                     assertThat(failure.phase()).isEqualTo(phase);
                 });
-    }
-
-    @FunctionalInterface
-    private interface ThrowingOperation {
-
-        void run();
     }
 }

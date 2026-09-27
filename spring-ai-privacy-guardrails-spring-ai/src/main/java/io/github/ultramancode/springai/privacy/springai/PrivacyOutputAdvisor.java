@@ -91,7 +91,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
      * @param privacyService service that owns request sessions and transformations
      * @param action action applied when sensitive output is detected
      * @param blockExceptionMessage non-sensitive message used by {@link PrivacyOutputAction#BLOCK}
-     * @param responseInspectionLimits hard limits applied while inspecting call and stream responses
+     * @param responseInspectionLimits configured limits for inspecting call and stream responses
      */
     public PrivacyOutputAdvisor(
             PrivacyService privacyService,
@@ -115,7 +115,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
      * @param privacyService service that owns request sessions and transformations
      * @param action action applied when sensitive output is detected
      * @param blockExceptionMessage non-sensitive message used by {@link PrivacyOutputAction#BLOCK}
-     * @param responseInspectionLimits hard limits applied while inspecting call and stream responses
+     * @param responseInspectionLimits configured limits for inspecting call and stream responses
      * @param order Spring AI advisor order
      */
     public PrivacyOutputAdvisor(
@@ -141,7 +141,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
      * @param privacyService service that owns request sessions and transformations
      * @param action action applied when sensitive output is detected
      * @param blockExceptionMessage non-sensitive message used by {@link PrivacyOutputAction#BLOCK}
-     * @param responseInspectionLimits hard limits applied while inspecting call and stream responses
+     * @param responseInspectionLimits configured limits for inspecting call and stream responses
      * @param enforcementObserver observer for boundary and outcome events only
      */
     public PrivacyOutputAdvisor(
@@ -167,7 +167,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
      * @param privacyService service that owns request sessions and transformations
      * @param action action applied when sensitive output is detected
      * @param blockExceptionMessage non-sensitive message used by {@link PrivacyOutputAction#BLOCK}
-     * @param responseInspectionLimits hard limits applied while inspecting call and stream responses
+     * @param responseInspectionLimits configured limits for inspecting call and stream responses
      * @param enforcementObserver observer for boundary and outcome events only
      * @param order Spring AI advisor order
      */

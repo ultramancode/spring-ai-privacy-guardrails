@@ -1,6 +1,48 @@
 {
   "properties": [
     {
+      "name": "spring.ai.privacy.processing.max-text-characters",
+      "type": "java.lang.Integer",
+      "description": "Maximum UTF-16 length of one text or boundary payload, or of all texts in one batch analysis.",
+      "defaultValue": 1000000
+    },
+    {
+      "name": "spring.ai.privacy.processing.max-output-characters",
+      "type": "java.lang.Integer",
+      "description": "Maximum UTF-16 output length per transformation, including unchanged text.",
+      "defaultValue": 8000000
+    },
+    {
+      "name": "spring.ai.privacy.processing.max-value-tree-characters",
+      "type": "java.lang.Integer",
+      "description": "Maximum cumulative UTF-16 length of strings, map keys, and numeric representations in a value tree or JSON document.",
+      "defaultValue": 1000000
+    },
+    {
+      "name": "spring.ai.privacy.processing.max-value-tree-nodes",
+      "type": "java.lang.Integer",
+      "description": "Maximum node count in a value tree or JSON document, including containers, scalar values, and map keys.",
+      "defaultValue": 100000
+    },
+    {
+      "name": "spring.ai.privacy.processing.max-depth",
+      "type": "java.lang.Integer",
+      "description": "Maximum container nesting depth in a value tree or JSON document.",
+      "defaultValue": 128
+    },
+    {
+      "name": "spring.ai.privacy.processing.max-analysis-segments",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of independent texts in one batch analysis.",
+      "defaultValue": 100000
+    },
+    {
+      "name": "spring.ai.privacy.processing.max-result-spans",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of spans collected in one analysis operation.",
+      "defaultValue": 100000
+    },
+    {
       "name": "spring.ai.privacy.analysis.language",
       "type": "java.lang.String",
       "defaultValue": "en"

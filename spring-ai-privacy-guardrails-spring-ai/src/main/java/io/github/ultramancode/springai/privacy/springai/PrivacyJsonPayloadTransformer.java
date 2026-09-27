@@ -6,6 +6,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.exc.StreamConstraintsException;
@@ -20,17 +21,10 @@ import java.util.function.UnaryOperator;
 /** Orchestrates JSON-aware privacy actions with safe plain-text fallback. */
 final class PrivacyJsonPayloadTransformer {
 
-    static final int MAX_PAYLOAD_CHARACTERS = PrivacyService.MAX_TEXT_INPUT_CHARACTERS;
-    static final int MAX_STRING_SCALAR_CHARACTERS =
-            PrivacyService.MAX_VALUE_TREE_STRING_CHARACTERS;
-    static final int MAX_NUMBER_LEXEME_CHARACTERS =
-            PrivacyService.MAX_VALUE_TREE_NUMBER_CHARACTERS;
-    static final int MAX_JSON_NODES = PrivacyService.MAX_VALUE_TREE_NODES;
-    static final int MAX_JSON_DEPTH = PrivacyService.MAX_VALUE_TREE_DEPTH;
-    static final int MAX_TRANSFORMED_PAYLOAD_CHARACTERS =
-            PrivacyService.MAX_TRANSFORMED_TEXT_CHARACTERS;
+    private static final PrivacyJsonDocumentProcessor DEFAULT_DOCUMENT_PROCESSOR =
+            new PrivacyJsonDocumentProcessor(PrivacyProcessingLimits.defaults());
     private static final String PAYLOAD_LIMIT_MESSAGE =
-            "Privacy payload exceeded the bounded processing limit";
+            "Privacy payload exceeded a configured processing limit";
 
     private PrivacyJsonPayloadTransformer() {
     }
@@ -126,13 +120,18 @@ final class PrivacyJsonPayloadTransformer {
     ) {
         Objects.requireNonNull(privacyService, "privacyService must not be null");
         Objects.requireNonNull(handle, "handle must not be null");
-        return transformJsonOrText(
-                payload,
-                scalar -> privacyService.detokenizeValueTree(handle, scalar),
-                text -> privacyService.detokenize(handle, text),
-                phase,
-                false
-        );
+        try {
+            return transformJsonOrText(
+                    payload,
+                    scalar -> privacyService.detokenizeValueTree(handle, scalar),
+                    text -> privacyService.detokenize(handle, text),
+                    phase,
+                    false,
+                    privacyService.processingLimits()
+            );
+        } catch (PrivacyGuardrailException failure) {
+            throw remapProcessingLimit(failure, phase);
+        }
     }
 
     static boolean containsPii(
@@ -168,19 +167,20 @@ final class PrivacyJsonPayloadTransformer {
             Function<Object, Object> scalarTransformer,
             UnaryOperator<String> textTransformer,
             PrivacyPhase phase,
-            boolean requireValidJson
+            boolean requireValidJson,
+            PrivacyProcessingLimits limits
     ) {
         Objects.requireNonNull(payload, "payload must not be null");
         Objects.requireNonNull(scalarTransformer, "scalarTransformer must not be null");
         Objects.requireNonNull(textTransformer, "textTransformer must not be null");
         Objects.requireNonNull(phase, "phase must not be null");
-        requireWithinLimit(payload.length(), MAX_PAYLOAD_CHARACTERS, phase);
+        requireWithinLimit(payload.length(), limits.maxTextCharacters(), phase);
         if (payload.isBlank()) {
-            return payload;
+            return requireTransformedResult(payload, phase, limits);
         }
 
         try {
-            return PrivacyJsonDocumentProcessor.transform(payload, scalarTransformer, phase);
+            return documentProcessor(limits).transform(payload, scalarTransformer, phase);
         } catch (PrivacyJsonDocumentProcessor.OutputLimitExceeded ignored) {
             throw payloadLimitExceeded(phase);
         } catch (StreamConstraintsException ignored) {
@@ -189,7 +189,7 @@ final class PrivacyJsonPayloadTransformer {
             if (requireValidJson) {
                 throw invalidStructuredJson(phase);
             }
-            return requireTransformedResult(textTransformer.apply(payload), phase);
+            return requireTransformedResult(textTransformer.apply(payload), phase, limits);
         }
     }
 
@@ -226,9 +226,9 @@ final class PrivacyJsonPayloadTransformer {
     ) {
         Objects.requireNonNull(payload, "payload must not be null");
         Objects.requireNonNull(phase, "phase must not be null");
-        requireWithinLimit(payload.length(), MAX_PAYLOAD_CHARACTERS, phase);
+        requireWithinLimit(payload.length(), privacyService.processingLimits().maxTextCharacters(), phase);
         if (payload.isBlank()) {
-            return payload;
+            return requireTransformedResult(payload, phase, privacyService.processingLimits());
         }
 
         try {
@@ -241,6 +241,8 @@ final class PrivacyJsonPayloadTransformer {
                     allowedEntityTypes,
                     disclosureTracker
             );
+        } catch (PrivacyGuardrailException failure) {
+            throw remapProcessingLimit(failure, phase);
         } catch (PrivacyJsonDocumentProcessor.OutputLimitExceeded ignored) {
             throw payloadLimitExceeded(phase);
         } catch (StreamConstraintsException ignored) {
@@ -270,30 +272,29 @@ final class PrivacyJsonPayloadTransformer {
             Set<String> allowedEntityTypes,
             DisclosureTracker disclosureTracker
     ) throws JacksonException {
-        List<String> analysisTexts =
-                PrivacyJsonDocumentProcessor.validateAndCollectAnalysisTexts(payload, phase);
+        PrivacyJsonDocumentProcessor processor =
+                documentProcessor(privacyService.processingLimits());
+        List<String> analysisTexts = processor.validateAndCollectAnalysisTexts(payload, phase);
         Map<String, List<PiiSpan>> spansByText = PrivacyJsonScalarBatchAnalyzer.analyze(
                 privacyService,
                 analysisTexts,
                 phase
         );
-        return PrivacyJsonDocumentProcessor.rewrite(
-                payload,
-                scalar -> applyScalarAction(
-                        privacyService,
-                        handle,
-                        scalar,
-                        spansByText.getOrDefault(
-                                PrivacyJsonDocumentProcessor.analysisText(scalar),
-                                List.of()
-                        ),
-                        action,
-                        allowedEntityTypes,
-                        phase,
-                        disclosureTracker
-                ),
-                phase
-        );
+        Function<Object, Object> scalarTransformer = scalar -> {
+            String analysisText = PrivacyJsonDocumentProcessor.analysisText(scalar);
+            List<PiiSpan> spans = spansByText.getOrDefault(analysisText, List.of());
+            return applyScalarAction(
+                    privacyService,
+                    handle,
+                    scalar,
+                    spans,
+                    action,
+                    allowedEntityTypes,
+                    phase,
+                    disclosureTracker
+            );
+        };
+        return processor.rewrite(payload, scalarTransformer, phase);
     }
 
     private static Object applyScalarAction(
@@ -366,10 +367,17 @@ final class PrivacyJsonPayloadTransformer {
                     yield disclosed;
                 }
             };
-            return requireTransformedResult(transformedText, phase);
+            return requireTransformedResult(transformedText, phase, privacyService.processingLimits());
         } catch (PrivacyGuardrailException failure) {
-            throw remapOutputLimit(failure, phase);
+            throw remapProcessingLimit(failure, phase);
         }
+    }
+
+    private static PrivacyJsonDocumentProcessor documentProcessor(PrivacyProcessingLimits limits) {
+        if (PrivacyProcessingLimits.defaults().equals(limits)) {
+            return DEFAULT_DOCUMENT_PROCESSOR;
+        }
+        return new PrivacyJsonDocumentProcessor(limits);
     }
 
     static void requireWithinLimit(long actual, long maximum, PrivacyPhase phase) {
@@ -378,13 +386,15 @@ final class PrivacyJsonPayloadTransformer {
         }
     }
 
-    static String requireTransformedResult(String value, PrivacyPhase phase) {
+    static String requireTransformedResult(
+            String value, PrivacyPhase phase, PrivacyProcessingLimits limits
+    ) {
         Objects.requireNonNull(value, "text transformation must not return null");
-        requireWithinLimit(value.length(), MAX_TRANSFORMED_PAYLOAD_CHARACTERS, phase);
+        requireWithinLimit(value.length(), limits.maxOutputCharacters(), phase);
         return value;
     }
 
-    static PrivacyGuardrailException remapOutputLimit(
+    static PrivacyGuardrailException remapProcessingLimit(
             PrivacyGuardrailException failure,
             PrivacyPhase phase
     ) {

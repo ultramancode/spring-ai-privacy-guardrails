@@ -32,9 +32,14 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
     }
 
     @Override
-    public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+    public List<PiiSpan> analyze(
+            String text,
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits
+    ) {
         Objects.requireNonNull(text, "text must not be null");
         Objects.requireNonNull(options, "options must not be null");
+        Objects.requireNonNull(limits, "limits must not be null");
         if (text.isBlank()) {
             return List.of();
         }
@@ -47,11 +52,11 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
                 if (span == null) {
                     continue;
                 }
-                if (spans.size() >= PiiAnalyzer.MAX_RESULT_SPANS) {
+                if (spans.size() >= limits.maxResultSpans()) {
                     throw new PrivacyGuardrailException(
-                            PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
+                            PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                             PrivacyPhase.ANALYSIS,
-                            "Regex analyzer result exceeded the safe span limit"
+                            "Regex analyzer result exceeded the configured span limit"
                     );
                 }
                 spans.add(span);

@@ -179,6 +179,13 @@ configured under `spring.ai.privacy`.
 | `output.enabled` | `false` | Enables output protection. |
 | `output.action` | `TOKENIZE` | Selects `TOKENIZE`, `REDACT`, or `BLOCK`, which throws a typed exception. |
 | `output.block-exception-message` | `Response blocked by privacy guardrail.` | Safe message used by a `BLOCK` exception. |
+| `processing.max-text-characters` | `1000000` | Maximum length of one text or JSON document. Batch analysis uses the combined length of all texts. |
+| `processing.max-output-characters` | `8000000` | Maximum output length per transformation, including unchanged text. |
+| `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. |
+| `processing.max-value-tree-nodes` | `100000` | Maximum node count in a value tree or JSON document, including containers, scalar values, and map keys. |
+| `processing.max-depth` | `128` | Maximum nesting depth in a value tree or JSON document. |
+| `processing.max-analysis-segments` | `100000` | Maximum number of texts in one batch analysis. |
+| `processing.max-result-spans` | `100000` | Maximum number of spans collected in one analysis, summed across analyzers. |
 | `response-inspection.max-stream-frames` | `1024` | Maximum number of frames inspected in one streaming response. |
 | `response-inspection.max-characters` | `1000000` | Maximum cumulative characters of text-based content inspected in one call or streaming response. |
 | `response-inspection.max-media-bytes` | `16777216` | Maximum cumulative media-data size allowed in one response. |
@@ -195,7 +202,8 @@ configured under `spring.ai.privacy`.
 | `presidio.timeout` | `5s` | Timeout for each HTTP attempt, including response-body completion, and for each health check. |
 | `presidio.max-retries` | `1` | Number of retries after the initial attempt. |
 | `presidio.retry-backoff` | `300ms` | Delay between attempts. |
-| `presidio.max-response-bytes` | `8388608` | Maximum Presidio response-body size retained for validation. |
+| `presidio.max-response-bytes` | `8388608` | Maximum Presidio response-body size in bytes. |
+| `presidio.max-response-depth` | `64` | Maximum JSON nesting depth in a Presidio response. |
 | `presidio.headers` | empty | Additional HTTP headers sent with Presidio requests. `Content-Type` is managed by the library and cannot be configured here. |
 | `opennlp.enabled` | `false` | Enables user-supplied local OpenNLP models. |
 | `opennlp.tokenizer-model` | unset | Optional tokenizer-model resource. If omitted, `SimpleTokenizer` is used. |
@@ -349,6 +357,10 @@ to a single analyzer.
 
 ### Structured JSON
 
+Ordinary messages and tool results can still receive plain-text privacy
+protection when they are not JSON. Malformed JSON is rejected only at a
+boundary that specifically requires structured JSON.
+
 For structured JSON, the library analyzes property names, string values, and
 numeric values. It skips property names and string values that are empty or
 contain only whitespace. Each item is analyzed independently, and the start
@@ -360,29 +372,20 @@ costs depend on the selected analyzer and the amount of text.
 
 ### Custom Analyzers
 
-This section applies when implementing `PiiAnalyzer` or calling its analysis
-methods directly. Starter users who use only the provided analyzers can skip it.
+Implement `PiiAnalyzer.analyze(text, options, limits)` to return spans for one
+text.
 
 A custom analyzer may be shared across requests, so it must be thread-safe and
 reentrant. Each analyzer must provide a unique provider ID. Apply finite
 deadlines to blocking work and cooperate with thread interruption.
 
-`PiiAnalyzer.analyzeSegments(...)` accepts multiple independent texts. Its
-default implementation calls `analyze(...)` for each text.
+`PiiAnalyzer.analyzeSegments(texts, options, limits)` calls `analyze(...)` for
+each text by default. Override it to use an external service's batch API.
+Return results separated by text in input order, with start and end positions
+relative to each text.
 
-A custom analyzer backed by an external service that accepts text arrays can
-override `analyzeSegments(...)` to process multiple texts in one request. The
-override must return results separated by text in input order, with start and
-end positions relative to each text. Applications can also call
-`PrivacyService.analyzeSegments(...)` directly to analyze multiple texts in the
-same way.
-
-One `PrivacyService.analyzeSegments(...)` call accepts at most 100,000 texts
-(`PiiAnalyzer.MAX_ANALYSIS_SEGMENTS`), and the combined input length cannot
-exceed `PrivacyService.MAX_TEXT_INPUT_CHARACTERS`. It may return at most 100,000
-spans in total (`PiiAnalyzer.MAX_RESULT_SPANS`). Custom analyzers should also
-bound the temporary data and results they produce during analysis. See
-[Input and Response Limits](#input-and-response-limits) for text-size limits.
+Respect the supplied `limits` when collecting results. For batch analysis, the
+span limit applies to the entire batch.
 
 ## Regex Analyzer
 
@@ -462,6 +465,7 @@ spring:
         max-retries: 1
         retry-backoff: 300ms
         max-response-bytes: 8388608
+        max-response-depth: 64
         headers:
           X-API-Key: ${PRESIDIO_API_KEY}
 ```
@@ -480,10 +484,10 @@ receipt. Transport failures, `timeout` expiration, HTTP 408/429 responses, and
 5xx responses are retried according to `max-retries`; other 4xx responses fail
 immediately.
 
-`max-response-bytes` is the maximum Presidio response-body size and defaults to
-8 MiB. Increasing it may also increase the maximum memory required to process
-one response. A response that exceeds the limit or cannot be processed safely
-is treated as an analysis failure.
+`max-response-depth` applies to Presidio responses. Use `processing.max-depth`
+for application value trees and JSON documents. A Presidio response that exceeds
+the size or depth limit causes an `ANALYZER_RESPONSE_INVALID` failure, handled
+according to the configured provider failure policy.
 
 When Spring Boot health support is available, the Presidio service can also be
 included in application health checks.
@@ -691,30 +695,19 @@ enabled, `response-inspection.max-characters` and
 media limit measures data size only; it does not detect PII in image or audio
 content.
 
-The library also enforces processing limits that cannot be changed through
-configuration. These bound memory use for unusually large or complex inputs
-and apply even when `output.enabled=false`:
+`processing.*` sets limits on privacy analysis and transformation. These limits
+apply even when `output.enabled=false`. All values must be positive integers.
 
-| Enforcement point | What is measured | Maximum |
-| --- | --- | ---: |
-| Spring AI boundary | Length of the complete payload before JSON parsing or plain-text processing (UTF-16 code units) | 1,000,000 |
-| `core` text processing | Length of one text value analyzed automatically or processed with caller-supplied spans (UTF-16 code units) | 1,000,000 |
-| `core` segmented analysis | Combined length of all texts passed to one `analyzeSegments(...)` call (UTF-16 code units) | 1,000,000 |
-| `core` value-tree processing | Combined length of strings, map keys, and numeric representations in one value tree (UTF-16 code units) | 1,000,000 |
-| JSON or value-tree processing | Number of nodes in one JSON document or `core` value tree | 100,000 |
-| JSON or value-tree processing | Nesting depth of one JSON document or `core` value tree | 128 |
-| Privacy transformation | Length of the complete output from one transformation (UTF-16 code units) | 8,000,000 |
+String lengths are measured in UTF-16 code units, as with Java `String.length()`.
+JSON output length includes JSON syntax and escape sequences. Value-tree output
+length is the combined length of string values and map keys in the result.
 
-Text lengths follow Java `String.length()` semantics. Most characters count as
-one UTF-16 code unit, but many emoji count as two even when displayed as a
-single character.
+Texts extracted from JSON are analyzed in batches of up to
+`processing.max-analysis-segments` texts. `processing.max-result-spans` applies
+to the total resolved span count for the document.
 
-Exceeding a safety maximum raises `PAYLOAD_LIMIT_EXCEEDED` before processing or
-result delivery continues.
-
-Ordinary messages and tool results can still receive plain-text privacy
-protection when they are not JSON. Malformed JSON is rejected only at a
-boundary that specifically requires structured JSON.
+Exceeding a processing limit stops the operation with `PAYLOAD_LIMIT_EXCEEDED`,
+regardless of `ALLOW_PARTIAL` or fallback provider policies.
 
 ## Direct `core` Module Usage
 

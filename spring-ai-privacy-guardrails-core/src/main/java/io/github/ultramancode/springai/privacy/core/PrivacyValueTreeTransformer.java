@@ -10,19 +10,22 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Applies privacy transformations to validated JSON-compatible recursive values. */
+/** Applies privacy transformations to validated JSON-compatible value trees. */
 final class PrivacyValueTreeTransformer {
 
     private final PiiAnalysisCoordinator analysisCoordinator;
     private final PrivacyTextTransformer textTransformer;
     private final String typeConflictFallback;
+    private final PrivacyProcessingLimits processingLimits;
 
     PrivacyValueTreeTransformer(
             PiiAnalysisCoordinator analysisCoordinator,
             PrivacyTextTransformer textTransformer,
-            String typeConflictFallback
+            String typeConflictFallback,
+            PrivacyProcessingLimits processingLimits
     ) {
         this.analysisCoordinator = analysisCoordinator;
+        this.processingLimits = processingLimits;
         this.textTransformer = textTransformer;
         this.typeConflictFallback = Objects.requireNonNull(
                 typeConflictFallback,
@@ -48,18 +51,22 @@ final class PrivacyValueTreeTransformer {
     ) {
         Object validatedTree = PrivacyValueTreeValidator.validateAndCopy(
                 valueTree,
-                PrivacyPhase.DETOKENIZATION
+                PrivacyPhase.DETOKENIZATION,
+                this.processingLimits
         );
-        TransformationBudget budget = new TransformationBudget(PrivacyPhase.DETOKENIZATION);
+        TransformationBudget budget = new TransformationBudget(
+                PrivacyPhase.DETOKENIZATION, this.processingLimits);
         return detokenizeValidatedValue(validatedTree, context, allowedEntityTypes, budget);
     }
 
     Object tokenizeValueTree(Object valueTree, PrivacyContext context) {
         Object validatedTree = PrivacyValueTreeValidator.validateAndCopy(
                 valueTree,
-                PrivacyPhase.TOKENIZATION
+                PrivacyPhase.TOKENIZATION,
+                this.processingLimits
         );
-        TransformationBudget budget = new TransformationBudget(PrivacyPhase.TOKENIZATION);
+        TransformationBudget budget = new TransformationBudget(
+                PrivacyPhase.TOKENIZATION, this.processingLimits);
         return tokenizeValidatedValue(validatedTree, context, budget);
     }
 
@@ -69,6 +76,8 @@ final class PrivacyValueTreeTransformer {
             return this.textTransformer.tokenize(text, spans, context);
         }
         if (scalar instanceof Number number && PrivacyValueTreeValidator.isSupportedNumber(number)) {
+            PrivacyValueTreeValidator.validateAndCopy(
+                    number, PrivacyPhase.ANALYSIS, this.processingLimits);
             List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(
                     number.toString(),
                     spans
@@ -207,7 +216,11 @@ final class PrivacyValueTreeTransformer {
         String entityType = entityTypes.size() == 1
                 ? entityTypes.iterator().next()
                 : this.typeConflictFallback;
-        return context.tokenForNumber(entityType, number);
+        this.textTransformer.requireOutputLength(
+                OpaquePiiTokenFormat.minimumGeneratedTokenLength(entityType), PrivacyPhase.TOKENIZATION);
+        String token = context.tokenForNumber(entityType, number);
+        this.textTransformer.requireOutputLength(token.length(), PrivacyPhase.TOKENIZATION);
+        return token;
     }
 
     private static void putTransformedEntry(
@@ -229,16 +242,18 @@ final class PrivacyValueTreeTransformer {
     private static final class TransformationBudget {
 
         private final PrivacyPhase phase;
+        private final PrivacyProcessingLimits limits;
         private int resolvedSpanCount;
         private long outputCharacters;
 
-        private TransformationBudget(PrivacyPhase phase) {
+        private TransformationBudget(PrivacyPhase phase, PrivacyProcessingLimits limits) {
             this.phase = phase;
+            this.limits = limits;
         }
 
         private void acceptAnalysis(PiiAnalysisResult analysis) {
             long updatedCount = (long) this.resolvedSpanCount + analysis.spans().size();
-            if (updatedCount > PiiAnalyzer.MAX_RESULT_SPANS) {
+            if (updatedCount > this.limits.maxResultSpans()) {
                 throw limitExceeded("Value tree analyzer span limit exceeded");
             }
             this.resolvedSpanCount = (int) updatedCount;
@@ -249,7 +264,7 @@ final class PrivacyValueTreeTransformer {
                 return;
             }
             this.outputCharacters += text.length();
-            if (this.outputCharacters > PrivacyService.MAX_TRANSFORMED_TEXT_CHARACTERS) {
+            if (this.outputCharacters > this.limits.maxOutputCharacters()) {
                 throw limitExceeded("Value tree transformed output limit exceeded");
             }
         }

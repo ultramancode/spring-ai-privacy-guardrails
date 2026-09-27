@@ -19,6 +19,11 @@
       "name": "spring.ai.privacy.presidio.max-response-bytes",
       "type": "java.lang.Integer",
       "defaultValue": 8388608
+    },
+    {
+      "name": "spring.ai.privacy.presidio.max-response-depth",
+      "type": "java.lang.Integer",
+      "defaultValue": 64
     }
   ]
 }

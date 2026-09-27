@@ -1,13 +1,16 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
+import tools.jackson.core.ObjectReadContext;
+import tools.jackson.core.ObjectWriteContext;
 import tools.jackson.core.StreamReadConstraints;
+import tools.jackson.core.StreamWriteConstraints;
 import tools.jackson.core.json.JsonFactory;
-import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -22,27 +25,29 @@ import java.util.function.Function;
 /** Validates and rewrites bounded JSON while preserving untouched numeric lexemes. */
 final class PrivacyJsonDocumentProcessor {
 
-    private static final int MAX_EXPANDED_NUMBER_CHARACTERS = 4_096;
-    // Every container can add one end token, so Jackson may count twice as many tokens as nodes.
-    private static final long MAX_JSON_TOKENS =
-            2L * PrivacyJsonPayloadTransformer.MAX_JSON_NODES;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper(
-            JsonFactory.builder()
-                    .streamReadConstraints(StreamReadConstraints.builder()
-                            .maxDocumentLength(PrivacyJsonPayloadTransformer.MAX_PAYLOAD_CHARACTERS)
-                            .maxStringLength(PrivacyJsonPayloadTransformer.MAX_STRING_SCALAR_CHARACTERS)
-                            .maxNameLength(PrivacyJsonPayloadTransformer.MAX_STRING_SCALAR_CHARACTERS)
-                            .maxNumberLength(PrivacyJsonPayloadTransformer.MAX_NUMBER_LEXEME_CHARACTERS)
-                            .maxNestingDepth(PrivacyJsonPayloadTransformer.MAX_JSON_DEPTH)
-                            .maxTokenCount(MAX_JSON_TOKENS)
-                            .build())
-                    .build()
-    );
+    private final PrivacyProcessingLimits limits;
+    private final JsonFactory jsonFactory;
 
-    private PrivacyJsonDocumentProcessor() {
+    PrivacyJsonDocumentProcessor(PrivacyProcessingLimits limits) {
+        this.limits = limits;
+        // Each container contributes two tokens (start and end), but counts as one node.
+        long maxJsonTokens = 2L * limits.maxValueTreeNodes();
+        this.jsonFactory = JsonFactory.builder()
+                .streamWriteConstraints(StreamWriteConstraints.builder()
+                        .maxNestingDepth(limits.maxDepth())
+                        .build())
+                .streamReadConstraints(StreamReadConstraints.builder()
+                        .maxDocumentLength(limits.maxTextCharacters())
+                        .maxStringLength(limits.maxValueTreeCharacters())
+                        .maxNameLength(limits.maxValueTreeCharacters())
+                        .maxNumberLength(limits.maxValueTreeCharacters())
+                        .maxNestingDepth(limits.maxDepth())
+                        .maxTokenCount(maxJsonTokens)
+                        .build())
+                .build();
     }
 
-    static String transform(
+    String transform(
             String payload,
             Function<Object, Object> scalarTransformer,
             PrivacyPhase phase
@@ -51,14 +56,15 @@ final class PrivacyJsonDocumentProcessor {
         return rewrite(payload, scalarTransformer, phase);
     }
 
-    static List<String> validateAndCollectAnalysisTexts(
+    List<String> validateAndCollectAnalysisTexts(
             String payload,
             PrivacyPhase phase
     ) throws JacksonException {
         validateSingleJsonValue(payload);
         Set<String> uniqueAnalysisTexts = new LinkedHashSet<>();
-        ProcessingBudget budget = new ProcessingBudget(phase);
-        try (JsonParser parser = OBJECT_MAPPER.createParser(payload)) {
+        ProcessingBudget budget = new ProcessingBudget(phase, this.limits);
+        long analysisCharacters = 0L;
+        try (JsonParser parser = this.jsonFactory.createParser(ObjectReadContext.empty(), payload)) {
             JsonToken token;
             while ((token = parser.nextToken()) != null) {
                 if (token != JsonToken.END_OBJECT && token != JsonToken.END_ARRAY) {
@@ -66,27 +72,35 @@ final class PrivacyJsonDocumentProcessor {
                 }
                 if (token == JsonToken.PROPERTY_NAME || token == JsonToken.VALUE_STRING) {
                     String scalar = parser.getString();
-                    budget.acceptScalar(scalar.length());
-                    if (!scalar.isBlank()) {
-                        uniqueAnalysisTexts.add(scalar);
+                    budget.acceptInputCharacters(scalar.length());
+                    if (!scalar.isBlank() && uniqueAnalysisTexts.add(scalar)) {
+                        analysisCharacters += scalar.length();
+                        PrivacyJsonPayloadTransformer.requireWithinLimit(
+                                analysisCharacters, this.limits.maxTextCharacters(), phase);
                     }
                 } else if (token == JsonToken.VALUE_NUMBER_INT || token == JsonToken.VALUE_NUMBER_FLOAT) {
                     String lexeme = parser.getString();
-                    budget.acceptNumber(lexeme.length());
-                    uniqueAnalysisTexts.add(analysisText(losslessNumber(lexeme, token, phase)));
+                    budget.acceptInputCharacters(lexeme.length());
+                    String analysisText = analysisText(losslessNumber(lexeme, token, phase, this.limits));
+                    if (uniqueAnalysisTexts.add(analysisText)) {
+                        analysisCharacters += analysisText.length();
+                        PrivacyJsonPayloadTransformer.requireWithinLimit(
+                                analysisCharacters, this.limits.maxTextCharacters(), phase);
+                    }
                 }
             }
         }
         return List.copyOf(uniqueAnalysisTexts);
     }
 
-    static String rewrite(
+    String rewrite(
             String payload,
             Function<Object, Object> scalarTransformer,
             PrivacyPhase phase
     ) throws JacksonException {
-        PrivacyJsonBoundedWriter writer = new PrivacyJsonBoundedWriter(payload.length());
-        ProcessingBudget budget = new ProcessingBudget(phase);
+        PrivacyJsonBoundedWriter writer = new PrivacyJsonBoundedWriter(
+                payload.length(), this.limits.maxOutputCharacters());
+        ProcessingBudget budget = new ProcessingBudget(phase, this.limits);
         Map<Object, Object> transformedScalars = new HashMap<>();
         Function<Object, Object> memoizedTransformer = scalar -> {
             if (transformedScalars.containsKey(scalar)) {
@@ -96,8 +110,8 @@ final class PrivacyJsonDocumentProcessor {
             transformedScalars.put(scalar, transformed);
             return transformed;
         };
-        try (JsonParser parser = OBJECT_MAPPER.createParser(payload);
-             JsonGenerator generator = OBJECT_MAPPER.createGenerator(writer)) {
+        try (JsonParser parser = this.jsonFactory.createParser(ObjectReadContext.empty(), payload);
+             JsonGenerator generator = this.jsonFactory.createGenerator(ObjectWriteContext.empty(), writer)) {
             JsonToken first = parser.nextToken();
             if (first == null) {
                 throw new InvalidJsonPayload();
@@ -107,7 +121,7 @@ final class PrivacyJsonDocumentProcessor {
                 throw new InvalidJsonPayload();
             }
         }
-        return PrivacyJsonPayloadTransformer.requireTransformedResult(writer.toString(), phase);
+        return PrivacyJsonPayloadTransformer.requireTransformedResult(writer.toString(), phase, this.limits);
     }
 
     static String analysisText(Object scalar) {
@@ -123,8 +137,8 @@ final class PrivacyJsonDocumentProcessor {
         throw new IllegalArgumentException("scalar must be a JSON string or number");
     }
 
-    private static void validateSingleJsonValue(String payload) throws JacksonException {
-        try (JsonParser parser = OBJECT_MAPPER.createParser(payload)) {
+    private void validateSingleJsonValue(String payload) throws JacksonException {
+        try (JsonParser parser = this.jsonFactory.createParser(ObjectReadContext.empty(), payload)) {
             JsonToken first = parser.nextToken();
             if (first == null) {
                 throw new InvalidJsonPayload();
@@ -150,13 +164,13 @@ final class PrivacyJsonDocumentProcessor {
             case START_ARRAY -> writeArray(parser, generator, scalarTransformer, phase, budget);
             case VALUE_STRING -> {
                 String text = parser.getString();
-                budget.acceptScalar(text.length());
+                budget.acceptInputCharacters(text.length());
                 writeTransformedScalar(generator, text, null, scalarTransformer.apply(text), phase);
             }
             case VALUE_NUMBER_INT, VALUE_NUMBER_FLOAT -> {
                 String lexeme = parser.getString();
-                budget.acceptNumber(lexeme.length());
-                Number number = losslessNumber(lexeme, token, phase);
+                budget.acceptInputCharacters(lexeme.length());
+                Number number = losslessNumber(lexeme, token, phase, budget.limits);
                 writeTransformedScalar(
                         generator,
                         number,
@@ -192,7 +206,7 @@ final class PrivacyJsonDocumentProcessor {
             }
             String originalName = parser.getString();
             budget.acceptNode();
-            budget.acceptScalar(originalName.length());
+            budget.acceptInputCharacters(originalName.length());
             Object transformedName = scalarTransformer.apply(originalName);
             if (!(transformedName instanceof String name)) {
                 throw PrivacyJsonPayloadTransformer.transformationConflict(
@@ -269,7 +283,9 @@ final class PrivacyJsonDocumentProcessor {
         );
     }
 
-    private static Number losslessNumber(String lexeme, JsonToken token, PrivacyPhase phase) {
+    private static Number losslessNumber(
+            String lexeme, JsonToken token, PrivacyPhase phase, PrivacyProcessingLimits limits
+    ) {
         if (token == JsonToken.VALUE_NUMBER_INT) {
             BigInteger value = new BigInteger(lexeme);
             try {
@@ -290,7 +306,7 @@ final class PrivacyJsonDocumentProcessor {
         }
         PrivacyJsonPayloadTransformer.requireWithinLimit(
                 expandedNumberLength(value),
-                MAX_EXPANDED_NUMBER_CHARACTERS,
+                Math.min(limits.maxValueTreeCharacters(), limits.maxTextCharacters()),
                 phase
         );
         return new BigDecimal(value.toPlainString());
@@ -304,10 +320,13 @@ final class PrivacyJsonDocumentProcessor {
     }
 
     private static long expandedNumberLength(BigDecimal value) {
-        // Bound the plain representation before materializing a potentially hostile exponent.
+        // Check the plain representation's length before expanding exponent notation.
         long sign = value.signum() < 0 ? 1L : 0L;
         long precision = value.precision();
         long scale = value.scale();
+        if (value.signum() == 0 && scale <= 0) {
+            return 1L;
+        }
         if (scale <= 0) {
             return sign + precision - scale;
         }
@@ -332,32 +351,28 @@ final class PrivacyJsonDocumentProcessor {
     private static final class ProcessingBudget {
 
         private final PrivacyPhase phase;
-        private int nodeCount;
+        private final PrivacyProcessingLimits limits;
+        private long nodeCount;
+        private long inputCharacters;
 
-        private ProcessingBudget(PrivacyPhase phase) {
+        private ProcessingBudget(PrivacyPhase phase, PrivacyProcessingLimits limits) {
             this.phase = phase;
+            this.limits = limits;
         }
 
         private void acceptNode() {
             PrivacyJsonPayloadTransformer.requireWithinLimit(
                     ++this.nodeCount,
-                    PrivacyJsonPayloadTransformer.MAX_JSON_NODES,
+                    this.limits.maxValueTreeNodes(),
                     this.phase
             );
         }
 
-        private void acceptScalar(int characterCount) {
+        private void acceptInputCharacters(int characterCount) {
+            this.inputCharacters += characterCount;
             PrivacyJsonPayloadTransformer.requireWithinLimit(
-                    characterCount,
-                    PrivacyJsonPayloadTransformer.MAX_STRING_SCALAR_CHARACTERS,
-                    this.phase
-            );
-        }
-
-        private void acceptNumber(int characterCount) {
-            PrivacyJsonPayloadTransformer.requireWithinLimit(
-                    characterCount,
-                    PrivacyJsonPayloadTransformer.MAX_NUMBER_LEXEME_CHARACTERS,
+                    this.inputCharacters,
+                    this.limits.maxValueTreeCharacters(),
                     this.phase
             );
         }

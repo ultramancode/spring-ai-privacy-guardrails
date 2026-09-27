@@ -6,6 +6,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
@@ -180,7 +181,8 @@ class PrivacyToolCallbackWrapperTest {
 
     @Test
     void toolInputAndResultRejectOversizedStructuredScalarsWithSafeTypedFailure() {
-        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxValueTreeCharacters(10).build();
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults(), limits);
         AtomicInteger delegateCalls = new AtomicInteger();
         AtomicReference<String> delegateResult = new AtomicReference<>("ok");
         PrivacyToolCallbackWrapper wrapper = wrap(
@@ -191,7 +193,7 @@ class PrivacyToolCallbackWrapperTest {
                 service
         );
         String oversized = "{\"value\":\""
-                + "x".repeat(PrivacyJsonPayloadTransformer.MAX_STRING_SCALAR_CHARACTERS + 1)
+                + "x".repeat(limits.maxValueTreeCharacters() + 1)
                 + "\"}";
 
         try (PrivacySession session = service.openSession()) {

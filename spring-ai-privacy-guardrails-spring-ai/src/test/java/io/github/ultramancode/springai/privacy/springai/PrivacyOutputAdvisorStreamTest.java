@@ -897,7 +897,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     private PrivacyService privacyService(AtomicInteger analysisCalls) {
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             int index = text.indexOf("Alice");
             if (index < 0) {

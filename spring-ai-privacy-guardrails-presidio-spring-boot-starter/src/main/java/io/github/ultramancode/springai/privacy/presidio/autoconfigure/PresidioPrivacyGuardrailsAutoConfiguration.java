@@ -31,6 +31,7 @@ public class PresidioPrivacyGuardrailsAutoConfiguration {
                     properties.getMaxRetries(),
                     properties.getRetryBackoff(),
                     properties.getMaxResponseBytes(),
+                    properties.getMaxResponseDepth(),
                     properties.getHeaders()
             );
         }

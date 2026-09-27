@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -155,7 +156,7 @@ class PrivacyValueTreeContractTest {
     @Test
     void tokenizationValidatesTheWholeTreeBeforeAnalyzingValues() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             return List.of(new PiiSpan("PERSON", 0, text.length(), 1.0));
         };
@@ -177,29 +178,23 @@ class PrivacyValueTreeContractTest {
 
     private static PrivacyService serviceWithNoopAnalyzer() {
         return new PrivacyService(
-                List.of((text, options) -> List.of()),
+                List.of((text, options, processingLimits) -> List.of()),
                 PiiAnalysisOptions.defaults()
         );
     }
 
     private static void assertTreeFailure(
-            ThrowingOperation operation,
+            ThrowingCallable operation,
             PrivacyFailureCode code,
             PrivacyPhase phase
     ) {
-        assertThatThrownBy(operation::run)
+        assertThatThrownBy(operation)
                 .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
                     assertThat(failure.code()).isEqualTo(code);
                     assertThat(failure.phase()).isEqualTo(phase);
                     assertThat(failure.getMessage()).doesNotContain("private-value");
                     assertThat(failure.toString()).doesNotContain("private-value");
                 });
-    }
-
-    @FunctionalInterface
-    private interface ThrowingOperation {
-
-        void run();
     }
 
     private static final class UnsupportedValue {

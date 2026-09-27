@@ -12,6 +12,7 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailurePolicy;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionMode;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -106,7 +107,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void autoConfigurationCreatesCoreServiceAndExplicitConfigurerWithoutPublicAdvisorBeans() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> assertThat(context)
@@ -134,7 +135,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void autoConfiguredPredicateRecognizesPrivacyProcessedMessagesUntilTheyChange() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
         ModelRequestBoundaryConfigurer inspectionConfigurer =
                 (clientBuilder, boundarySpec) -> boundarySpec.inspection(inspectedRequest::set);
@@ -183,7 +184,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
     @Test
     void explicitConfigurerIgnoresUnrelatedUserAdvisorBeans() {
         PrivacyService service = new PrivacyService(
-                List.of((text, options) -> List.of()),
+                List.of((text, options, processingLimits) -> List.of()),
                 PiiAnalysisOptions.defaults()
         );
         PrivacyToolContextAdvisor weakToolContext = new PrivacyToolContextAdvisor(service);
@@ -250,6 +251,46 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
+    void processingLimitsBindToTheService() {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
+        this.contextRunner
+                .withBean(PiiAnalyzer.class, () -> analyzer)
+                .withPropertyValues(
+                        "spring.ai.privacy.processing.max-text-characters=200",
+                        "spring.ai.privacy.processing.max-output-characters=160",
+                        "spring.ai.privacy.processing.max-value-tree-characters=120",
+                        "spring.ai.privacy.processing.max-value-tree-nodes=20",
+                        "spring.ai.privacy.processing.max-depth=2",
+                        "spring.ai.privacy.processing.max-analysis-segments=3",
+                        "spring.ai.privacy.processing.max-result-spans=4"
+                )
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    PrivacyService service = context.getBean(PrivacyService.class);
+                    assertThat(service.processingLimits().maxTextCharacters()).isEqualTo(200);
+                    assertThat(service.processingLimits().maxOutputCharacters()).isEqualTo(160);
+                    assertThat(service.processingLimits().maxValueTreeCharacters()).isEqualTo(120);
+                    assertThat(service.processingLimits().maxValueTreeNodes()).isEqualTo(20);
+                    assertThat(service.processingLimits().maxDepth()).isEqualTo(2);
+                    assertThat(service.processingLimits().maxAnalysisSegments()).isEqualTo(3);
+                    assertThat(service.processingLimits().maxResultSpans()).isEqualTo(4);
+                });
+    }
+
+    @Test
+    void analysisSegmentAndSpanLimitsRequirePositiveValues() {
+        PrivacyGuardrailsProperties.Processing processing =
+                new PrivacyGuardrailsProperties().getProcessing();
+
+        assertThatThrownBy(() -> processing.setMaxAnalysisSegments(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("processing.max-analysis-segments must be positive");
+        assertThatThrownBy(() -> processing.setMaxResultSpans(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("processing.max-result-spans must be positive");
+    }
+
+    @Test
     void responseInspectionLimitsArePositiveAndHaveOneValidatedConfigurationSource() {
         PrivacyGuardrailsProperties.ResponseInspection inspection =
                 new PrivacyGuardrailsProperties().getResponseInspection();
@@ -282,7 +323,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void responseInspectionPropertiesBindIndependentlyOfTheOptionalOutputPolicy() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues(
@@ -310,7 +351,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void configuredEntityAliasesFeedTheServiceWithoutExposingABaseRegistryBean() {
-        PiiAnalyzer analyzer = (text, options) -> List.of(
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(
                 new PiiSpan("PER", 0, text.length(), 0.95)
         );
         this.contextRunner
@@ -327,7 +368,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void configuredEntityAliasesRejectNonCanonicalTypesAtStartup() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues("spring.ai.privacy.analysis.entity-aliases[PER]=customer-id")
@@ -342,7 +383,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void applicationProvidedEntityRegistryRemainsTheExplicitOverridePath() {
-        PiiAnalyzer analyzer = (text, options) -> List.of(
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(
                 new PiiSpan("PER", 0, text.length(), 0.95)
         );
         this.contextRunner
@@ -402,7 +443,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void explicitConfigurerRegistersTheCompleteEnabledAdvisorBundle() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .withPropertyValues("spring.ai.privacy.output.enabled=true")
@@ -434,7 +475,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void explicitConfigurerRejectsApplyingTheBoundaryTwiceToTheSameBuilder() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> {
@@ -605,7 +646,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void explicitlyConfiguredBoundaryRejectsWrappersFromAnotherFactoryEvenWithTheSameService() {
-        PiiAnalyzer analyzer = (text, options) -> List.of();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> {
@@ -686,7 +727,8 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
                     assertThat(analyzer.analyze(
                             "EMP-1234 and EMP-5670",
-                            context.getBean(PiiAnalysisOptions.class)
+                            context.getBean(PiiAnalysisOptions.class),
+                            PrivacyProcessingLimits.defaults()
                     )).containsExactly(new PiiSpan("EMPLOYEE_ID", 13, 21, 0.91));
                     assertThat(receivedCandidate).hasValue("EMP-5670");
                     assertThat(idCalls).hasValue(1);
@@ -757,12 +799,12 @@ class PrivacyGuardrailsAutoConfigurationTest {
         AtomicReference<PiiAnalyzerFailure> observed = new AtomicReference<>();
         this.contextRunner
                 .withBean("brokenAnalyzer", PiiAnalyzer.class, () -> namedAnalyzer(
-                        "BROKEN", (text, options) -> {
+                        "BROKEN", (text, options, processingLimits) -> {
                             throw new IllegalStateException("must-not-cross-boundary-" + text);
                         }
                 ))
                 .withBean("workingAnalyzer", PiiAnalyzer.class, () -> namedAnalyzer(
-                        "WORKING", (text, options) -> List.of()
+                        "WORKING", (text, options, processingLimits) -> List.of()
                 ))
                 .withBean(PiiAnalyzerFailureObserver.class, () -> observed::set)
                 .withPropertyValues("spring.ai.privacy.analysis.failure-policy=allow-partial")
@@ -801,7 +843,8 @@ class PrivacyGuardrailsAutoConfigurationTest {
             @Override
             public List<PiiSpan> analyze(
                     String text,
-                    PiiAnalysisOptions options
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
             ) {
                 return List.of();
             }
@@ -898,9 +941,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
             @Override
             public List<PiiSpan> analyze(
                     String text,
-                    PiiAnalysisOptions options
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
             ) {
-                return delegate.analyze(text, options);
+                return delegate.analyze(text, options, limits);
             }
 
             @Override

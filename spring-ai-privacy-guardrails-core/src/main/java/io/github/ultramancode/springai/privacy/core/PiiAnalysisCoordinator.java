@@ -15,6 +15,7 @@ final class PiiAnalysisCoordinator {
     private static final PiiAnalysisResult EMPTY_ANALYSIS_RESULT =
             new PiiAnalysisResult(List.of(), Set.of(), List.of());
 
+    private final PrivacyProcessingLimits processingLimits;
     private final List<ConfiguredAnalyzer> analyzers;
     private final PiiAnalysisOptions options;
     private final PiiResolutionPolicy resolutionPolicy;
@@ -26,8 +27,10 @@ final class PiiAnalysisCoordinator {
             PiiAnalysisOptions options,
             EntityTypeRegistry entityTypeRegistry,
             PiiResolutionPolicy resolutionPolicy,
-            PiiAnalyzerFailureObserver failureObserver
+            PiiAnalyzerFailureObserver failureObserver,
+            PrivacyProcessingLimits processingLimits
     ) {
+        this.processingLimits = Objects.requireNonNull(processingLimits, "processingLimits must not be null");
         this.analyzers = configuredAnalyzers(analyzers);
         PiiAnalysisOptions configuredOptions = Objects.requireNonNull(options, "options must not be null");
         this.resolutionPolicy = Objects.requireNonNull(
@@ -148,11 +151,11 @@ final class PiiAnalysisCoordinator {
 
     private List<PiiAnalysisResult> analyzeSegmentsDetailed(List<String> texts) {
         Objects.requireNonNull(texts, "texts must not be null");
-        if (texts.size() > PiiAnalyzer.MAX_ANALYSIS_SEGMENTS) {
+        if (texts.size() > this.processingLimits.maxAnalysisSegments()) {
             throw new PrivacyGuardrailException(
                     PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                     PrivacyPhase.ANALYSIS,
-                    "PII analysis segment count exceeded the bounded processing limit"
+                    "PII analysis exceeded the configured segment limit"
             );
         }
         List<String> sourceTexts = validatedSegmentedSourceTexts(texts);
@@ -182,7 +185,7 @@ final class PiiAnalysisCoordinator {
         return List.copyOf(results);
     }
 
-    private static List<String> validatedSegmentedSourceTexts(List<String> texts) {
+    private List<String> validatedSegmentedSourceTexts(List<String> texts) {
         List<String> sourceTexts = new ArrayList<>(texts.size());
         long inputCharacters = 0L;
         for (String text : texts) {
@@ -192,11 +195,11 @@ final class PiiAnalysisCoordinator {
                 continue;
             }
             inputCharacters += text.length();
-            if (inputCharacters > PrivacyService.MAX_TEXT_INPUT_CHARACTERS) {
+            if (inputCharacters > this.processingLimits.maxTextCharacters()) {
                 throw new PrivacyGuardrailException(
                         PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                         PrivacyPhase.ANALYSIS,
-                        "PII analysis input exceeded the bounded processing limit"
+                        "PII analysis input exceeded the configured text limit"
                 );
             }
         }
@@ -205,7 +208,7 @@ final class PiiAnalysisCoordinator {
 
     private List<PiiAnalysisResult> analyzeNonBlankSegments(List<String> texts) {
         SegmentedEvidenceAccumulator evidenceAccumulator =
-                new SegmentedEvidenceAccumulator(texts.size());
+                new SegmentedEvidenceAccumulator(texts.size(), this.processingLimits.maxResultSpans());
         Set<String> successfulProviders = new LinkedHashSet<>();
         List<PiiAnalyzerFailure> failures = new ArrayList<>();
         if (this.resolutionPolicy.mode() == PiiResolutionMode.PRIMARY_WITH_FALLBACK) {
@@ -347,7 +350,7 @@ final class PiiAnalysisCoordinator {
             String provider = configuredAnalyzer.provider();
             List<PiiSpan> reportedSpans;
             try {
-                reportedSpans = analyzer.analyze(text, this.options);
+                reportedSpans = analyzer.analyze(text, this.options, this.processingLimits);
             } catch (Throwable failure) {
                 PrivacyFailureSanitizer.rethrowIfFatal(failure);
                 rejectInterruptedAnalysis();
@@ -365,7 +368,7 @@ final class PiiAnalysisCoordinator {
                 validatedSpans = validateAnalyzerResult(
                         text,
                         reportedSpans,
-                        PiiAnalyzer.MAX_RESULT_SPANS - evidence.size()
+                        this.processingLimits.maxResultSpans() - evidence.size()
                 );
             } catch (Throwable failure) {
                 PrivacyFailureSanitizer.rethrowIfFatal(failure);
@@ -397,7 +400,7 @@ final class PiiAnalysisCoordinator {
             String provider = configuredAnalyzer.provider();
             List<List<PiiSpan>> reportedSpans;
             try {
-                reportedSpans = analyzer.analyzeSegments(texts, this.options);
+                reportedSpans = analyzer.analyzeSegments(texts, this.options, this.processingLimits);
             } catch (Throwable failure) {
                 PrivacyFailureSanitizer.rethrowIfFatal(failure);
                 rejectInterruptedAnalysis();
@@ -437,6 +440,16 @@ final class PiiAnalysisCoordinator {
             List<PiiAnalyzerFailure> failures,
             Throwable boundaryFailure
     ) {
+        if (boundaryFailure instanceof PrivacyGuardrailException privacyFailure
+                && privacyFailure.code() == PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED) {
+            // Processing limits apply to the whole operation, regardless of provider failure policy.
+            throw PrivacyFailureSanitizer.sanitize(
+                    boundaryFailure,
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analysis exceeded the configured processing limit"
+            );
+        }
         failures.add(failure);
         notifyAnalyzerFailure(failure);
         rejectInterruptedAnalysis();
@@ -477,7 +490,11 @@ final class PiiAnalysisCoordinator {
             throw new IllegalStateException("PII analyzer returned a null result");
         }
         if (spans.size() > remainingCapacity) {
-            throw new IllegalStateException("PII analyzer result exceeded the safe span limit");
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analyzer result exceeded the configured span limit"
+            );
         }
         for (PiiSpan span : spans) {
             if (span == null) {
@@ -527,23 +544,23 @@ final class PiiAnalysisCoordinator {
         }
     }
 
-    private static void requireSuppliedSpanCount(List<PiiSpan> spans) {
+    private void requireSuppliedSpanCount(List<PiiSpan> spans) {
         Objects.requireNonNull(spans, "spans must not be null");
-        if (spans.size() > PiiAnalyzer.MAX_RESULT_SPANS) {
+        if (spans.size() > this.processingLimits.maxResultSpans()) {
             throw new PrivacyGuardrailException(
                     PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                     PrivacyPhase.ANALYSIS,
-                    "Caller-supplied PII spans exceeded the bounded processing limit"
+                    "Caller-supplied PII spans exceeded the configured span limit"
             );
         }
     }
 
-    static void requireTextInputWithinLimit(String text) {
-        if (text != null && text.length() > PrivacyService.MAX_TEXT_INPUT_CHARACTERS) {
+    void requireTextInputWithinLimit(String text) {
+        if (text != null && text.length() > this.processingLimits.maxTextCharacters()) {
             throw new PrivacyGuardrailException(
                     PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
                     PrivacyPhase.ANALYSIS,
-                    "Privacy text input exceeded the bounded processing limit"
+                    "Privacy text input exceeded the configured text limit"
             );
         }
     }
@@ -562,9 +579,11 @@ final class PiiAnalysisCoordinator {
     private static final class SegmentedEvidenceAccumulator {
 
         private final List<List<PiiEvidence>> evidenceBySegment;
+        private final int maxResultSpans;
         private int reportedSpanCount;
 
-        private SegmentedEvidenceAccumulator(int segmentCount) {
+        private SegmentedEvidenceAccumulator(int segmentCount, int maxResultSpans) {
+            this.maxResultSpans = maxResultSpans;
             this.evidenceBySegment = new ArrayList<>(segmentCount);
             for (int index = 0; index < segmentCount; index++) {
                 this.evidenceBySegment.add(new ArrayList<>());
@@ -572,7 +591,7 @@ final class PiiAnalysisCoordinator {
         }
 
         private int remainingSpanCapacity() {
-            return PiiAnalyzer.MAX_RESULT_SPANS - this.reportedSpanCount;
+            return this.maxResultSpans - this.reportedSpanCount;
         }
 
         private void add(String provider, List<List<PiiSpan>> spansBySegment) {

@@ -28,7 +28,7 @@ import static org.mockito.Mockito.mock;
 
 class PrivacySecurityAutoConfigurationTest {
 
-    private final PiiAnalyzer emptyAnalyzer = (text, options) -> List.of();
+    private final PiiAnalyzer emptyAnalyzer = (text, options, processingLimits) -> List.of();
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -63,7 +63,7 @@ class PrivacySecurityAutoConfigurationTest {
                         ChatClientAutoConfiguration.class))
                 .withBean(ChatModel.class, () -> mock(ChatModel.class));
         if (analyzerPresent) {
-            PiiAnalyzer analyzer = (text, options) -> List.of();
+            PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
             runner = runner.withBean(PiiAnalyzer.class, () -> analyzer);
         }
         if (policyPresent) {

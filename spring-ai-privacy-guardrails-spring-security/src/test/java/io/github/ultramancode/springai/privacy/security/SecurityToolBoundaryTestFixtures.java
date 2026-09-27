@@ -90,7 +90,7 @@ final class SecurityToolBoundaryTestFixtures {
     }
 
     static PrivacyService privacyService() {
-        PiiAnalyzer analyzer = (text, options) -> spans(text, "Alice").stream()
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> spans(text, "Alice").stream()
                 .map(span -> new PiiSpan("PERSON", span.start(), span.end(), 0.99))
                 .toList();
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());

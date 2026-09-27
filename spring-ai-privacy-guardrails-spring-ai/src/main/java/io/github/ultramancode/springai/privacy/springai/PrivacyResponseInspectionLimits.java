@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * Hard limits for inspecting one model response and buffering one response stream.
+ * Configurable limits for inspecting one model response and buffering one response stream.
  *
  * @param maxStreamFrames maximum response frames inspected per streaming subscription
  * @param maxCharacters maximum cumulative text and textual metadata characters

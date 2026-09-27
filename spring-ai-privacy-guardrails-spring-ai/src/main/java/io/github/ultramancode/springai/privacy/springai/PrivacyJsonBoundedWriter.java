@@ -3,15 +3,17 @@ package io.github.ultramancode.springai.privacy.springai;
 import java.io.Writer;
 import java.util.Objects;
 
-/** Accumulates transformed JSON without allowing the configured output bound to be exceeded. */
+/** Accumulates transformed JSON up to the configured output character limit. */
 final class PrivacyJsonBoundedWriter extends Writer {
 
     private final StringBuilder buffer;
+    private final int maxOutputCharacters;
 
-    PrivacyJsonBoundedWriter(int initialCapacity) {
+    PrivacyJsonBoundedWriter(int initialCapacity, int maxOutputCharacters) {
+        this.maxOutputCharacters = maxOutputCharacters;
         this.buffer = new StringBuilder(Math.min(
                 initialCapacity,
-                PrivacyJsonPayloadTransformer.MAX_TRANSFORMED_PAYLOAD_CHARACTERS
+                this.maxOutputCharacters
         ));
     }
 
@@ -51,7 +53,7 @@ final class PrivacyJsonBoundedWriter extends Writer {
 
     private void requireAdditional(int additional) {
         if ((long) this.buffer.length() + additional
-                > PrivacyJsonPayloadTransformer.MAX_TRANSFORMED_PAYLOAD_CHARACTERS) {
+                > this.maxOutputCharacters) {
             throw new PrivacyJsonDocumentProcessor.OutputLimitExceeded();
         }
     }

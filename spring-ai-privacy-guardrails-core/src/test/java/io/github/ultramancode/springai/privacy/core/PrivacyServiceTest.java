@@ -22,7 +22,7 @@ class PrivacyServiceTest {
     void analyzeSegmentsSkipsNullAndBlankTextsAndPreservesPerTextOffsets() {
         AtomicInteger analysisCalls = new AtomicInteger();
         List<String> analyzedTexts = new ArrayList<>();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             analyzedTexts.add(text);
             return text.matches("^EMP-[0-9]{4}$")
@@ -51,7 +51,7 @@ class PrivacyServiceTest {
     void analyzeSegmentsPreservesEarlierResultsWhenAnalyzerReusesItsResultList() {
         ThreadLocal<ArrayList<PiiSpan>> resultBuffers =
                 ThreadLocal.withInitial(ArrayList::new);
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             List<PiiSpan> reusableResults = resultBuffers.get();
             reusableResults.clear();
             if (text.equals("Alice")) {
@@ -86,7 +86,11 @@ class PrivacyServiceTest {
         AtomicInteger segmentCalls = new AtomicInteger();
         PiiAnalyzer analyzer = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 singleCalls.incrementAndGet();
                 return List.of();
             }
@@ -94,7 +98,8 @@ class PrivacyServiceTest {
             @Override
             public List<List<PiiSpan>> analyzeSegments(
                     List<String> texts,
-                    PiiAnalysisOptions options
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
             ) {
                 segmentCalls.incrementAndGet();
                 assertThat(texts).containsExactly("safe", "EMP-1234");
@@ -170,7 +175,7 @@ class PrivacyServiceTest {
     @Test
     void analyzeAndTokenizeReturnsResolvedSpansFromExactlyOneAnalysis() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             return List.of(new PiiSpan("PERSON", 0, 5, 0.95));
         };
@@ -198,7 +203,7 @@ class PrivacyServiceTest {
     @Test
     void tokenizeUsesTheSameSingleAnalysisPath() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             return List.of(new PiiSpan("PERSON", 0, 5, 0.95));
         };
@@ -214,7 +219,7 @@ class PrivacyServiceTest {
     @Test
     void analyzeAndTokenizePreservesNullAndBlankButStillValidatesTheSession() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             return List.of();
         };
@@ -275,7 +280,7 @@ class PrivacyServiceTest {
     @Test
     void recursiveTransformsProtectNumericPiiAndRestoreItsJsonTypeOnlyWhenAllowed() {
         long phoneNumber = 821012345678L;
-        PiiAnalyzer analyzer = (text, options) -> text.equals(Long.toString(phoneNumber))
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> text.equals(Long.toString(phoneNumber))
                 ? List.of(new PiiSpan("PHONE_NUMBER", 0, text.length(), 0.99))
                 : List.of();
         PrivacyService service = new PrivacyService(
@@ -303,7 +308,7 @@ class PrivacyServiceTest {
     @Test
     void preAnalyzedScalarOperationsReuseSpansAndPreserveNumericTypeMappings() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             return List.of();
         };
@@ -415,7 +420,7 @@ class PrivacyServiceTest {
 
     @Test
     void analyzeAppliesMinimumScore() {
-        PiiAnalyzer analyzer = (text, options) -> List.of(
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(
                 new PiiSpan("PERSON", 0, 5, 0.4),
                 new PiiSpan("PERSON", 13, 18, 0.9)
         );
@@ -431,7 +436,7 @@ class PrivacyServiceTest {
 
     @Test
     void tokenizePrefersCoveringSpanToAvoidPartialMaskingLeak() {
-        PiiAnalyzer analyzer = (text, options) -> List.of(
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(
                 new PiiSpan("PERSON", 0, 4, 0.99),
                 new PiiSpan("EMAIL_ADDRESS", 0, 16, 0.90)
         );
@@ -450,7 +455,7 @@ class PrivacyServiceTest {
 
     @Test
     void analyzeAppliesEntityAllowListAcrossAnalyzers() {
-        PiiAnalyzer analyzer = (text, options) -> List.of(
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(
                 new PiiSpan("PERSON", 0, 5, 0.95),
                 new PiiSpan("EMAIL_ADDRESS", 14, 31, 0.95)
         );
@@ -487,7 +492,7 @@ class PrivacyServiceTest {
     @Test
     void tokenizeDoesNotRetokenizeKnownOpaqueTokens() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer broadAnalyzer = (text, options) -> {
+        PiiAnalyzer broadAnalyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             return List.of(new PiiSpan("PII", 0, text.length(), 0.95));
         };
@@ -511,7 +516,7 @@ class PrivacyServiceTest {
     @Test
     void tokenizeReanalyzesPartiallyProtectedTextForNewAutomaticEvidence() {
         AtomicInteger calls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             calls.incrementAndGet();
             String detectedValue = calls.get() == 1 ? "Alice" : "Bob";
             int start = text.indexOf(detectedValue);
@@ -556,7 +561,7 @@ class PrivacyServiceTest {
 
     @Test
     void sessionAwareInspectionIgnoresKnownTokensButFindsAdjacentPii() {
-        PiiAnalyzer broadAnalyzer = (text, options) -> List.of(new PiiSpan("PII", 0, text.length(), 0.95));
+        PiiAnalyzer broadAnalyzer = (text, options, processingLimits) -> List.of(new PiiSpan("PII", 0, text.length(), 0.95));
         PrivacyService service = new PrivacyService(List.of(broadAnalyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
@@ -574,7 +579,7 @@ class PrivacyServiceTest {
     @Test
     void tokenizeReanalyzesTextAfterAnEarlierEmptyResult() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer recoveringAnalyzer = (text, options) -> analysisCalls.incrementAndGet() == 1
+        PiiAnalyzer recoveringAnalyzer = (text, options, processingLimits) -> analysisCalls.incrementAndGet() == 1
                 ? List.of()
                 : List.of(new PiiSpan("PERSON", 0, 5, 0.95));
         PrivacyService service = new PrivacyService(
@@ -637,7 +642,7 @@ class PrivacyServiceTest {
 
     @Test
     void analyzerAssertionFailureIsSanitizedAtTheCoreBoundary() {
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             throw new AssertionError("Analyzer exposed Alice");
         };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
@@ -653,7 +658,7 @@ class PrivacyServiceTest {
 
     @Test
     void arbitraryAnalyzerErrorIsSanitizedButFatalJvmErrorIsRethrown() {
-        PiiAnalyzer nonFatal = (text, options) -> {
+        PiiAnalyzer nonFatal = (text, options, processingLimits) -> {
             throw new Error("Analyzer exposed " + text);
         };
         PrivacyService safeService = new PrivacyService(List.of(nonFatal), PiiAnalysisOptions.defaults());
@@ -664,7 +669,7 @@ class PrivacyServiceTest {
                 .hasNoCause();
 
         StackOverflowError fatal = new StackOverflowError("Alice");
-        PiiAnalyzer fatalAnalyzer = (text, options) -> {
+        PiiAnalyzer fatalAnalyzer = (text, options, processingLimits) -> {
             throw fatal;
         };
         PrivacyService fatalService = new PrivacyService(List.of(fatalAnalyzer), PiiAnalysisOptions.defaults());
@@ -677,7 +682,7 @@ class PrivacyServiceTest {
         analyzerFailure.setStackTrace(new StackTraceElement[]{
                 new StackTraceElement("Alice", "Alice", "Alice.java", 1)
         });
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             throw analyzerFailure;
         };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
@@ -709,7 +714,7 @@ class PrivacyServiceTest {
 
     @Test
     void malformedAnalyzerTypeFailsSafelyWithoutExposingSourceText() {
-        PiiAnalyzer analyzer = (text, options) -> List.of(
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(
                 new PiiSpan("Alice Smith", 0, 5, 0.95)
         );
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
@@ -726,7 +731,11 @@ class PrivacyServiceTest {
     void analyzerCapabilityTrustsItsCustomTypeWithoutAcceptingOtherUnknownTypes() {
         PiiAnalyzer analyzer = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of(
                         new PiiSpan("CUSTOMER_ID", 0, 8, 0.95),
                         new PiiSpan("UNREGISTERED", 9, 15, 0.95)
@@ -752,7 +761,11 @@ class PrivacyServiceTest {
     void analyzerCapabilityTrustAppliesOnlyToEvidenceFromThatProvider() {
         PiiAnalyzer localAnalyzer = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of(new PiiSpan("EMPLOYEE_ID", 0, text.length(), 0.95));
             }
 
@@ -768,7 +781,11 @@ class PrivacyServiceTest {
         };
         PiiAnalyzer remoteAnalyzer = new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of(new PiiSpan("EMPLOYEE_ID", 0, text.length(), 0.95));
             }
 
@@ -886,8 +903,8 @@ class PrivacyServiceTest {
 
     @Test
     void constructorRejectsDuplicateProviderNames() {
-        PiiAnalyzer first = (text, options) -> List.of();
-        PiiAnalyzer second = (text, options) -> List.of();
+        PiiAnalyzer first = (text, options, processingLimits) -> List.of();
+        PiiAnalyzer second = (text, options, processingLimits) -> List.of();
 
         assertThat(first.providerId()).isEqualTo("CUSTOM");
         assertThatThrownBy(() -> new PrivacyService(List.of(first, second), PiiAnalysisOptions.defaults()))
@@ -900,14 +917,19 @@ class PrivacyServiceTest {
     ) {
         return new PiiAnalyzer() {
             @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options) {
+            public List<PiiSpan> analyze(
+                    String text,
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
+            ) {
                 return List.of();
             }
 
             @Override
             public List<List<PiiSpan>> analyzeSegments(
                     List<String> texts,
-                    PiiAnalysisOptions options
+                    PiiAnalysisOptions options,
+                    PrivacyProcessingLimits limits
             ) {
                 return operation.apply(texts, options);
             }
@@ -915,7 +937,7 @@ class PrivacyServiceTest {
     }
 
     private PiiAnalyzer personAnalyzer() {
-        return (text, options) -> {
+        return (text, options, processingLimits) -> {
             if ("Alice called Alice".equals(text)) {
                 return List.of(
                         new PiiSpan("PERSON", 0, 5, 0.95),

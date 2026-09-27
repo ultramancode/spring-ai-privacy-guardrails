@@ -54,7 +54,7 @@ class PrivacyChatClientIntegrationTest {
     @Test
     void unchangedProtectedPromptIsSafelyReanalyzedAtTheFinalModelBoundary() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             int start = text.indexOf("Alice");
             return start < 0

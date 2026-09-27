@@ -431,7 +431,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     private PrivacyService privacyService(AtomicInteger analysisCalls) {
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
             int index = text.indexOf("Alice");
             if (index < 0) {
@@ -443,7 +443,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     private PrivacyService digitAwarePrivacyService() {
-        PiiAnalyzer analyzer = (text, options) -> {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             List<PiiSpan> spans = new ArrayList<>();
             int person = text.indexOf("Alice");
             if (person >= 0) {

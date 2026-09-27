@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: e0c1153b4601b52b8aa6b7a82026a77e80a3d23807e69ff360141e85916c4b01 -->
+<!-- i18n-source-sha256: df66e6747856b929ab2cbd202d87c136a97d8d054c66b2d0645ce73d40bd831c -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보

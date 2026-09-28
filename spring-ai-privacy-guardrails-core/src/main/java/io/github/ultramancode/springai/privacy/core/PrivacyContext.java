@@ -9,8 +9,8 @@ import java.util.Set;
 /** Owns token and analysis state for one privacy session. */
 final class PrivacyContext {
 
-    private static final int MAX_RETAINED_ENTRIES = 128;
-    private static final int MAX_RETAINED_CHARACTERS = 65_536;
+    private static final int MAX_RETAINED_ENTRIES = 256;
+    private static final int MAX_RETAINED_CHARACTERS = 131_072;
     private static final int MAX_RETAINED_EVIDENCE = 2_048;
 
     private final Map<OriginalValue, String> originalToToken = new HashMap<>();

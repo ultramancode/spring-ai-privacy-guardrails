@@ -16,6 +16,7 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import tools.jackson.core.type.TypeReference;
@@ -512,8 +513,9 @@ class PrivacyJsonPayloadPolicyTest {
         assertThat(analysisCalls).hasValue(1);
     }
 
-    @Test
-    void jsonBatchingRespectsTheConfiguredSegmentCount() {
+    @ParameterizedTest
+    @EnumSource(value = PrivacyOutputAction.class, names = {"TOKENIZE", "REDACT", "BLOCK"})
+    void jsonBatchingRespectsTheConfiguredSegmentCount(PrivacyOutputAction action) {
         AtomicInteger singleCalls = new AtomicInteger();
         AtomicInteger batchCalls = new AtomicInteger();
         PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
@@ -527,7 +529,9 @@ class PrivacyJsonPayloadPolicyTest {
 
         try (PrivacySession session = service.openSession()) {
             assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service, session.handle(), input, PrivacyOutputAction.REDACT).text()).isEqualTo(input);
+                    service, session.handle(), input, action).text()).isEqualTo(input);
+            assertThat(PrivacyOutputPolicyExecutor.apply(
+                    service, session.handle(), input, action).text()).isEqualTo(input);
         }
         assertThat(singleCalls).hasValue(0);
         assertThat(batchCalls).hasValue(2);
@@ -538,11 +542,12 @@ class PrivacyJsonPayloadPolicyTest {
         AtomicInteger analysisCalls = new AtomicInteger();
         PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
-            return List.of(new PiiSpan("CHARACTER", 0, 1, 1.0));
+            return List.of(new PiiSpan("CHARACTER", 0, 1, 0.9),
+                    new PiiSpan("CHARACTER", 0, 1, 1.0));
         };
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
                 .maxAnalysisSegments(1)
-                .maxResultSpans(1)
+                .maxResultSpans(3)
                 .build();
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 

@@ -5,6 +5,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -81,7 +82,7 @@ class PrivacySessionAnalysisReuseTest {
                     session.handle(), List.of(protectedAlice, "Bob")));
             assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
 
-            for (int index = 0; index < 160; index++) {
+            for (int index = 0; index < 320; index++) {
                 service.tokenize(session.handle(), "safe text " + index);
             }
             release.countDown();
@@ -161,6 +162,28 @@ class PrivacySessionAnalysisReuseTest {
             assertThat(calls).hasValue(2);
             service.analyzeSegments(session.handle(), List.of("Carol"));
             assertThat(calls).hasValue(3);
+        }
+    }
+
+    @Test
+    void segmentLimitCountsReusedAndEmptyInputsBeforeAnalysis() {
+        AtomicInteger calls = new AtomicInteger();
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxAnalysisSegments(1).build();
+        PrivacyService service = new PrivacyService(List.of(personAnalyzer(calls)),
+                PiiAnalysisOptions.defaults(), limits);
+        List<List<String>> oversizedInputs = List.of(
+                List.of("Alice", "Alice"), Arrays.asList(null, ""));
+
+        try (PrivacySession session = service.openSession()) {
+            service.analyzeSegments(session.handle(), List.of("Alice"));
+            for (List<String> texts : oversizedInputs) {
+                assertThatThrownBy(() -> service.analyzeSegments(session.handle(), texts))
+                        .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                            assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                            assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                        });
+            }
+            assertThat(calls).hasValue(1);
         }
     }
 
@@ -258,12 +281,14 @@ class PrivacySessionAnalysisReuseTest {
         AtomicInteger calls = new AtomicInteger();
         PrivacyService service = new PrivacyService(List.of(personAnalyzer(calls)), PiiAnalysisOptions.defaults());
         try (PrivacySession session = service.openSession()) {
-            service.tokenize(session.handle(), "Alice");
-            for (int index = 0; index < 160; index++) {
+            String protectedText = service.tokenize(session.handle(), "Alice");
+            for (int index = 0; index < 320; index++) {
                 service.tokenize(session.handle(), "safe text " + index);
             }
             int beforeRepeat = calls.get();
-            service.analyzeAndTokenize(session.handle(), "Alice");
+            assertThat(service.analyzeAndTokenize(session.handle(), "Alice").tokenizedText())
+                    .isEqualTo(protectedText);
+            assertThat(service.detokenize(session.handle(), protectedText)).isEqualTo("Alice");
             assertThat(calls).hasValue(beforeRepeat + 1);
         }
         try (PrivacySession anotherSession = service.openSession()) {

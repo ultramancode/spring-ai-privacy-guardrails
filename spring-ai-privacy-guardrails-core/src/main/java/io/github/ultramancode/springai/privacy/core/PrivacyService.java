@@ -142,8 +142,9 @@ public final class PrivacyService {
     }
 
     /**
-     * Analyzes independent source texts in an active session. Successful analysis
-     * for identical text may be reused. Results preserve input order.
+     * Analyzes independent source texts in an active session, reusing successful
+     * results for identical text. The input limits of {@link #analyzeSegments(List)}
+     * apply to the full list.
      *
      * @param handle active session handle
      * @param texts independent source texts
@@ -151,6 +152,30 @@ public final class PrivacyService {
      */
     public List<List<ResolvedPiiSpan>> analyzeSegments(
             PrivacyContextHandle handle, List<String> texts) {
+        this.analysisCoordinator.requireSegmentCountWithinLimit(texts);
+        return this.sessionAnalysis.analyzeSegmentsEvidence(
+                texts, this.contextRegistry.requireActiveContext(handle)).stream()
+                .map(item -> item.result().spans())
+                .toList();
+    }
+
+    /**
+     * Internal integration entry point for scalar texts from a validated JSON document.
+     * The number of texts is bounded by {@link PrivacyProcessingLimits#maxValueTreeNodes()},
+     * while each analyzer batch respects {@link PrivacyProcessingLimits#maxAnalysisSegments()}.
+     * Combined text and evidence limits apply across the entire operation.
+     *
+     * @hidden
+     */
+    public List<List<ResolvedPiiSpan>> analyzeScalarTexts(
+            PrivacyContextHandle handle, List<String> texts) {
+        Objects.requireNonNull(texts, "texts must not be null");
+        if (texts.size() > this.processingLimits.maxValueTreeNodes()) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analysis exceeded the logical scalar limit");
+        }
         return this.sessionAnalysis.analyzeSegmentsEvidence(
                 texts, this.contextRegistry.requireActiveContext(handle)).stream()
                 .map(item -> item.result().spans())
@@ -390,8 +415,8 @@ public final class PrivacyService {
 
     /**
      * Tokenizes PII found in the string keys, string values, and numbers of a value tree.
-     * {@link java.math.BigDecimal} values are analyzed using {@code toPlainString()};
-     * other numbers use {@code toString()}.
+     * {@link java.math.BigDecimal} values are analyzed using {@code toPlainString()}.
+     * Other numbers use {@code toString()}.
      * A protected number becomes an opaque token and is restored to its original
      * numeric type by value-tree detokenization when its entity type is allowed.
      * Accepts the same input types and follows the same validation and limit rules as
@@ -437,10 +462,11 @@ public final class PrivacyService {
     /**
      * Analyzes and tokenizes JSON-compatible string and numeric scalars in an active
      * session. {@link java.math.BigDecimal} values use plain decimal text for analysis.
-     * The configured processing limits apply to the batch.
+     * The list size is limited by {@link PrivacyProcessingLimits#maxValueTreeNodes()}.
+     * Character and span limits apply to the whole list.
      *
      * @param handle active session handle
-     * @param scalars JSON-compatible string and numeric scalars in one logical batch
+     * @param scalars JSON-compatible string and numeric scalars
      * @return transformed scalars in input order
      */
     public List<Object> tokenizeScalars(PrivacyContextHandle handle, List<?> scalars) {

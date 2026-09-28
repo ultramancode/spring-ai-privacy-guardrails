@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.AbstractList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -263,9 +264,11 @@ class PrivacyProcessingLimitsTest {
                 });
     }
 
-    @Test
-    void segmentedAnalysisRejectsExcessSegmentsBeforeIteration() {
-        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxAnalysisSegments(2).build();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void segmentedAnalysisRejectsExcessSegmentsBeforeIteration(boolean sessionAware) {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
+                .maxAnalysisSegments(2).maxValueTreeNodes(1).build();
         AtomicInteger batchCalls = new AtomicInteger();
         PiiAnalyzer analyzer = new PiiAnalyzer() {
             @Override
@@ -296,16 +299,20 @@ class PrivacyProcessingLimitsTest {
         };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
-        assertThat(service.analyzeSegments(List.of("a", "b")))
-                .containsExactly(List.of(), List.of());
-        assertThat(batchCalls).hasValue(1);
+        try (PrivacySession session = service.openSession()) {
+            Function<List<String>, List<List<ResolvedPiiSpan>>> analyze = texts -> sessionAware
+                    ? service.analyzeSegments(session.handle(), texts) : service.analyzeSegments(texts);
+            assertThat(analyze.apply(List.of("a", "b")))
+                    .containsExactly(List.of(), List.of());
+            assertThat(batchCalls).hasValue(1);
 
-        assertThatThrownBy(() -> service.analyzeSegments(excessiveSegments))
-                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
-                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
-                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
-                });
-        assertThat(batchCalls).hasValue(1);
+            assertThatThrownBy(() -> analyze.apply(excessiveSegments))
+                    .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                        assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                        assertThat(failure.phase()).isEqualTo(PrivacyPhase.ANALYSIS);
+                    });
+            assertThat(batchCalls).hasValue(1);
+        }
     }
 
     @Test

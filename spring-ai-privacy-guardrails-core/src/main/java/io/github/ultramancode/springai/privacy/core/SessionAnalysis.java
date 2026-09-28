@@ -9,6 +9,8 @@ import java.util.Objects;
 /** Looks up core-produced analysis in one session. Analyzer work runs outside context locks. */
 final class SessionAnalysis {
 
+    private static final int TARGET_BATCH_CHARACTERS = 32_768;
+
     private final PiiAnalysisCoordinator coordinator;
 
     SessionAnalysis(PiiAnalysisCoordinator coordinator) {
@@ -33,12 +35,13 @@ final class SessionAnalysis {
         return analyzed;
     }
 
+    /**
+     * Callers enforce input-count limits.
+     * Text and evidence limits cover all analyzer batches.
+     */
     List<PiiAnalysisCoordinator.AnalysisEvidence> analyzeSegmentsEvidence(
             List<String> texts, PrivacyContext context) {
         Objects.requireNonNull(texts, "texts must not be null");
-        if (texts.size() > this.coordinator.processingLimits().maxValueTreeNodes()) {
-            throw limitExceeded("PII analysis exceeded the logical segment limit");
-        }
         context.requireActive();
         rejectInterrupted();
         Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText = new LinkedHashMap<>();
@@ -111,7 +114,7 @@ final class SessionAnalysis {
                     && batch.size() < this.coordinator.processingLimits().maxAnalysisSegments()) {
                 String next = uncachedTexts.get(index);
                 if (!batch.isEmpty() && batchCharacters + next.length() >
-                        Math.min(32_768, this.coordinator.processingLimits().maxTextCharacters())) {
+                        Math.min(TARGET_BATCH_CHARACTERS, this.coordinator.processingLimits().maxTextCharacters())) {
                     break;
                 }
                 batch.add(next);

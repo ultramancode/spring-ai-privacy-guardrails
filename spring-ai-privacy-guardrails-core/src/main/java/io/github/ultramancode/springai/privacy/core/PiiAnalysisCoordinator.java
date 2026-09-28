@@ -142,14 +142,7 @@ final class PiiAnalysisCoordinator {
     }
 
     List<AnalysisEvidence> analyzeSegmentsEvidence(List<String> texts) {
-        Objects.requireNonNull(texts, "texts must not be null");
-        if (texts.size() > this.processingLimits.maxAnalysisSegments()) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
-                    PrivacyPhase.ANALYSIS,
-                    "PII analysis exceeded the configured segment limit"
-            );
-        }
+        requireSegmentCountWithinLimit(texts);
         List<String> sourceTexts = validatedSegmentedSourceTexts(texts);
 
         List<AnalysisEvidence> results = new ArrayList<>(sourceTexts.size());
@@ -542,6 +535,16 @@ final class PiiAnalysisCoordinator {
                     PrivacyPhase.ANALYSIS,
                     "Caller-supplied PII spans exceeded the configured span limit"
             );
+        }
+    }
+
+    void requireSegmentCountWithinLimit(List<String> texts) {
+        Objects.requireNonNull(texts, "texts must not be null");
+        if (texts.size() > this.processingLimits.maxAnalysisSegments()) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analysis exceeded the configured segment limit");
         }
     }
 

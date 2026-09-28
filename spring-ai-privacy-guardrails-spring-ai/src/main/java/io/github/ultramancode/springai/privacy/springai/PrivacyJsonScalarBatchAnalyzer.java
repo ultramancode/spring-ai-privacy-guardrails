@@ -26,7 +26,7 @@ final class PrivacyJsonScalarBatchAnalyzer {
 
         Map<String, List<PiiSpan>> spansByText = new LinkedHashMap<>();
         List<List<ResolvedPiiSpan>> resolvedSpansByText =
-                privacyService.analyzeSegments(handle, analysisTexts);
+                privacyService.analyzeScalarTexts(handle, analysisTexts);
         for (int index = 0; index < analysisTexts.size(); index++) {
             List<ResolvedPiiSpan> resolvedSpans = resolvedSpansByText.get(index);
             spansByText.put(

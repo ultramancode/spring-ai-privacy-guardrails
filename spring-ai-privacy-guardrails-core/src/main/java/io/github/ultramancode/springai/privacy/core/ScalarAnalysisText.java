@@ -28,18 +28,26 @@ public final class ScalarAnalysisText {
 
     /** Returns the plain decimal length without allocating the expanded string. */
     public static long plainDecimalLength(BigDecimal decimal) {
-        long sign = decimal.signum() < 0 ? 1L : 0L;
+        long signCharacters = decimal.signum() < 0 ? 1L : 0L;
         long precision = decimal.precision();
         long scale = decimal.scale();
+
+        // Zero with a nonpositive scale renders as just "0"
         if (decimal.signum() == 0 && scale <= 0) {
             return 1L;
         }
+
+        // Nonpositive scale renders without a decimal point and may append trailing zeros
         if (scale <= 0) {
-            return sign + precision - scale;
+            return signCharacters + precision - scale;
         }
-        long integerDigits = precision - scale;
-        return integerDigits > 0
-                ? sign + precision + 1L
-                : sign + 2L - integerDigits + precision;
+
+        // When digits reach the integer part, only the decimal point adds a character
+        if (precision > scale) {
+            return signCharacters + precision + 1L;
+        }
+
+        // Otherwise "0." precedes exactly scale fractional digits
+        return signCharacters + 2L + scale;
     }
 }

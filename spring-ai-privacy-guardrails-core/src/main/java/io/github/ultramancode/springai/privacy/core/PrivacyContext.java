@@ -76,6 +76,7 @@ final class PrivacyContext {
                 || evidence.evidenceCount() > MAX_RETAINED_EVIDENCE) {
             return;
         }
+        // Remove the old entry so its counts are not included when checking the new one.
         PiiAnalysisCoordinator.AnalysisEvidence old = this.analysisBySource.remove(source);
         if (old != null) {
             this.retainedCharacters -= source.length();

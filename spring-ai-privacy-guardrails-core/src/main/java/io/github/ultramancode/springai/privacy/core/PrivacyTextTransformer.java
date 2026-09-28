@@ -26,24 +26,24 @@ final class PrivacyTextTransformer {
 
     PiiTokenizationResult analyzeAndTokenize(String text, PrivacyContext context) {
         PiiAnalysisResult analysis = this.sessionAnalysis.analyzeEvidence(text, context).result();
-        String tokenizedText = tokenizeResolved(text, analysis.spans(), context);
+        String tokenizedText = tokenizeWithResolvedSpans(text, analysis.spans(), context);
         if (tokenizedText != null && analysis.failures().isEmpty()) {
             context.retainCompletedTokenization(tokenizedText);
         }
         return new PiiTokenizationResult(tokenizedText, analysis);
     }
 
-    String tokenizeResolved(
+    String tokenizeWithResolvedSpans(
             String text,
-            List<ResolvedPiiSpan> spans,
+            List<ResolvedPiiSpan> resolvedSpans,
             PrivacyContext context
     ) {
-        return tokenizePrepared(text, protectionSpans(spans), context);
+        return tokenizePrepared(text, protectionSpans(resolvedSpans), context);
     }
 
     String tokenize(String text, List<PiiSpan> spans, PrivacyContext context) {
-        List<ResolvedPiiSpan> resolved = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
-        return tokenizePrepared(text, protectionSpans(resolved), context);
+        List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
+        return tokenizePrepared(text, protectionSpans(resolvedSpans), context);
     }
 
     String tokenize(String text, PrivacyContext context) {
@@ -69,20 +69,20 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
-        List<ResolvedPiiSpan> spans = this.analysisCoordinator.analyzeEvidence(text).result().spans();
-        return redactPrepared(text, protectionSpans(spans));
+        List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.analyzeEvidence(text).result().spans();
+        return redactPrepared(text, protectionSpans(resolvedSpans));
     }
 
     String redact(String text, List<PiiSpan> spans) {
-        List<ResolvedPiiSpan> resolved = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
-        return redactPrepared(text, protectionSpans(resolved));
+        List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
+        return redactPrepared(text, protectionSpans(resolvedSpans));
     }
 
     String redact(String text, List<PiiSpan> spans, PrivacyContext context) {
-        List<ResolvedPiiSpan> resolved = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
+        List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
         return redactPrepared(
                 text,
-                excludeKnownTokens(text, protectionSpans(resolved), context)
+                excludeKnownTokens(text, protectionSpans(resolvedSpans), context)
         );
     }
 
@@ -91,9 +91,9 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
-        List<ResolvedPiiSpan> analyzed = this.sessionAnalysis.analyzeEvidence(text, context)
+        List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyzeEvidence(text, context)
                 .result().spans();
-        List<ProtectionSpan> spans = excludeKnownTokens(text, protectionSpans(analyzed), context);
+        List<ProtectionSpan> spans = excludeKnownTokens(text, protectionSpans(resolvedSpans), context);
         return redactPrepared(text, spans);
     }
 
@@ -102,16 +102,16 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return false;
         }
-        List<ResolvedPiiSpan> analyzed = this.sessionAnalysis.analyzeEvidence(text, context)
+        List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyzeEvidence(text, context)
                 .result().spans();
-        return !excludeKnownTokens(text, protectionSpans(analyzed), context).isEmpty();
+        return !excludeKnownTokens(text, protectionSpans(resolvedSpans), context).isEmpty();
     }
 
     boolean containsPii(String text, List<PiiSpan> spans, PrivacyContext context) {
-        List<ResolvedPiiSpan> resolved = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
+        List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
         return !excludeKnownTokens(
                 text,
-                protectionSpans(resolved),
+                protectionSpans(resolvedSpans),
                 context
         ).isEmpty();
     }
@@ -310,8 +310,8 @@ final class PrivacyTextTransformer {
         }
     }
 
-    private static List<ProtectionSpan> protectionSpans(List<ResolvedPiiSpan> spans) {
-        return spans.stream()
+    private static List<ProtectionSpan> protectionSpans(List<ResolvedPiiSpan> resolvedSpans) {
+        return resolvedSpans.stream()
                 .map(span -> new ProtectionSpan(span.entityType(), span.start(), span.end()))
                 .toList();
     }

@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 4075dc6285e64094e2b54dfc303aafaf563b9721fb0b5e71f194bb396edbb94e -->
+<!-- i18n-source-sha256: 102b26222444a2552b9759da7c31f0a8c7e5f5454dce3526b52a29f1d0f7d701 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -104,7 +104,7 @@ ChatClient derivedClient = protectedClient.mutate().build();
 보호 설정이 적용된 `ChatClient.Builder`를 `clone()`으로 복사할 때도 설정이
 이어지므로 `PrivacyChatClientConfigurer`를 다시 적용하지 마세요.
 
-도구 이름, 설명과 JSON 스키마도 모델에 전달되기 전에 개인정보를 검사합니다.
+도구 설명과 JSON 스키마는 모델에 전달되기 전에 개인정보를 검사합니다.
 
 Spring AI의 표준 `UserMessage`, `SystemMessage`, `AssistantMessage`,
 `ToolResponseMessage`와 `DeepSeekAssistantMessage`를 지원합니다. 그 밖의 모델
@@ -664,8 +664,8 @@ spring:
 JSON의 출력 길이에는 JSON 구문과 이스케이프 문자도 포함합니다. 값 트리의 출력 길이는
 결과에 포함된 문자열 값과 맵 키의 길이를 합산합니다.
 
-JSON에서 추출한 텍스트는 최대 `processing.max-analysis-segments`개씩 묶어 분석합니다.
-`processing.max-result-spans`는 문서 전체의 최종 탐지 범위 수에 적용합니다.
+JSON에서 추출한 텍스트는 최대 `processing.max-analysis-segments`개씩 묶어
+분석합니다.
 
 처리 제한을 초과하면 `ALLOW_PARTIAL`이나 fallback 정책과 관계없이
 `PAYLOAD_LIMIT_EXCEEDED`로 작업을 중단합니다.

@@ -304,7 +304,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
             AssistantMessage message,
             boolean returnDirect
     ) {
-        this.modelControlValidator.validateSensitiveControlFields(handle, message);
+        this.modelControlValidator.validateToolCallStructure(message);
         return PrivacyMessageTransformer.transformAssistantMessage(
                 message,
                 text -> protectText(handle, text, returnDirect)

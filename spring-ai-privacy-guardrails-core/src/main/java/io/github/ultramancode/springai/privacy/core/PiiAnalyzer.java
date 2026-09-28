@@ -12,7 +12,8 @@ public interface PiiAnalyzer {
     /**
      * Analyzes source text without retaining or mutating it. Implementations are
      * shared by {@link PrivacyService} and must therefore be thread-safe and
-     * reentrant. Blocking implementations must set a finite deadline and cooperate
+     * reentrant. Successful results may be reused for identical input within a session.
+     * Blocking implementations must set a finite deadline and cooperate
      * with thread interruption.
      *
      * <p>If adding another span would exceed the supplied

@@ -153,6 +153,9 @@ session handle. The actual mapping between opaque tokens and original values
 remains in library-managed internal state and is not included in model requests
 or tool inputs.
 
+Within a session, PII analysis can be reused for identical input. Disclosure
+and authorization checks still run for each tool invocation.
+
 A session is not bound to a specific execution thread, so tool execution can
 continue on another thread while using the same request session. If the session
 is missing or already closed, privacy processing fails instead of continuing.
@@ -263,10 +266,7 @@ permission to receive original values are separate concerns: only tools
 configured for specific entity types receive those originals immediately before
 execution.
 
-Tool information sent to the model, including the tool name, description, and
-JSON schema, is also inspected for PII. Tool input is protected before
-execution, only the required values are selectively restored, and tool results
-are inspected and protected again before returning to the model or application.
+Tool descriptions and JSON schemas sent to the model are also inspected for PII.
 
 On a protected `ChatClient`'s standard tool path, callbacks that are not wrapped
 by `PrivacyToolCallbackFactory` are rejected. Separate execution paths that use

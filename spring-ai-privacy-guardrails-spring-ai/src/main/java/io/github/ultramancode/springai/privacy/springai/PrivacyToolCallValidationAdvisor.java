@@ -200,7 +200,6 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
         }
         Set<String> registeredToolNames = PrivacyToolExecutionContextSupport.requireRegisteredToolNames(response);
         this.modelControlValidator.validateResponseToolCalls(
-                responseHandle,
                 response,
                 registeredToolNames
         );

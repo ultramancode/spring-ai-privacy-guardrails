@@ -2,6 +2,7 @@ package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
+import io.github.ultramancode.springai.privacy.core.ScalarAnalysisText;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.core.JsonParser;
@@ -60,8 +61,19 @@ final class PrivacyJsonDocumentProcessor {
             String payload,
             PrivacyPhase phase
     ) throws JacksonException {
+        return validateAndCollect(payload, phase).analysisTexts();
+    }
+
+    List<Object> validateAndCollectScalars(String payload, PrivacyPhase phase)
+            throws JacksonException {
+        return validateAndCollect(payload, phase).scalars();
+    }
+
+    private CollectedScalars validateAndCollect(String payload, PrivacyPhase phase)
+            throws JacksonException {
         validateSingleJsonValue(payload);
         Set<String> uniqueAnalysisTexts = new LinkedHashSet<>();
+        Set<Object> uniqueScalars = new LinkedHashSet<>();
         ProcessingBudget budget = new ProcessingBudget(phase, this.limits);
         long analysisCharacters = 0L;
         try (JsonParser parser = this.jsonFactory.createParser(ObjectReadContext.empty(), payload)) {
@@ -72,6 +84,7 @@ final class PrivacyJsonDocumentProcessor {
                 }
                 if (token == JsonToken.PROPERTY_NAME || token == JsonToken.VALUE_STRING) {
                     String scalar = parser.getString();
+                    uniqueScalars.add(scalar);
                     budget.acceptInputCharacters(scalar.length());
                     if (!scalar.isBlank() && uniqueAnalysisTexts.add(scalar)) {
                         analysisCharacters += scalar.length();
@@ -81,7 +94,9 @@ final class PrivacyJsonDocumentProcessor {
                 } else if (token == JsonToken.VALUE_NUMBER_INT || token == JsonToken.VALUE_NUMBER_FLOAT) {
                     String lexeme = parser.getString();
                     budget.acceptInputCharacters(lexeme.length());
-                    String analysisText = analysisText(losslessNumber(lexeme, token, phase, this.limits));
+                    Number number = losslessNumber(lexeme, token, phase, this.limits);
+                    uniqueScalars.add(number);
+                    String analysisText = ScalarAnalysisText.toAnalysisText(number);
                     if (uniqueAnalysisTexts.add(analysisText)) {
                         analysisCharacters += analysisText.length();
                         PrivacyJsonPayloadTransformer.requireWithinLimit(
@@ -90,7 +105,11 @@ final class PrivacyJsonDocumentProcessor {
                 }
             }
         }
-        return List.copyOf(uniqueAnalysisTexts);
+        return new CollectedScalars(
+                List.copyOf(uniqueAnalysisTexts), List.copyOf(uniqueScalars));
+    }
+
+    private record CollectedScalars(List<String> analysisTexts, List<Object> scalars) {
     }
 
     String rewrite(
@@ -122,19 +141,6 @@ final class PrivacyJsonDocumentProcessor {
             }
         }
         return PrivacyJsonPayloadTransformer.requireTransformedResult(writer.toString(), phase, this.limits);
-    }
-
-    static String analysisText(Object scalar) {
-        if (scalar instanceof String text) {
-            return text;
-        }
-        if (scalar instanceof BigDecimal decimal) {
-            return decimal.toPlainString();
-        }
-        if (scalar instanceof Number number) {
-            return number.toString();
-        }
-        throw new IllegalArgumentException("scalar must be a JSON string or number");
     }
 
     private void validateSingleJsonValue(String payload) throws JacksonException {
@@ -305,11 +311,11 @@ final class PrivacyJsonDocumentProcessor {
             throw PrivacyJsonPayloadTransformer.payloadLimitExceeded(phase);
         }
         PrivacyJsonPayloadTransformer.requireWithinLimit(
-                expandedNumberLength(value),
+                ScalarAnalysisText.plainDecimalLength(value),
                 Math.min(limits.maxValueTreeCharacters(), limits.maxTextCharacters()),
                 phase
         );
-        return new BigDecimal(value.toPlainString());
+        return new BigDecimal(ScalarAnalysisText.toAnalysisText(value));
     }
 
     private static boolean numericallyEqual(Object left, Number right) {
@@ -317,24 +323,6 @@ final class PrivacyJsonDocumentProcessor {
             return false;
         }
         return new BigDecimal(leftNumber.toString()).compareTo(new BigDecimal(right.toString())) == 0;
-    }
-
-    private static long expandedNumberLength(BigDecimal value) {
-        // Check the plain representation's length before expanding exponent notation.
-        long sign = value.signum() < 0 ? 1L : 0L;
-        long precision = value.precision();
-        long scale = value.scale();
-        if (value.signum() == 0 && scale <= 0) {
-            return 1L;
-        }
-        if (scale <= 0) {
-            return sign + precision - scale;
-        }
-        long integerDigits = precision - scale;
-        if (integerDigits > 0) {
-            return sign + precision + 1L;
-        }
-        return sign + 2L - integerDigits + precision;
     }
 
     static final class InvalidJsonPayload extends RuntimeException {

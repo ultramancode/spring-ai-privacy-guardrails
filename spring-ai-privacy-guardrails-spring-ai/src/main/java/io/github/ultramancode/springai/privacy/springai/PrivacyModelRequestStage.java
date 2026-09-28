@@ -79,7 +79,7 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
             );
         }
         this.modelControlValidator.validateOutputFormatControlFields(handle, request);
-        this.modelControlValidator.validateHistoryToolControlFields(handle, request);
+        this.modelControlValidator.validateHistoryToolControlFields(request);
         PrivacyToolExecutionContextSupport.requireCallbacksMatchValidatedSnapshot(request);
         Set<String> registeredToolNames = request.prompt().getOptions() instanceof ToolCallingChatOptions
                 ? PrivacyToolContextAdvisor.requirePrivacyWrappedToolNames(

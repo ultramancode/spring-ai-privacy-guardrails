@@ -11,19 +11,25 @@ import java.util.regex.Matcher;
 final class PrivacyTextTransformer {
 
     private final PiiAnalysisCoordinator analysisCoordinator;
+    private final SessionAnalysis sessionAnalysis;
     private final PrivacyProcessingLimits processingLimits;
 
     PrivacyTextTransformer(
             PiiAnalysisCoordinator analysisCoordinator,
+            SessionAnalysis sessionAnalysis,
             PrivacyProcessingLimits processingLimits
     ) {
         this.analysisCoordinator = analysisCoordinator;
+        this.sessionAnalysis = sessionAnalysis;
         this.processingLimits = processingLimits;
     }
 
     PiiTokenizationResult analyzeAndTokenize(String text, PrivacyContext context) {
-        PiiAnalysisResult analysis = this.analysisCoordinator.analyzeDetailed(text);
+        PiiAnalysisResult analysis = this.sessionAnalysis.analyzeEvidence(text, context).result();
         String tokenizedText = tokenizeResolved(text, analysis.spans(), context);
+        if (tokenizedText != null && analysis.failures().isEmpty()) {
+            context.retainCompletedTokenization(tokenizedText);
+        }
         return new PiiTokenizationResult(tokenizedText, analysis);
     }
 
@@ -41,7 +47,21 @@ final class PrivacyTextTransformer {
     }
 
     String tokenize(String text, PrivacyContext context) {
+        if (canReuseCompletedTokenization(text, context)) {
+            return requireOutputWithinLimit(text, PrivacyPhase.TOKENIZATION);
+        }
         return analyzeAndTokenize(text, context).tokenizedText();
+    }
+
+    boolean canReuseCompletedTokenization(String text, PrivacyContext context) {
+        this.analysisCoordinator.requireTextInputWithinLimit(text);
+        context.requireActive();
+        if (Thread.currentThread().isInterrupted()) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.ANALYSIS_INTERRUPTED, PrivacyPhase.ANALYSIS,
+                    "PII analysis interrupted");
+        }
+        return text != null && context.isCompletedTokenization(text);
     }
 
     String redact(String text) {
@@ -49,7 +69,8 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
-        return redactPrepared(text, protectionSpans(this.analysisCoordinator.analyze(text)));
+        List<ResolvedPiiSpan> spans = this.analysisCoordinator.analyzeEvidence(text).result().spans();
+        return redactPrepared(text, protectionSpans(spans));
     }
 
     String redact(String text, List<PiiSpan> spans) {
@@ -70,11 +91,9 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
-        List<ProtectionSpan> spans = excludeKnownTokens(
-                text,
-                protectionSpans(this.analysisCoordinator.analyze(text)),
-                context
-        );
+        List<ResolvedPiiSpan> analyzed = this.sessionAnalysis.analyzeEvidence(text, context)
+                .result().spans();
+        List<ProtectionSpan> spans = excludeKnownTokens(text, protectionSpans(analyzed), context);
         return redactPrepared(text, spans);
     }
 
@@ -83,11 +102,9 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return false;
         }
-        return !excludeKnownTokens(
-                text,
-                protectionSpans(this.analysisCoordinator.analyze(text)),
-                context
-        ).isEmpty();
+        List<ResolvedPiiSpan> analyzed = this.sessionAnalysis.analyzeEvidence(text, context)
+                .result().spans();
+        return !excludeKnownTokens(text, protectionSpans(analyzed), context).isEmpty();
     }
 
     boolean containsPii(String text, List<PiiSpan> spans, PrivacyContext context) {

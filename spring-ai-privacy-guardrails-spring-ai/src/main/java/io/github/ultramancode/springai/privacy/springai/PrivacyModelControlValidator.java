@@ -25,8 +25,6 @@ import java.util.Set;
  */
 final class PrivacyModelControlValidator {
 
-    private static final String SENSITIVE_CONTROL_FIELD_MESSAGE =
-            "Tool control field rejected by privacy guardrail";
     private static final String UNKNOWN_TOOL_MESSAGE =
             "Model requested a tool outside the registered privacy boundary";
 
@@ -36,19 +34,17 @@ final class PrivacyModelControlValidator {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
     }
 
-    void validateHistoryToolControlFields(PrivacyContextHandle handle, ChatClientRequest request) {
+    void validateHistoryToolControlFields(ChatClientRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         for (Message message : request.prompt().getInstructions()) {
             if (message instanceof AssistantMessage assistantMessage) {
                 for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
                     requireToolCall(toolCall);
-                    rejectPii(handle, toolCall.name());
                 }
             }
             if (message instanceof ToolResponseMessage toolResponseMessage) {
                 for (ToolResponseMessage.ToolResponse response : toolResponseMessage.getResponses()) {
                     requireToolResponse(response);
-                    rejectPii(handle, response.name());
                 }
             }
         }
@@ -62,7 +58,6 @@ final class PrivacyModelControlValidator {
         }
         for (ToolCallback callback : toolOptions.getToolCallbacks()) {
             ToolDefinition definition = callback.getToolDefinition();
-            rejectPiiPayload(handle, definition.name(), false, "Tool definition rejected by privacy guardrail");
             rejectPiiPayload(handle, definition.description(), false, "Tool definition rejected by privacy guardrail");
             rejectPiiPayload(handle, definition.inputSchema(), true, "Tool definition rejected by privacy guardrail");
         }
@@ -85,7 +80,6 @@ final class PrivacyModelControlValidator {
     }
 
     void validateResponseToolCalls(
-            PrivacyContextHandle handle,
             ChatClientResponse response,
             Set<String> registeredToolNames
     ) {
@@ -97,52 +91,35 @@ final class PrivacyModelControlValidator {
         for (Generation generation : response.chatResponse().getResults()) {
             AssistantMessage message = generation.getOutput();
             if (message != null) {
-                validateAssistantMessage(handle, message, registeredToolNames);
+                validateAssistantMessage(message, registeredToolNames);
             }
         }
         for (AssistantMessage.ToolCall toolCall : PrivacyToolCallMetadataReader.read(
                 response.chatResponse(),
                 PrivacyPhase.TOOL_INPUT
         )) {
-            validateToolCall(handle, toolCall, registeredToolNames);
+            validateToolCall(toolCall, registeredToolNames);
         }
     }
 
     AssistantMessage validateAssistantMessage(
-            PrivacyContextHandle handle,
             AssistantMessage message,
             Set<String> registeredToolNames
     ) {
         Objects.requireNonNull(message, "message must not be null");
         Objects.requireNonNull(registeredToolNames, "registeredToolNames must not be null");
-        validateSensitiveControlFields(handle, message);
         for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
-            requireToolCall(toolCall);
-            requireRegisteredName(toolCall, registeredToolNames);
+            validateToolCall(toolCall, registeredToolNames);
         }
         return message;
     }
 
-    AssistantMessage validateSensitiveControlFields(
-            PrivacyContextHandle handle,
-            AssistantMessage message
-    ) {
+    AssistantMessage validateToolCallStructure(AssistantMessage message) {
         Objects.requireNonNull(message, "message must not be null");
         for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
             requireToolCall(toolCall);
-            rejectPii(handle, toolCall.name());
         }
         return message;
-    }
-
-    private void rejectPii(PrivacyContextHandle handle, String value) {
-        if (value != null && !value.isBlank() && this.privacyService.containsPii(handle, value)) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.TRANSFORMATION_CONFLICT,
-                    PrivacyPhase.TOOL_INPUT,
-                    SENSITIVE_CONTROL_FIELD_MESSAGE
-            );
-        }
     }
 
     private void rejectPiiPayload(
@@ -192,12 +169,10 @@ final class PrivacyModelControlValidator {
     }
 
     private void validateToolCall(
-            PrivacyContextHandle handle,
             AssistantMessage.ToolCall toolCall,
             Set<String> registeredToolNames
     ) {
         requireToolCall(toolCall);
-        rejectPii(handle, toolCall.name());
         requireRegisteredName(toolCall, registeredToolNames);
     }
 

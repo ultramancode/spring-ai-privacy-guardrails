@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.SpringAiToolSearchSupport;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;

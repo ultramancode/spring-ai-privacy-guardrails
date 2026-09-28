@@ -1,16 +1,17 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
-import io.github.ultramancode.springai.privacy.core.PiiTokenizationResult;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.ScalarAnalysisText;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.exc.StreamConstraintsException;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,7 +45,7 @@ final class PrivacyJsonPayloadTransformer {
                 payload,
                 phase,
                 requireValidJson,
-                PrivacyJsonScalarActionExecutor.Action.TOKENIZE,
+                Action.TOKENIZE,
                 Set.of()
         );
     }
@@ -64,27 +65,9 @@ final class PrivacyJsonPayloadTransformer {
                 payload,
                 phase,
                 requireValidJson,
-                PrivacyJsonScalarActionExecutor.Action.REDACT,
+                Action.REDACT,
                 Set.of()
         );
-    }
-
-    static String disclose(
-            PrivacyService privacyService,
-            PrivacyContextHandle handle,
-            String payload,
-            Set<String> allowedEntityTypes,
-            PrivacyPhase phase,
-            boolean requireValidJson
-    ) {
-        return discloseWithOutcome(
-                privacyService,
-                handle,
-                payload,
-                allowedEntityTypes,
-                phase,
-                requireValidJson
-        ).payload();
     }
 
     static DisclosureResult discloseWithOutcome(
@@ -105,7 +88,7 @@ final class PrivacyJsonPayloadTransformer {
                 payload,
                 phase,
                 requireValidJson,
-                PrivacyJsonScalarActionExecutor.Action.DISCLOSE,
+                Action.DISCLOSE,
                 allowedEntityTypes,
                 tracker
         );
@@ -153,7 +136,7 @@ final class PrivacyJsonPayloadTransformer {
                     payload,
                     phase,
                     requireValidJson,
-                    PrivacyJsonScalarActionExecutor.Action.CONTAINS_PII,
+                    Action.CONTAINS_PII,
                     Set.of()
             );
             return false;
@@ -199,7 +182,7 @@ final class PrivacyJsonPayloadTransformer {
             String payload,
             PrivacyPhase phase,
             boolean requireValidJson,
-            PrivacyJsonScalarActionExecutor.Action action,
+            Action action,
             Set<String> allowedEntityTypes
     ) {
         return analyzeAndTransformJsonOrText(
@@ -220,7 +203,7 @@ final class PrivacyJsonPayloadTransformer {
             String payload,
             PrivacyPhase phase,
             boolean requireValidJson,
-            PrivacyJsonScalarActionExecutor.Action action,
+            Action action,
             Set<String> allowedEntityTypes,
             DisclosureTracker disclosureTracker
     ) {
@@ -268,30 +251,48 @@ final class PrivacyJsonPayloadTransformer {
             PrivacyContextHandle handle,
             String payload,
             PrivacyPhase phase,
-            PrivacyJsonScalarActionExecutor.Action action,
+            Action action,
             Set<String> allowedEntityTypes,
             DisclosureTracker disclosureTracker
     ) throws JacksonException {
         PrivacyJsonDocumentProcessor processor =
                 documentProcessor(privacyService.processingLimits());
+        if (action == Action.TOKENIZE || action == Action.DISCLOSE) {
+            List<Object> scalars = processor.validateAndCollectScalars(payload, phase);
+            List<Object> protectedScalars = privacyService.tokenizeScalars(handle, scalars);
+            Map<Object, Object> valuesByScalar = new HashMap<>();
+            for (int index = 0; index < scalars.size(); index++) {
+                Object protectedValue = protectedScalars.get(index);
+                if (action == Action.DISCLOSE) {
+                    Object disclosed = privacyService.detokenizeValueTree(
+                            handle, protectedValue, allowedEntityTypes);
+                    if (disclosureTracker != null) {
+                        disclosureTracker.record(!Objects.equals(protectedValue, disclosed));
+                    }
+                    valuesByScalar.put(scalars.get(index), disclosed);
+                } else {
+                    valuesByScalar.put(scalars.get(index), protectedValue);
+                }
+            }
+            return processor.rewrite(payload, valuesByScalar::get, phase);
+        }
         List<String> analysisTexts = processor.validateAndCollectAnalysisTexts(payload, phase);
         Map<String, List<PiiSpan>> spansByText = PrivacyJsonScalarBatchAnalyzer.analyze(
                 privacyService,
-                analysisTexts,
-                phase
+                handle,
+                analysisTexts
         );
         Function<Object, Object> scalarTransformer = scalar -> {
-            String analysisText = PrivacyJsonDocumentProcessor.analysisText(scalar);
+            String analysisText = ScalarAnalysisText.toAnalysisText(scalar);
             List<PiiSpan> spans = spansByText.getOrDefault(analysisText, List.of());
             return applyScalarAction(
                     privacyService,
                     handle,
                     scalar,
+                    analysisText,
                     spans,
                     action,
-                    allowedEntityTypes,
-                    phase,
-                    disclosureTracker
+                    phase
             );
         };
         return processor.rewrite(payload, scalarTransformer, phase);
@@ -301,42 +302,33 @@ final class PrivacyJsonPayloadTransformer {
             PrivacyService privacyService,
             PrivacyContextHandle handle,
             Object scalar,
+            String analysisText,
             List<PiiSpan> spans,
-            PrivacyJsonScalarActionExecutor.Action action,
-            Set<String> allowedEntityTypes,
-            PrivacyPhase phase,
-            DisclosureTracker disclosureTracker
+            Action action,
+            PrivacyPhase phase
     ) {
-        if (action != PrivacyJsonScalarActionExecutor.Action.DISCLOSE
-                || disclosureTracker == null) {
-            return PrivacyJsonScalarActionExecutor.apply(
-                    privacyService,
-                    handle,
-                    scalar,
-                    spans,
-                    action,
-                    allowedEntityTypes,
-                    phase
-            );
+        try {
+            if (action == Action.REDACT) {
+                String redacted = privacyService.redact(handle, analysisText, spans);
+                return redacted.equals(analysisText) ? scalar : redacted;
+            }
+            if (action == Action.CONTAINS_PII) {
+                if (privacyService.containsPii(handle, analysisText, spans)) {
+                    throw new PiiDetected();
+                }
+                return scalar;
+            }
+            throw new IllegalStateException("Unexpected JSON scalar analysis action");
+        } catch (PrivacyGuardrailException failure) {
+            throw remapProcessingLimit(failure, phase);
         }
-        PrivacyJsonScalarActionExecutor.DisclosureResult result =
-                PrivacyJsonScalarActionExecutor.disclose(
-                        privacyService,
-                        handle,
-                        scalar,
-                        spans,
-                        allowedEntityTypes,
-                        phase
-                );
-        disclosureTracker.record(result.disclosed());
-        return result.value();
     }
 
     private static String applyTextAction(
             PrivacyService privacyService,
             PrivacyContextHandle handle,
             String text,
-            PrivacyJsonScalarActionExecutor.Action action,
+            Action action,
             Set<String> allowedEntityTypes,
             PrivacyPhase phase,
             DisclosureTracker disclosureTracker
@@ -352,15 +344,15 @@ final class PrivacyJsonPayloadTransformer {
                     yield text;
                 }
                 case DISCLOSE -> {
-                    PiiTokenizationResult tokenization = privacyService.analyzeAndTokenize(handle, text);
+                    String protectedText = privacyService.tokenize(handle, text);
                     String disclosed = privacyService.detokenize(
                             handle,
-                            tokenization.tokenizedText(),
+                            protectedText,
                             allowedEntityTypes
                     );
                     if (disclosureTracker != null) {
                         disclosureTracker.record(!Objects.equals(
-                                tokenization.tokenizedText(),
+                                protectedText,
                                 disclosed
                         ));
                     }
@@ -449,5 +441,12 @@ final class PrivacyJsonPayloadTransformer {
         private boolean disclosed() {
             return this.disclosed;
         }
+    }
+
+    private enum Action {
+        TOKENIZE,
+        REDACT,
+        CONTAINS_PII,
+        DISCLOSE
     }
 }

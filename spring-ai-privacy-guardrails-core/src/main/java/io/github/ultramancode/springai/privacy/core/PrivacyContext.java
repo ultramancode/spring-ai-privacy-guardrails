@@ -6,12 +6,23 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Session-scoped bidirectional mapping between original PII and opaque tokens. */
+/** Owns token and analysis state for one privacy session. */
 final class PrivacyContext {
+
+    private static final int MAX_RETAINED_ENTRIES = 128;
+    private static final int MAX_RETAINED_CHARACTERS = 65_536;
+    private static final int MAX_RETAINED_EVIDENCE = 2_048;
 
     private final Map<OriginalValue, String> originalToToken = new HashMap<>();
     private final Map<String, OriginalValue> originalValuesByToken = new LinkedHashMap<>();
     private final Map<String, Integer> lastTokenIndexByEntityType = new HashMap<>();
+    private final LinkedHashMap<String, PiiAnalysisCoordinator.AnalysisEvidence> analysisBySource =
+            new LinkedHashMap<>(16, 0.75f, true);
+    private final LinkedHashMap<String, Boolean> completedTokenizations =
+            new LinkedHashMap<>(16, 0.75f, true);
+    private int retainedCharacters;
+    private int retainedEvidence;
+    private int completedCharacters;
     private final String tokenNonce;
     private boolean closed;
 
@@ -49,6 +60,66 @@ final class PrivacyContext {
         return !this.originalValuesByToken.isEmpty();
     }
 
+    synchronized void requireActive() {
+        ensureActive();
+    }
+
+    synchronized PiiAnalysisCoordinator.AnalysisEvidence analysisFor(String source) {
+        ensureActive();
+        return this.analysisBySource.get(source);
+    }
+
+    synchronized void retainAnalysis(String source, PiiAnalysisCoordinator.AnalysisEvidence evidence) {
+        ensureActive();
+        if (!evidence.result().failures().isEmpty()
+                || source.length() > MAX_RETAINED_CHARACTERS
+                || evidence.evidenceCount() > MAX_RETAINED_EVIDENCE) {
+            return;
+        }
+        PiiAnalysisCoordinator.AnalysisEvidence old = this.analysisBySource.remove(source);
+        if (old != null) {
+            this.retainedCharacters -= source.length();
+            this.retainedEvidence -= old.evidenceCount();
+        }
+        while (!this.analysisBySource.isEmpty()
+                && (this.analysisBySource.size() >= MAX_RETAINED_ENTRIES
+                || this.retainedCharacters + source.length() > MAX_RETAINED_CHARACTERS
+                || this.retainedEvidence + evidence.evidenceCount() > MAX_RETAINED_EVIDENCE)) {
+            Map.Entry<String, PiiAnalysisCoordinator.AnalysisEvidence> eldest =
+                    this.analysisBySource.entrySet().iterator().next();
+            this.retainedCharacters -= eldest.getKey().length();
+            this.retainedEvidence -= eldest.getValue().evidenceCount();
+            this.analysisBySource.remove(eldest.getKey());
+        }
+        this.analysisBySource.put(source, evidence);
+        this.retainedCharacters += source.length();
+        this.retainedEvidence += evidence.evidenceCount();
+    }
+
+    synchronized boolean isCompletedTokenization(String protectedText) {
+        ensureActive();
+        return this.completedTokenizations.get(protectedText) != null;
+    }
+
+    synchronized void retainCompletedTokenization(String protectedText) {
+        ensureActive();
+        if (protectedText.length() > MAX_RETAINED_CHARACTERS) {
+            return;
+        }
+        if (this.completedTokenizations.remove(protectedText) != null) {
+            this.completedCharacters -= protectedText.length();
+        }
+        while (!this.completedTokenizations.isEmpty()
+                && (this.completedTokenizations.size() >= MAX_RETAINED_ENTRIES
+                || this.completedCharacters + protectedText.length() > MAX_RETAINED_CHARACTERS)) {
+            String eldest = this.completedTokenizations.keySet().iterator().next();
+            this.completedTokenizations.remove(eldest);
+            this.completedCharacters -= eldest.length();
+        }
+        this.completedTokenizations.put(protectedText, Boolean.TRUE);
+        this.completedCharacters += protectedText.length();
+    }
+
     synchronized boolean ownsToken(String token) {
         ensureActive();
         return this.originalValuesByToken.containsKey(token);
@@ -74,6 +145,11 @@ final class PrivacyContext {
         this.originalToToken.clear();
         this.originalValuesByToken.clear();
         this.lastTokenIndexByEntityType.clear();
+        this.analysisBySource.clear();
+        this.completedTokenizations.clear();
+        this.retainedCharacters = 0;
+        this.retainedEvidence = 0;
+        this.completedCharacters = 0;
     }
 
     private void ensureActive() {

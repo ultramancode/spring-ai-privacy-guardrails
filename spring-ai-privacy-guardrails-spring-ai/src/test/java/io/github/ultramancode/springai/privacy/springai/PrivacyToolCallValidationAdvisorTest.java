@@ -70,7 +70,7 @@ class PrivacyToolCallValidationAdvisorTest {
             assertThatThrownBy(() -> advisor.adviseCall(request, chain))
                     .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
                         assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
-                        assertThat(failure).hasMessage("Tool control field rejected by privacy guardrail")
+                        assertThat(failure).hasMessage("Model requested a tool outside the registered privacy boundary")
                                 .hasMessageNotContaining("Alice");
                     });
         }

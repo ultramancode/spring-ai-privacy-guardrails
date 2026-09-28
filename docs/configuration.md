@@ -106,8 +106,8 @@ ChatClient derivedClient = protectedClient.mutate().build();
 Copying a protected `ChatClient.Builder` with `clone()` also preserves its
 configuration, so do not reapply `PrivacyChatClientConfigurer` to the copy.
 
-Tool names, descriptions, and JSON schemas are also checked for PII before they
-are sent to the model.
+Tool descriptions and JSON schemas are checked for PII before they are sent to
+the model.
 
 The boundary supports the standard Spring AI `UserMessage`, `SystemMessage`,
 `AssistantMessage`, and `ToolResponseMessage` classes, plus
@@ -703,8 +703,7 @@ JSON output length includes JSON syntax and escape sequences. Value-tree output
 length is the combined length of string values and map keys in the result.
 
 Texts extracted from JSON are analyzed in batches of up to
-`processing.max-analysis-segments` texts. `processing.max-result-spans` applies
-to the total resolved span count for the document.
+`processing.max-analysis-segments`.
 
 Exceeding a processing limit stops the operation with `PAYLOAD_LIMIT_EXCEEDED`,
 regardless of `ALLOW_PARTIAL` or fallback provider policies.

@@ -111,7 +111,7 @@ opaque tokens for each tool.
 | Threat | Library control |
 | --- | --- |
 | Opaque token reuse or invalid-session access | Mappings between opaque tokens and original values are managed separately for each request through `PrivacySession`. Opaque tokens from another request are not restored to original values, and unknown or closed sessions fail. |
-| PII retained in a session after a request ends | When a Spring AI request using the standard privacy configuration completes, fails, or its stream is cancelled, the library cleans up the mappings it manages between opaque tokens and original values. The mappings themselves are not included in model requests or tool input. |
+| PII retained in a session after a request ends | When a request using the standard privacy configuration completes, fails, or its stream is cancelled, the library closes its session and clears the retained data. |
 | Resource exhaustion from very large or deeply nested input | The library enforces size, item-count, nesting-depth, and similar bounds when inspecting supported text, JSON, value structures, and responses. |
 
 **Scope and considerations**

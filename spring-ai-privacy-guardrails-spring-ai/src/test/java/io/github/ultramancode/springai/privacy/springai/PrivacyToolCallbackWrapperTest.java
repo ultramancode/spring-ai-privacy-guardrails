@@ -40,6 +40,40 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyToolCallbackWrapperTest {
 
+    @Test
+    void repeatedInvocationReusesDetectionButAppliesCurrentDisclosurePolicy() {
+        AtomicInteger aliceAnalyses = new AtomicInteger();
+        PiiAnalyzer analyzer = (text, options, limits) -> {
+            int start = text.indexOf("Alice");
+            if (start < 0) {
+                return List.of();
+            }
+            aliceAnalyses.incrementAndGet();
+            return List.of(new PiiSpan("PERSON", start, start + 5, 0.95));
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+        AtomicReference<String> deniedInput = new AtomicReference<>();
+        AtomicReference<String> allowedInput = new AtomicReference<>();
+        PrivacyToolCallbackWrapper denied = wrap(delegate(input -> {
+            deniedInput.set(input);
+            return "Alice";
+        }), service, ToolDisclosurePolicy.denyAll());
+        PrivacyToolCallbackWrapper allowed = wrap(delegate(input -> {
+            allowedInput.set(input);
+            return "Alice";
+        }), service, ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON"))));
+
+        try (PrivacySession session = service.openSession()) {
+            String first = denied.call("{\"name\":\"Alice\"}", toolContext(session.handle()));
+            String second = allowed.call("{\"name\":\"Alice\"}", toolContext(session.handle()));
+            assertThat(deniedInput.get()).doesNotContain("Alice");
+            assertThat(allowedInput.get()).contains("Alice");
+            assertThat(first).doesNotContain("Alice");
+            assertThat(second).doesNotContain("Alice");
+            assertThat(aliceAnalyses).hasValue(1);
+        }
+    }
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test

@@ -82,14 +82,10 @@ final class PiiAnalysisCoordinator {
         validateProviderConfiguration();
     }
 
-    List<ResolvedPiiSpan> analyze(String text) {
-        return analyzeDetailed(text).spans();
-    }
-
-    PiiAnalysisResult analyzeDetailed(String text) {
+    AnalysisEvidence analyzeEvidence(String text) {
         requireTextInputWithinLimit(text);
         if (text == null || text.isBlank()) {
-            return EMPTY_ANALYSIS_RESULT;
+            return new AnalysisEvidence(EMPTY_ANALYSIS_RESULT, 0);
         }
         requireAnalyzerConfigured();
 
@@ -140,16 +136,12 @@ final class PiiAnalysisCoordinator {
                 Set.copyOf(successfulProviders),
                 this.options
         );
-        return new PiiAnalysisResult(resolved, Set.copyOf(successfulProviders), failures);
+        return new AnalysisEvidence(
+                new PiiAnalysisResult(resolved, Set.copyOf(successfulProviders), failures),
+                evidence.size());
     }
 
-    List<List<ResolvedPiiSpan>> analyzeSegments(List<String> texts) {
-        return analyzeSegmentsDetailed(texts).stream()
-                .map(PiiAnalysisResult::spans)
-                .toList();
-    }
-
-    private List<PiiAnalysisResult> analyzeSegmentsDetailed(List<String> texts) {
+    List<AnalysisEvidence> analyzeSegmentsEvidence(List<String> texts) {
         Objects.requireNonNull(texts, "texts must not be null");
         if (texts.size() > this.processingLimits.maxAnalysisSegments()) {
             throw new PrivacyGuardrailException(
@@ -160,12 +152,12 @@ final class PiiAnalysisCoordinator {
         }
         List<String> sourceTexts = validatedSegmentedSourceTexts(texts);
 
-        List<PiiAnalysisResult> results = new ArrayList<>(sourceTexts.size());
+        List<AnalysisEvidence> results = new ArrayList<>(sourceTexts.size());
         List<String> nonBlankTexts = new ArrayList<>(sourceTexts.size());
         List<Integer> nonBlankSourceIndexes = new ArrayList<>(sourceTexts.size());
         for (int index = 0; index < sourceTexts.size(); index++) {
             String text = sourceTexts.get(index);
-            results.add(EMPTY_ANALYSIS_RESULT);
+            results.add(new AnalysisEvidence(EMPTY_ANALYSIS_RESULT, 0));
             if (text != null && !text.isBlank()) {
                 nonBlankTexts.add(text);
                 nonBlankSourceIndexes.add(index);
@@ -176,7 +168,7 @@ final class PiiAnalysisCoordinator {
         }
 
         requireAnalyzerConfigured();
-        List<PiiAnalysisResult> analyzedResults = analyzeNonBlankSegments(
+        List<AnalysisEvidence> analyzedResults = analyzeNonBlankSegments(
                 List.copyOf(nonBlankTexts)
         );
         for (int index = 0; index < analyzedResults.size(); index++) {
@@ -206,7 +198,7 @@ final class PiiAnalysisCoordinator {
         return sourceTexts;
     }
 
-    private List<PiiAnalysisResult> analyzeNonBlankSegments(List<String> texts) {
+    private List<AnalysisEvidence> analyzeNonBlankSegments(List<String> texts) {
         SegmentedEvidenceAccumulator evidenceAccumulator =
                 new SegmentedEvidenceAccumulator(texts.size(), this.processingLimits.maxResultSpans());
         Set<String> successfulProviders = new LinkedHashSet<>();
@@ -256,7 +248,7 @@ final class PiiAnalysisCoordinator {
         }
 
         Set<String> immutableSuccessfulProviders = Set.copyOf(successfulProviders);
-        List<PiiAnalysisResult> results = new ArrayList<>(texts.size());
+        List<AnalysisEvidence> results = new ArrayList<>(texts.size());
         for (int index = 0; index < texts.size(); index++) {
             List<ResolvedPiiSpan> resolved = this.evidenceResolver.resolve(
                     texts.get(index),
@@ -264,11 +256,9 @@ final class PiiAnalysisCoordinator {
                     immutableSuccessfulProviders,
                     this.options
             );
-            results.add(new PiiAnalysisResult(
-                    resolved,
-                    immutableSuccessfulProviders,
-                    failures
-            ));
+            results.add(new AnalysisEvidence(
+                    new PiiAnalysisResult(resolved, immutableSuccessfulProviders, failures),
+                    evidenceAccumulator.forSegment(index).size()));
         }
         return List.copyOf(results);
     }
@@ -563,6 +553,22 @@ final class PiiAnalysisCoordinator {
                     "Privacy text input exceeded the configured text limit"
             );
         }
+    }
+
+    void requireEvidenceWithinLimit(long count) {
+        if (count > this.processingLimits.maxResultSpans()) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analyzer result exceeded the configured span limit");
+        }
+    }
+
+    PrivacyProcessingLimits processingLimits() {
+        return this.processingLimits;
+    }
+
+    record AnalysisEvidence(PiiAnalysisResult result, int evidenceCount) {
     }
 
     private boolean mustFail(String provider) {

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -14,17 +15,20 @@ import java.util.stream.Collectors;
 final class PrivacyValueTreeTransformer {
 
     private final PiiAnalysisCoordinator analysisCoordinator;
+    private final SessionAnalysis sessionAnalysis;
     private final PrivacyTextTransformer textTransformer;
     private final String typeConflictFallback;
     private final PrivacyProcessingLimits processingLimits;
 
     PrivacyValueTreeTransformer(
             PiiAnalysisCoordinator analysisCoordinator,
+            SessionAnalysis sessionAnalysis,
             PrivacyTextTransformer textTransformer,
             String typeConflictFallback,
             PrivacyProcessingLimits processingLimits
     ) {
         this.analysisCoordinator = analysisCoordinator;
+        this.sessionAnalysis = sessionAnalysis;
         this.processingLimits = processingLimits;
         this.textTransformer = textTransformer;
         this.typeConflictFallback = Objects.requireNonNull(
@@ -67,7 +71,10 @@ final class PrivacyValueTreeTransformer {
         );
         TransformationBudget budget = new TransformationBudget(
                 PrivacyPhase.TOKENIZATION, this.processingLimits);
-        return tokenizeValidatedValue(validatedTree, context, budget);
+        Object transformed = tokenizeValidatedValue(validatedTree, context, budget);
+        context.requireActive();
+        budget.publishCompletions(context);
+        return transformed;
     }
 
     Object tokenizeScalar(Object scalar, List<PiiSpan> spans, PrivacyContext context) {
@@ -79,12 +86,112 @@ final class PrivacyValueTreeTransformer {
             PrivacyValueTreeValidator.validateAndCopy(
                     number, PrivacyPhase.ANALYSIS, this.processingLimits);
             List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(
-                    number.toString(),
+                    analysisText(number),
                     spans
             );
             return tokenizeNumber(number, resolvedSpans, context);
         }
         throw new IllegalArgumentException("scalar must be a JSON string or number");
+    }
+
+    List<Object> tokenizeScalars(List<?> scalars, PrivacyContext context) {
+        Objects.requireNonNull(scalars, "scalars must not be null");
+        context.requireActive();
+        List<ScalarInput> inputs = prepareScalars(scalars);
+        Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText = new LinkedHashMap<>();
+        List<String> analysisTexts = new ArrayList<>();
+        // Eviction does not revoke completion already observed by this operation.
+        Set<String> completedInputs = new LinkedHashSet<>();
+        for (ScalarInput input : inputs) {
+            String text = input.analysisText();
+            if (input.value() instanceof String
+                    && (completedInputs.contains(text) || context.isCompletedTokenization(text))) {
+                completedInputs.add(text);
+                continue;
+            }
+            if (!evidenceByText.containsKey(text)) {
+                evidenceByText.put(text, null);
+                analysisTexts.add(text);
+            }
+        }
+        List<PiiAnalysisCoordinator.AnalysisEvidence> analyzed =
+                this.sessionAnalysis.analyzeSegmentsEvidence(analysisTexts, context);
+        for (int index = 0; index < analysisTexts.size(); index++) {
+            evidenceByText.put(analysisTexts.get(index), analyzed.get(index));
+        }
+        List<Object> transformed = new ArrayList<>(inputs.size());
+        List<String> completedOutputs = new ArrayList<>();
+        long outputCharacters = 0;
+        for (ScalarInput input : inputs) {
+            Object scalar = input.value();
+            Object value;
+            if (scalar instanceof String text && completedInputs.contains(text)) {
+                value = text;
+            } else {
+                PiiAnalysisCoordinator.AnalysisEvidence evidence =
+                        evidenceByText.get(input.analysisText());
+                value = scalar instanceof String text
+                        ? this.textTransformer.tokenizeResolved(text, evidence.result().spans(), context)
+                        : tokenizeNumber((Number) scalar, evidence.result().spans(), context);
+                if (value instanceof String protectedText && evidence.result().failures().isEmpty()) {
+                    completedOutputs.add(protectedText);
+                }
+            }
+            if (value instanceof String text) {
+                outputCharacters += text.length();
+                requireWithinLimit(outputCharacters, this.processingLimits.maxOutputCharacters(),
+                        PrivacyPhase.TOKENIZATION);
+            }
+            transformed.add(value);
+        }
+        context.requireActive();
+        for (String completedOutput : completedOutputs) {
+            context.retainCompletedTokenization(completedOutput);
+        }
+        return Collections.unmodifiableList(transformed);
+    }
+
+    private List<ScalarInput> prepareScalars(List<?> scalars) {
+        int scalarCount = scalars.size();
+        requireWithinLimit(scalarCount, this.processingLimits.maxValueTreeNodes(),
+                PrivacyPhase.ANALYSIS);
+        List<ScalarInput> inputs = new ArrayList<>(scalarCount);
+        long inputCharacters = 0;
+        for (Object scalar : scalars) {
+            if (!(scalar instanceof String) && !(scalar instanceof Number number
+                    && PrivacyValueTreeValidator.isSupportedNumber(number))) {
+                throw new IllegalArgumentException("scalars must contain only JSON strings and numbers");
+            }
+            Object validated = PrivacyValueTreeValidator.validateAndCopy(
+                    scalar, PrivacyPhase.ANALYSIS, this.processingLimits);
+            String text = analysisText(validated);
+            inputCharacters += text.length();
+            requireWithinLimit(inputCharacters, this.processingLimits.maxTextCharacters(),
+                    PrivacyPhase.ANALYSIS);
+            inputs.add(new ScalarInput(validated, text));
+        }
+        return inputs;
+    }
+
+    private record ScalarInput(Object value, String analysisText) {
+    }
+
+    private String analysisText(Object scalar) {
+        if (scalar instanceof BigDecimal decimal) {
+            requireWithinLimit(ScalarAnalysisText.plainDecimalLength(decimal),
+                    Math.min(this.processingLimits.maxTextCharacters(),
+                            this.processingLimits.maxValueTreeCharacters()),
+                    PrivacyPhase.ANALYSIS);
+        }
+        return ScalarAnalysisText.toAnalysisText(scalar);
+    }
+
+    private static void requireWithinLimit(long actual, int maximum, PrivacyPhase phase) {
+        if (actual > maximum) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED, phase,
+                    "Privacy scalar processing exceeded a configured limit");
+        }
     }
 
     private Object detokenizeValidatedValue(
@@ -184,10 +291,19 @@ final class PrivacyValueTreeTransformer {
             PrivacyContext context,
             TransformationBudget budget
     ) {
-        PiiAnalysisResult analysis = this.analysisCoordinator.analyzeDetailed(text);
-        budget.acceptAnalysis(analysis);
-        String transformed = this.textTransformer.tokenizeResolved(text, analysis.spans(), context);
+        if (this.textTransformer.canReuseCompletedTokenization(text, context)) {
+            budget.acceptOutput(text);
+            return text;
+        }
+        PiiAnalysisCoordinator.AnalysisEvidence evidence =
+                this.sessionAnalysis.analyzeEvidence(text, context);
+        budget.acceptAnalysis(evidence.evidenceCount());
+        String transformed = this.textTransformer.tokenizeResolved(
+                text, evidence.result().spans(), context);
         budget.acceptOutput(transformed);
+        if (evidence.result().failures().isEmpty()) {
+            budget.recordCompletion(transformed);
+        }
         return transformed;
     }
 
@@ -196,10 +312,15 @@ final class PrivacyValueTreeTransformer {
             PrivacyContext context,
             TransformationBudget budget
     ) {
-        String text = number.toString();
-        PiiAnalysisResult analysis = this.analysisCoordinator.analyzeDetailed(text);
-        budget.acceptAnalysis(analysis);
-        return tokenizeNumber(number, analysis.spans(), context);
+        String text = analysisText(number);
+        PiiAnalysisCoordinator.AnalysisEvidence evidence =
+                this.sessionAnalysis.analyzeEvidence(text, context);
+        budget.acceptAnalysis(evidence.evidenceCount());
+        Object transformed = tokenizeNumber(number, evidence.result().spans(), context);
+        if (transformed instanceof String protectedText && evidence.result().failures().isEmpty()) {
+            budget.recordCompletion(protectedText);
+        }
+        return transformed;
     }
 
     private Object tokenizeNumber(
@@ -243,20 +364,21 @@ final class PrivacyValueTreeTransformer {
 
         private final PrivacyPhase phase;
         private final PrivacyProcessingLimits limits;
-        private int resolvedSpanCount;
+        private int evidenceCount;
         private long outputCharacters;
+        private final List<String> completedOutputs = new ArrayList<>();
 
         private TransformationBudget(PrivacyPhase phase, PrivacyProcessingLimits limits) {
             this.phase = phase;
             this.limits = limits;
         }
 
-        private void acceptAnalysis(PiiAnalysisResult analysis) {
-            long updatedCount = (long) this.resolvedSpanCount + analysis.spans().size();
+        private void acceptAnalysis(int additionalEvidence) {
+            long updatedCount = (long) this.evidenceCount + additionalEvidence;
             if (updatedCount > this.limits.maxResultSpans()) {
                 throw limitExceeded("Value tree analyzer span limit exceeded");
             }
-            this.resolvedSpanCount = (int) updatedCount;
+            this.evidenceCount = (int) updatedCount;
         }
 
         private void acceptOutput(Object value) {
@@ -266,6 +388,16 @@ final class PrivacyValueTreeTransformer {
             this.outputCharacters += text.length();
             if (this.outputCharacters > this.limits.maxOutputCharacters()) {
                 throw limitExceeded("Value tree transformed output limit exceeded");
+            }
+        }
+
+        private void recordCompletion(String text) {
+            this.completedOutputs.add(text);
+        }
+
+        private void publishCompletions(PrivacyContext context) {
+            for (String text : this.completedOutputs) {
+                context.retainCompletedTokenization(text);
             }
         }
 

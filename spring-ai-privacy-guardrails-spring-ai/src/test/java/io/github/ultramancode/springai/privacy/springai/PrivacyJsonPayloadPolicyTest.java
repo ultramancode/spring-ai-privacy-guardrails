@@ -324,7 +324,7 @@ class PrivacyJsonPayloadPolicyTest {
                     List.of(new PiiSpan("SECRET", 0, original.length(), 1.0))
             );
 
-            assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.disclose(
+            assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.discloseWithOutcome(
                     service,
                     session.handle(),
                     "{\"tokens\":\"" + token.repeat(3) + "\"}",
@@ -336,27 +336,6 @@ class PrivacyJsonPayloadPolicyTest {
                 assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOOL_INPUT);
             });
         }
-    }
-
-    @Test
-    void plainDecimalAnalysisDoesNotIntroduceExponentNotation() {
-        AtomicReference<String> analyzedText = new AtomicReference<>();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analyzedText.set(text);
-            return List.of();
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String input = "0.0000001";
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
-                    input,
-                    PrivacyOutputAction.TOKENIZE
-            ).text()).isEqualTo(input);
-        }
-        assertThat(analyzedText).hasValue(input);
     }
 
     @Test
@@ -436,7 +415,7 @@ class PrivacyJsonPayloadPolicyTest {
             return List.of();
         };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String scalar = "x".repeat(PrivacyJsonScalarBatchAnalyzer.TARGET_BATCH_CHARACTERS + 1);
+        String scalar = "x".repeat(32_769);
         String input = "\"" + scalar + "\"";
 
         try (PrivacySession session = service.openSession()) {
@@ -480,6 +459,33 @@ class PrivacyJsonPayloadPolicyTest {
                 assertThat(protectedPayload).doesNotContain("EMP-1234", "KEY-1234");
                 assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
             }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void expandedNumericBatchKeepsTheOriginalJsonCharacterBudget(boolean disclose) {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
+                .maxValueTreeCharacters(6)
+                .maxTextCharacters(10)
+                .build();
+        List<String> analyzedTexts = new ArrayList<>();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
+            analyzedTexts.add(text);
+            return List.of();
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
+        String input = "[1e3,2e3]";
+
+        try (PrivacySession session = service.openSession()) {
+            String output = disclose
+                    ? PrivacyJsonPayloadTransformer.discloseWithOutcome(
+                            service, session.handle(), input, Set.of("PERSON"), PrivacyPhase.TOOL_INPUT, true)
+                            .payload()
+                    : PrivacyJsonPayloadTransformer.tokenize(
+                            service, session.handle(), input, PrivacyPhase.TOOL_INPUT, true);
+            assertThat(output).isEqualTo(input);
+            assertThat(analyzedTexts).containsExactly("1000", "2000");
         }
     }
 

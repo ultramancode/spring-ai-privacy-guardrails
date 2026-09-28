@@ -98,7 +98,6 @@ final class PrivacyValueTreeTransformer {
         Objects.requireNonNull(scalars, "scalars must not be null");
         context.requireActive();
         List<ScalarInput> inputs = prepareScalars(scalars);
-        Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText = new LinkedHashMap<>();
         List<String> analysisTexts = new ArrayList<>();
         // Eviction does not revoke completion already observed by this operation.
         Set<String> completedInputs = new LinkedHashSet<>();
@@ -109,13 +108,11 @@ final class PrivacyValueTreeTransformer {
                 completedInputs.add(text);
                 continue;
             }
-            if (!evidenceByText.containsKey(text)) {
-                evidenceByText.put(text, null);
-                analysisTexts.add(text);
-            }
+            analysisTexts.add(text);
         }
         List<PiiAnalysisCoordinator.AnalysisEvidence> analyzed =
                 this.sessionAnalysis.analyzeSegmentsEvidence(analysisTexts, context);
+        Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText = new LinkedHashMap<>();
         for (int index = 0; index < analysisTexts.size(); index++) {
             evidenceByText.put(analysisTexts.get(index), analyzed.get(index));
         }

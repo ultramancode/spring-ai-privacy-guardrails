@@ -152,6 +152,11 @@ class PrivacySessionAnalysisReuseTest {
                     .isInstanceOfSatisfying(PrivacyGuardrailException.class,
                             failure -> assertThat(failure.code())
                                     .isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
+            assertThatThrownBy(() -> service.tokenizeScalars(session.handle(),
+                    List.of("Alice", "Alice")))
+                    .isInstanceOfSatisfying(PrivacyGuardrailException.class,
+                            failure -> assertThat(failure.code())
+                                    .isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
             assertThat(calls).hasValue(1);
 
             assertThatThrownBy(() -> service.analyzeSegments(session.handle(),

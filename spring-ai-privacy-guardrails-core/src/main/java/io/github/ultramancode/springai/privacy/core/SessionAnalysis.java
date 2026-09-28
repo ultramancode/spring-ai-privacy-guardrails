@@ -6,10 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Looks up core-produced analysis in one session. Analyzer work runs outside context locks. */
+/**
+ * Reuses successful analysis for identical source text within a session.
+ * Runs analyzers without holding the context lock.
+ */
 final class SessionAnalysis {
-
-    private static final int TARGET_BATCH_CHARACTERS = 32_768;
 
     private final PiiAnalysisCoordinator coordinator;
 
@@ -24,7 +25,7 @@ final class SessionAnalysis {
         if (text == null || text.isBlank()) {
             return this.coordinator.analyzeEvidence(text);
         }
-        PiiAnalysisCoordinator.AnalysisEvidence retained = context.analysisFor(text);
+        PiiAnalysisCoordinator.AnalysisEvidence retained = context.cachedAnalysisFor(text);
         if (retained != null) {
             context.requireActive();
             return retained;
@@ -36,8 +37,9 @@ final class SessionAnalysis {
     }
 
     /**
-     * Callers enforce input-count limits.
-     * Text and evidence limits cover all analyzer batches.
+     * Returns evidence in input order, reusing retained results for identical text.
+     * Callers enforce their respective input-count limits. Aggregate text and
+     * evidence limits include repeated inputs and reused results across batches.
      */
     List<PiiAnalysisCoordinator.AnalysisEvidence> analyzeSegmentsEvidence(
             List<String> texts, PrivacyContext context) {
@@ -56,14 +58,15 @@ final class SessionAnalysis {
                     throw limitExceeded("PII analysis input exceeded the configured text limit");
                 }
             }
-            if (text == null || text.isBlank() || evidenceByText.containsKey(text)) {
-                if (text != null && !text.isBlank()) {
-                    occurrences.merge(text, 1, Integer::sum);
-                }
+            if (text == null || text.isBlank()) {
+                continue;
+            }
+            if (evidenceByText.containsKey(text)) {
+                occurrences.merge(text, 1, Integer::sum);
                 continue;
             }
             occurrences.put(text, 1);
-            PiiAnalysisCoordinator.AnalysisEvidence retained = context.analysisFor(text);
+            PiiAnalysisCoordinator.AnalysisEvidence retained = context.cachedAnalysisFor(text);
             if (retained != null) {
                 evidenceByText.put(text, retained);
             } else {
@@ -83,6 +86,7 @@ final class SessionAnalysis {
         List<PiiAnalysisCoordinator.AnalysisEvidence> results = new ArrayList<>(texts.size());
         for (String text : texts) {
             if (text == null || text.isBlank()) {
+                // Keep an empty result for each null or blank input without invoking analyzers
                 results.add(this.coordinator.analyzeEvidence(text));
             } else {
                 results.add(evidenceByText.get(text));
@@ -106,21 +110,12 @@ final class SessionAnalysis {
             Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText,
             long accumulatedEvidence
     ) {
-        int index = 0;
-        while (index < uncachedTexts.size()) {
-            List<String> batch = new ArrayList<>();
-            long batchCharacters = 0;
-            while (index < uncachedTexts.size()
-                    && batch.size() < this.coordinator.processingLimits().maxAnalysisSegments()) {
-                String next = uncachedTexts.get(index);
-                if (!batch.isEmpty() && batchCharacters + next.length() >
-                        Math.min(TARGET_BATCH_CHARACTERS, this.coordinator.processingLimits().maxTextCharacters())) {
-                    break;
-                }
-                batch.add(next);
-                batchCharacters += next.length();
-                index++;
-            }
+        int maxBatchSegments = this.coordinator.processingLimits().maxAnalysisSegments();
+        int batchStart = 0;
+        while (batchStart < uncachedTexts.size()) {
+            int batchSize = Math.min(maxBatchSegments, uncachedTexts.size() - batchStart);
+            int batchEnd = batchStart + batchSize;
+            List<String> batch = uncachedTexts.subList(batchStart, batchEnd);
             List<PiiAnalysisCoordinator.AnalysisEvidence> analyzed =
                     this.coordinator.analyzeSegmentsEvidence(batch);
             for (int resultIndex = 0; resultIndex < batch.size(); resultIndex++) {
@@ -130,6 +125,7 @@ final class SessionAnalysis {
                 accumulatedEvidence += (long) evidence.evidenceCount() * occurrences.get(source);
                 this.coordinator.requireEvidenceWithinLimit(accumulatedEvidence);
             }
+            batchStart = batchEnd;
         }
     }
 

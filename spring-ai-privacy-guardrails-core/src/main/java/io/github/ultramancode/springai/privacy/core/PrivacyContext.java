@@ -64,7 +64,7 @@ final class PrivacyContext {
         ensureActive();
     }
 
-    synchronized PiiAnalysisCoordinator.AnalysisEvidence analysisFor(String source) {
+    synchronized PiiAnalysisCoordinator.AnalysisEvidence cachedAnalysisFor(String source) {
         ensureActive();
         return this.analysisBySource.get(source);
     }

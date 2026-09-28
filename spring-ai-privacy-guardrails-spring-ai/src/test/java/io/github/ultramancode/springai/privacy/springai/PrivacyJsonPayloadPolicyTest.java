@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -407,31 +406,6 @@ class PrivacyJsonPayloadPolicyTest {
     }
 
     @Test
-    void scalarLargerThanBatchTargetIsAnalyzedIntact() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        AtomicReference<String> analyzedText = new AtomicReference<>();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analysisCalls.incrementAndGet();
-            analyzedText.set(text);
-            return List.of();
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String scalar = "x".repeat(32_769);
-        String input = "\"" + scalar + "\"";
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
-                    input,
-                    PrivacyOutputAction.TOKENIZE
-            ).text()).isEqualTo(input);
-        }
-        assertThat(analysisCalls).hasValue(1);
-        assertThat(analyzedText).hasValue(scalar);
-    }
-
-    @Test
     void batchingPreservesScalarIsolationForBoundarySensitiveRegexRules() {
         PrivacyService service = new PrivacyService(
                 List.of(new RegexPiiAnalyzer(List.of(
@@ -559,30 +533,6 @@ class PrivacyJsonPayloadPolicyTest {
     }
 
     @Test
-    void spanLimitAppliesAcrossBatchesSplitByTextLength() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analysisCalls.incrementAndGet();
-            return List.of(new PiiSpan("CHARACTER", 0, 1, 1.0));
-        };
-        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(2).build();
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
-        String input = IntStream.range(0, 4)
-                .mapToObj(index -> "\"" + Character.toString('a' + index).repeat(20_000) + "\"")
-                .collect(Collectors.joining(",", "[", "]"));
-
-        try (PrivacySession session = service.openSession()) {
-            assertPayloadLimit(() -> PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
-                    input,
-                    PrivacyOutputAction.TOKENIZE
-            ));
-        }
-        assertThat(analysisCalls).hasValue(3);
-    }
-
-    @Test
     void manyUniqueScalarsAreProtectedWithOneSegmentedAnalysis() {
         AtomicInteger scalarAnalysisCalls = new AtomicInteger();
         AtomicInteger segmentedAnalysisCalls = new AtomicInteger();
@@ -647,7 +597,8 @@ class PrivacyJsonPayloadPolicyTest {
                         })
                         .toList()
         );
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxAnalysisSegments(300).build();
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
         String input = IntStream.range(0, 800)
                 .mapToObj(index -> "\"value-" + index + "-" + "x".repeat(80) + "\"")
                 .collect(Collectors.joining(",", "[", "]"));
@@ -664,7 +615,7 @@ class PrivacyJsonPayloadPolicyTest {
             assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
         }
         assertThat(scalarAnalysisCalls).hasValue(0);
-        assertThat(segmentedAnalysisCalls.get()).isGreaterThan(1).isLessThan(800);
+        assertThat(segmentedAnalysisCalls).hasValue(3);
     }
 
     @Test

@@ -19,8 +19,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacySessionAnalysisReuseTest {
 
+    // Exceeds PrivacyContext's internal 256-entry limit for both caches
+    private static final int CACHE_EVICTION_INPUT_COUNT = 320;
+
     @Test
-    void completionSkipsTokenizeButDetailedAnalysisStillUsesRealSourceEvidence() {
+    void completedTokenizationDoesNotReplaceDetailedAnalysis() {
         AtomicInteger calls = new AtomicInteger();
         PrivacyService service = new PrivacyService(List.of(personAnalyzer(calls)), PiiAnalysisOptions.defaults());
         try (PrivacySession session = service.openSession()) {
@@ -82,7 +85,7 @@ class PrivacySessionAnalysisReuseTest {
                     session.handle(), List.of(protectedAlice, "Bob")));
             assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
 
-            for (int index = 0; index < 320; index++) {
+            for (int index = 0; index < CACHE_EVICTION_INPUT_COUNT; index++) {
                 service.tokenize(session.handle(), "safe text " + index);
             }
             release.countDown();
@@ -269,7 +272,7 @@ class PrivacySessionAnalysisReuseTest {
         PrivacyService service = new PrivacyService(List.of(personAnalyzer(calls)), PiiAnalysisOptions.defaults());
         try (PrivacySession session = service.openSession()) {
             String protectedText = service.tokenize(session.handle(), "Alice");
-            for (int index = 0; index < 320; index++) {
+            for (int index = 0; index < CACHE_EVICTION_INPUT_COUNT; index++) {
                 service.tokenize(session.handle(), "safe text " + index);
             }
             int beforeRepeat = calls.get();

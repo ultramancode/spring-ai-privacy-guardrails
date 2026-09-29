@@ -463,7 +463,8 @@ public final class PrivacyService {
      * Analyzes and tokenizes JSON-compatible string and numeric scalars in an active
      * session. {@link java.math.BigDecimal} values use plain decimal text for analysis.
      * The list size is limited by {@link PrivacyProcessingLimits#maxValueTreeNodes()}.
-     * Character limits apply to the whole list; the analyzer span limit applies
+     * The value-tree character limit applies per scalar, while text and output
+     * character limits apply across the list. The analyzer span limit applies
      * to newly analyzed texts.
      *
      * @param handle active session handle

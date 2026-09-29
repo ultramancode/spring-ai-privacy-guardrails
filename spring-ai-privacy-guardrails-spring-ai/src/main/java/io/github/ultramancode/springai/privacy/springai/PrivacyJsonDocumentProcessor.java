@@ -69,7 +69,7 @@ final class PrivacyJsonDocumentProcessor {
         return validateAndCollect(payload, phase).scalars();
     }
 
-    private CollectedScalars validateAndCollect(String payload, PrivacyPhase phase)
+    private CollectedScalarInputs validateAndCollect(String payload, PrivacyPhase phase)
             throws JacksonException {
         validateSingleJsonValue(payload);
         Set<String> uniqueAnalysisTexts = new LinkedHashSet<>();
@@ -105,11 +105,11 @@ final class PrivacyJsonDocumentProcessor {
                 }
             }
         }
-        return new CollectedScalars(
+        return new CollectedScalarInputs(
                 List.copyOf(uniqueAnalysisTexts), List.copyOf(uniqueScalars));
     }
 
-    private record CollectedScalars(List<String> analysisTexts, List<Object> scalars) {
+    private record CollectedScalarInputs(List<String> analysisTexts, List<Object> scalars) {
     }
 
     String rewrite(

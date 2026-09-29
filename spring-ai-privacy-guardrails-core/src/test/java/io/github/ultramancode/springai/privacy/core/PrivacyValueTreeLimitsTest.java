@@ -171,6 +171,25 @@ class PrivacyValueTreeLimitsTest {
     }
 
     @Test
+    void valueTreeBoundsCombinedExpandedDecimalAnalysisText() {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
+                .maxValueTreeCharacters(15)
+                .build();
+        PrivacyService service = new PrivacyService(
+                List.of((text, options, processingLimits) -> List.of()), PiiAnalysisOptions.defaults(), limits);
+        BigDecimal decimal = new BigDecimal("1E+9");
+
+        try (PrivacySession session = service.openSession()) {
+            assertThat(service.tokenizeValueTree(session.handle(), List.of(decimal)))
+                    .isEqualTo(List.of(decimal));
+            assertValueTreeLimitFailure(
+                    () -> service.tokenizeValueTree(session.handle(), List.of(decimal, decimal)),
+                    PrivacyPhase.TOKENIZATION
+            );
+        }
+    }
+
+    @Test
     void valueTreeDetokenizationEnforcesTheCumulativeOutputLimit() {
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxOutputCharacters(200).build();
         PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults(), limits);
@@ -190,22 +209,6 @@ class PrivacyValueTreeLimitsTest {
             assertValueTreeLimitFailure(
                     () -> service.detokenizeValueTree(session.handle(), rejected),
                     PrivacyPhase.DETOKENIZATION
-            );
-        }
-    }
-
-    @Test
-    void valueTreeSpanLimitAppliesAcrossValues() {
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of(new PiiSpan("PII", 0, 1, 1.0));
-        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(2).build();
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
-
-        try (PrivacySession session = service.openSession()) {
-            Object protectedValues = service.tokenizeValueTree(session.handle(), List.of("a", "b"));
-            assertThat(service.detokenizeValueTree(session.handle(), protectedValues)).isEqualTo(List.of("a", "b"));
-            assertValueTreeLimitFailure(
-                    () -> service.tokenizeValueTree(session.handle(), List.of("a", "b", "c")),
-                    PrivacyPhase.TOKENIZATION
             );
         }
     }

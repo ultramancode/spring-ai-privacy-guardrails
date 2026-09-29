@@ -37,8 +37,8 @@ final class SessionAnalysis {
     }
 
     /**
-     * Returns results in input order, reusing successful analysis for identical text
-     * Callers enforce input counts while this method bounds text and newly collected analyzer spans
+     * Returns results in input order, reusing successful analysis for identical text.
+     * Callers enforce input counts while this method bounds text and newly collected analyzer spans.
      */
     List<PiiAnalysisResult> analyzeSegments(
             List<String> texts, PrivacyContext context) {

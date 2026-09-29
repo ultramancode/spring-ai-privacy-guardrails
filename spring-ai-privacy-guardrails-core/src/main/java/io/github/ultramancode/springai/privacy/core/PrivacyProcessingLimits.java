@@ -7,7 +7,9 @@ package io.github.ultramancode.springai.privacy.core;
  *
  * <p>For text and JSON, the output limit covers the complete returned text. For
  * direct value-tree operations, it covers the sum of string values and map keys.
- * Nodes include containers, scalar values, and map keys.</p>
+ * Nodes include containers, scalar values, and map keys. Direct value-tree
+ * tokenization also bounds the combined {@link java.math.BigDecimal} analysis text by
+ * {@code maxValueTreeCharacters}.</p>
  *
  * @param maxTextCharacters maximum length of one text or boundary payload, or the combined
  *                          length of texts in one batch analysis
@@ -19,7 +21,8 @@ package io.github.ultramancode.springai.privacy.core;
  * @param maxDepth maximum container nesting depth in a value tree or JSON document,
  *                 counting the outermost container as depth one
  * @param maxAnalysisSegments maximum number of independent texts in one batch analysis
- * @param maxResultSpans maximum number of spans collected in one analysis operation
+ * @param maxResultSpans maximum number of raw spans accepted from analyzers or callers
+ *                       in one analysis, including newly produced spans across session batches
  */
 public record PrivacyProcessingLimits(
         int maxTextCharacters,
@@ -43,7 +46,7 @@ public record PrivacyProcessingLimits(
     public static final int DEFAULT_MAX_DEPTH = 128;
     /** Default maximum number of independent texts in one batch analysis. */
     public static final int DEFAULT_MAX_ANALYSIS_SEGMENTS = 100_000;
-    /** Default maximum number of spans in one analysis operation. */
+    /** Default maximum number of raw spans in one analysis operation. */
     public static final int DEFAULT_MAX_RESULT_SPANS = 100_000;
 
     private static final PrivacyProcessingLimits DEFAULTS = new PrivacyProcessingLimits(
@@ -145,7 +148,7 @@ public record PrivacyProcessingLimits(
             return this;
         }
 
-        /** Sets the maximum number of spans collected in one analysis operation. */
+        /** Sets the maximum number of raw spans accepted in one analysis operation. */
         public Builder maxResultSpans(int maxResultSpans) {
             this.maxResultSpans = maxResultSpans;
             return this;

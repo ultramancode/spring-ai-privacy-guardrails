@@ -181,11 +181,11 @@ configured under `spring.ai.privacy`.
 | `output.block-exception-message` | `Response blocked by privacy guardrail.` | Safe message used by a `BLOCK` exception. |
 | `processing.max-text-characters` | `1000000` | Maximum length of one text or JSON document. Batch analysis uses the combined length of all texts. |
 | `processing.max-output-characters` | `8000000` | Maximum output length per transformation, including unchanged text. |
-| `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. |
+| `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. Direct value-tree tokenization also bounds combined `BigDecimal` analysis text by this value. |
 | `processing.max-value-tree-nodes` | `100000` | Maximum node count in a value tree or JSON document, including containers, scalar values, and map keys. |
 | `processing.max-depth` | `128` | Maximum nesting depth in a value tree or JSON document. |
 | `processing.max-analysis-segments` | `100000` | Maximum number of texts in one batch analysis. |
-| `processing.max-result-spans` | `100000` | Maximum number of spans collected in one analysis, summed across analyzers. |
+| `processing.max-result-spans` | `100000` | Maximum raw spans accepted from analyzers or callers in one analysis. Newly produced analyzer spans are summed across session batches; reused results are not counted again. |
 | `response-inspection.max-stream-frames` | `1024` | Maximum number of frames inspected in one streaming response. |
 | `response-inspection.max-characters` | `1000000` | Maximum cumulative characters of text-based content inspected in one call or streaming response. |
 | `response-inspection.max-media-bytes` | `16777216` | Maximum cumulative media-data size allowed in one response. |

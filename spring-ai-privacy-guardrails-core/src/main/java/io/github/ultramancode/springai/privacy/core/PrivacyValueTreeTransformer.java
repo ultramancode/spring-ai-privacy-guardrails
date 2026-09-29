@@ -292,7 +292,6 @@ final class PrivacyValueTreeTransformer {
             return text;
         }
         PiiAnalysisResult analysis = this.sessionAnalysis.analyze(text, context);
-        budget.acceptAnalysis(analysis);
         String transformed = this.textTransformer.tokenizeWithResolvedSpans(
                 text, analysis.spans(), context);
         budget.acceptOutput(transformed);
@@ -308,8 +307,10 @@ final class PrivacyValueTreeTransformer {
             TransformationBudget budget
     ) {
         String text = analysisText(number);
+        if (number instanceof BigDecimal) {
+            budget.acceptDecimalAnalysisCharacters(text.length());
+        }
         PiiAnalysisResult analysis = this.sessionAnalysis.analyze(text, context);
-        budget.acceptAnalysis(analysis);
         Object transformed = tokenizeNumber(number, analysis.spans(), context);
         if (transformed instanceof String protectedText && analysis.failures().isEmpty()) {
             budget.recordCompletion(protectedText);
@@ -358,7 +359,7 @@ final class PrivacyValueTreeTransformer {
 
         private final PrivacyPhase phase;
         private final PrivacyProcessingLimits limits;
-        private int resolvedSpanCount;
+        private long decimalAnalysisCharacters;
         private long outputCharacters;
         private final List<String> completedOutputs = new ArrayList<>();
 
@@ -367,12 +368,11 @@ final class PrivacyValueTreeTransformer {
             this.limits = limits;
         }
 
-        private void acceptAnalysis(PiiAnalysisResult analysis) {
-            long updatedCount = (long) this.resolvedSpanCount + analysis.spans().size();
-            if (updatedCount > this.limits.maxResultSpans()) {
-                throw limitExceeded("Value tree analyzer span limit exceeded");
+        private void acceptDecimalAnalysisCharacters(int characters) {
+            this.decimalAnalysisCharacters += characters;
+            if (this.decimalAnalysisCharacters > this.limits.maxValueTreeCharacters()) {
+                throw limitExceeded("Value tree decimal analysis text limit exceeded");
             }
-            this.resolvedSpanCount = (int) updatedCount;
         }
 
         private void acceptOutput(Object value) {

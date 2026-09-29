@@ -94,7 +94,6 @@ class PrivacySessionAnalysisReuseTest {
             assertThat(service.detokenizeValueTree(session.handle(), result)).isEqualTo(List.of("Alice", "Bob"));
             assertThat(protectedTextAnalyses).hasValue(0);
 
-            // Confirm eviction occurred: a later call must analyze the protected text again.
             assertThat(service.tokenize(session.handle(), protectedAlice)).isEqualTo(protectedAlice);
             assertThat(protectedTextAnalyses).hasValue(1);
         } finally {
@@ -123,50 +122,33 @@ class PrivacySessionAnalysisReuseTest {
     }
 
     @Test
-    void batchEvidenceLimitIncludesReusedResultsWithoutCachingFailedBatches() {
+    void spanLimitCountsOnlyNewAnalyzerResultsAcrossBatches() {
         AtomicInteger calls = new AtomicInteger();
-        PiiAnalyzer first = (text, options, limits) -> {
+        PiiAnalyzer analyzer = (text, options, limits) -> {
             calls.incrementAndGet();
-            return List.of(new PiiSpan("PERSON", 0, 5, 0.95));
+            return List.of(new PiiSpan("PERSON", 0, text.length(), 0.95));
         };
-        PiiAnalyzer second = new PiiAnalyzer() {
-            @Override
-            public String providerId() {
-                return "SECOND";
-            }
-
-            @Override
-            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options,
-                                         PrivacyProcessingLimits limits) {
-                return List.of(new PiiSpan("PERSON", 0, 5, 0.9));
-            }
-        };
-        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(3).build();
-        PrivacyService service = new PrivacyService(List.of(first, second),
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
+                .maxAnalysisSegments(1).maxResultSpans(1).build();
+        PrivacyService service = new PrivacyService(List.of(analyzer),
                 PiiAnalysisOptions.defaults(), limits);
         try (PrivacySession session = service.openSession()) {
+            assertThat(service.tokenizeScalars(session.handle(), List.of("Alice", "Alice")))
+                    .hasSize(2);
+            assertThat(calls).hasValue(1);
             assertThat(service.analyzeSegments(session.handle(), List.of("Alice"))).hasSize(1);
             assertThat(calls).hasValue(1);
-            assertThatThrownBy(() -> service.analyzeSegments(session.handle(),
-                    List.of("Alice", "Alice")))
-                    .isInstanceOfSatisfying(PrivacyGuardrailException.class,
-                            failure -> assertThat(failure.code())
-                                    .isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
-            assertThatThrownBy(() -> service.tokenizeScalars(session.handle(),
-                    List.of("Alice", "Alice")))
-                    .isInstanceOfSatisfying(PrivacyGuardrailException.class,
-                            failure -> assertThat(failure.code())
-                                    .isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
-            assertThat(calls).hasValue(1);
 
-            assertThatThrownBy(() -> service.analyzeSegments(session.handle(),
-                    List.of("Alice", "Carol")))
+            assertThat(service.tokenizeScalars(session.handle(), List.of("Alice", "Carol")))
+                    .hasSize(2);
+            assertThat(calls).hasValue(2);
+
+            assertThatThrownBy(() -> service.tokenizeScalars(session.handle(),
+                    List.of("Diana", "Elena")))
                     .isInstanceOfSatisfying(PrivacyGuardrailException.class,
                             failure -> assertThat(failure.code())
                                     .isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED));
-            assertThat(calls).hasValue(2);
-            service.analyzeSegments(session.handle(), List.of("Carol"));
-            assertThat(calls).hasValue(3);
+            assertThat(calls).hasValue(4);
         }
     }
 

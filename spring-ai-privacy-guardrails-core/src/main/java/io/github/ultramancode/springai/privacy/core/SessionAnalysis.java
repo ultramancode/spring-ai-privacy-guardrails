@@ -18,36 +18,34 @@ final class SessionAnalysis {
         this.coordinator = coordinator;
     }
 
-    PiiAnalysisCoordinator.AnalysisEvidence analyzeEvidence(String text, PrivacyContext context) {
+    PiiAnalysisResult analyze(String text, PrivacyContext context) {
         this.coordinator.requireTextInputWithinLimit(text);
         context.requireActive();
         rejectInterrupted();
         if (text == null || text.isBlank()) {
-            return this.coordinator.analyzeEvidence(text);
+            return this.coordinator.analyzeEvidence(text).result();
         }
         PiiAnalysisCoordinator.AnalysisEvidence retained = context.cachedAnalysisFor(text);
         if (retained != null) {
             context.requireActive();
-            return retained;
+            return retained.result();
         }
         PiiAnalysisCoordinator.AnalysisEvidence analyzed = this.coordinator.analyzeEvidence(text);
         rejectInterrupted();
         context.retainAnalysis(text, analyzed);
-        return analyzed;
+        return analyzed.result();
     }
 
     /**
-     * Returns evidence in input order, reusing retained results for identical text.
-     * Callers enforce their respective input-count limits. Aggregate text and
-     * evidence limits include repeated inputs and reused results across batches.
+     * Returns results in input order, reusing successful analysis for identical text
+     * Callers enforce input counts while this method bounds text and newly collected analyzer spans
      */
-    List<PiiAnalysisCoordinator.AnalysisEvidence> analyzeSegmentsEvidence(
+    List<PiiAnalysisResult> analyzeSegments(
             List<String> texts, PrivacyContext context) {
         Objects.requireNonNull(texts, "texts must not be null");
         context.requireActive();
         rejectInterrupted();
         Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText = new LinkedHashMap<>();
-        Map<String, Integer> occurrences = new LinkedHashMap<>();
         List<String> uncachedTexts = new ArrayList<>();
         long inputCharacters = 0;
         for (String text : texts) {
@@ -62,10 +60,8 @@ final class SessionAnalysis {
                 continue;
             }
             if (evidenceByText.containsKey(text)) {
-                occurrences.merge(text, 1, Integer::sum);
                 continue;
             }
-            occurrences.put(text, 1);
             PiiAnalysisCoordinator.AnalysisEvidence retained = context.cachedAnalysisFor(text);
             if (retained != null) {
                 evidenceByText.put(text, retained);
@@ -74,22 +70,14 @@ final class SessionAnalysis {
                 uncachedTexts.add(text);
             }
         }
-        long accumulatedEvidence = 0;
-        for (Map.Entry<String, PiiAnalysisCoordinator.AnalysisEvidence> entry : evidenceByText.entrySet()) {
-            if (entry.getValue() != null) {
-                accumulatedEvidence += (long) entry.getValue().evidenceCount()
-                        * occurrences.get(entry.getKey());
-                this.coordinator.requireEvidenceWithinLimit(accumulatedEvidence);
-            }
-        }
-        analyzeUncachedSegments(uncachedTexts, occurrences, evidenceByText, accumulatedEvidence);
-        List<PiiAnalysisCoordinator.AnalysisEvidence> results = new ArrayList<>(texts.size());
+        analyzeUncachedSegments(uncachedTexts, evidenceByText);
+        List<PiiAnalysisResult> results = new ArrayList<>(texts.size());
         for (String text : texts) {
             if (text == null || text.isBlank()) {
                 // Keep an empty result for each null or blank input without invoking analyzers
-                results.add(this.coordinator.analyzeEvidence(text));
+                results.add(this.coordinator.analyzeEvidence(text).result());
             } else {
-                results.add(evidenceByText.get(text));
+                results.add(evidenceByText.get(text).result());
             }
         }
         rejectInterrupted();
@@ -106,11 +94,10 @@ final class SessionAnalysis {
 
     private void analyzeUncachedSegments(
             List<String> uncachedTexts,
-            Map<String, Integer> occurrences,
-            Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText,
-            long accumulatedEvidence
+            Map<String, PiiAnalysisCoordinator.AnalysisEvidence> evidenceByText
     ) {
         int maxBatchSegments = this.coordinator.processingLimits().maxAnalysisSegments();
+        long collectedEvidence = 0;
         int batchStart = 0;
         while (batchStart < uncachedTexts.size()) {
             int batchSize = Math.min(maxBatchSegments, uncachedTexts.size() - batchStart);
@@ -122,8 +109,8 @@ final class SessionAnalysis {
                 String source = batch.get(resultIndex);
                 PiiAnalysisCoordinator.AnalysisEvidence evidence = analyzed.get(resultIndex);
                 evidenceByText.put(source, evidence);
-                accumulatedEvidence += (long) evidence.evidenceCount() * occurrences.get(source);
-                this.coordinator.requireEvidenceWithinLimit(accumulatedEvidence);
+                collectedEvidence += evidence.evidenceCount();
+                this.coordinator.requireEvidenceWithinLimit(collectedEvidence);
             }
             batchStart = batchEnd;
         }

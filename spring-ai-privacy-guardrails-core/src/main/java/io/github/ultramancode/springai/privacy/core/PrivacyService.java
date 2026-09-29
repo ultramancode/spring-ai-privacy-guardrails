@@ -144,7 +144,7 @@ public final class PrivacyService {
     /**
      * Analyzes independent source texts in an active session, reusing successful
      * results for identical text. The input limits of {@link #analyzeSegments(List)}
-     * apply to the full list.
+     * apply to the full list. Cached results do not consume the analyzer span limit again.
      *
      * @param handle active session handle
      * @param texts independent source texts
@@ -153,9 +153,9 @@ public final class PrivacyService {
     public List<List<ResolvedPiiSpan>> analyzeSegments(
             PrivacyContextHandle handle, List<String> texts) {
         this.analysisCoordinator.requireSegmentCountWithinLimit(texts);
-        return this.sessionAnalysis.analyzeSegmentsEvidence(
+        return this.sessionAnalysis.analyzeSegments(
                 texts, this.contextRegistry.requireActiveContext(handle)).stream()
-                .map(item -> item.result().spans())
+                .map(PiiAnalysisResult::spans)
                 .toList();
     }
 
@@ -163,7 +163,7 @@ public final class PrivacyService {
      * Internal integration entry point for scalar texts from a validated JSON document.
      * The number of texts is bounded by {@link PrivacyProcessingLimits#maxValueTreeNodes()},
      * while each analyzer batch respects {@link PrivacyProcessingLimits#maxAnalysisSegments()}.
-     * Combined text and evidence limits apply across the entire operation.
+     * Combined text and newly collected analyzer span limits apply across the operation.
      *
      * @hidden
      */
@@ -176,9 +176,9 @@ public final class PrivacyService {
                     PrivacyPhase.ANALYSIS,
                     "PII analysis exceeded the logical scalar limit");
         }
-        return this.sessionAnalysis.analyzeSegmentsEvidence(
+        return this.sessionAnalysis.analyzeSegments(
                 texts, this.contextRegistry.requireActiveContext(handle)).stream()
-                .map(item -> item.result().spans())
+                .map(PiiAnalysisResult::spans)
                 .toList();
     }
 
@@ -463,7 +463,8 @@ public final class PrivacyService {
      * Analyzes and tokenizes JSON-compatible string and numeric scalars in an active
      * session. {@link java.math.BigDecimal} values use plain decimal text for analysis.
      * The list size is limited by {@link PrivacyProcessingLimits#maxValueTreeNodes()}.
-     * Character and span limits apply to the whole list.
+     * Character limits apply to the whole list; the analyzer span limit applies
+     * to newly analyzed texts.
      *
      * @param handle active session handle
      * @param scalars JSON-compatible string and numeric scalars

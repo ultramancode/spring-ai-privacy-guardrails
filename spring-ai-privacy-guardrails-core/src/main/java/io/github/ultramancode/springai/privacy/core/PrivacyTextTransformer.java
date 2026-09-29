@@ -25,7 +25,7 @@ final class PrivacyTextTransformer {
     }
 
     PiiTokenizationResult analyzeAndTokenize(String text, PrivacyContext context) {
-        PiiAnalysisResult analysis = this.sessionAnalysis.analyzeEvidence(text, context).result();
+        PiiAnalysisResult analysis = this.sessionAnalysis.analyze(text, context);
         String tokenizedText = tokenizeWithResolvedSpans(text, analysis.spans(), context);
         if (tokenizedText != null && analysis.failures().isEmpty()) {
             context.retainCompletedTokenization(tokenizedText);
@@ -91,8 +91,7 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
-        List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyzeEvidence(text, context)
-                .result().spans();
+        List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyze(text, context).spans();
         List<ProtectionSpan> spans = excludeKnownTokens(text, protectionSpans(resolvedSpans), context);
         return redactPrepared(text, spans);
     }
@@ -102,8 +101,7 @@ final class PrivacyTextTransformer {
         if (text == null || text.isBlank()) {
             return false;
         }
-        List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyzeEvidence(text, context)
-                .result().spans();
+        List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyze(text, context).spans();
         return !excludeKnownTokens(text, protectionSpans(resolvedSpans), context).isEmpty();
     }
 

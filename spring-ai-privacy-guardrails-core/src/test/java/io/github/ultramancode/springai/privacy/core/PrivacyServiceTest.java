@@ -538,7 +538,7 @@ class PrivacyServiceTest {
     }
 
     @Test
-    void tokenizeReusesSuccessfulEmptyResultWithinStableProfile() {
+    void tokenizeSkipsReanalysisWhenNoPiiIsFound() {
         AtomicInteger analysisCalls = new AtomicInteger();
         PiiAnalyzer emptyAnalyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();

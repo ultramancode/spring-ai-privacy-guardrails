@@ -130,14 +130,14 @@ final class PiiAnalysisCoordinator {
             );
         }
 
-        List<ResolvedPiiSpan> resolved = this.evidenceResolver.resolve(
+        List<ResolvedPiiSpan> resolvedSpans = this.evidenceResolver.resolve(
                 text,
                 evidence,
                 Set.copyOf(successfulProviders),
                 this.options
         );
         return new AnalysisEvidence(
-                new PiiAnalysisResult(resolved, Set.copyOf(successfulProviders), failures),
+                new PiiAnalysisResult(resolvedSpans, Set.copyOf(successfulProviders), failures),
                 evidence.size());
     }
 
@@ -243,15 +243,16 @@ final class PiiAnalysisCoordinator {
         Set<String> immutableSuccessfulProviders = Set.copyOf(successfulProviders);
         List<AnalysisEvidence> results = new ArrayList<>(texts.size());
         for (int index = 0; index < texts.size(); index++) {
-            List<ResolvedPiiSpan> resolved = this.evidenceResolver.resolve(
+            List<PiiEvidence> segmentEvidence = evidenceAccumulator.forSegment(index);
+            List<ResolvedPiiSpan> resolvedSpans = this.evidenceResolver.resolve(
                     texts.get(index),
-                    evidenceAccumulator.forSegment(index),
+                    segmentEvidence,
                     immutableSuccessfulProviders,
                     this.options
             );
             results.add(new AnalysisEvidence(
-                    new PiiAnalysisResult(resolved, immutableSuccessfulProviders, failures),
-                    evidenceAccumulator.forSegment(index).size()));
+                    new PiiAnalysisResult(resolvedSpans, immutableSuccessfulProviders, failures),
+                    segmentEvidence.size()));
         }
         return List.copyOf(results);
     }

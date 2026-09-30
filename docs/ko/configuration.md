@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 4075dc6285e64094e2b54dfc303aafaf563b9721fb0b5e71f194bb396edbb94e -->
+<!-- i18n-source-sha256: 822ff46b118a65f5b222ba6e9961007be388c77a0cf6cd4eae348e62446d4fbc -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -104,7 +104,7 @@ ChatClient derivedClient = protectedClient.mutate().build();
 보호 설정이 적용된 `ChatClient.Builder`를 `clone()`으로 복사할 때도 설정이
 이어지므로 `PrivacyChatClientConfigurer`를 다시 적용하지 마세요.
 
-도구 이름, 설명과 JSON 스키마도 모델에 전달되기 전에 개인정보를 검사합니다.
+도구 설명과 JSON 스키마는 모델에 전달되기 전에 개인정보를 검사합니다.
 
 Spring AI의 표준 `UserMessage`, `SystemMessage`, `AssistantMessage`,
 `ToolResponseMessage`와 `DeepSeekAssistantMessage`를 지원합니다. 그 밖의 모델
@@ -175,11 +175,11 @@ builder를 전달하세요. Factory가 실행 순서에 맞춰 개인정보 보�
 | `output.block-exception-message` | `Response blocked by privacy guardrail.` | `BLOCK` 예외에 사용할 안전한 메시지입니다. |
 | `processing.max-text-characters` | `1000000` | 텍스트나 JSON 문서 하나의 최대 길이입니다. 배치 분석에서는 모든 텍스트의 길이를 합산합니다. |
 | `processing.max-output-characters` | `8000000` | 변환 결과의 최대 길이입니다. 원문을 그대로 반환할 때도 적용합니다. |
-| `processing.max-value-tree-characters` | `1000000` | 값 트리나 JSON 문서 하나의 최대 누적 길이입니다. 문자열 값·맵 키·숫자 표현의 길이를 합산합니다. |
+| `processing.max-value-tree-characters` | `1000000` | 값 트리나 JSON 문서 하나에서 문자열 값·맵 키·숫자 표현의 길이를 합산한 상한입니다. 직접 값 트리를 토큰화할 때는 `BigDecimal` 분석 텍스트의 누적 길이에도 적용합니다. |
 | `processing.max-value-tree-nodes` | `100000` | 값 트리나 JSON 문서 하나의 최대 노드 수입니다. 컨테이너·스칼라 값·맵 키를 포함합니다. |
 | `processing.max-depth` | `128` | 값 트리나 JSON 문서 하나의 최대 중첩 깊이입니다. |
 | `processing.max-analysis-segments` | `100000` | 한 번의 배치 분석에 전달하는 텍스트의 최대 개수입니다. |
-| `processing.max-result-spans` | `100000` | 한 번의 분석에서 수집하는 탐지 범위의 최대 개수입니다. 여러 분석기의 결과를 합산합니다. |
+| `processing.max-result-spans` | `100000` | 한 번의 분석에서 분석기나 호출자로부터 받는 원시 탐지 범위의 최대 개수입니다. 세션 배치에서 새로 생성된 결과는 합산하고 재사용한 결과는 다시 세지 않습니다. |
 | `response-inspection.max-stream-frames` | `1024` | 스트리밍 응답 하나에서 검사할 최대 프레임 수입니다. |
 | `response-inspection.max-characters` | `1000000` | 호출 또는 스트리밍 응답 하나에서 검사하는 텍스트 기반 콘텐츠의 최대 누적 문자 수입니다. |
 | `response-inspection.max-media-bytes` | `16777216` | 응답 하나에서 허용하는 미디어 데이터의 최대 누적 바이트 수입니다. |
@@ -664,8 +664,8 @@ spring:
 JSON의 출력 길이에는 JSON 구문과 이스케이프 문자도 포함합니다. 값 트리의 출력 길이는
 결과에 포함된 문자열 값과 맵 키의 길이를 합산합니다.
 
-JSON에서 추출한 텍스트는 최대 `processing.max-analysis-segments`개씩 묶어 분석합니다.
-`processing.max-result-spans`는 문서 전체의 최종 탐지 범위 수에 적용합니다.
+JSON에서 추출한 텍스트는 최대 `processing.max-analysis-segments`개씩 묶어
+분석합니다.
 
 처리 제한을 초과하면 `ALLOW_PARTIAL`이나 fallback 정책과 관계없이
 `PAYLOAD_LIMIT_EXCEEDED`로 작업을 중단합니다.

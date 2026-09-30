@@ -12,8 +12,13 @@ public interface PiiAnalyzer {
     /**
      * Analyzes source text without retaining or mutating it. Implementations are
      * shared by {@link PrivacyService} and must therefore be thread-safe and
-     * reentrant. Blocking implementations must set a finite deadline and cooperate
+     * reentrant.
+     * Blocking implementations must set a finite deadline and cooperate
      * with thread interruption.
+     *
+     * <p>Successful results may be reused for identical input within a
+     * {@link PrivacySession}. Detection models, rules, and other settings that
+     * affect results must remain stable throughout that session.</p>
      *
      * <p>If adding another span would exceed the supplied
      * {@link PrivacyProcessingLimits#maxResultSpans() maxResultSpans} limit,
@@ -35,8 +40,10 @@ public interface PiiAnalyzer {
 
     /**
      * Analyzes independent source texts in one batch. Results must follow input
-     * order, with offsets measured from the start of each source text. State from
-     * analyzing one text must not affect another text's results.
+     * order, with offsets measured from the start of each source text. Each text
+     * must follow the same detection semantics as
+     * {@link #analyze(String, PiiAnalysisOptions, PrivacyProcessingLimits)},
+     * independently of other texts in the batch.
      * Implementations that override this method must not modify the input list
      * or keep references to the list or its texts after the method returns.
      *

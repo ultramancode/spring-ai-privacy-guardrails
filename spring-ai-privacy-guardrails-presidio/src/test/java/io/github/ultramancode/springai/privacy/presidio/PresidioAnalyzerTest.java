@@ -18,6 +18,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,39 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 class PresidioAnalyzerTest {
+
+    @Test
+    void sessionReuseReducesActualHttpRequestsAndChangedInputStillReachesPresidio()
+            throws IOException {
+        AtomicInteger requests = new AtomicInteger();
+        AtomicReference<String> lastRequest = new AtomicReference<>();
+        startServer(exchange -> {
+            requests.incrementAndGet();
+            lastRequest.set(new String(exchange.getRequestBody().readAllBytes(),
+                    StandardCharsets.UTF_8));
+            respond(exchange, 200, """
+                    [{"entity_type":"PERSON","start":5,"end":10,"score":0.98}]
+                    """);
+        });
+        PrivacyService service = new PrivacyService(
+                List.of(new PresidioAnalyzer(config())), PiiAnalysisOptions.defaults());
+        try (PrivacySession session = service.openSession()) {
+            String first = service.tokenize(session.handle(), "Find Alice");
+            assertThat(first).doesNotContain("Alice");
+            assertThat(requests).hasValue(1);
+
+            assertThat(service.tokenize(session.handle(), first)).isEqualTo(first);
+            assertThat(requests).hasValue(1);
+
+            assertThat(service.tokenize(session.handle(), "Find Alice")).isEqualTo(first);
+            assertThat(requests).hasValue(1);
+
+            String changed = service.tokenize(session.handle(), "Find Carol");
+            assertThat(changed).doesNotContain("Carol");
+            assertThat(requests).hasValue(2);
+            assertThat(lastRequest.get()).contains("Find Carol");
+        }
+    }
 
     private static final TypeReference<Map<String, Object>> REQUEST_TYPE = new TypeReference<>() {
     };
@@ -404,10 +438,9 @@ class PresidioAnalyzerTest {
 
     @Test
     void analyzeUsesConfiguredDepthForUnknownResponseMetadata() throws IOException {
-        StringBuilder nestedMetadata = new StringBuilder("0");
-        for (int index = 0; index < 3; index++) {
-            nestedMetadata.insert(0, "{\"nested\":").append('}');
-        }
+        String nestedMetadata = """
+                {"nested":{"nested":{"nested":0}}}
+                """.trim();
         startServer(200, "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":1,"
                 + "\"score\":1,\"metadata\":" + nestedMetadata + "}]");
         PresidioAnalyzerConfig baseConfig = config();

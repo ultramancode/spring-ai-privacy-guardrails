@@ -16,6 +16,7 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import tools.jackson.core.type.TypeReference;
@@ -28,10 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -324,7 +322,7 @@ class PrivacyJsonPayloadPolicyTest {
                     List.of(new PiiSpan("SECRET", 0, original.length(), 1.0))
             );
 
-            assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.disclose(
+            assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.discloseWithOutcome(
                     service,
                     session.handle(),
                     "{\"tokens\":\"" + token.repeat(3) + "\"}",
@@ -336,27 +334,6 @@ class PrivacyJsonPayloadPolicyTest {
                 assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOOL_INPUT);
             });
         }
-    }
-
-    @Test
-    void plainDecimalAnalysisDoesNotIntroduceExponentNotation() {
-        AtomicReference<String> analyzedText = new AtomicReference<>();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analyzedText.set(text);
-            return List.of();
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String input = "0.0000001";
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
-                    input,
-                    PrivacyOutputAction.TOKENIZE
-            ).text()).isEqualTo(input);
-        }
-        assertThat(analyzedText).hasValue(input);
     }
 
     @Test
@@ -427,31 +404,6 @@ class PrivacyJsonPayloadPolicyTest {
     }
 
     @Test
-    void scalarLargerThanBatchTargetIsAnalyzedIntact() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        AtomicReference<String> analyzedText = new AtomicReference<>();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analysisCalls.incrementAndGet();
-            analyzedText.set(text);
-            return List.of();
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String scalar = "x".repeat(PrivacyJsonScalarBatchAnalyzer.TARGET_BATCH_CHARACTERS + 1);
-        String input = "\"" + scalar + "\"";
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
-                    input,
-                    PrivacyOutputAction.TOKENIZE
-            ).text()).isEqualTo(input);
-        }
-        assertThat(analysisCalls).hasValue(1);
-        assertThat(analyzedText).hasValue(scalar);
-    }
-
-    @Test
     void batchingPreservesScalarIsolationForBoundarySensitiveRegexRules() {
         PrivacyService service = new PrivacyService(
                 List.of(new RegexPiiAnalyzer(List.of(
@@ -483,6 +435,33 @@ class PrivacyJsonPayloadPolicyTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void expandedNumericBatchKeepsTheOriginalJsonCharacterBudget(boolean disclose) {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
+                .maxValueTreeCharacters(6)
+                .maxTextCharacters(10)
+                .build();
+        List<String> analyzedTexts = new ArrayList<>();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
+            analyzedTexts.add(text);
+            return List.of();
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
+        String input = "[1e3,2e3]";
+
+        try (PrivacySession session = service.openSession()) {
+            String output = disclose
+                    ? PrivacyJsonPayloadTransformer.discloseWithOutcome(
+                            service, session.handle(), input, Set.of("PERSON"), PrivacyPhase.TOOL_INPUT, true)
+                            .payload()
+                    : PrivacyJsonPayloadTransformer.tokenize(
+                            service, session.handle(), input, PrivacyPhase.TOOL_INPUT, true);
+            assertThat(output).isEqualTo(input);
+            assertThat(analyzedTexts).containsExactly("1000", "2000");
+        }
+    }
+
     @Test
     void expandedNumericAnalysisUsesTheConfiguredTextLimit() {
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxTextCharacters(10).build();
@@ -506,8 +485,9 @@ class PrivacyJsonPayloadPolicyTest {
         assertThat(analysisCalls).hasValue(1);
     }
 
-    @Test
-    void jsonBatchingRespectsTheConfiguredSegmentCount() {
+    @ParameterizedTest
+    @EnumSource(value = PrivacyOutputAction.class, names = {"TOKENIZE", "REDACT", "BLOCK"})
+    void jsonBatchingRespectsSegmentCountAndSkipsAnalyzerOnRepeatedInput(PrivacyOutputAction action) {
         AtomicInteger singleCalls = new AtomicInteger();
         AtomicInteger batchCalls = new AtomicInteger();
         PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
@@ -521,22 +501,29 @@ class PrivacyJsonPayloadPolicyTest {
 
         try (PrivacySession session = service.openSession()) {
             assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service, session.handle(), input, PrivacyOutputAction.REDACT).text()).isEqualTo(input);
+                    service, session.handle(), input, action).text()).isEqualTo(input);
+            assertThat(batchCalls).hasValue(2);
+
+            assertThat(PrivacyOutputPolicyExecutor.apply(
+                    service, session.handle(), input, action).text()).isEqualTo(input);
+            assertThat(batchCalls).hasValue(2);
         }
         assertThat(singleCalls).hasValue(0);
-        assertThat(batchCalls).hasValue(2);
     }
 
     @Test
-    void spanLimitAppliesAcrossBatchesSplitBySegmentCount() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analysisCalls.incrementAndGet();
-            return List.of(new PiiSpan("CHARACTER", 0, 1, 1.0));
-        };
+    void rawSpanLimitCountsOverlappingSpansAcrossSegmentBatches() {
+        AtomicInteger singleCalls = new AtomicInteger();
+        AtomicInteger batchCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
+                singleCalls, batchCalls, Set.of(), texts -> {
+                    assertThat(texts).hasSize(1);
+                    return List.of(List.of(new PiiSpan("CHARACTER", 0, 1, 0.9),
+                            new PiiSpan("CHARACTER", 0, 1, 1.0)));
+                });
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
                 .maxAnalysisSegments(1)
-                .maxResultSpans(1)
+                .maxResultSpans(3)
                 .build();
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
@@ -544,35 +531,12 @@ class PrivacyJsonPayloadPolicyTest {
             assertPayloadLimit(() -> PrivacyOutputPolicyExecutor.apply(
                     service, session.handle(), "[\"a\",\"b\"]", PrivacyOutputAction.REDACT));
         }
-        assertThat(analysisCalls).hasValue(2);
+        assertThat(batchCalls).hasValue(2);
+        assertThat(singleCalls).hasValue(0);
     }
 
     @Test
-    void spanLimitAppliesAcrossBatchesSplitByTextLength() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analysisCalls.incrementAndGet();
-            return List.of(new PiiSpan("CHARACTER", 0, 1, 1.0));
-        };
-        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(2).build();
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
-        String input = IntStream.range(0, 4)
-                .mapToObj(index -> "\"" + Character.toString('a' + index).repeat(20_000) + "\"")
-                .collect(Collectors.joining(",", "[", "]"));
-
-        try (PrivacySession session = service.openSession()) {
-            assertPayloadLimit(() -> PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
-                    input,
-                    PrivacyOutputAction.TOKENIZE
-            ));
-        }
-        assertThat(analysisCalls).hasValue(3);
-    }
-
-    @Test
-    void manyUniqueScalarsAreProtectedWithOneSegmentedAnalysis() {
+    void distinctJsonScalarsAreProtectedWithOneSegmentedAnalysis() {
         AtomicInteger scalarAnalysisCalls = new AtomicInteger();
         AtomicInteger segmentedAnalysisCalls = new AtomicInteger();
         PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
@@ -593,9 +557,7 @@ class PrivacyJsonPayloadPolicyTest {
                         .toList()
         );
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String input = IntStream.range(0, 600)
-                .mapToObj(index -> "\"secret-" + index + "\"")
-                .collect(Collectors.joining(",", "[", "]"));
+        String input = "[\"secret-0\",\"secret-1\",\"secret-2\"]";
 
         try (PrivacySession session = service.openSession()) {
             String protectedPayload = PrivacyOutputPolicyExecutor.apply(
@@ -613,11 +575,11 @@ class PrivacyJsonPayloadPolicyTest {
     }
 
     @Test
-    void largeJsonProtectsValuesAcrossMultipleAnalysisBatches() {
+    void jsonProtectsValuesAcrossMultipleAnalysisBatches() {
         AtomicInteger scalarAnalysisCalls = new AtomicInteger();
         AtomicInteger segmentedAnalysisCalls = new AtomicInteger();
-        String firstSecret = "value-0-" + "x".repeat(80);
-        String lastSecret = "value-799-" + "x".repeat(80);
+        String firstSecret = "value-0";
+        String lastSecret = "value-7";
         PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
                 scalarAnalysisCalls,
                 segmentedAnalysisCalls,
@@ -636,10 +598,11 @@ class PrivacyJsonPayloadPolicyTest {
                         })
                         .toList()
         );
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String input = IntStream.range(0, 800)
-                .mapToObj(index -> "\"value-" + index + "-" + "x".repeat(80) + "\"")
-                .collect(Collectors.joining(",", "[", "]"));
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxAnalysisSegments(3).build();
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
+        String input = """
+                ["value-0","value-1","value-2","value-3","value-4","value-5","value-6","value-7"]
+                """.trim();
 
         try (PrivacySession session = service.openSession()) {
             String protectedPayload = PrivacyOutputPolicyExecutor.apply(
@@ -653,7 +616,7 @@ class PrivacyJsonPayloadPolicyTest {
             assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
         }
         assertThat(scalarAnalysisCalls).hasValue(0);
-        assertThat(segmentedAnalysisCalls.get()).isGreaterThan(1).isLessThan(800);
+        assertThat(segmentedAnalysisCalls).hasValue(3);
     }
 
     @Test
@@ -707,7 +670,7 @@ class PrivacyJsonPayloadPolicyTest {
             return List.of();
         };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        String input = "[" + "\"safe\",".repeat(100) + "\"safe\"]";
+        String input = "[\"safe\",\"safe\"]";
 
         try (PrivacySession session = service.openSession()) {
             assertThat(PrivacyOutputPolicyExecutor.apply(

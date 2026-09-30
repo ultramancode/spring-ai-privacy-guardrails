@@ -201,22 +201,6 @@ class PrivacyServiceTest {
     }
 
     @Test
-    void tokenizeUsesTheSameSingleAnalysisPath() {
-        AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            analysisCalls.incrementAndGet();
-            return List.of(new PiiSpan("PERSON", 0, 5, 0.95));
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(service.tokenize(session.handle(), "Alice"))
-                    .matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
-            assertThat(analysisCalls).hasValue(1);
-        }
-    }
-
-    @Test
     void analyzeAndTokenizePreservesNullAndBlankButStillValidatesTheSession() {
         AtomicInteger analysisCalls = new AtomicInteger();
         PiiAnalyzer analyzer = (text, options, processingLimits) -> {
@@ -490,7 +474,7 @@ class PrivacyServiceTest {
     }
 
     @Test
-    void tokenizeDoesNotRetokenizeKnownOpaqueTokens() {
+    void tokenizeReusesUnchangedOutputAndProtectsNewAdjacentContent() {
         AtomicInteger analysisCalls = new AtomicInteger();
         PiiAnalyzer broadAnalyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
@@ -503,37 +487,18 @@ class PrivacyServiceTest {
 
         try (PrivacySession session = service.openSession()) {
             String first = service.tokenize(session.handle(), "Alice");
+            assertThat(analysisCalls).hasValue(1);
+
             String unchanged = service.tokenize(session.handle(), first);
+            assertThat(analysisCalls).hasValue(1);
+
             String second = service.tokenize(session.handle(), first + " Bob");
+            assertThat(analysisCalls).hasValue(2);
 
             assertThat(unchanged).isEqualTo(first);
             assertThat(second).startsWith(first).isNotEqualTo(first + " Bob");
+            assertThat(second).doesNotContain("Alice", "Bob");
             assertThat(service.detokenize(session.handle(), second)).isEqualTo("Alice Bob");
-            assertThat(analysisCalls.get()).isEqualTo(3);
-        }
-    }
-
-    @Test
-    void tokenizeReanalyzesPartiallyProtectedTextForNewAutomaticEvidence() {
-        AtomicInteger calls = new AtomicInteger();
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> {
-            calls.incrementAndGet();
-            String detectedValue = calls.get() == 1 ? "Alice" : "Bob";
-            int start = text.indexOf(detectedValue);
-            return start < 0
-                    ? List.of()
-                    : List.of(new PiiSpan("PERSON", start, start + detectedValue.length(), 0.95));
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-
-        try (PrivacySession session = service.openSession()) {
-            String partlyProtected = service.tokenize(session.handle(), "Alice Bob");
-            String fullyProtected = service.tokenize(session.handle(), partlyProtected);
-
-            assertThat(partlyProtected).contains("Bob").doesNotContain("Alice");
-            assertThat(fullyProtected).doesNotContain("Alice", "Bob");
-            assertThat(service.detokenize(session.handle(), fullyProtected)).isEqualTo("Alice Bob");
-            assertThat(calls).hasValue(2);
         }
     }
 
@@ -577,21 +542,23 @@ class PrivacyServiceTest {
     }
 
     @Test
-    void tokenizeReanalyzesTextAfterAnEarlierEmptyResult() {
+    void tokenizeSkipsReanalysisWhenNoPiiIsFound() {
         AtomicInteger analysisCalls = new AtomicInteger();
-        PiiAnalyzer recoveringAnalyzer = (text, options, processingLimits) -> analysisCalls.incrementAndGet() == 1
-                ? List.of()
-                : List.of(new PiiSpan("PERSON", 0, 5, 0.95));
+        PiiAnalyzer emptyAnalyzer = (text, options, processingLimits) -> {
+            analysisCalls.incrementAndGet();
+            return List.of();
+        };
         PrivacyService service = new PrivacyService(
-                List.of(recoveringAnalyzer),
+                List.of(emptyAnalyzer),
                 PiiAnalysisOptions.defaults()
         );
 
         try (PrivacySession session = service.openSession()) {
             assertThat(service.tokenize(session.handle(), "Alice")).isEqualTo("Alice");
-            assertThat(service.tokenize(session.handle(), "Alice"))
-                    .matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
-            assertThat(analysisCalls.get()).isEqualTo(2);
+            assertThat(analysisCalls).hasValue(1);
+
+            assertThat(service.tokenize(session.handle(), "Alice")).isEqualTo("Alice");
+            assertThat(analysisCalls).hasValue(1);
         }
     }
 

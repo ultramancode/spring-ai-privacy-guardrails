@@ -52,7 +52,7 @@ class PrivacyChatClientIntegrationTest {
     private static final Pattern PERSON_TOKEN = OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
     @Test
-    void unchangedProtectedPromptIsSafelyReanalyzedAtTheFinalModelBoundary() {
+    void unchangedProtectedPromptSkipsReanalysisAtTheFinalModelBoundary() {
         AtomicInteger analysisCalls = new AtomicInteger();
         PiiAnalyzer analyzer = (text, options, processingLimits) -> {
             analysisCalls.incrementAndGet();
@@ -75,7 +75,7 @@ class PrivacyChatClientIntegrationTest {
         assertThat(model.lastPrompt())
                 .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"))
                 .doesNotContain("Alice");
-        assertThat(analysisCalls.get()).isEqualTo(2);
+        assertThat(analysisCalls.get()).isEqualTo(1);
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -99,7 +99,7 @@ class PrivacyChatClientIntegrationTest {
 
         assertThatThrownBy(() -> chatClient.prompt().user("hello").call().entity(converter))
                 .isInstanceOf(PrivacyGuardrailException.class)
-                .hasMessage("Terminal model augmentation rejected by privacy guardrail")
+                .hasMessage("Model output configuration rejected by privacy guardrail")
                 .hasMessageNotContaining("Alice");
         assertThat(model.lastPrompt()).isNull();
         assertThat(service.activeSessionCount()).isZero();
@@ -302,7 +302,7 @@ class PrivacyChatClientIntegrationTest {
 
         assertThatThrownBy(() -> chatClient.prompt().user("hello").call().content())
                 .isInstanceOf(PrivacyGuardrailException.class)
-                .hasMessage("Tool control field rejected by privacy guardrail")
+                .hasMessage("Model requested a tool outside the registered privacy boundary")
                 .hasMessageNotContaining("Alice");
         assertThat(toolInput.get()).isNull();
         assertThat(service.activeSessionCount()).isZero();
@@ -324,7 +324,7 @@ class PrivacyChatClientIntegrationTest {
 
         assertThatThrownBy(() -> chatClient.prompt().user("hello").stream().content().collectList().block())
                 .isInstanceOf(PrivacyGuardrailException.class)
-                .hasMessage("Tool control field rejected by privacy guardrail")
+                .hasMessage("Model requested a tool outside the registered privacy boundary")
                 .hasMessageNotContaining("Alice");
         assertThat(toolInput.get()).isNull();
         assertThat(service.activeSessionCount()).isZero();

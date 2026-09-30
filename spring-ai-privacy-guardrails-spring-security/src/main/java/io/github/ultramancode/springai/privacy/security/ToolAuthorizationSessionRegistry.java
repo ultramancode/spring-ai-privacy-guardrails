@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.security;
 
+import io.github.ultramancode.springai.privacy.boundary.SpringAiToolSearchSupport;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.security.authorization.AuthorizationDeniedException;

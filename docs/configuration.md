@@ -106,8 +106,8 @@ ChatClient derivedClient = protectedClient.mutate().build();
 Copying a protected `ChatClient.Builder` with `clone()` also preserves its
 configuration, so do not reapply `PrivacyChatClientConfigurer` to the copy.
 
-Tool names, descriptions, and JSON schemas are also checked for PII before they
-are sent to the model.
+Tool descriptions and JSON schemas are checked for PII before they are sent to
+the model.
 
 The boundary supports the standard Spring AI `UserMessage`, `SystemMessage`,
 `AssistantMessage`, and `ToolResponseMessage` classes, plus
@@ -181,11 +181,11 @@ configured under `spring.ai.privacy`.
 | `output.block-exception-message` | `Response blocked by privacy guardrail.` | Safe message used by a `BLOCK` exception. |
 | `processing.max-text-characters` | `1000000` | Maximum length of one text or JSON document. Batch analysis uses the combined length of all texts. |
 | `processing.max-output-characters` | `8000000` | Maximum output length per transformation, including unchanged text. |
-| `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. |
+| `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. Direct value-tree tokenization also bounds combined `BigDecimal` analysis text by this value. |
 | `processing.max-value-tree-nodes` | `100000` | Maximum node count in a value tree or JSON document, including containers, scalar values, and map keys. |
 | `processing.max-depth` | `128` | Maximum nesting depth in a value tree or JSON document. |
 | `processing.max-analysis-segments` | `100000` | Maximum number of texts in one batch analysis. |
-| `processing.max-result-spans` | `100000` | Maximum number of spans collected in one analysis, summed across analyzers. |
+| `processing.max-result-spans` | `100000` | Maximum raw spans accepted from analyzers or callers in one analysis. Newly produced analyzer spans are summed across session batches; reused results are not counted again. |
 | `response-inspection.max-stream-frames` | `1024` | Maximum number of frames inspected in one streaming response. |
 | `response-inspection.max-characters` | `1000000` | Maximum cumulative characters of text-based content inspected in one call or streaming response. |
 | `response-inspection.max-media-bytes` | `16777216` | Maximum cumulative media-data size allowed in one response. |
@@ -703,8 +703,7 @@ JSON output length includes JSON syntax and escape sequences. Value-tree output
 length is the combined length of string values and map keys in the result.
 
 Texts extracted from JSON are analyzed in batches of up to
-`processing.max-analysis-segments` texts. `processing.max-result-spans` applies
-to the total resolved span count for the document.
+`processing.max-analysis-segments`.
 
 Exceeding a processing limit stops the operation with `PAYLOAD_LIMIT_EXCEEDED`,
 regardless of `ALLOW_PARTIAL` or fallback provider policies.

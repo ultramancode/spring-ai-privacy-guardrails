@@ -78,8 +78,8 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
                     "Privacy context is unknown or already closed"
             );
         }
-        this.modelControlValidator.validateOutputFormatControlFields(handle, request);
-        this.modelControlValidator.validateHistoryToolControlFields(handle, request);
+        this.modelControlValidator.validateOutputConfigurationContextValues(handle, request);
+        this.modelControlValidator.validateHistoryToolControlStructure(request);
         PrivacyToolExecutionContextSupport.requireCallbacksMatchValidatedSnapshot(request);
         Set<String> registeredToolNames = request.prompt().getOptions() instanceof ToolCallingChatOptions
                 ? PrivacyToolContextAdvisor.requirePrivacyWrappedToolNames(

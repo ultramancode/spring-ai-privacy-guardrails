@@ -1,4 +1,4 @@
-package io.github.ultramancode.springai.privacy.springai;
+package io.github.ultramancode.springai.privacy.boundary;
 
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
@@ -9,8 +9,11 @@ import java.util.Map;
 /**
  * Matches Spring AI's reserved Tool Search name and request-scoped session context marker.
  * This compatibility convention trusts application extensions and does not verify callback origin.
+ * Shared internally by the privacy and security integrations.
+ *
+ * @hidden
  */
-final class SpringAiToolSearchSupport {
+public final class SpringAiToolSearchSupport {
 
     private static final String TOOL_SEARCH_TOOL_NAME = "toolSearchTool";
     private static final String SESSION_ID_CONTEXT_KEY = "toolSearchToolSessionId";
@@ -25,7 +28,7 @@ final class SpringAiToolSearchSupport {
      * @param options current tool-calling options
      * @return {@code true} when the Tool Search name and session marker are present
      */
-    static boolean isToolSearchToolCallback(
+    public static boolean isToolSearchToolCallback(
             ToolCallback callback,
             ToolCallingChatOptions options
     ) {

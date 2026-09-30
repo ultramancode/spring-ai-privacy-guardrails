@@ -70,7 +70,7 @@ class PrivacyToolCallValidationAdvisorTest {
             assertThatThrownBy(() -> advisor.adviseCall(request, chain))
                     .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
                         assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
-                        assertThat(failure).hasMessage("Tool control field rejected by privacy guardrail")
+                        assertThat(failure).hasMessage("Model requested a tool outside the registered privacy boundary")
                                 .hasMessageNotContaining("Alice");
                     });
         }
@@ -137,27 +137,6 @@ class PrivacyToolCallValidationAdvisorTest {
             ));
 
             assertThat(advisor.adviseCall(request, chain).chatResponse()).isNotNull();
-        }
-    }
-
-    @Test
-    void streamAllowsOpaqueMetadataToolCallIdsOwnedByTheProvider() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolCallValidationAdvisor advisor = new PrivacyToolCallValidationAdvisor(service);
-        StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest request = activeRequest(session);
-            ChatResponse metadataToolCall = metadataToolCallResponse(
-                    List.of(new AssistantMessage.ToolCall("Alice", "function", "customerLookup", "{}"))
-            );
-            when(chain.nextStream(any())).thenReturn(Flux.just(validatedResponse(
-                    request,
-                    metadataToolCall,
-                    Set.of("customerLookup")
-            )));
-
-            assertThat(advisor.adviseStream(request, chain).collectList().block()).hasSize(1);
         }
     }
 

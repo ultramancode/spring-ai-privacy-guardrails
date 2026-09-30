@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.ChatClientAttributes;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
@@ -160,28 +159,6 @@ class PrivacyModelRequestStageTest {
     }
 
     @Test
-    void stageRejectsPiiInHistoricalToolResponseNameBeforeModelCall() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
-        ToolResponseMessage response = ToolResponseMessage.builder()
-                .responses(List.of(new ToolResponseMessage.ToolResponse(
-                        "call-1", "Alice", "safe result"
-                )))
-                .build();
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest request = activeRequest(
-                    new ChatClientRequest(new Prompt(List.of(response)), Map.of()),
-                    session.handle()
-            );
-            assertThatThrownBy(() -> stage.apply(request))
-                    .isInstanceOf(PrivacyGuardrailException.class)
-                    .hasMessage("Tool control field rejected by privacy guardrail")
-                    .hasMessageNotContaining("Alice");
-        }
-    }
-
-    @Test
     void stageRejectsPiiInModelVisibleToolDefinitionsBeforeModelCall() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
@@ -273,7 +250,7 @@ class PrivacyModelRequestStageTest {
         PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
 
         try (PrivacySession session = service.openSession()) {
-            for (Map.Entry<String, String> augmentation : Map.of(
+            for (Map.Entry<String, String> outputContextEntry : Map.of(
                     ChatClientAttributes.OUTPUT_FORMAT.getKey(), "Return Alice",
                     ChatClientAttributes.STRUCTURED_OUTPUT_SCHEMA.getKey(),
                     "{\"description\":\"Alice\"}"
@@ -281,14 +258,14 @@ class PrivacyModelRequestStageTest {
                 ChatClientRequest request = activeRequest(
                         new ChatClientRequest(
                                 new Prompt("hello"),
-                                Map.of(augmentation.getKey(), augmentation.getValue())
+                                Map.of(outputContextEntry.getKey(), outputContextEntry.getValue())
                         ),
                         session.handle()
                 );
 
                 assertThatThrownBy(() -> stage.apply(request))
                         .isInstanceOf(PrivacyGuardrailException.class)
-                        .hasMessage("Terminal model augmentation rejected by privacy guardrail")
+                        .hasMessage("Model output configuration rejected by privacy guardrail")
                         .hasMessageNotContaining("Alice");
             }
         }

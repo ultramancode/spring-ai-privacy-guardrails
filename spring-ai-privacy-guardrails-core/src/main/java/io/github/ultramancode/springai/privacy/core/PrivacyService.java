@@ -9,6 +9,7 @@ public final class PrivacyService {
 
     private final PrivacyProcessingLimits processingLimits;
     private final PiiAnalysisCoordinator analysisCoordinator;
+    private final SessionAnalysis sessionAnalysis;
     private final PrivacyContextRegistry contextRegistry;
     private final PrivacyTextTransformer textTransformer;
     private final PrivacyValueTreeTransformer valueTreeTransformer;
@@ -93,10 +94,12 @@ public final class PrivacyService {
                 this.processingLimits
         );
         this.contextRegistry = new PrivacyContextRegistry();
+        this.sessionAnalysis = new SessionAnalysis(this.analysisCoordinator);
         this.textTransformer = new PrivacyTextTransformer(
-                this.analysisCoordinator, this.processingLimits);
+                this.analysisCoordinator, this.sessionAnalysis, this.processingLimits);
         this.valueTreeTransformer = new PrivacyValueTreeTransformer(
                 this.analysisCoordinator,
+                this.sessionAnalysis,
                 this.textTransformer,
                 resolutionPolicy.typeConflictFallback(),
                 this.processingLimits
@@ -119,7 +122,7 @@ public final class PrivacyService {
      * @return resolved spans in source order
      */
     public List<ResolvedPiiSpan> analyze(String text) {
-        return this.analysisCoordinator.analyze(text);
+        return this.analysisCoordinator.analyzeEvidence(text).result().spans();
     }
 
     /**
@@ -133,7 +136,50 @@ public final class PrivacyService {
      * @return immutable per-text resolved spans in input order
      */
     public List<List<ResolvedPiiSpan>> analyzeSegments(List<String> texts) {
-        return this.analysisCoordinator.analyzeSegments(texts);
+        return this.analysisCoordinator.analyzeSegmentsEvidence(texts).stream()
+                .map(item -> item.result().spans())
+                .toList();
+    }
+
+    /**
+     * Analyzes independent source texts in an active session, reusing successful
+     * results for identical text. The input limits of {@link #analyzeSegments(List)}
+     * apply to the full list. Cached results do not consume the analyzer span limit again.
+     *
+     * @param handle active session handle
+     * @param texts independent source texts
+     * @return immutable per-text resolved spans in input order
+     */
+    public List<List<ResolvedPiiSpan>> analyzeSegments(
+            PrivacyContextHandle handle, List<String> texts) {
+        this.analysisCoordinator.requireSegmentCountWithinLimit(texts);
+        return this.sessionAnalysis.analyzeSegments(
+                texts, this.contextRegistry.requireActiveContext(handle)).stream()
+                .map(PiiAnalysisResult::spans)
+                .toList();
+    }
+
+    /**
+     * Internal integration entry point for scalar texts from a validated JSON document.
+     * The number of texts is bounded by {@link PrivacyProcessingLimits#maxValueTreeNodes()},
+     * while each analyzer batch respects {@link PrivacyProcessingLimits#maxAnalysisSegments()}.
+     * Combined text and newly collected analyzer span limits apply across the operation.
+     *
+     * @hidden
+     */
+    public List<List<ResolvedPiiSpan>> analyzeTextsFromJsonScalars(
+            PrivacyContextHandle handle, List<String> texts) {
+        Objects.requireNonNull(texts, "texts must not be null");
+        if (texts.size() > this.processingLimits.maxValueTreeNodes()) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
+                    PrivacyPhase.ANALYSIS,
+                    "PII analysis exceeded the logical scalar limit");
+        }
+        return this.sessionAnalysis.analyzeSegments(
+                texts, this.contextRegistry.requireActiveContext(handle)).stream()
+                .map(PiiAnalysisResult::spans)
+                .toList();
     }
 
     /**
@@ -143,11 +189,11 @@ public final class PrivacyService {
      * @return detailed analysis result
      */
     public PiiAnalysisResult analyzeDetailed(String text) {
-        return this.analysisCoordinator.analyzeDetailed(text);
+        return this.analysisCoordinator.analyzeEvidence(text).result();
     }
 
     /**
-     * Opens an isolated token-mapping session.
+     * Opens an isolated privacy processing session.
      *
      * @return a session that must be closed after the request completes
      */
@@ -156,7 +202,8 @@ public final class PrivacyService {
     }
 
     /**
-     * Analyzes and tokenizes text within an active session.
+     * Tokenizes text within an active session, reusing prior analysis or already
+     * protected output when available.
      *
      * @param handle active session handle
      * @param text source text
@@ -164,11 +211,12 @@ public final class PrivacyService {
      * @throws PrivacyGuardrailException if the session is not active
      */
     public String tokenize(PrivacyContextHandle handle, String text) {
-        return analyzeAndTokenize(handle, text).tokenizedText();
+        return this.textTransformer.tokenize(text, this.contextRegistry.requireActiveContext(handle));
     }
 
     /**
-     * Analyzes source text once and returns both its resolved spans and tokenized form.
+     * Analyzes and tokenizes source text within an active session. Successful
+     * analysis for identical text may be reused.
      *
      * @param handle active session handle
      * @param text source text
@@ -367,6 +415,8 @@ public final class PrivacyService {
 
     /**
      * Tokenizes PII found in the string keys, string values, and numbers of a value tree.
+     * {@link java.math.BigDecimal} values are analyzed using {@code toPlainString()}.
+     * Other numbers use {@code toString()}.
      * A protected number becomes an opaque token and is restored to its original
      * numeric type by value-tree detokenization when its entity type is allowed.
      * Accepts the same input types and follows the same validation and limit rules as
@@ -387,6 +437,8 @@ public final class PrivacyService {
 
     /**
      * Protects one pre-analyzed JSON-compatible string or numeric scalar.
+     * Numeric span offsets refer to {@link java.math.BigDecimal#toPlainString()}
+     * for decimal values and {@code toString()} for other numbers.
      * Numeric values retain their original type when no supplied span is protected.
      * Multiple distinct protected entity types in one numeric scalar use the configured
      * type-conflict fallback entity type. Numeric representations must fit the
@@ -405,6 +457,23 @@ public final class PrivacyService {
                 spans,
                 this.contextRegistry.requireActiveContext(handle)
         );
+    }
+
+    /**
+     * Analyzes and tokenizes JSON-compatible string and numeric scalars in an active
+     * session. {@link java.math.BigDecimal} values use plain decimal text for analysis.
+     * The list size is limited by {@link PrivacyProcessingLimits#maxValueTreeNodes()}.
+     * The value-tree character limit applies per scalar, while text and output
+     * character limits apply across the list. The analyzer span limit applies
+     * to newly analyzed texts.
+     *
+     * @param handle active session handle
+     * @param scalars JSON-compatible string and numeric scalars
+     * @return transformed scalars in input order
+     */
+    public List<Object> tokenizeScalars(PrivacyContextHandle handle, List<?> scalars) {
+        return this.valueTreeTransformer.tokenizeScalars(
+                scalars, this.contextRegistry.requireActiveContext(handle));
     }
 
     /**

@@ -99,7 +99,7 @@ class PrivacyChatClientIntegrationTest {
 
         assertThatThrownBy(() -> chatClient.prompt().user("hello").call().entity(converter))
                 .isInstanceOf(PrivacyGuardrailException.class)
-                .hasMessage("Terminal model augmentation rejected by privacy guardrail")
+                .hasMessage("Model output configuration rejected by privacy guardrail")
                 .hasMessageNotContaining("Alice");
         assertThat(model.lastPrompt()).isNull();
         assertThat(service.activeSessionCount()).isZero();

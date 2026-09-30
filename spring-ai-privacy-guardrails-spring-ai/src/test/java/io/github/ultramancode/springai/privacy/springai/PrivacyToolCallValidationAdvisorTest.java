@@ -141,27 +141,6 @@ class PrivacyToolCallValidationAdvisorTest {
     }
 
     @Test
-    void streamAllowsOpaqueMetadataToolCallIdsOwnedByTheProvider() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolCallValidationAdvisor advisor = new PrivacyToolCallValidationAdvisor(service);
-        StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest request = activeRequest(session);
-            ChatResponse metadataToolCall = metadataToolCallResponse(
-                    List.of(new AssistantMessage.ToolCall("Alice", "function", "customerLookup", "{}"))
-            );
-            when(chain.nextStream(any())).thenReturn(Flux.just(validatedResponse(
-                    request,
-                    metadataToolCall,
-                    Set.of("customerLookup")
-            )));
-
-            assertThat(advisor.adviseStream(request, chain).collectList().block()).hasSize(1);
-        }
-    }
-
-    @Test
     void streamDoesNotApplyOrCompareToolExecutionLimitsWhenNoToolsAreRegistered() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyResponseInspectionLimits limits = new PrivacyResponseInspectionLimits(

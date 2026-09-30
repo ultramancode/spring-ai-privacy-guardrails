@@ -67,7 +67,11 @@ class PresidioAnalyzerTest {
         try (PrivacySession session = service.openSession()) {
             String first = service.tokenize(session.handle(), "Find Alice");
             assertThat(first).doesNotContain("Alice");
+            assertThat(requests).hasValue(1);
+
             assertThat(service.tokenize(session.handle(), first)).isEqualTo(first);
+            assertThat(requests).hasValue(1);
+
             assertThat(service.tokenize(session.handle(), "Find Alice")).isEqualTo(first);
             assertThat(requests).hasValue(1);
 
@@ -434,10 +438,9 @@ class PresidioAnalyzerTest {
 
     @Test
     void analyzeUsesConfiguredDepthForUnknownResponseMetadata() throws IOException {
-        StringBuilder nestedMetadata = new StringBuilder("0");
-        for (int index = 0; index < 3; index++) {
-            nestedMetadata.insert(0, "{\"nested\":").append('}');
-        }
+        String nestedMetadata = """
+                {"nested":{"nested":{"nested":0}}}
+                """.trim();
         startServer(200, "[{\"entity_type\":\"PERSON\",\"start\":0,\"end\":1,"
                 + "\"score\":1,\"metadata\":" + nestedMetadata + "}]");
         PresidioAnalyzerConfig baseConfig = config();

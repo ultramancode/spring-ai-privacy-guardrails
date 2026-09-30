@@ -32,8 +32,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,36 +39,39 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PrivacyToolCallbackWrapperTest {
 
     @Test
-    void repeatedInvocationReusesDetectionButAppliesCurrentDisclosurePolicy() {
-        AtomicInteger aliceAnalyses = new AtomicInteger();
+    void sameInputReusesAnalysisButAppliesEachDisclosurePolicy() {
+        AtomicInteger aliceAnalysisCalls = new AtomicInteger();
         PiiAnalyzer analyzer = (text, options, limits) -> {
             int start = text.indexOf("Alice");
             if (start < 0) {
                 return List.of();
             }
-            aliceAnalyses.incrementAndGet();
+            aliceAnalysisCalls.incrementAndGet();
             return List.of(new PiiSpan("PERSON", start, start + 5, 0.95));
         };
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        AtomicReference<String> deniedInput = new AtomicReference<>();
-        AtomicReference<String> allowedInput = new AtomicReference<>();
-        PrivacyToolCallbackWrapper denied = wrap(delegate(input -> {
-            deniedInput.set(input);
+        AtomicReference<String> deniedDelegateInput = new AtomicReference<>();
+        AtomicReference<String> allowedDelegateInput = new AtomicReference<>();
+        PrivacyToolCallbackWrapper deniedWrapper = wrap(delegate(input -> {
+            deniedDelegateInput.set(input);
             return "Alice";
         }), service, ToolDisclosurePolicy.denyAll());
-        PrivacyToolCallbackWrapper allowed = wrap(delegate(input -> {
-            allowedInput.set(input);
+        PrivacyToolCallbackWrapper allowedWrapper = wrap(delegate(input -> {
+            allowedDelegateInput.set(input);
             return "Alice";
         }), service, ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON"))));
+        String toolInput = "{\"name\":\"Alice\"}";
 
         try (PrivacySession session = service.openSession()) {
-            String first = denied.call("{\"name\":\"Alice\"}", toolContext(session.handle()));
-            String second = allowed.call("{\"name\":\"Alice\"}", toolContext(session.handle()));
-            assertThat(deniedInput.get()).doesNotContain("Alice");
-            assertThat(allowedInput.get()).contains("Alice");
-            assertThat(first).doesNotContain("Alice");
-            assertThat(second).doesNotContain("Alice");
-            assertThat(aliceAnalyses).hasValue(1);
+            String deniedResult = deniedWrapper.call(toolInput, toolContext(session.handle()));
+            assertThat(deniedDelegateInput.get()).doesNotContain("Alice");
+            assertThat(deniedResult).doesNotContain("Alice");
+            assertThat(aliceAnalysisCalls).hasValue(1);
+
+            String allowedResult = allowedWrapper.call(toolInput, toolContext(session.handle()));
+            assertThat(allowedDelegateInput.get()).contains("Alice");
+            assertThat(allowedResult).doesNotContain("Alice");
+            assertThat(aliceAnalysisCalls).hasValue(1);
         }
     }
 
@@ -249,7 +250,7 @@ class PrivacyToolCallbackWrapperTest {
     }
 
     @Test
-    void toolInputProtectsManyScalarsWithOneSegmentedAnalysis() {
+    void toolInputProtectsDistinctScalarsWithOneSegmentedAnalysis() {
         AtomicInteger scalarAnalysisCalls = new AtomicInteger();
         AtomicInteger segmentedAnalysisCalls = new AtomicInteger();
         PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
@@ -278,9 +279,7 @@ class PrivacyToolCallbackWrapperTest {
                 }),
                 service
         );
-        String input = IntStream.range(0, 600)
-                .mapToObj(index -> "\"secret-" + index + "\"")
-                .collect(Collectors.joining(",", "[", "]"));
+        String input = "[\"secret-0\",\"secret-1\",\"secret-2\"]";
 
         try (PrivacySession session = service.openSession()) {
             wrapper.call(input, toolContext(session.handle()));

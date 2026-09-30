@@ -34,7 +34,7 @@ final class PrivacyModelControlValidator {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
     }
 
-    void validateHistoryToolControlFields(ChatClientRequest request) {
+    void validateHistoryToolControlStructure(ChatClientRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         for (Message message : request.prompt().getInstructions()) {
             if (message instanceof AssistantMessage assistantMessage) {
@@ -63,15 +63,15 @@ final class PrivacyModelControlValidator {
         }
     }
 
-    void validateOutputFormatControlFields(PrivacyContextHandle handle, ChatClientRequest request) {
+    void validateOutputConfigurationContextValues(PrivacyContextHandle handle, ChatClientRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        validateModelAugmentation(
+        validateOutputConfigurationContextValue(
                 handle,
                 request,
                 ChatClientAttributes.OUTPUT_FORMAT.getKey(),
                 false
         );
-        validateModelAugmentation(
+        validateOutputConfigurationContextValue(
                 handle,
                 request,
                 ChatClientAttributes.STRUCTURED_OUTPUT_SCHEMA.getKey(),
@@ -91,7 +91,7 @@ final class PrivacyModelControlValidator {
         for (Generation generation : response.chatResponse().getResults()) {
             AssistantMessage message = generation.getOutput();
             if (message != null) {
-                validateAssistantMessage(message, registeredToolNames);
+                validateAssistantToolCalls(message, registeredToolNames);
             }
         }
         for (AssistantMessage.ToolCall toolCall : PrivacyToolCallMetadataReader.read(
@@ -102,7 +102,7 @@ final class PrivacyModelControlValidator {
         }
     }
 
-    AssistantMessage validateAssistantMessage(
+    void validateAssistantToolCalls(
             AssistantMessage message,
             Set<String> registeredToolNames
     ) {
@@ -111,15 +111,13 @@ final class PrivacyModelControlValidator {
         for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
             validateToolCall(toolCall, registeredToolNames);
         }
-        return message;
     }
 
-    AssistantMessage validateToolCallStructure(AssistantMessage message) {
+    void validateToolCallStructure(AssistantMessage message) {
         Objects.requireNonNull(message, "message must not be null");
         for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
             requireToolCall(toolCall);
         }
-        return message;
     }
 
     private void rejectPiiPayload(
@@ -143,7 +141,7 @@ final class PrivacyModelControlValidator {
         }
     }
 
-    private void validateModelAugmentation(
+    private void validateOutputConfigurationContextValue(
             PrivacyContextHandle handle,
             ChatClientRequest request,
             String contextKey,
@@ -157,14 +155,14 @@ final class PrivacyModelControlValidator {
             throw new PrivacyGuardrailException(
                     PrivacyFailureCode.TRANSFORMATION_CONFLICT,
                     PrivacyPhase.TOKENIZATION,
-                    "Terminal model augmentation is invalid"
+                    "Model output configuration is invalid"
             );
         }
         rejectPiiPayload(
                 handle,
                 text,
                 requireValidJson,
-                "Terminal model augmentation rejected by privacy guardrail"
+                "Model output configuration rejected by privacy guardrail"
         );
     }
 
@@ -173,10 +171,10 @@ final class PrivacyModelControlValidator {
             Set<String> registeredToolNames
     ) {
         requireToolCall(toolCall);
-        requireRegisteredName(toolCall, registeredToolNames);
+        requireRegisteredToolName(toolCall, registeredToolNames);
     }
 
-    private void requireRegisteredName(
+    private void requireRegisteredToolName(
             AssistantMessage.ToolCall toolCall,
             Set<String> registeredToolNames
     ) {

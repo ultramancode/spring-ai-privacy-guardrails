@@ -167,7 +167,7 @@ public final class PrivacyService {
      *
      * @hidden
      */
-    public List<List<ResolvedPiiSpan>> analyzeScalarTexts(
+    public List<List<ResolvedPiiSpan>> analyzeTextsFromJsonScalars(
             PrivacyContextHandle handle, List<String> texts) {
         Objects.requireNonNull(texts, "texts must not be null");
         if (texts.size() > this.processingLimits.maxValueTreeNodes()) {

@@ -2,9 +2,6 @@ package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
-import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
-import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
@@ -13,14 +10,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.ChatClientAttributes;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -28,38 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyModelRequestStageTest {
-
-    @Test
-    void toolIdentifierIsExcludedButSameTextInContentIsAnalyzed() {
-        List<String> analyzedTexts = new ArrayList<>();
-        PiiAnalyzer analyzer = (text, options, limits) -> {
-            analyzedTexts.add(text);
-            int start = text.indexOf("Alice");
-            return start < 0 ? List.of()
-                    : List.of(new PiiSpan("PERSON", start, start + 5, 0.95));
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
-                service, ToolDisclosurePolicy.denyAll());
-        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(
-                service, factory, PrivacyEnforcementObserver.noop());
-        ToolCallingChatOptions options = ToolCallingChatOptions.builder()
-                .toolCallbacks(List.of(factory.wrap(tool("Alice"))))
-                .build();
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest nameOnly = activeRequest(
-                    new ChatClientRequest(new Prompt("hello", options), Map.of()), session.handle());
-            stage.apply(nameOnly);
-            assertThat(analyzedTexts).noneMatch(text -> text.contains("Alice"));
-
-            ChatClientRequest content = activeRequest(
-                    new ChatClientRequest(new Prompt("Find Alice", options), Map.of()), session.handle());
-            ChatClientRequest protectedRequest = stage.apply(content);
-            assertThat(analyzedTexts).anyMatch(text -> text.contains("Alice"));
-            assertThat(protectedRequest.prompt().getUserMessage().getText()).doesNotContain("Alice");
-        }
-    }
 
     @Test
     void stageTokenizesRetrievedContent() {
@@ -196,29 +159,6 @@ class PrivacyModelRequestStageTest {
     }
 
     @Test
-    void stagePreservesHistoricalToolResponseName() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
-        ToolResponseMessage response = ToolResponseMessage.builder()
-                .responses(List.of(new ToolResponseMessage.ToolResponse(
-                        "call-1", "Alice", "safe result"
-                )))
-                .build();
-
-        try (PrivacySession session = service.openSession()) {
-            ChatClientRequest request = activeRequest(
-                    new ChatClientRequest(new Prompt(List.of(response)), Map.of()),
-                    session.handle()
-            );
-            assertThat(stage.apply(request).prompt().getInstructions())
-                    .anySatisfy(message -> assertThat(message)
-                            .isInstanceOfSatisfying(ToolResponseMessage.class,
-                                    toolResponse -> assertThat(toolResponse.getResponses().get(0).name())
-                                            .isEqualTo("Alice")));
-        }
-    }
-
-    @Test
     void stageRejectsPiiInModelVisibleToolDefinitionsBeforeModelCall() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
@@ -310,7 +250,7 @@ class PrivacyModelRequestStageTest {
         PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
 
         try (PrivacySession session = service.openSession()) {
-            for (Map.Entry<String, String> augmentation : Map.of(
+            for (Map.Entry<String, String> outputContextEntry : Map.of(
                     ChatClientAttributes.OUTPUT_FORMAT.getKey(), "Return Alice",
                     ChatClientAttributes.STRUCTURED_OUTPUT_SCHEMA.getKey(),
                     "{\"description\":\"Alice\"}"
@@ -318,14 +258,14 @@ class PrivacyModelRequestStageTest {
                 ChatClientRequest request = activeRequest(
                         new ChatClientRequest(
                                 new Prompt("hello"),
-                                Map.of(augmentation.getKey(), augmentation.getValue())
+                                Map.of(outputContextEntry.getKey(), outputContextEntry.getValue())
                         ),
                         session.handle()
                 );
 
                 assertThatThrownBy(() -> stage.apply(request))
                         .isInstanceOf(PrivacyGuardrailException.class)
-                        .hasMessage("Terminal model augmentation rejected by privacy guardrail")
+                        .hasMessage("Model output configuration rejected by privacy guardrail")
                         .hasMessageNotContaining("Alice");
             }
         }

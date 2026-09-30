@@ -7,11 +7,13 @@ import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
 import io.github.ultramancode.springai.privacy.core.ScalarAnalysisText;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.exc.StreamConstraintsException;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -257,56 +259,108 @@ final class PrivacyJsonPayloadTransformer {
     ) throws JacksonException {
         PrivacyJsonDocumentProcessor processor =
                 documentProcessor(privacyService.processingLimits());
-        if (action == Action.TOKENIZE || action == Action.DISCLOSE) {
-            List<Object> scalars = processor.validateAndCollectScalars(payload, phase);
-            List<Object> protectedScalars = privacyService.tokenizeScalars(handle, scalars);
-            Map<Object, Object> valuesByScalar = new HashMap<>();
-            for (int index = 0; index < scalars.size(); index++) {
-                Object protectedValue = protectedScalars.get(index);
-                if (action == Action.DISCLOSE) {
-                    Object disclosed = privacyService.detokenizeValueTree(
-                            handle, protectedValue, allowedEntityTypes);
-                    if (disclosureTracker != null) {
-                        disclosureTracker.record(!Objects.equals(protectedValue, disclosed));
-                    }
-                    valuesByScalar.put(scalars.get(index), disclosed);
-                } else {
-                    valuesByScalar.put(scalars.get(index), protectedValue);
+        return switch (action) {
+            case TOKENIZE, DISCLOSE -> transformJsonWithTokenizedScalars(
+                    processor, privacyService, handle, payload, phase,
+                    action, allowedEntityTypes, disclosureTracker);
+            case REDACT, CONTAINS_PII -> transformJsonWithAnalyzedSpans(
+                    processor, privacyService, handle, payload, phase, action);
+        };
+    }
+
+    /** Tokenizes JSON scalars, then restores allowed values for DISCLOSE. */
+    private static String transformJsonWithTokenizedScalars(
+            PrivacyJsonDocumentProcessor processor,
+            PrivacyService privacyService,
+            PrivacyContextHandle handle,
+            String payload,
+            PrivacyPhase phase,
+            Action action,
+            Set<String> allowedEntityTypes,
+            DisclosureTracker disclosureTracker
+    ) throws JacksonException {
+        List<Object> sourceScalars = processor.validateAndCollectScalars(payload, phase);
+        List<Object> protectedScalars = privacyService.tokenizeScalars(handle, sourceScalars);
+        Map<Object, Object> transformedValuesByScalar = new HashMap<>();
+        for (int index = 0; index < sourceScalars.size(); index++) {
+            Object protectedValue = protectedScalars.get(index);
+            if (action == Action.DISCLOSE) {
+                Object disclosedValue = privacyService.detokenizeValueTree(
+                        handle, protectedValue, allowedEntityTypes);
+                if (disclosureTracker != null) {
+                    disclosureTracker.record(!Objects.equals(protectedValue, disclosedValue));
                 }
+                transformedValuesByScalar.put(sourceScalars.get(index), disclosedValue);
+            } else {
+                transformedValuesByScalar.put(sourceScalars.get(index), protectedValue);
             }
-            return processor.rewrite(payload, valuesByScalar::get, phase);
         }
+        return processor.rewrite(payload, transformedValuesByScalar::get, phase);
+    }
+
+    private static String transformJsonWithAnalyzedSpans(
+            PrivacyJsonDocumentProcessor processor,
+            PrivacyService privacyService,
+            PrivacyContextHandle handle,
+            String payload,
+            PrivacyPhase phase,
+            Action action
+    ) throws JacksonException {
         List<String> analysisTexts = processor.validateAndCollectAnalysisTexts(payload, phase);
-        Map<String, List<PiiSpan>> spansByText = PrivacyJsonScalarBatchAnalyzer.analyze(
+        Map<String, List<PiiSpan>> spansByAnalysisText = analyzeTextsFromJsonScalars(
                 privacyService,
                 handle,
                 analysisTexts
         );
-        Function<Object, Object> scalarTransformer = scalar -> {
-            String analysisText = ScalarAnalysisText.toAnalysisText(scalar);
-            List<PiiSpan> spans = spansByText.getOrDefault(analysisText, List.of());
-            return applyScalarAction(
-                    privacyService,
-                    handle,
-                    scalar,
-                    analysisText,
-                    spans,
-                    action,
-                    phase
-            );
-        };
-        return processor.rewrite(payload, scalarTransformer, phase);
+        return processor.rewrite(
+                payload,
+                scalar -> transformAnalyzedScalar(
+                        privacyService, handle, scalar, spansByAnalysisText, action, phase),
+                phase
+        );
     }
 
-    private static Object applyScalarAction(
+    private static Map<String, List<PiiSpan>> analyzeTextsFromJsonScalars(
+            PrivacyService privacyService,
+            PrivacyContextHandle handle,
+            List<String> analysisTexts
+    ) {
+        Objects.requireNonNull(privacyService, "privacyService must not be null");
+        Objects.requireNonNull(analysisTexts, "analysisTexts must not be null");
+
+        Map<String, List<PiiSpan>> spansByAnalysisText = new LinkedHashMap<>();
+        List<List<ResolvedPiiSpan>> resolvedSpansPerText =
+                privacyService.analyzeTextsFromJsonScalars(handle, analysisTexts);
+        for (int index = 0; index < analysisTexts.size(); index++) {
+            List<ResolvedPiiSpan> resolvedSpans = resolvedSpansPerText.get(index);
+            spansByAnalysisText.put(
+                    analysisTexts.get(index),
+                    resolvedSpans.stream()
+                            .map(PrivacyJsonPayloadTransformer::toPiiSpan)
+                            .toList()
+            );
+        }
+        return Map.copyOf(spansByAnalysisText);
+    }
+
+    private static PiiSpan toPiiSpan(ResolvedPiiSpan span) {
+        double score = span.evidence().stream()
+                .mapToDouble(evidence -> evidence.score())
+                .max()
+                .orElseThrow();
+        return new PiiSpan(span.entityType(), span.start(), span.end(), score);
+    }
+
+    private static Object transformAnalyzedScalar(
             PrivacyService privacyService,
             PrivacyContextHandle handle,
             Object scalar,
-            String analysisText,
-            List<PiiSpan> spans,
+            Map<String, List<PiiSpan>> spansByAnalysisText,
             Action action,
             PrivacyPhase phase
     ) {
+        String analysisText = ScalarAnalysisText.toAnalysisText(scalar);
+        List<PiiSpan> spans = spansByAnalysisText.getOrDefault(analysisText, List.of());
         try {
             if (action == Action.REDACT) {
                 String redacted = privacyService.redact(handle, analysisText, spans);

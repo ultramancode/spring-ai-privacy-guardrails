@@ -487,14 +487,18 @@ class PrivacyServiceTest {
 
         try (PrivacySession session = service.openSession()) {
             String first = service.tokenize(session.handle(), "Alice");
+            assertThat(analysisCalls).hasValue(1);
+
             String unchanged = service.tokenize(session.handle(), first);
+            assertThat(analysisCalls).hasValue(1);
+
             String second = service.tokenize(session.handle(), first + " Bob");
+            assertThat(analysisCalls).hasValue(2);
 
             assertThat(unchanged).isEqualTo(first);
             assertThat(second).startsWith(first).isNotEqualTo(first + " Bob");
             assertThat(second).doesNotContain("Alice", "Bob");
             assertThat(service.detokenize(session.handle(), second)).isEqualTo("Alice Bob");
-            assertThat(analysisCalls.get()).isEqualTo(2);
         }
     }
 
@@ -551,8 +555,10 @@ class PrivacyServiceTest {
 
         try (PrivacySession session = service.openSession()) {
             assertThat(service.tokenize(session.handle(), "Alice")).isEqualTo("Alice");
+            assertThat(analysisCalls).hasValue(1);
+
             assertThat(service.tokenize(session.handle(), "Alice")).isEqualTo("Alice");
-            assertThat(analysisCalls.get()).isEqualTo(1);
+            assertThat(analysisCalls).hasValue(1);
         }
     }
 

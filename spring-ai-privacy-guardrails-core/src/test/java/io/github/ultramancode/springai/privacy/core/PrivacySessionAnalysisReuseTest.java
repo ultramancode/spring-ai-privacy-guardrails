@@ -125,7 +125,7 @@ class PrivacySessionAnalysisReuseTest {
     }
 
     @Test
-    void spanLimitCountsOnlyNewAnalyzerResultsAcrossBatches() {
+    void spanLimitDoesNotRecountReusedAnalysisAcrossBatches() {
         AtomicInteger calls = new AtomicInteger();
         PiiAnalyzer analyzer = (text, options, limits) -> {
             calls.incrementAndGet();
@@ -289,7 +289,7 @@ class PrivacySessionAnalysisReuseTest {
     }
 
     @Test
-    void closeDuringRemoteAnalysisPreventsPublicationAndReturn() throws Exception {
+    void closingSessionDuringAnalysisRejectsInFlightResult() throws Exception {
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         PiiAnalyzer analyzer = (text, options, limits) -> {

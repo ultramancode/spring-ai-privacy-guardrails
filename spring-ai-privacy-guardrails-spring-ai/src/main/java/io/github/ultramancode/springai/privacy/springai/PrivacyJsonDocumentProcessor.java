@@ -64,6 +64,7 @@ final class PrivacyJsonDocumentProcessor {
         return validateAndCollect(payload, phase).analysisTexts();
     }
 
+    /** Validates JSON and collects each string or number once, including property names. */
     List<Object> validateAndCollectScalars(String payload, PrivacyPhase phase)
             throws JacksonException {
         return validateAndCollect(payload, phase).scalars();

@@ -406,7 +406,7 @@ class PrivacyOutputAdvisorTest {
         AssistantMessage toolCallMessage = AssistantMessage.builder()
                 .content("")
                 .toolCalls(List.of(new AssistantMessage.ToolCall(
-                        "Alice",
+                        "call-1",
                         "function",
                         "lookup",
                         "{}"
@@ -422,7 +422,7 @@ class PrivacyOutputAdvisorTest {
 
             assertThat(protectedResponse.chatResponse().getResult().getOutput().getToolCalls())
                     .singleElement()
-                    .satisfies(toolCall -> assertThat(toolCall.id()).isEqualTo("Alice"));
+                    .satisfies(toolCall -> assertThat(toolCall.id()).isEqualTo("call-1"));
         }
     }
 

@@ -38,6 +38,41 @@ class PrivacyJsonPayloadPolicyTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    @Test
+    void redactProtectsNestedJsonValues() {
+        List<String> analyzedTexts = new ArrayList<>();
+        PiiAnalyzer analyzer = (text, options, limits) -> {
+            analyzedTexts.add(text);
+            return List.of(new PiiSpan("PII", 0, text.length(), 1.0));
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        try (PrivacySession session = service.openSession()) {
+            PrivacyOutputPolicyExecutor.Result result = PrivacyOutputPolicyExecutor.apply(
+                    service, session.handle(), "{\"name\":\"Alice\",\"nested\":[{\"id\":123}]}",
+                    PrivacyOutputAction.REDACT);
+
+            assertThat(result.blocked()).isFalse();
+            assertThat(result.text())
+                    .isEqualTo("{\"name\":\"[REDACTED_PII]\",\"nested\":[{\"id\":\"[REDACTED_PII]\"}]}");
+            assertThat(analyzedTexts).containsExactly("Alice", "123");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"field\":1,\"field\":2}",
+            "{\"field\":1,\"\\u0066ield\":2}",
+            "[{\"field\":{\"nested\":1,\"nested\":2}}]"
+    })
+    void jsonObjectsRejectDuplicateProperties(String input) {
+        assertThatThrownBy(() -> transformIdentity(input, PrivacyProcessingLimits.defaults()))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.OUTPUT_POLICY);
+                });
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"ab", "[\"ab\"]"})
     void analysisLimitFailuresUseTheCallingBoundaryPhase(String payload) {

@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 45789c4b4a6c143f00b2877180697f3aa3d3d4303a2e53690cc8ef964b2deb78 -->
+<!-- i18n-source-sha256: 41891f9a1b72002d0895e524f01f67246c47efacaa00dd51eff9317cf1ebfe47 -->
 
 ## 책임 범위
 
@@ -241,8 +241,6 @@ sequenceDiagram
 도구에 대한 원문 값 공개는 기본적으로 허용되지 않습니다. 도구 등록과 원문 값 공개
 권한은 별개이며, 공개할 엔티티 유형을 명시한 도구에만 실행 직전에 해당 원문 값을
 복원합니다.
-
-모델에 전달되는 도구 설명과 JSON 스키마도 개인정보를 검사합니다.
 
 보호된 `ChatClient`의 표준 도구 경로에서는 `PrivacyToolCallbackFactory`로 감싸지 않은
 콜백을 오류로 처리합니다. 사용자 정의 `ToolCallingManager`나 `ToolCallbackResolver`를

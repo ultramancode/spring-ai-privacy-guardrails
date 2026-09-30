@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -242,10 +241,13 @@ class PrivacyServiceTest {
 
     @Test
     void tokenizeValueTreeProtectsNestedJsonLikeStringValues() {
-        PrivacyService service = new PrivacyService(
-                List.of(personAnalyzer()),
-                PiiAnalysisOptions.defaults()
-        );
+        List<String> analyzedTexts = new ArrayList<>();
+        PiiAnalyzer personAnalyzer = personAnalyzer();
+        PiiAnalyzer analyzer = (text, options, limits) -> {
+            analyzedTexts.add(text);
+            return personAnalyzer.analyze(text, options, limits);
+        };
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
             Object protectedInput = service.tokenizeValueTree(session.handle(), Map.of(
@@ -258,6 +260,7 @@ class PrivacyServiceTest {
                     "name", "Alice",
                     "nested", List.of(Map.of("owner", "Alice"), 7)
             ));
+            assertThat(analyzedTexts).containsExactlyInAnyOrder("Alice", "7");
         }
     }
 
@@ -359,46 +362,6 @@ class PrivacyServiceTest {
                     .isEqualTo(token);
             assertThat(service.detokenizeValueTree(session.handle(), token, Set.of("SENSITIVE")))
                     .isEqualTo(123456);
-        }
-    }
-
-    @Test
-    void recursiveTransformsProtectAndRestoreStringMapKeys() {
-        PrivacyService service = new PrivacyService(
-                List.of(personAnalyzer()),
-                PiiAnalysisOptions.defaults()
-        );
-
-        try (PrivacySession session = service.openSession()) {
-            Object protectedInput = service.tokenizeValueTree(session.handle(), Map.of("Alice", "safe"));
-
-            assertThat(protectedInput.toString()).doesNotContain("Alice");
-            assertThat(service.detokenizeValueTree(session.handle(), protectedInput))
-                    .isEqualTo(Map.of("Alice", "safe"));
-        }
-    }
-
-    @Test
-    void recursiveTransformsFailClosedWhenMapKeysCollide() {
-        PrivacyService service = new PrivacyService(
-                List.of(personAnalyzer()),
-                PiiAnalysisOptions.defaults()
-        );
-
-        try (PrivacySession session = service.openSession()) {
-            String token = service.tokenize(session.handle(), "Alice");
-            Map<String, String> input = new LinkedHashMap<>();
-            input.put("Alice", "first");
-            input.put(token, "second");
-
-            assertThatThrownBy(() -> service.tokenizeValueTree(session.handle(), input))
-                    .isInstanceOf(PrivacyGuardrailException.class)
-                    .hasMessageContaining("duplicate map keys")
-                    .hasMessageNotContaining("Alice");
-            assertThatThrownBy(() -> service.detokenizeValueTree(session.handle(), input))
-                    .isInstanceOf(PrivacyGuardrailException.class)
-                    .hasMessageContaining("duplicate map keys")
-                    .hasMessageNotContaining("Alice");
         }
     }
 

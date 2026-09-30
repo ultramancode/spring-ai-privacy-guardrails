@@ -57,7 +57,7 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
         }
         this.expectedFactoryProvenance = expectedFactory == null ? null : expectedFactory.provenance();
         this.messageTransformer = new PrivacyMessageTransformer(privacyService);
-        this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
+        this.modelControlValidator = new PrivacyModelControlValidator();
         this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
     }
 
@@ -78,7 +78,6 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
                     "Privacy context is unknown or already closed"
             );
         }
-        this.modelControlValidator.validateOutputConfigurationContextValues(handle, request);
         this.modelControlValidator.validateHistoryToolControlStructure(request);
         PrivacyToolExecutionContextSupport.requireCallbacksMatchValidatedSnapshot(request);
         Set<String> registeredToolNames = request.prompt().getOptions() instanceof ToolCallingChatOptions
@@ -88,7 +87,6 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
                         this.expectedFactoryProvenance
                 )
                 : Set.of();
-        this.modelControlValidator.validateModelVisibleToolDefinitions(handle, request);
         ChatClientRequest tokenized = this.messageTransformer.tokenize(handle, request);
         ChatClientRequest protectedRequest = PrivacyToolExecutionContextSupport.attachRegisteredToolNames(
                 tokenized,

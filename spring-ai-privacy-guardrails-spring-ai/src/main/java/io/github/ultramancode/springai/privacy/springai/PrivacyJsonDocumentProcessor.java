@@ -64,7 +64,7 @@ final class PrivacyJsonDocumentProcessor {
         return validateAndCollect(payload, phase).analysisTexts();
     }
 
-    /** Validates JSON and collects each string or number once, including property names. */
+    /** Validates JSON and collects each string or numeric value once. */
     List<Object> validateAndCollectScalars(String payload, PrivacyPhase phase)
             throws JacksonException {
         return validateAndCollect(payload, phase).scalars();
@@ -83,7 +83,9 @@ final class PrivacyJsonDocumentProcessor {
                 if (token != JsonToken.END_OBJECT && token != JsonToken.END_ARRAY) {
                     budget.acceptNode();
                 }
-                if (token == JsonToken.PROPERTY_NAME || token == JsonToken.VALUE_STRING) {
+                if (token == JsonToken.PROPERTY_NAME) {
+                    budget.acceptInputCharacters(parser.getString().length());
+                } else if (token == JsonToken.VALUE_STRING) {
                     String scalar = parser.getString();
                     uniqueScalars.add(scalar);
                     budget.acceptInputCharacters(scalar.length());
@@ -201,7 +203,7 @@ final class PrivacyJsonDocumentProcessor {
             ProcessingBudget budget
     ) throws JacksonException {
         generator.writeStartObject();
-        Set<String> transformedNames = new HashSet<>();
+        Set<String> propertyNames = new HashSet<>();
         while (true) {
             JsonToken token = parser.nextToken();
             if (token == JsonToken.END_OBJECT) {
@@ -211,20 +213,13 @@ final class PrivacyJsonDocumentProcessor {
             if (token != JsonToken.PROPERTY_NAME) {
                 throw new InvalidJsonPayload();
             }
-            String originalName = parser.getString();
+            String name = parser.getString();
             budget.acceptNode();
-            budget.acceptInputCharacters(originalName.length());
-            Object transformedName = scalarTransformer.apply(originalName);
-            if (!(transformedName instanceof String name)) {
+            budget.acceptInputCharacters(name.length());
+            if (!propertyNames.add(name)) {
                 throw PrivacyJsonPayloadTransformer.transformationConflict(
                         phase,
-                        "JSON property protection changed its scalar type"
-                );
-            }
-            if (!transformedNames.add(name)) {
-                throw PrivacyJsonPayloadTransformer.transformationConflict(
-                        phase,
-                        "PII transformation produced duplicate JSON properties"
+                        "JSON payload contains duplicate properties"
                 );
             }
             generator.writeName(name);

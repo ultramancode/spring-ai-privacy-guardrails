@@ -189,7 +189,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 responseInspectionLimits,
                 "responseInspectionLimits must not be null"
         );
-        this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
+        this.modelControlValidator = new PrivacyModelControlValidator();
         this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
         this.order = order;
     }

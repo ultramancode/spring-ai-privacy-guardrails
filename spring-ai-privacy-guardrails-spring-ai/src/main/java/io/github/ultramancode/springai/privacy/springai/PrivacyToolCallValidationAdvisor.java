@@ -105,7 +105,7 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
         );
         this.usesExplicitResponseInspectionLimits = usesExplicitResponseInspectionLimits;
         this.order = order;
-        this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
+        this.modelControlValidator = new PrivacyModelControlValidator();
         this.toolSearchArgumentProtector = new PrivacyToolSearchArgumentProtector(privacyService);
     }
 

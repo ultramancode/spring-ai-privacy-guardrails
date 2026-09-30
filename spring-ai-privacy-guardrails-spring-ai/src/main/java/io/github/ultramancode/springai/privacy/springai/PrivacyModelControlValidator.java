@@ -1,38 +1,25 @@
 package io.github.ultramancode.springai.privacy.springai;
 
-import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
-import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import org.springframework.ai.chat.client.ChatClientAttributes;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.definition.ToolDefinition;
 
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * Validates model-visible tool control fields, tool definitions, output-format configuration,
- * and requested tool calls before Spring AI interprets or executes them.
+ * Validates tool control structure and registered tool names before Spring AI executes calls.
  */
 final class PrivacyModelControlValidator {
 
     private static final String UNKNOWN_TOOL_MESSAGE =
             "Model requested a tool outside the registered privacy boundary";
-
-    private final PrivacyService privacyService;
-
-    PrivacyModelControlValidator(PrivacyService privacyService) {
-        this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
-    }
 
     void validateHistoryToolControlStructure(ChatClientRequest request) {
         Objects.requireNonNull(request, "request must not be null");
@@ -48,35 +35,6 @@ final class PrivacyModelControlValidator {
                 }
             }
         }
-    }
-
-    void validateModelVisibleToolDefinitions(PrivacyContextHandle handle, ChatClientRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
-        if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions toolOptions)
-                || toolOptions.getToolCallbacks() == null) {
-            return;
-        }
-        for (ToolCallback callback : toolOptions.getToolCallbacks()) {
-            ToolDefinition definition = callback.getToolDefinition();
-            rejectPiiPayload(handle, definition.description(), false, "Tool definition rejected by privacy guardrail");
-            rejectPiiPayload(handle, definition.inputSchema(), true, "Tool definition rejected by privacy guardrail");
-        }
-    }
-
-    void validateOutputConfigurationContextValues(PrivacyContextHandle handle, ChatClientRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
-        validateOutputConfigurationContextValue(
-                handle,
-                request,
-                ChatClientAttributes.OUTPUT_FORMAT.getKey(),
-                false
-        );
-        validateOutputConfigurationContextValue(
-                handle,
-                request,
-                ChatClientAttributes.STRUCTURED_OUTPUT_SCHEMA.getKey(),
-                true
-        );
     }
 
     void validateResponseToolCalls(
@@ -118,52 +76,6 @@ final class PrivacyModelControlValidator {
         for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
             requireToolCall(toolCall);
         }
-    }
-
-    private void rejectPiiPayload(
-            PrivacyContextHandle handle,
-            String value,
-            boolean requireValidJson,
-            String safeMessage
-    ) {
-        if (value != null && PrivacyJsonPayloadTransformer.containsPii(
-                this.privacyService,
-                handle,
-                value,
-                PrivacyPhase.TOKENIZATION,
-                requireValidJson
-        )) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.TRANSFORMATION_CONFLICT,
-                    PrivacyPhase.TOKENIZATION,
-                    safeMessage
-            );
-        }
-    }
-
-    private void validateOutputConfigurationContextValue(
-            PrivacyContextHandle handle,
-            ChatClientRequest request,
-            String contextKey,
-            boolean requireValidJson
-    ) {
-        Object value = request.context().get(contextKey);
-        if (value == null) {
-            return;
-        }
-        if (!(value instanceof String text)) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.TRANSFORMATION_CONFLICT,
-                    PrivacyPhase.TOKENIZATION,
-                    "Model output configuration is invalid"
-            );
-        }
-        rejectPiiPayload(
-                handle,
-                text,
-                requireValidJson,
-                "Model output configuration rejected by privacy guardrail"
-        );
     }
 
     private void validateToolCall(

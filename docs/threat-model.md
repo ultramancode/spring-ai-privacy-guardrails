@@ -53,7 +53,7 @@ opaque tokens for each tool.
 | Threat | Library control |
 | --- | --- |
 | Unprotected PII in model input or final output | Detected PII in supported model input text is replaced with opaque tokens before the model call. When output protection is enabled, the configured policy applies to the final response body and supported reasoning text. |
-| Inspection bypass through structured values, streaming, or `returnDirect` | JSON and supported value structures are inspected under size and complexity bounds. When output protection is enabled, streaming responses are collected through completion for inspection, and the configured output policy also applies to `returnDirect` results. |
+| Inspection bypass through structured values, streaming, or `returnDirect` | String and numeric values in JSON and supported value structures are inspected under size and complexity bounds. When output protection is enabled, streaming responses are collected through completion for inspection, and the configured output policy also applies to `returnDirect` results. |
 | Inspection bypass through unsupported message types | Unsupported `Message` implementations cause an error instead of being sent to the model. |
 
 **Scope and considerations**

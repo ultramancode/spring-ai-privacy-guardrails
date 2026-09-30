@@ -85,7 +85,7 @@ class PrivacyChatClientIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void structuredOutputWorksWithProtectedMessages(boolean nativeOutput) {
+    void structuredOutputWorksWhenMessagesArePrivacyProtected(boolean nativeOutput) {
         PrivacyService service = TestPrivacyServices.privacyService();
         RecordingPromptModel model = new RecordingPromptModel();
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
@@ -113,7 +113,9 @@ class PrivacyChatClientIntegrationTest {
         }
 
         assertThat(request.call().entity(converter)).isEqualTo("ok");
-        assertThat(model.lastPrompt()).containsPattern(PERSON_TOKEN).doesNotContain("Find Alice");
+        assertThat(model.lastPrompt())
+                .containsPattern(PERSON_TOKEN)
+                .doesNotContain("Alice");
         if (nativeOutput) {
             assertThat(model.lastOptions()).isInstanceOfSatisfying(StructuredOutputChatOptions.class,
                     options -> assertThat(options.getOutputSchema()).isEqualTo(converter.getJsonSchema()));

@@ -34,7 +34,7 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
     public static final int DEFAULT_ORDER = ToolCallingAdvisor.DEFAULT_ORDER + 1;
 
     private final PrivacyService privacyService;
-    private final PrivacyModelControlValidator modelControlValidator;
+    private final PrivacyToolControlValidator toolControlValidator;
     private final PrivacyToolSearchArgumentProtector toolSearchArgumentProtector;
     private final PrivacyResponseInspectionLimits responseInspectionLimits;
     private final boolean usesExplicitResponseInspectionLimits;
@@ -105,7 +105,7 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
         );
         this.usesExplicitResponseInspectionLimits = usesExplicitResponseInspectionLimits;
         this.order = order;
-        this.modelControlValidator = new PrivacyModelControlValidator();
+        this.toolControlValidator = new PrivacyToolControlValidator();
         this.toolSearchArgumentProtector = new PrivacyToolSearchArgumentProtector(privacyService);
     }
 
@@ -199,7 +199,7 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
             throw missingValidatedContext();
         }
         Set<String> registeredToolNames = PrivacyToolExecutionContextSupport.requireRegisteredToolNames(response);
-        this.modelControlValidator.validateResponseToolCalls(
+        this.toolControlValidator.validateResponseToolCalls(
                 response,
                 registeredToolNames
         );

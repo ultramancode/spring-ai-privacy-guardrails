@@ -360,8 +360,7 @@ boundary that specifically requires structured JSON.
 
 For structured JSON, the library preserves property names and analyzes string
 and numeric values. It skips string values that are empty or contain only
-whitespace. Each value is analyzed independently, and the start and end positions
-of detected text are relative to that value's text.
+whitespace. Detected text positions are relative to the value's text.
 
 For example, `{"name":"Alice","city":"Seoul"}` produces two analysis targets:
 `Alice` and `Seoul`. External request counts and processing

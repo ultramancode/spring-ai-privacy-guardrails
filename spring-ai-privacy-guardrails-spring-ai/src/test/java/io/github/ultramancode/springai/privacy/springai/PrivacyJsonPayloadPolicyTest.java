@@ -40,11 +40,8 @@ class PrivacyJsonPayloadPolicyTest {
 
     @Test
     void redactProtectsNestedJsonValues() {
-        List<String> analyzedTexts = new ArrayList<>();
-        PiiAnalyzer analyzer = (text, options, limits) -> {
-            analyzedTexts.add(text);
-            return List.of(new PiiSpan("PII", 0, text.length(), 1.0));
-        };
+        PiiAnalyzer analyzer = (text, options, limits) ->
+                List.of(new PiiSpan("PII", 0, text.length(), 1.0));
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
@@ -55,22 +52,25 @@ class PrivacyJsonPayloadPolicyTest {
             assertThat(result.blocked()).isFalse();
             assertThat(result.text())
                     .isEqualTo("{\"name\":\"[REDACTED_PII]\",\"nested\":[{\"id\":\"[REDACTED_PII]\"}]}");
-            assertThat(analyzedTexts).containsExactly("Alice", "123");
         }
     }
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "{\"field\":1,\"field\":2}",
-            "{\"field\":1,\"\\u0066ield\":2}",
-            "[{\"field\":{\"nested\":1,\"nested\":2}}]"
+            "{\"value\":\"Alice\",\"value\":821012345678}",
+            "{\"value\":\"Alice\",\"\\u0076alue\":821012345678}"
     })
-    void jsonObjectsRejectDuplicateProperties(String input) {
-        assertThatThrownBy(() -> transformIdentity(input, PrivacyProcessingLimits.defaults()))
-                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
-                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
-                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.OUTPUT_POLICY);
-                });
+    void redactPreservesDuplicatePropertiesAndProtectsTheirValues(String input) {
+        PrivacyService service = TestPrivacyServices.privacyService();
+
+        try (PrivacySession session = service.openSession()) {
+            PrivacyOutputPolicyExecutor.Result result = PrivacyOutputPolicyExecutor.apply(
+                    service, session.handle(), input, PrivacyOutputAction.REDACT);
+
+            assertThat(result.blocked()).isFalse();
+            assertThat(result.text()).isEqualTo(
+                    "{\"value\":\"[REDACTED_PERSON]\",\"value\":\"[REDACTED_PHONE_NUMBER]\"}");
+        }
     }
 
     @ParameterizedTest
@@ -224,26 +224,24 @@ class PrivacyJsonPayloadPolicyTest {
     }
 
     @Test
-    void blockDetectsEscapedStringAndExponentNumericPii() {
+    void blockDetectsPiiInJsonValues() {
         PrivacyService service = TestPrivacyServices.privacyService();
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
+            for (String input : List.of(
                     "{\"email\":\"alice\\u0040example.com\"}",
-                    PrivacyOutputAction.BLOCK
-            ).blocked()).isTrue();
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service,
-                    session.handle(),
                     "{\"phone\":8.21012345678e11}",
-                    PrivacyOutputAction.BLOCK
-            ).blocked()).isTrue();
+                    "{\"value\":\"Alice\",\"value\":\"safe\"}",
+                    "{\"value\":\"safe\",\"value\":\"Alice\"}"
+            )) {
+                assertThat(PrivacyOutputPolicyExecutor.apply(
+                        service, session.handle(), input, PrivacyOutputAction.BLOCK
+                ).blocked()).isTrue();
+            }
             assertThat(PrivacyOutputPolicyExecutor.apply(
                     service,
                     session.handle(),
-                    "{\"revision\":1e3}",
+                    "{\"revision\":1e3,\"revision\":2e3}",
                     PrivacyOutputAction.BLOCK
             ).blocked()).isFalse();
         }

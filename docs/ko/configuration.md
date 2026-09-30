@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 067bb9f7226793d4e58bc6cbbc0de2fb464c8ad8137c88fdb32da88082a12f73 -->
+<!-- i18n-source-sha256: 143623d79be1be4fbe4afe2bf65e1c21f14150e33b02bae6238756ce21147737 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -339,8 +339,8 @@ spring:
 있습니다. 구조화된 JSON이 반드시 필요한 경계에서만 잘못된 JSON을 거부합니다.
 
 구조화된 JSON에서는 속성 이름을 보존하고 문자열 값과 숫자 값을 분석합니다.
-비어 있거나 공백으로만 이루어진 문자열 값은 분석하지 않습니다. 각 값은 독립적으로
-분석하며, 탐지한 문자열의 시작·끝 위치는 해당 값의 텍스트를 기준으로 계산합니다.
+비어 있거나 공백으로만 이루어진 문자열 값은 분석하지 않습니다. 탐지한 문자열의
+시작·끝 위치는 해당 값의 텍스트를 기준으로 계산합니다.
 
 예를 들어 `{"name":"Alice","city":"Seoul"}`에서는 `Alice`와 `Seoul`이
 각각 분석 대상이 됩니다. 외부 요청 횟수와 처리 비용은 선택한 분석기와

@@ -16,7 +16,7 @@ import java.util.Set;
 /**
  * Validates tool control structure and registered tool names before Spring AI executes calls.
  */
-final class PrivacyModelControlValidator {
+final class PrivacyToolControlValidator {
 
     private static final String UNKNOWN_TOOL_MESSAGE =
             "Model requested a tool outside the registered privacy boundary";

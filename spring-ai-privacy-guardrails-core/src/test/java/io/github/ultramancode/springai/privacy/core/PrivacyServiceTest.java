@@ -241,13 +241,10 @@ class PrivacyServiceTest {
 
     @Test
     void tokenizeValueTreeProtectsNestedJsonLikeStringValues() {
-        List<String> analyzedTexts = new ArrayList<>();
-        PiiAnalyzer personAnalyzer = personAnalyzer();
-        PiiAnalyzer analyzer = (text, options, limits) -> {
-            analyzedTexts.add(text);
-            return personAnalyzer.analyze(text, options, limits);
-        };
-        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+        PrivacyService service = new PrivacyService(
+                List.of(personAnalyzer()),
+                PiiAnalysisOptions.defaults()
+        );
 
         try (PrivacySession session = service.openSession()) {
             Object protectedInput = service.tokenizeValueTree(session.handle(), Map.of(
@@ -260,7 +257,6 @@ class PrivacyServiceTest {
                     "name", "Alice",
                     "nested", List.of(Map.of("owner", "Alice"), 7)
             ));
-            assertThat(analyzedTexts).containsExactlyInAnyOrder("Alice", "7");
         }
     }
 

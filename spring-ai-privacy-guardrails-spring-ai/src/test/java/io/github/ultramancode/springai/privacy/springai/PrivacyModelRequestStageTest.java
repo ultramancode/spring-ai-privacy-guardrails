@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PrivacyModelRequestStageTest {
 
     @Test
-    void stageTokenizesRetrievedContent() {
+    void stageTokenizesMessageContent() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, null, PrivacyEnforcementObserver.noop());
 
@@ -30,7 +30,7 @@ class PrivacyModelRequestStageTest {
             ChatClientRequest request = activeRequest(
                     new ChatClientRequest(
                             new Prompt(List.of(new UserMessage("Retrieved customer: Alice"))),
-                            Map.of("rag", true)
+                            Map.of()
                     ),
                     session.handle()
             );

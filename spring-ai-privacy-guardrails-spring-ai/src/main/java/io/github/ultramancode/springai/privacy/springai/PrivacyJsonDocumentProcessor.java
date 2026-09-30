@@ -16,7 +16,6 @@ import tools.jackson.core.json.JsonFactory;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +63,7 @@ final class PrivacyJsonDocumentProcessor {
         return validateAndCollect(payload, phase).analysisTexts();
     }
 
-    /** Validates JSON and collects each string or numeric value once. */
+    /** Validates JSON and collects distinct string and numeric values. */
     List<Object> validateAndCollectScalars(String payload, PrivacyPhase phase)
             throws JacksonException {
         return validateAndCollect(payload, phase).scalars();
@@ -203,7 +202,6 @@ final class PrivacyJsonDocumentProcessor {
             ProcessingBudget budget
     ) throws JacksonException {
         generator.writeStartObject();
-        Set<String> propertyNames = new HashSet<>();
         while (true) {
             JsonToken token = parser.nextToken();
             if (token == JsonToken.END_OBJECT) {
@@ -213,16 +211,10 @@ final class PrivacyJsonDocumentProcessor {
             if (token != JsonToken.PROPERTY_NAME) {
                 throw new InvalidJsonPayload();
             }
-            String name = parser.getString();
+            String propertyName = parser.getString();
             budget.acceptNode();
-            budget.acceptInputCharacters(name.length());
-            if (!propertyNames.add(name)) {
-                throw PrivacyJsonPayloadTransformer.transformationConflict(
-                        phase,
-                        "JSON payload contains duplicate properties"
-                );
-            }
-            generator.writeName(name);
+            budget.acceptInputCharacters(propertyName.length());
+            generator.writeName(propertyName);
             JsonToken valueToken = parser.nextToken();
             if (valueToken == null) {
                 throw new InvalidJsonPayload();

@@ -78,7 +78,7 @@ class PrivacySessionTest {
     }
 
     @Test
-    void detokenizeValueTreeAppliesTheSameEntityScopeToKeysAndNestedValues() {
+    void detokenizeValueTreeAppliesEntityScopeToNestedValues() {
         PrivacyService service = privacyService();
 
         try (PrivacySession session = service.openSession()) {
@@ -96,12 +96,12 @@ class PrivacySessionTest {
 
             Object disclosed = service.detokenizeValueTree(
                     session.handle(),
-                    Map.of(personToken, List.of(personToken, emailToken)),
+                    Map.of("contact", List.of(personToken, emailToken)),
                     Set.of("PERSON")
             );
 
             assertThat(disclosed).isEqualTo(Map.of(
-                    "Alice",
+                    "contact",
                     List.of("Alice", emailToken)
             ));
         }

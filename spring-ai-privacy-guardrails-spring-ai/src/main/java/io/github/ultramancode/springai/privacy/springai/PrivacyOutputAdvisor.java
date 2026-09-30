@@ -47,7 +47,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
     private final PrivacyOutputAction action;
     private final String blockExceptionMessage;
     private final PrivacyResponseInspectionLimits responseInspectionLimits;
-    private final PrivacyModelControlValidator modelControlValidator;
+    private final PrivacyToolControlValidator toolControlValidator;
     private final PrivacyEnforcementNotifier enforcementNotifier;
     private final int order;
 
@@ -189,7 +189,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                 responseInspectionLimits,
                 "responseInspectionLimits must not be null"
         );
-        this.modelControlValidator = new PrivacyModelControlValidator(privacyService);
+        this.toolControlValidator = new PrivacyToolControlValidator();
         this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
         this.order = order;
     }
@@ -304,7 +304,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
             AssistantMessage message,
             boolean returnDirect
     ) {
-        this.modelControlValidator.validateToolCallStructure(message);
+        this.toolControlValidator.validateToolCallStructure(message);
         return PrivacyMessageTransformer.transformAssistantMessage(
                 message,
                 text -> protectText(handle, text, returnDirect)

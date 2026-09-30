@@ -7,7 +7,10 @@ import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientAttributes;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
@@ -27,6 +30,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.converter.StructuredOutputConverter;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.StructuredOutputChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -79,8 +83,9 @@ class PrivacyChatClientIntegrationTest {
         assertThat(service.activeSessionCount()).isZero();
     }
 
-    @Test
-    void structuredOutputFormatAddedBySpringIsRejectedBeforeTheTerminalModelAdvisor() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void structuredOutputWorksWhenMessagesArePrivacyProtected(boolean nativeOutput) {
         PrivacyService service = TestPrivacyServices.privacyService();
         RecordingPromptModel model = new RecordingPromptModel();
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
@@ -88,7 +93,12 @@ class PrivacyChatClientIntegrationTest {
         StructuredOutputConverter<String> converter = new StructuredOutputConverter<>() {
             @Override
             public String getFormat() {
-                return "Return the record for Alice";
+                return "Return a customer record";
+            }
+
+            @Override
+            public String getJsonSchema() {
+                return "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}";
             }
 
             @Override
@@ -97,11 +107,22 @@ class PrivacyChatClientIntegrationTest {
             }
         };
 
-        assertThatThrownBy(() -> chatClient.prompt().user("hello").call().entity(converter))
-                .isInstanceOf(PrivacyGuardrailException.class)
-                .hasMessage("Model output configuration rejected by privacy guardrail")
-                .hasMessageNotContaining("Alice");
-        assertThat(model.lastPrompt()).isNull();
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().user("Find Alice");
+        if (nativeOutput) {
+            request.advisors(advisors -> advisors.param(ChatClientAttributes.STRUCTURED_OUTPUT_NATIVE.getKey(), true));
+        }
+
+        assertThat(request.call().entity(converter)).isEqualTo("ok");
+        assertThat(model.lastPrompt())
+                .containsPattern(PERSON_TOKEN)
+                .doesNotContain("Alice");
+        if (nativeOutput) {
+            assertThat(model.lastOptions()).isInstanceOfSatisfying(StructuredOutputChatOptions.class,
+                    options -> assertThat(options.getOutputSchema()).isEqualTo(converter.getJsonSchema()));
+            assertThat(model.lastPrompt()).doesNotContain(converter.getFormat());
+        } else {
+            assertThat(model.lastPrompt()).contains(converter.getFormat());
+        }
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -715,9 +736,11 @@ class PrivacyChatClientIntegrationTest {
     private static final class RecordingPromptModel implements ChatModel {
 
         private volatile String lastPrompt;
+        private volatile ChatOptions lastOptions;
 
         @Override
         public ChatResponse call(Prompt prompt) {
+            this.lastOptions = prompt.getOptions();
             this.lastPrompt = prompt.getInstructions().stream()
                     .map(Message::getText)
                     .filter(Objects::nonNull)
@@ -731,8 +754,17 @@ class PrivacyChatClientIntegrationTest {
             return Flux.just(call(prompt));
         }
 
+        @Override
+        public ChatOptions getOptions() {
+            return StructuredOutputChatOptions.builder().build();
+        }
+
         String lastPrompt() {
             return this.lastPrompt;
+        }
+
+        ChatOptions lastOptions() {
+            return this.lastOptions;
         }
     }
 

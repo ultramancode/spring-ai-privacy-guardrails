@@ -106,9 +106,6 @@ ChatClient derivedClient = protectedClient.mutate().build();
 Copying a protected `ChatClient.Builder` with `clone()` also preserves its
 configuration, so do not reapply `PrivacyChatClientConfigurer` to the copy.
 
-Tool descriptions and JSON schemas are checked for PII before they are sent to
-the model.
-
 The boundary supports the standard Spring AI `UserMessage`, `SystemMessage`,
 `AssistantMessage`, and `ToolResponseMessage` classes, plus
 `DeepSeekAssistantMessage`. Other provider-specific `Message` subclasses and
@@ -361,13 +358,12 @@ Ordinary messages and tool results can still receive plain-text privacy
 protection when they are not JSON. Malformed JSON is rejected only at a
 boundary that specifically requires structured JSON.
 
-For structured JSON, the library analyzes property names, string values, and
-numeric values. It skips property names and string values that are empty or
-contain only whitespace. Each item is analyzed independently, and the start
-and end positions of detected text are relative to that item's text.
+For structured JSON, the library preserves property names and analyzes string
+and numeric values. It skips string values that are empty or contain only
+whitespace. Detected text positions are relative to the value's text.
 
-For example, `{"name":"Alice","city":"Seoul"}` produces four analysis targets:
-`name`, `Alice`, `city`, and `Seoul`. External request counts and processing
+For example, `{"name":"Alice","city":"Seoul"}` produces two analysis targets:
+`Alice` and `Seoul`. External request counts and processing
 costs depend on the selected analyzer and the amount of text.
 
 ### Custom Analyzers

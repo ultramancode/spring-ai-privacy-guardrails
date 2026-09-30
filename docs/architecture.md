@@ -266,8 +266,6 @@ permission to receive original values are separate concerns: only tools
 configured for specific entity types receive those originals immediately before
 execution.
 
-Tool descriptions and JSON schemas sent to the model are also inspected for PII.
-
 On a protected `ChatClient`'s standard tool path, callbacks that are not wrapped
 by `PrivacyToolCallbackFactory` are rejected. Separate execution paths that use
 a custom `ToolCallingManager` or `ToolCallbackResolver` are outside the automatic

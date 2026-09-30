@@ -133,27 +133,6 @@ class PrivacyValueTreeContractTest {
     }
 
     @Test
-    void detokenizationKeepsMapKeysAsStringsForNumericTokens() {
-        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
-
-        try (PrivacySession session = service.openSession()) {
-            String numericToken = service.tokenizeScalar(
-                    session.handle(),
-                    123,
-                    List.of(new PiiSpan("NATIONAL_ID", 0, 3, 1.0))
-            ).toString();
-
-            Object restored = service.detokenizeValueTree(
-                    session.handle(),
-                    Map.of(numericToken, "safe")
-            );
-
-            assertThat(restored).isEqualTo(Map.of("123", "safe"));
-            assertThat(((Map<?, ?>) restored).keySet()).allMatch(String.class::isInstance);
-        }
-    }
-
-    @Test
     void tokenizationValidatesTheWholeTreeBeforeAnalyzingValues() {
         AtomicInteger analysisCalls = new AtomicInteger();
         PiiAnalyzer analyzer = (text, options, processingLimits) -> {

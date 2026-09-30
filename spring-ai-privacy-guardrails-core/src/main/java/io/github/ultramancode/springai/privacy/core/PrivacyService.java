@@ -368,7 +368,7 @@ public final class PrivacyService {
     }
 
     /**
-     * Restores all current-session tokens in a JSON-compatible value tree, including map keys.
+     * Restores current-session tokens in the values of a JSON-compatible tree.
      * Accepted values are {@code null}, booleans, strings, numbers of type
      * {@code Byte}, {@code Short}, {@code Integer}, {@code Long}, {@code BigInteger},
      * {@code BigDecimal}, {@code Float}, or {@code Double}, lists, and maps with
@@ -414,7 +414,7 @@ public final class PrivacyService {
     }
 
     /**
-     * Tokenizes PII found in the string keys, string values, and numbers of a value tree.
+     * Tokenizes PII found in the string and numeric values of a value tree.
      * {@link java.math.BigDecimal} values are analyzed using {@code toPlainString()}.
      * Other numbers use {@code toString()}.
      * A protected number becomes an opaque token and is restored to its original

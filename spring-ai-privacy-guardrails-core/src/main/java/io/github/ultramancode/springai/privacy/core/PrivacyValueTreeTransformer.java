@@ -208,23 +208,10 @@ final class PrivacyValueTreeTransformer {
             Map<String, Object> transformedMap = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String key = (String) entry.getKey();
-                String transformedKey = this.textTransformer.detokenize(
-                        key,
-                        context,
-                        allowedEntityTypes
-                );
-                budget.acceptOutput(transformedKey);
-                putTransformedEntry(
-                        transformedMap,
-                        transformedKey,
-                        detokenizeValidatedValue(
-                                entry.getValue(),
-                                context,
-                                allowedEntityTypes,
-                                budget
-                        ),
-                        PrivacyPhase.DETOKENIZATION
-                );
+                budget.acceptOutput(key);
+                Object transformedValue = detokenizeValidatedValue(
+                        entry.getValue(), context, allowedEntityTypes, budget);
+                transformedMap.put(key, transformedValue);
             }
             return transformedMap;
         }
@@ -261,13 +248,9 @@ final class PrivacyValueTreeTransformer {
             Map<String, Object> transformedMap = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String key = (String) entry.getKey();
-                String transformedKey = tokenizeText(key, context, budget);
-                putTransformedEntry(
-                        transformedMap,
-                        transformedKey,
-                        tokenizeValidatedValue(entry.getValue(), context, budget),
-                        PrivacyPhase.TOKENIZATION
-                );
+                budget.acceptOutput(key);
+                Object transformedValue = tokenizeValidatedValue(entry.getValue(), context, budget);
+                transformedMap.put(key, transformedValue);
             }
             return transformedMap;
         }
@@ -337,22 +320,6 @@ final class PrivacyValueTreeTransformer {
         String token = context.tokenForNumber(entityType, number);
         this.textTransformer.requireOutputLength(token.length(), PrivacyPhase.TOKENIZATION);
         return token;
-    }
-
-    private static void putTransformedEntry(
-            Map<String, Object> target,
-            String key,
-            Object value,
-            PrivacyPhase phase
-    ) {
-        if (target.containsKey(key)) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.TRANSFORMATION_CONFLICT,
-                    phase,
-                    "PII transformation produced duplicate map keys"
-            );
-        }
-        target.put(key, value);
     }
 
     private static final class TransformationBudget {

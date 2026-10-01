@@ -484,6 +484,29 @@ class PrivacyServiceTest {
     }
 
     @Test
+    void transformsUnorderedSuppliedSpansAroundAnOwnedToken() {
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+
+        try (PrivacySession session = service.openSession()) {
+            String aliceToken = service.tokenize(session.handle(), "Alice",
+                    List.of(new PiiSpan("PERSON", 0, 5, 1.0)));
+            String input = "Bob " + aliceToken + " Carol|Dave";
+            int separator = input.indexOf('|');
+            List<PiiSpan> spans = List.of(
+                    new PiiSpan("PERSON", separator + 1, input.length(), 1.0),
+                    new PiiSpan("PII", 0, separator, 1.0)
+            );
+
+            String tokenized = service.tokenize(session.handle(), input, spans);
+
+            assertThat(tokenized).contains(aliceToken).doesNotContain("Alice", "Bob", "Carol", "Dave");
+            assertThat(service.detokenize(session.handle(), tokenized)).isEqualTo("Bob Alice Carol|Dave");
+            assertThat(service.redact(session.handle(), input, spans))
+                    .isEqualTo("[REDACTED_PII]" + aliceToken + "[REDACTED_PII]|[REDACTED_PERSON]");
+        }
+    }
+
+    @Test
     void sessionAwareInspectionIgnoresKnownTokensButFindsAdjacentPii() {
         PiiAnalyzer broadAnalyzer = (text, options, processingLimits) -> List.of(new PiiSpan("PII", 0, text.length(), 0.95));
         PrivacyService service = new PrivacyService(List.of(broadAnalyzer), PiiAnalysisOptions.defaults());

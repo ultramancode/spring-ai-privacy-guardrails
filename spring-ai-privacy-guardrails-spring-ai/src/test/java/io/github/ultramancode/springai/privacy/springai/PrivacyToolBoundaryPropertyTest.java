@@ -43,7 +43,9 @@ class PrivacyToolBoundaryPropertyTest {
             ));
 
             try (PrivacySession session = service.openSession()) {
-                String result = wrapped.call(rawInput, PrivacyToolContextFactory.create(session.handle()));
+                ToolContext toolContext = new ToolContext(Map.of(
+                        PrivacyRequestContextSupport.CONTEXT_HANDLE, session.handle()));
+                String result = wrapped.call(rawInput, toolContext);
 
                 assertThat(delegateInput.get())
                         .as("delegate input for case %s with seed %s", index, TOOL_SEED)

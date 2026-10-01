@@ -15,10 +15,8 @@ import tools.jackson.core.json.JsonFactory;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -114,6 +112,7 @@ final class PrivacyJsonDocumentProcessor {
     private record CollectedScalarInputs(List<String> analysisTexts, List<Object> scalars) {
     }
 
+    /** Rewrites the same immutable payload already validated by the collection pass. */
     String rewrite(
             String payload,
             Function<Object, Object> scalarTransformer,
@@ -121,23 +120,13 @@ final class PrivacyJsonDocumentProcessor {
     ) throws JacksonException {
         PrivacyJsonBoundedWriter writer = new PrivacyJsonBoundedWriter(
                 payload.length(), this.limits.maxOutputCharacters());
-        ProcessingBudget budget = new ProcessingBudget(phase, this.limits);
-        Map<Object, Object> transformedScalars = new HashMap<>();
-        Function<Object, Object> memoizedTransformer = scalar -> {
-            if (transformedScalars.containsKey(scalar)) {
-                return transformedScalars.get(scalar);
-            }
-            Object transformed = scalarTransformer.apply(scalar);
-            transformedScalars.put(scalar, transformed);
-            return transformed;
-        };
         try (JsonParser parser = this.jsonFactory.createParser(ObjectReadContext.empty(), payload);
              JsonGenerator generator = this.jsonFactory.createGenerator(ObjectWriteContext.empty(), writer)) {
             JsonToken first = parser.nextToken();
             if (first == null) {
                 throw new InvalidJsonPayload();
             }
-            writeValue(parser, generator, first, memoizedTransformer, phase, budget);
+            writeValue(parser, generator, first, scalarTransformer, phase);
             if (parser.nextToken() != null) {
                 throw new InvalidJsonPayload();
             }
@@ -158,27 +147,23 @@ final class PrivacyJsonDocumentProcessor {
         }
     }
 
-    private static void writeValue(
+    private void writeValue(
             JsonParser parser,
             JsonGenerator generator,
             JsonToken token,
             Function<Object, Object> scalarTransformer,
-            PrivacyPhase phase,
-            ProcessingBudget budget
+            PrivacyPhase phase
     ) throws JacksonException {
-        budget.acceptNode();
         switch (token) {
-            case START_OBJECT -> writeObject(parser, generator, scalarTransformer, phase, budget);
-            case START_ARRAY -> writeArray(parser, generator, scalarTransformer, phase, budget);
+            case START_OBJECT -> writeObject(parser, generator, scalarTransformer, phase);
+            case START_ARRAY -> writeArray(parser, generator, scalarTransformer, phase);
             case VALUE_STRING -> {
                 String text = parser.getString();
-                budget.acceptInputCharacters(text.length());
                 writeTransformedScalar(generator, text, null, scalarTransformer.apply(text), phase);
             }
             case VALUE_NUMBER_INT, VALUE_NUMBER_FLOAT -> {
                 String lexeme = parser.getString();
-                budget.acceptInputCharacters(lexeme.length());
-                Number number = losslessNumber(lexeme, token, phase, budget.limits);
+                Number number = losslessNumber(lexeme, token, phase, this.limits);
                 writeTransformedScalar(
                         generator,
                         number,
@@ -194,12 +179,11 @@ final class PrivacyJsonDocumentProcessor {
         }
     }
 
-    private static void writeObject(
+    private void writeObject(
             JsonParser parser,
             JsonGenerator generator,
             Function<Object, Object> scalarTransformer,
-            PrivacyPhase phase,
-            ProcessingBudget budget
+            PrivacyPhase phase
     ) throws JacksonException {
         generator.writeStartObject();
         while (true) {
@@ -212,23 +196,20 @@ final class PrivacyJsonDocumentProcessor {
                 throw new InvalidJsonPayload();
             }
             String propertyName = parser.getString();
-            budget.acceptNode();
-            budget.acceptInputCharacters(propertyName.length());
             generator.writeName(propertyName);
             JsonToken valueToken = parser.nextToken();
             if (valueToken == null) {
                 throw new InvalidJsonPayload();
             }
-            writeValue(parser, generator, valueToken, scalarTransformer, phase, budget);
+            writeValue(parser, generator, valueToken, scalarTransformer, phase);
         }
     }
 
-    private static void writeArray(
+    private void writeArray(
             JsonParser parser,
             JsonGenerator generator,
             Function<Object, Object> scalarTransformer,
-            PrivacyPhase phase,
-            ProcessingBudget budget
+            PrivacyPhase phase
     ) throws JacksonException {
         generator.writeStartArray();
         while (true) {
@@ -240,7 +221,7 @@ final class PrivacyJsonDocumentProcessor {
             if (token == null) {
                 throw new InvalidJsonPayload();
             }
-            writeValue(parser, generator, token, scalarTransformer, phase, budget);
+            writeValue(parser, generator, token, scalarTransformer, phase);
         }
     }
 

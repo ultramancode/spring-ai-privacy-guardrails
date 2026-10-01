@@ -601,6 +601,28 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
+    void discardsPartiallyMappedSystemEnvironmentSource(CapturedOutput output) {
+        SystemEnvironmentPropertySource partialSource = new SystemEnvironmentPropertySource(
+                StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                Map.of("SPRING_AI_PRIVACY_OUTPUT_ENABLEDDDD", "synthetic-sensitive-value")) {
+            @Override
+            public String[] getPropertyNames() {
+                return new String[] {"SPRING_AI_PRIVACY_OUTPUT_ENABLEDDDD", null};
+            }
+        };
+        this.diagnosticsRunner
+                .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(partialSource))
+                .withPropertyValues("spring.ai.privacy.output.actoin=tokenize")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(output)
+                            .contains("'spring.ai.privacy.output.actoin'. Did you mean ")
+                            .doesNotContain("spring.ai.privacy.output.enabledddd")
+                            .doesNotContain("synthetic-sensitive-value");
+                });
+    }
+
+    @Test
     void skipsSystemEnvironmentSourcesWithAnApplicationPrefix(CapturedOutput output) {
         this.diagnosticsRunner
                 .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(

@@ -418,6 +418,69 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
+    void adviseStreamCorrelatesIndexedChoicesAcrossChangingArityAndEmptyFrames() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
+        ChatClientResponse empty = response(List.of());
+        ChatClientResponse noChatResponse = new ChatClientResponse(null, Map.of());
+        Flux<ChatClientResponse> responses = Flux.just(
+                empty,
+                response(List.of(new Generation(AssistantMessage.builder()
+                        .content("Ali").properties(Map.of("index", 7)).build()))),
+                response(List.of(
+                        new Generation(AssistantMessage.builder()
+                                .content("Bo").properties(Map.of("index", 8)).build()),
+                        new Generation(AssistantMessage.builder()
+                                .content("ce").properties(Map.of("index", 7)).build())
+                )),
+                noChatResponse,
+                response(List.of(new Generation(AssistantMessage.builder()
+                        .content("b").properties(Map.of("index", 8)).build())))
+        );
+
+        try (PrivacySession session = service.openSession()) {
+            List<ChatClientResponse> results = advisor.protectAtApplicationBoundary(session.handle(), responses)
+                    .collectList().block();
+
+            assertThat(results).hasSize(5);
+            assertThat(results.get(0)).isSameAs(empty);
+            assertThat(results.get(3)).isSameAs(noChatResponse);
+            assertThat(results.get(1).chatResponse().getResult().getOutput().getText()).isNull();
+            assertThat(results.get(2).chatResponse().getResults().get(0).getOutput().getText()).isNull();
+            String alice = results.get(2).chatResponse().getResults().get(1).getOutput().getText();
+            String bob = results.get(4).chatResponse().getResult().getOutput().getText();
+            assertThat(alice).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+            assertThat(bob).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+            assertThat(service.detokenize(session.handle(), alice)).isEqualTo("Alice");
+            assertThat(service.detokenize(session.handle(), bob)).isEqualTo("Bob");
+        }
+    }
+
+    @Test
+    void adviseStreamRejectsDuplicateChoiceIndexesBeforeReplayingAnyFrame() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
+        Flux<ChatClientResponse> responses = Flux.just(
+                response(List.of(new Generation(AssistantMessage.builder()
+                        .content("Ali").properties(Map.of("index", 0)).build()))),
+                response(List.of(
+                        new Generation(AssistantMessage.builder()
+                                .content("ce").properties(Map.of("index", 0)).build()),
+                        new Generation(AssistantMessage.builder()
+                                .content("Bob").properties(Map.of("index", 0L)).build())
+                ))
+        );
+
+        try (PrivacySession session = service.openSession()) {
+            StepVerifier.create(advisor.protectAtApplicationBoundary(session.handle(), responses))
+                    .expectErrorSatisfies(failure -> assertThat(failure)
+                            .isInstanceOf(PrivacyGuardrailException.class)
+                            .hasFieldOrPropertyWithValue("code", PrivacyFailureCode.TRANSFORMATION_CONFLICT))
+                    .verify();
+        }
+    }
+
+    @Test
     void adviseStreamFailsClosedWhenChoiceIndexSourcesConflict() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);

@@ -90,11 +90,9 @@ final class PrivacyBufferedStreamTransformer {
     }
 
     private static Map<ChoiceKey, List<GenerationOccurrence>> correlateChoices(List<ChatClientResponse> responses) {
-        List<ResponseGenerations> frames = new ArrayList<>();
-        Set<Integer> arities = new LinkedHashSet<>();
-        boolean everyGenerationHasIndex = true;
-        boolean anyGenerationHasIndex = false;
-        boolean generationPresent = false;
+        Map<ChoiceKey, List<GenerationOccurrence>> choices = new LinkedHashMap<>();
+        Boolean indexed = null;
+        int positionalArity = -1;
 
         for (int responseIndex = 0; responseIndex < responses.size(); responseIndex++) {
             ChatResponse response = responses.get(responseIndex).chatResponse();
@@ -102,40 +100,30 @@ final class PrivacyBufferedStreamTransformer {
                 continue;
             }
             List<Generation> generations = response.getResults();
-            frames.add(new ResponseGenerations(responseIndex, generations));
-            arities.add(generations.size());
-            generationPresent = true;
-            for (Generation generation : generations) {
-                String index = choiceIndex(generation);
-                everyGenerationHasIndex &= index != null;
-                anyGenerationHasIndex |= index != null;
-            }
-        }
-        if (!generationPresent) {
-            return Map.of();
-        }
-        if ((!everyGenerationHasIndex && anyGenerationHasIndex)
-                || (!everyGenerationHasIndex && arities.size() > 1)) {
-            throw correlationFailure();
-        }
-
-        Map<ChoiceKey, List<GenerationOccurrence>> choices = new LinkedHashMap<>();
-        for (ResponseGenerations frame : frames) {
             Set<ChoiceKey> frameKeys = new LinkedHashSet<>();
-            for (int generationIndex = 0; generationIndex < frame.generations().size(); generationIndex++) {
-                Generation generation = frame.generations().get(generationIndex);
+            for (int generationIndex = 0; generationIndex < generations.size(); generationIndex++) {
+                Generation generation = generations.get(generationIndex);
                 String explicitIndex = choiceIndex(generation);
+                boolean hasIndex = explicitIndex != null;
+                if (indexed != null && indexed != hasIndex) {
+                    throw correlationFailure();
+                }
+                indexed = hasIndex;
                 ChoiceKey key;
-                if (everyGenerationHasIndex) {
+                if (hasIndex) {
                     key = new ChoiceKey("index:" + explicitIndex);
                 } else {
+                    if (positionalArity != -1 && positionalArity != generations.size()) {
+                        throw correlationFailure();
+                    }
+                    positionalArity = generations.size();
                     key = new ChoiceKey("position:" + generationIndex);
                 }
                 if (!frameKeys.add(key)) {
                     throw correlationFailure();
                 }
                 choices.computeIfAbsent(key, ignored -> new ArrayList<>())
-                        .add(new GenerationOccurrence(frame.responseIndex(), generationIndex, generation));
+                        .add(new GenerationOccurrence(responseIndex, generationIndex, generation));
             }
         }
         return choices;
@@ -387,9 +375,6 @@ final class PrivacyBufferedStreamTransformer {
     }
 
     private record ChoiceKey(String value) {
-    }
-
-    private record ResponseGenerations(int responseIndex, List<Generation> generations) {
     }
 
     private record GenerationOccurrence(int responseIndex, int generationIndex, Generation generation) {

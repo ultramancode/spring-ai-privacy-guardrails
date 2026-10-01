@@ -1,13 +1,15 @@
 package io.github.ultramancode.springai.privacy.core;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.function.ToIntFunction;
 import java.util.regex.Matcher;
 
-/** Applies text tokenization, redaction, and detokenization for one core service. */
+/**
+ * Applies text tokenization, redaction, and detokenization for one core service.
+ * Resolved spans are source-ordered and non-overlapping. Token exclusion preserves that order.
+ */
 final class PrivacyTextTransformer {
 
     private final PiiAnalysisCoordinator analysisCoordinator;
@@ -80,10 +82,7 @@ final class PrivacyTextTransformer {
 
     String redact(String text, List<PiiSpan> spans, PrivacyContext context) {
         List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
-        return redactPrepared(
-                text,
-                excludeKnownTokens(text, protectionSpans(resolvedSpans), context)
-        );
+        return redactWithResolvedSpans(text, resolvedSpans, context);
     }
 
     String redact(String text, PrivacyContext context) {
@@ -92,6 +91,10 @@ final class PrivacyTextTransformer {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
         List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyze(text, context).spans();
+        return redactWithResolvedSpans(text, resolvedSpans, context);
+    }
+
+    String redactWithResolvedSpans(String text, List<ResolvedPiiSpan> resolvedSpans, PrivacyContext context) {
         List<ProtectionSpan> spans = excludeKnownTokens(text, protectionSpans(resolvedSpans), context);
         return redactPrepared(text, spans);
     }
@@ -102,16 +105,16 @@ final class PrivacyTextTransformer {
             return false;
         }
         List<ResolvedPiiSpan> resolvedSpans = this.sessionAnalysis.analyze(text, context).spans();
-        return !excludeKnownTokens(text, protectionSpans(resolvedSpans), context).isEmpty();
+        return containsPiiWithResolvedSpans(text, resolvedSpans, context);
     }
 
     boolean containsPii(String text, List<PiiSpan> spans, PrivacyContext context) {
         List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
-        return !excludeKnownTokens(
-                text,
-                protectionSpans(resolvedSpans),
-                context
-        ).isEmpty();
+        return containsPiiWithResolvedSpans(text, resolvedSpans, context);
+    }
+
+    boolean containsPiiWithResolvedSpans(String text, List<ResolvedPiiSpan> resolvedSpans, PrivacyContext context) {
+        return !excludeKnownTokens(text, protectionSpans(resolvedSpans), context).isEmpty();
     }
 
     String detokenize(String text, PrivacyContext context, Set<String> allowedEntityTypes) {
@@ -153,17 +156,16 @@ final class PrivacyTextTransformer {
             return requireOutputWithinLimit(text, PrivacyPhase.TOKENIZATION);
         }
 
-        List<ProtectionSpan> ordered = orderedSpans(preparedSpans);
         // Reject guaranteed overflow before creating mappings, then check actual token lengths.
         int capacity = boundedTransformedLength(
                 text,
-                ordered,
+                preparedSpans,
                 PrivacyPhase.TOKENIZATION,
                 span -> OpaquePiiTokenFormat.minimumGeneratedTokenLength(span.entityType())
         );
         StringBuilder tokenizedText = new StringBuilder(capacity);
         int cursor = 0;
-        for (ProtectionSpan span : ordered) {
+        for (ProtectionSpan span : preparedSpans) {
             appendBounded(tokenizedText, text, cursor, span.start(), PrivacyPhase.TOKENIZATION);
             String token = context.tokenFor(
                     span.entityType(),
@@ -181,16 +183,15 @@ final class PrivacyTextTransformer {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
 
-        List<ProtectionSpan> ordered = orderedSpans(spans);
         int capacity = boundedTransformedLength(
                 text,
-                ordered,
+                spans,
                 PrivacyPhase.REDACTION,
                 span -> redactionMarker(span.entityType()).length()
         );
         StringBuilder redactedText = new StringBuilder(capacity);
         int cursor = 0;
-        for (ProtectionSpan span : ordered) {
+        for (ProtectionSpan span : spans) {
             redactedText.append(text, cursor, span.start());
             redactedText.append(redactionMarker(span.entityType()));
             cursor = span.end();
@@ -212,9 +213,8 @@ final class PrivacyTextTransformer {
         }
 
         List<ProtectionSpan> spansOutsideKnownTokens = new ArrayList<>();
-        List<ProtectionSpan> ordered = orderedSpans(spans);
         int firstPossibleRange = 0;
-        for (ProtectionSpan span : ordered) {
+        for (ProtectionSpan span : spans) {
             while (firstPossibleRange < protectedRanges.size()
                     && protectedRanges.get(firstPossibleRange).end() <= span.start()) {
                 firstPossibleRange++;
@@ -249,12 +249,6 @@ final class PrivacyTextTransformer {
             }
         }
         return List.copyOf(ranges);
-    }
-
-    private static List<ProtectionSpan> orderedSpans(List<ProtectionSpan> spans) {
-        return spans.stream()
-                .sorted(Comparator.comparingInt(ProtectionSpan::start).thenComparingInt(ProtectionSpan::end))
-                .toList();
     }
 
     private int boundedTransformedLength(

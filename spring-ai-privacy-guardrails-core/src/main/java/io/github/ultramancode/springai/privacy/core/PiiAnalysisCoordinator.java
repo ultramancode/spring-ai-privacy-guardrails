@@ -131,9 +131,7 @@ final class PiiAnalysisCoordinator {
         }
 
         List<ResolvedPiiSpan> resolvedSpans = this.evidenceResolver.resolve(
-                text,
                 evidence,
-                Set.copyOf(successfulProviders),
                 this.options
         );
         return new AnalysisEvidence(
@@ -245,9 +243,7 @@ final class PiiAnalysisCoordinator {
         for (int index = 0; index < texts.size(); index++) {
             List<PiiEvidence> segmentEvidence = evidenceAccumulator.forSegment(index);
             List<ResolvedPiiSpan> resolvedSpans = this.evidenceResolver.resolve(
-                    texts.get(index),
                     segmentEvidence,
-                    immutableSuccessfulProviders,
                     this.options
             );
             results.add(new AnalysisEvidence(

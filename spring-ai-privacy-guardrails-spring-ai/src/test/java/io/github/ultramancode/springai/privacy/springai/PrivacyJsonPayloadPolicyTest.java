@@ -6,6 +6,7 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureObserver;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -19,6 +20,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -38,6 +43,23 @@ class PrivacyJsonPayloadPolicyTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    @ParameterizedTest
+    @ValueSource(strings = {"  {\"value\":\"ok\"}  ", "{\"value\":\"\\u006f\\u006b\"}", "  ok  ", "   "})
+    void blockChecksTheUnchangedOutputLength(String payload) {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
+                .maxOutputCharacters(payload.length())
+                .build();
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
+
+        try (PrivacySession session = service.openSession()) {
+            assertThat(applyOutputPolicy(service, session.handle(), payload, PrivacyOutputAction.BLOCK))
+                    .isEqualTo(payload);
+            assertPayloadLimit(() -> applyOutputPolicy(
+                    service, session.handle(), payload + " ", PrivacyOutputAction.BLOCK));
+        }
+    }
+
     @Test
     void redactProtectsNestedJsonValues() {
         PiiAnalyzer analyzer = (text, options, limits) ->
@@ -45,13 +67,94 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
-            PrivacyOutputPolicyExecutor.Result result = PrivacyOutputPolicyExecutor.apply(
+            String result = applyOutputPolicy(
                     service, session.handle(), "{\"name\":\"Alice\",\"nested\":[{\"id\":123}]}",
                     PrivacyOutputAction.REDACT);
 
-            assertThat(result.blocked()).isFalse();
-            assertThat(result.text())
+            assertThat(result)
                     .isEqualTo("{\"name\":\"[REDACTED_PII]\",\"nested\":[{\"id\":\"[REDACTED_PII]\"}]}");
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PrivacyOutputAction.class, names = {"REDACT", "BLOCK"})
+    void jsonOutputPreservesResolvedTypeConflictsOutsideTheDetectionAllowlist(PrivacyOutputAction action) {
+        PiiAnalyzer analyzer = (text, options, limits) -> List.of(
+                new PiiSpan("PERSON", 0, text.length(), 1.0),
+                new PiiSpan("PHONE_NUMBER", 0, text.length(), 1.0));
+        PrivacyService service = new PrivacyService(List.of(analyzer),
+                new PiiAnalysisOptions("en", List.of("PERSON", "PHONE_NUMBER"), 0.0));
+
+        try (PrivacySession session = service.openSession()) {
+            String input = "{\"value\":[\"Alice\",123.00]}";
+            if (action == PrivacyOutputAction.BLOCK) {
+                assertThatThrownBy(() -> applyOutputPolicy(service, session.handle(), input, action))
+                        .isInstanceOf(PrivacyOutputBlockedException.class);
+            } else {
+                String result = applyOutputPolicy(service, session.handle(), input, action);
+                assertThat(result)
+                        .isEqualTo("{\"value\":[\"[REDACTED_PII]\",\"[REDACTED_PII]\"]}");
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PrivacyOutputAction.class, names = {"REDACT", "BLOCK"})
+    void jsonOutputUsesBatchResultsEvenWhenTheyExceedTheSessionCache(PrivacyOutputAction action) throws Exception {
+        AtomicInteger singleCalls = new AtomicInteger();
+        AtomicInteger batchCalls = new AtomicInteger();
+        PiiAnalyzer analyzer = TestPrivacyServices.countingSegmentedAnalyzer(
+                singleCalls, batchCalls, Set.of(), texts -> texts.stream()
+                        .map(text -> List.of(new PiiSpan("PERSON", 0, text.length(), 1.0)))
+                        .toList());
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxAnalysisSegments(128).build();
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
+        List<String> values = new ArrayList<>();
+        // Exceeds the session's 256-entry analysis cache.
+        for (int index = 0; index < 320; index++) {
+            values.add("person-" + index);
+        }
+
+        try (PrivacySession session = service.openSession()) {
+            String input = OBJECT_MAPPER.writeValueAsString(values);
+            if (action == PrivacyOutputAction.BLOCK) {
+                assertThatThrownBy(() -> applyOutputPolicy(service, session.handle(), input, action))
+                        .isInstanceOf(PrivacyOutputBlockedException.class);
+            } else {
+                String result = applyOutputPolicy(service, session.handle(), input, action);
+                List<String> redacted = OBJECT_MAPPER.readValue(result, new TypeReference<>() {});
+                assertThat(redacted).hasSize(values.size()).containsOnly("[REDACTED_PERSON]");
+            }
+        }
+        assertThat(singleCalls).hasValue(0);
+        assertThat(batchCalls).hasValue(3);
+    }
+
+    @Test
+    void jsonOutputExcludesOwnedTokensButStillBlocksUntrustedRedactionMarkers() {
+        PiiAnalyzer analyzer = (text, options, limits) ->
+                List.of(new PiiSpan("PII", 0, text.length(), 1.0));
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+
+        try (PrivacySession session = service.openSession()) {
+            String token = service.tokenize(session.handle(), "Alice");
+            String tokenPayload = OBJECT_MAPPER.writeValueAsString(List.of(token));
+            assertThat(applyOutputPolicy(
+                    service, session.handle(), tokenPayload, PrivacyOutputAction.REDACT))
+                    .isEqualTo(tokenPayload);
+            assertThat(applyOutputPolicy(
+                    service, session.handle(), tokenPayload, PrivacyOutputAction.BLOCK)).isEqualTo(tokenPayload);
+
+            String mixedPayload = OBJECT_MAPPER.writeValueAsString(List.of(token + " Bob"));
+            assertThat(applyOutputPolicy(
+                    service, session.handle(), mixedPayload, PrivacyOutputAction.REDACT))
+                    .isEqualTo(OBJECT_MAPPER.writeValueAsString(List.of(token + "[REDACTED_PII]")));
+            assertThatThrownBy(() -> applyOutputPolicy(
+                    service, session.handle(), mixedPayload, PrivacyOutputAction.BLOCK))
+                    .isInstanceOf(PrivacyOutputBlockedException.class);
+            assertThatThrownBy(() -> applyOutputPolicy(
+                    service, session.handle(), "[\"[REDACTED_PII]\"]", PrivacyOutputAction.BLOCK))
+                    .isInstanceOf(PrivacyOutputBlockedException.class);
         }
     }
 
@@ -64,11 +167,10 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = TestPrivacyServices.privacyService();
 
         try (PrivacySession session = service.openSession()) {
-            PrivacyOutputPolicyExecutor.Result result = PrivacyOutputPolicyExecutor.apply(
+            String result = applyOutputPolicy(
                     service, session.handle(), input, PrivacyOutputAction.REDACT);
 
-            assertThat(result.blocked()).isFalse();
-            assertThat(result.text()).isEqualTo(
+            assertThat(result).isEqualTo(
                     "{\"value\":\"[REDACTED_PERSON]\",\"value\":\"[REDACTED_PHONE_NUMBER]\"}");
         }
     }
@@ -88,6 +190,8 @@ class PrivacyJsonPayloadPolicyTest {
                         assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
                         assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOOL_INPUT);
                     });
+            assertPayloadLimit(() -> applyOutputPolicy(
+                    service, session.handle(), payload, PrivacyOutputAction.BLOCK));
         }
     }
 
@@ -113,24 +217,22 @@ class PrivacyJsonPayloadPolicyTest {
 
     @Test
     void strictJsonContractRejectsEveryNonblankParseFailure() {
-        for (String invalidJson : List.of(
-                "not-json",
-                "[[PII_EMAIL_ADDRESS_0123456789abcdef0123456789abcdef_3]]",
-                "[[PII_not-a-complete-token",
-                "[[PII_PERSON__NAME_0123456789abcdef0123456789abcdef_1]]"
-        )) {
-            assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.transformJsonOrText(
-                    invalidJson,
-                    scalar -> scalar,
-                    text -> text,
-                    PrivacyPhase.TOKENIZATION,
-                    true,
-                    PrivacyProcessingLimits.defaults()
-            )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
-                assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
-                assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOKENIZATION);
-                assertThat(failure).hasMessage("Structured JSON payload is invalid");
-            });
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        try (PrivacySession session = service.openSession()) {
+            for (String invalidJson : List.of(
+                    "not-json",
+                    "[[PII_EMAIL_ADDRESS_0123456789abcdef0123456789abcdef_3]]",
+                    "[[PII_not-a-complete-token",
+                    "[[PII_PERSON__NAME_0123456789abcdef0123456789abcdef_1]]"
+            )) {
+                assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.discloseWithOutcome(
+                        service, session.handle(), invalidJson, Set.of(), PrivacyPhase.TOOL_INPUT, true
+                )).isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TRANSFORMATION_CONFLICT);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOOL_INPUT);
+                    assertThat(failure).hasMessage("Structured JSON payload is invalid");
+                });
+            }
         }
     }
 
@@ -140,7 +242,8 @@ class PrivacyJsonPayloadPolicyTest {
         // An ordinary int, Integer.MAX_VALUE + 1, Long.MAX_VALUE + 1, and a high-precision decimal.
         String input = "[2,2147483648,9223372036854775808,0.1234567890123456789012345]";
 
-        String result = PrivacyJsonPayloadTransformer.transformJsonOrText(
+        PrivacyJsonDocumentProcessor processor = new PrivacyJsonDocumentProcessor(PrivacyProcessingLimits.defaults());
+        String result = processor.transform(
                 input,
                 scalar -> {
                     if (scalar instanceof Number number) {
@@ -148,10 +251,7 @@ class PrivacyJsonPayloadPolicyTest {
                     }
                     return scalar;
                 },
-                text -> text,
-                PrivacyPhase.TOKENIZATION,
-                true,
-                PrivacyProcessingLimits.defaults()
+                PrivacyPhase.TOKENIZATION
         );
 
         assertThat(result).isEqualTo(input);
@@ -171,27 +271,26 @@ class PrivacyJsonPayloadPolicyTest {
                 + ",\"scientific\":1e3}";
 
         try (PrivacySession session = service.openSession()) {
-            PrivacyOutputPolicyExecutor.Result result = PrivacyOutputPolicyExecutor.apply(
+            String result = applyOutputPolicy(
                     service,
                     session.handle(),
                     input,
                     PrivacyOutputAction.TOKENIZE
             );
 
-            assertThat(result.blocked()).isFalse();
-            assertThat(result.text())
+            assertThat(result)
                     .doesNotContain("alice@example.com", "alice\\u0040example.com")
                     .contains("\"precise\":" + precise)
                     .contains("\"scientific\":1e3");
             assertThat(OBJECT_MAPPER.readValue(
-                    result.text(),
+                    result,
                     new TypeReference<Map<String, Object>>() { }
             )).containsKeys(
                     "email",
                     "precise",
                     "scientific"
             );
-            assertThat(service.detokenize(session.handle(), result.text()))
+            assertThat(service.detokenize(session.handle(), result))
                     .contains("alice@example.com");
         }
     }
@@ -203,21 +302,20 @@ class PrivacyJsonPayloadPolicyTest {
                 + "\"phone\":8.21012345678e11,\"revision\":1e3}";
 
         try (PrivacySession session = service.openSession()) {
-            PrivacyOutputPolicyExecutor.Result result = PrivacyOutputPolicyExecutor.apply(
+            String result = applyOutputPolicy(
                     service,
                     session.handle(),
                     input,
                     PrivacyOutputAction.REDACT
             );
 
-            assertThat(result.blocked()).isFalse();
             assertThat(OBJECT_MAPPER.readValue(
-                    result.text(),
+                    result,
                     new TypeReference<Map<String, Object>>() { }
             ))
                     .containsEntry("email", "[REDACTED_EMAIL_ADDRESS]")
                     .containsEntry("phone", "[REDACTED_PHONE_NUMBER]");
-            assertThat(result.text())
+            assertThat(result)
                     .contains("\"revision\":1e3")
                     .doesNotContain("alice@example.com", "8.21012345678e11", "821012345678");
         }
@@ -234,16 +332,16 @@ class PrivacyJsonPayloadPolicyTest {
                     "{\"value\":\"Alice\",\"value\":\"safe\"}",
                     "{\"value\":\"safe\",\"value\":\"Alice\"}"
             )) {
-                assertThat(PrivacyOutputPolicyExecutor.apply(
+                assertThatThrownBy(() -> applyOutputPolicy(
                         service, session.handle(), input, PrivacyOutputAction.BLOCK
-                ).blocked()).isTrue();
+                )).isInstanceOf(PrivacyOutputBlockedException.class);
             }
-            assertThat(PrivacyOutputPolicyExecutor.apply(
+            assertThat(applyOutputPolicy(
                     service,
                     session.handle(),
                     "{\"revision\":1e3,\"revision\":2e3}",
                     PrivacyOutputAction.BLOCK
-            ).blocked()).isFalse();
+            )).isEqualTo("{\"revision\":1e3,\"revision\":2e3}");
         }
     }
 
@@ -255,25 +353,18 @@ class PrivacyJsonPayloadPolicyTest {
                 "1e9999999999",
                 "1e-9999999999"
         )) {
-            assertPayloadLimit(() -> PrivacyJsonPayloadTransformer.transformJsonOrText(
-                    value,
-                    scalar -> scalar,
-                    text -> text,
-                    PrivacyPhase.OUTPUT_POLICY,
-                    false,
-                    PrivacyProcessingLimits.defaults()
-            ));
+            assertPayloadLimit(() -> restoreWithoutTokens(value, PrivacyProcessingLimits.defaults()));
         }
     }
 
     @Test
     void numericLexemesAndExpandedValuesRespectTheCharacterLimit() {
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxValueTreeCharacters(5).build();
-        assertThat(transformIdentity("99999", limits)).isEqualTo("99999");
-        assertPayloadLimit(() -> transformIdentity("999999", limits));
-        assertThat(transformIdentity("1e4", limits)).isEqualTo("1e4");
-        assertPayloadLimit(() -> transformIdentity("1e5", limits));
-        assertThat(transformIdentity("0e100", limits)).isEqualTo("0e100");
+        assertThat(restoreWithoutTokens("99999", limits)).isEqualTo("99999");
+        assertPayloadLimit(() -> restoreWithoutTokens("999999", limits));
+        assertThat(restoreWithoutTokens("1e4", limits)).isEqualTo("1e4");
+        assertPayloadLimit(() -> restoreWithoutTokens("1e5", limits));
+        assertThat(restoreWithoutTokens("0e100", limits)).isEqualTo("0e100");
     }
 
     @Test
@@ -307,18 +398,19 @@ class PrivacyJsonPayloadPolicyTest {
     }
 
     @Test
-    void jsonWritingRejectsReplacementsExceedingTheOutputLimit() {
-        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxOutputCharacters(20).build();
-        String oversized = "x".repeat(limits.maxOutputCharacters() + 1);
+    void jsonWritingRejectsRestoredValuesWhoseEscapingExceedsTheOutputLimit() {
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxOutputCharacters(80).build();
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults(), limits);
+        String original = "\"".repeat(70);
 
-        assertPayloadLimit(() -> PrivacyJsonPayloadTransformer.transformJsonOrText(
-                "{\"value\":\"safe\"}",
-                scalar -> "safe".equals(scalar) ? oversized : scalar,
-                text -> text,
-                PrivacyPhase.OUTPUT_POLICY,
-                true,
-                limits
-        ));
+        try (PrivacySession session = service.openSession()) {
+            String token = service.tokenize(session.handle(), original,
+                    List.of(new PiiSpan("PERSON", 0, original.length(), 1.0)));
+            String payload = "{\"value\":\"" + token + "\"}";
+            assertThat(service.detokenize(session.handle(), token)).isEqualTo(original);
+            assertPayloadLimit(() -> PrivacyJsonPayloadTransformer.restoreKnownTokens(
+                    service, session.handle(), payload, PrivacyPhase.OUTPUT_POLICY));
+        }
     }
 
     @Test
@@ -326,8 +418,8 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxOutputCharacters(2).build();
         PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults(), limits);
 
-        assertThat(transformIdentity("  ", limits)).isEqualTo("  ");
-        assertPayloadLimit(() -> transformIdentity("   ", limits));
+        assertThat(restoreWithoutTokens("  ", limits)).isEqualTo("  ");
+        assertPayloadLimit(() -> restoreWithoutTokens("   ", limits));
         try (PrivacySession session = service.openSession()) {
             assertPayloadLimit(() -> PrivacyJsonPayloadTransformer.redact(
                     service, session.handle(), "   ", PrivacyPhase.OUTPUT_POLICY, false));
@@ -391,12 +483,12 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
-            String protectedPayload = PrivacyOutputPolicyExecutor.apply(
+            String protectedPayload = applyOutputPolicy(
                     service,
                     session.handle(),
                     "0.0000001",
                     PrivacyOutputAction.TOKENIZE
-            ).text();
+            );
             Object token = OBJECT_MAPPER.readValue(protectedPayload, Object.class);
             Object restored = service.detokenizeValueTree(session.handle(), token);
 
@@ -410,10 +502,10 @@ class PrivacyJsonPayloadPolicyTest {
     void jsonStringsUseTheConfiguredCharacterLimit() {
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxValueTreeCharacters(5).build();
 
-        assertThat(transformIdentity("\"abcde\"", limits)).isEqualTo("\"abcde\"");
-        assertPayloadLimit(() -> transformIdentity("\"abcdef\"", limits));
-        assertThat(transformIdentity("[\"ab\",\"cde\"]", limits)).isEqualTo("[\"ab\",\"cde\"]");
-        assertPayloadLimit(() -> transformIdentity("[\"abc\",\"def\"]", limits));
+        assertThat(restoreWithoutTokens("\"abcde\"", limits)).isEqualTo("\"abcde\"");
+        assertPayloadLimit(() -> restoreWithoutTokens("\"abcdef\"", limits));
+        assertThat(restoreWithoutTokens("[\"ab\",\"cde\"]", limits)).isEqualTo("[\"ab\",\"cde\"]");
+        assertPayloadLimit(() -> restoreWithoutTokens("[\"abc\",\"def\"]", limits));
     }
 
     @Test
@@ -427,10 +519,10 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service, session.handle(), "[[],[]]", PrivacyOutputAction.TOKENIZE).text())
+            assertThat(applyOutputPolicy(
+                    service, session.handle(), "[[],[]]", PrivacyOutputAction.TOKENIZE))
                     .isEqualTo("[[],[]]");
-            assertPayloadLimit(() -> PrivacyOutputPolicyExecutor.apply(
+            assertPayloadLimit(() -> applyOutputPolicy(
                     service, session.handle(), "[0,1,2]", PrivacyOutputAction.TOKENIZE));
         }
         assertThat(analysisCalls).hasValue(0);
@@ -455,12 +547,12 @@ class PrivacyJsonPayloadPolicyTest {
 
         for (String input : inputs) {
             try (PrivacySession session = service.openSession()) {
-                String protectedPayload = PrivacyOutputPolicyExecutor.apply(
+                String protectedPayload = applyOutputPolicy(
                         service,
                         session.handle(),
                         input,
                         PrivacyOutputAction.TOKENIZE
-                ).text();
+                );
 
                 assertThat(protectedPayload).doesNotContain("EMP-1234", "KEY-1234");
                 assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
@@ -506,12 +598,12 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service, session.handle(), "1e9", PrivacyOutputAction.TOKENIZE).text())
+            assertThat(applyOutputPolicy(
+                    service, session.handle(), "1e9", PrivacyOutputAction.TOKENIZE))
                     .isEqualTo("1e9");
             assertThat(analysisCalls).hasValue(1);
             for (String input : List.of("1e10", "[1e5,2e5]")) {
-                assertPayloadLimit(() -> PrivacyOutputPolicyExecutor.apply(
+                assertPayloadLimit(() -> applyOutputPolicy(
                         service, session.handle(), input, PrivacyOutputAction.TOKENIZE));
             }
         }
@@ -533,12 +625,12 @@ class PrivacyJsonPayloadPolicyTest {
         String input = "[\"a\",\"b\"]";
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service, session.handle(), input, action).text()).isEqualTo(input);
+            assertThat(applyOutputPolicy(
+                    service, session.handle(), input, action)).isEqualTo(input);
             assertThat(batchCalls).hasValue(2);
 
-            assertThat(PrivacyOutputPolicyExecutor.apply(
-                    service, session.handle(), input, action).text()).isEqualTo(input);
+            assertThat(applyOutputPolicy(
+                    service, session.handle(), input, action)).isEqualTo(input);
             assertThat(batchCalls).hasValue(2);
         }
         assertThat(singleCalls).hasValue(0);
@@ -561,7 +653,7 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
         try (PrivacySession session = service.openSession()) {
-            assertPayloadLimit(() -> PrivacyOutputPolicyExecutor.apply(
+            assertPayloadLimit(() -> applyOutputPolicy(
                     service, session.handle(), "[\"a\",\"b\"]", PrivacyOutputAction.REDACT));
         }
         assertThat(batchCalls).hasValue(2);
@@ -593,12 +685,12 @@ class PrivacyJsonPayloadPolicyTest {
         String input = "[\"secret-0\",\"secret-1\",\"secret-2\"]";
 
         try (PrivacySession session = service.openSession()) {
-            String protectedPayload = PrivacyOutputPolicyExecutor.apply(
+            String protectedPayload = applyOutputPolicy(
                     service,
                     session.handle(),
                     input,
                     PrivacyOutputAction.TOKENIZE
-            ).text();
+            );
 
             assertThat(protectedPayload).doesNotContain("secret-");
             assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
@@ -638,12 +730,12 @@ class PrivacyJsonPayloadPolicyTest {
                 """.trim();
 
         try (PrivacySession session = service.openSession()) {
-            String protectedPayload = PrivacyOutputPolicyExecutor.apply(
+            String protectedPayload = applyOutputPolicy(
                     service,
                     session.handle(),
                     input,
                     PrivacyOutputAction.TOKENIZE
-            ).text();
+            );
 
             assertThat(protectedPayload).doesNotContain(firstSecret, lastSecret);
             assertThat(service.detokenize(session.handle(), protectedPayload)).isEqualTo(input);
@@ -679,7 +771,7 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
-            assertThatThrownBy(() -> PrivacyOutputPolicyExecutor.apply(
+            assertThatThrownBy(() -> applyOutputPolicy(
                     service,
                     session.handle(),
                     "[\"left\",\"right\"]",
@@ -706,12 +798,12 @@ class PrivacyJsonPayloadPolicyTest {
         String input = "[\"safe\",\"safe\"]";
 
         try (PrivacySession session = service.openSession()) {
-            assertThat(PrivacyOutputPolicyExecutor.apply(
+            assertThat(applyOutputPolicy(
                     service,
                     session.handle(),
                     input,
                     PrivacyOutputAction.TOKENIZE
-            ).text()).isEqualTo(input);
+            )).isEqualTo(input);
         }
         assertThat(analysisCalls).hasValue(1);
     }
@@ -759,22 +851,22 @@ class PrivacyJsonPayloadPolicyTest {
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
 
         try (PrivacySession session = service.openSession()) {
-            PrivacyOutputPolicyExecutor.Result first = PrivacyOutputPolicyExecutor.apply(
+            String first = applyOutputPolicy(
                     service,
                     session.handle(),
                     "Alice",
                     PrivacyOutputAction.REDACT
             );
-            PrivacyOutputPolicyExecutor.Result second = PrivacyOutputPolicyExecutor.apply(
+            String second = applyOutputPolicy(
                     service,
                     session.handle(),
-                    first.text(),
+                    first,
                     PrivacyOutputAction.REDACT
             );
 
-            assertThat(first.text()).isEqualTo("[REDACTED_PERSON]");
-            assertThat(second.text())
-                    .isNotEqualTo(first.text())
+            assertThat(first).isEqualTo("[REDACTED_PERSON]");
+            assertThat(second)
+                    .isNotEqualTo(first)
                     .contains("[REDACTED_MARKER]");
         }
     }
@@ -787,21 +879,37 @@ class PrivacyJsonPayloadPolicyTest {
                     "\"alice\\u0040example.com\" trailing",
                     "alice\\u0040example.com trailing"
             )) {
-                PrivacyOutputPolicyExecutor.Result result = PrivacyOutputPolicyExecutor.apply(
+                String result = applyOutputPolicy(
                         service,
                         session.handle(),
                         malformed,
                         action
                 );
-                assertThat(result.text()).isEqualTo(malformed);
-                assertThat(result.blocked()).isFalse();
+                assertThat(result).isEqualTo(malformed);
+
             }
         }
     }
 
-    private String transformIdentity(String value, PrivacyProcessingLimits limits) {
-        return PrivacyJsonPayloadTransformer.transformJsonOrText(
-                value, scalar -> scalar, text -> text, PrivacyPhase.OUTPUT_POLICY, false, limits);
+    private String applyOutputPolicy(
+            PrivacyService service,
+            PrivacyContextHandle handle,
+            String text,
+            PrivacyOutputAction action
+    ) {
+        PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service, action, "Blocked output");
+        ChatResponse chatResponse = new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+        ChatClientResponse response = new ChatClientResponse(chatResponse, Map.of());
+        ChatClientResponse protectedResponse = advisor.protectAtApplicationBoundary(handle, response);
+        return protectedResponse.chatResponse().getResult().getOutput().getText();
+    }
+
+    private String restoreWithoutTokens(String value, PrivacyProcessingLimits limits) {
+        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults(), limits);
+        try (PrivacySession session = service.openSession()) {
+            return PrivacyJsonPayloadTransformer.restoreKnownTokens(
+                    service, session.handle(), value, PrivacyPhase.OUTPUT_POLICY);
+        }
     }
 
     private void assertPayloadLimit(ThrowingCallable invocation) {

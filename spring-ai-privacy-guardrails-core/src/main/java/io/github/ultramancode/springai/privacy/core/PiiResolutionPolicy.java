@@ -140,9 +140,9 @@ public final class PiiResolutionPolicy {
         return this.typeConflictFallback;
     }
 
-    double minimumScore(String provider, double globalMinimumScore) {
+    double minimumScore(String canonicalProvider, double globalMinimumScore) {
         return Math.max(globalMinimumScore, this.providerMinimumScores.getOrDefault(
-                PiiProviderId.canonicalize(provider), 0.0));
+                canonicalProvider, 0.0));
     }
 
     /**

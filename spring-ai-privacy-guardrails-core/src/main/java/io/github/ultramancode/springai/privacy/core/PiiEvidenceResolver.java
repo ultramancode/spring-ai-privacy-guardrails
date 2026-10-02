@@ -2,7 +2,6 @@ package io.github.ultramancode.springai.privacy.core;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -11,6 +10,7 @@ import java.util.stream.Collectors;
 
 /**
  * Resolves overlapping multi-provider evidence according to a resolution policy.
+ * The coordinator supplies evidence from selected, successful providers with validated ranges.
  * Entity filters supplied to this package-private boundary must already be canonical.
  */
 final class PiiEvidenceResolver {
@@ -44,36 +44,12 @@ final class PiiEvidenceResolver {
     }
 
     List<ResolvedPiiSpan> resolve(
-            String text,
             List<PiiEvidence> evidence,
-            Set<String> successfulProviders,
             PiiAnalysisOptions canonicalOptions
     ) {
-        Objects.requireNonNull(evidence, "evidence must not be null");
-        Objects.requireNonNull(successfulProviders, "successfulProviders must not be null");
-        PiiAnalysisOptions options = Objects.requireNonNull(
-                canonicalOptions,
-                "canonicalOptions must not be null"
-        );
-        if (evidence.stream().anyMatch(Objects::isNull)) {
-            throw new IllegalArgumentException("evidence must not contain null values");
-        }
-        Set<String> successful = canonicalizeProviderIds(successfulProviders);
-        if (evidence.stream().anyMatch(item -> !successful.contains(item.provider()))) {
-            throw new IllegalArgumentException("evidence provider must be successful");
-        }
-        Set<String> selectedProviders = selectedProviders(successful);
-        if (text == null || text.isBlank()) {
-            return List.of();
-        }
-        if (evidence.isEmpty()) {
-            return List.of();
-        }
-
-        List<PiiEvidence> candidates = canonicalizeAndFilterCandidates(text, evidence, options).stream()
-                .filter(item -> selectedProviders.contains(item.provider()))
+        List<PiiEvidence> candidates = canonicalizeAndFilterCandidates(evidence, canonicalOptions).stream()
                 .filter(item -> item.score() >= this.policy.minimumScore(
-                        item.provider(), options.minimumScore()))
+                        item.provider(), canonicalOptions.minimumScore()))
                 .sorted(Comparator.comparingInt(PiiEvidence::start).thenComparingInt(PiiEvidence::end))
                 .toList();
         return resolveCandidates(candidates);
@@ -101,8 +77,9 @@ final class PiiEvidenceResolver {
 
         List<PiiEvidence> evidence = spans.stream()
                 .map(span -> PiiEvidence.from(span, SUPPLIED_SPAN_PROVIDER))
+                .map(item -> validateRange(text, item))
                 .toList();
-        List<PiiEvidence> candidates = canonicalizeAndFilterCandidates(text, evidence, options).stream()
+        List<PiiEvidence> candidates = canonicalizeAndFilterCandidates(evidence, options).stream()
                 .filter(item -> item.score() >= options.minimumScore())
                 .sorted(Comparator.comparingInt(PiiEvidence::start).thenComparingInt(PiiEvidence::end))
                 .toList();
@@ -110,12 +87,10 @@ final class PiiEvidenceResolver {
     }
 
     private List<PiiEvidence> canonicalizeAndFilterCandidates(
-            String text,
             List<PiiEvidence> evidence,
             PiiAnalysisOptions canonicalOptions
     ) {
         return evidence.stream()
-                .map(item -> validateRange(text, item))
                 .map(this::resolveEntityType)
                 .filter(item -> acceptsEntityType(item.entityType(), canonicalOptions))
                 .toList();
@@ -151,33 +126,6 @@ final class PiiEvidenceResolver {
             throw new IllegalArgumentException("PII evidence is outside the source text");
         }
         return evidence;
-    }
-
-    private Set<String> canonicalizeProviderIds(Set<String> providers) {
-        Set<String> successful = new LinkedHashSet<>();
-        for (String provider : providers) {
-            if (!successful.add(PiiProviderId.canonicalize(provider))) {
-                throw new IllegalArgumentException("successfulProviders contain canonical duplicates");
-            }
-        }
-        return Set.copyOf(successful);
-    }
-
-    private Set<String> selectedProviders(Set<String> successful) {
-        if (this.policy.mode() == PiiResolutionMode.UNION) {
-            return successful;
-        }
-
-        Set<String> selected = new LinkedHashSet<>(this.policy.supplementalProviders());
-        String primary = this.policy.primaryProvider();
-        if (successful.contains(primary)) {
-            selected.add(primary);
-            return Set.copyOf(selected);
-        }
-        if (this.policy.mode() == PiiResolutionMode.PRIMARY_WITH_FALLBACK) {
-            selected.addAll(successful);
-        }
-        return Set.copyOf(selected);
     }
 
     private PiiEvidence resolveEntityType(PiiEvidence evidence) {

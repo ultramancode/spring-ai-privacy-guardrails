@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 143623d79be1be4fbe4afe2bf65e1c21f14150e33b02bae6238756ce21147737 -->
+<!-- i18n-source-sha256: cb40a579eb289d63af38c3ec7c25aa2c31364606a3b21aa6cea12d2a694e2e74 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -554,6 +554,11 @@ ChatClient mcpClient = privacyConfigurer.configure(builder)
 추가한다면 변경된 최종 이름을 사용하세요. 와일드카드는 지원하지 않으며 `PII`를 포함해
 원문 공개가 필요한 엔티티 유형은 모두 명시적으로 지정해야 합니다. 공개할 유형이
 없다면 해당 도구를 `tools.disclosures`에 등록하지 마세요.
+
+원문 공개 허용 여부는 병합 후 확정된 엔티티 유형을 기준으로 판단합니다.
+예를 들어 `PERSON`과 `ORGANIZATION`의 탐지 결과가 하나의 `PII` 구간으로 병합되면,
+해당 도구에 `PERSON`과 `ORGANIZATION`을 모두 허용해도 원문은 복원되지 않습니다.
+`PII`를 명시적으로 허용하면 병합된 구간 전체의 원문이 복원됩니다.
 
 도구가 호출되기 전에 입력을 검사하고, 해당 도구에 허용된 엔티티 유형만 원문으로
 복원합니다. 도구 실행 결과도 다시 검사하여 모델에 전달되기 전에 개인정보를

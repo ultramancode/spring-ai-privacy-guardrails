@@ -90,11 +90,9 @@ final class PrivacyBufferedStreamTransformer {
     }
 
     private static Map<ChoiceKey, List<GenerationOccurrence>> correlateChoices(List<ChatClientResponse> responses) {
-        List<ResponseGenerations> frames = new ArrayList<>();
-        Set<Integer> arities = new LinkedHashSet<>();
-        boolean everyGenerationHasIndex = true;
-        boolean anyGenerationHasIndex = false;
-        boolean generationPresent = false;
+        Map<ChoiceKey, List<GenerationOccurrence>> choices = new LinkedHashMap<>();
+        Boolean usesExplicitChoiceIndexes = null;
+        int expectedPositionalChoiceCount = -1;
 
         for (int responseIndex = 0; responseIndex < responses.size(); responseIndex++) {
             ChatResponse response = responses.get(responseIndex).chatResponse();
@@ -102,40 +100,30 @@ final class PrivacyBufferedStreamTransformer {
                 continue;
             }
             List<Generation> generations = response.getResults();
-            frames.add(new ResponseGenerations(responseIndex, generations));
-            arities.add(generations.size());
-            generationPresent = true;
-            for (Generation generation : generations) {
-                String index = choiceIndex(generation);
-                everyGenerationHasIndex &= index != null;
-                anyGenerationHasIndex |= index != null;
-            }
-        }
-        if (!generationPresent) {
-            return Map.of();
-        }
-        if ((!everyGenerationHasIndex && anyGenerationHasIndex)
-                || (!everyGenerationHasIndex && arities.size() > 1)) {
-            throw correlationFailure();
-        }
-
-        Map<ChoiceKey, List<GenerationOccurrence>> choices = new LinkedHashMap<>();
-        for (ResponseGenerations frame : frames) {
             Set<ChoiceKey> frameKeys = new LinkedHashSet<>();
-            for (int generationIndex = 0; generationIndex < frame.generations().size(); generationIndex++) {
-                Generation generation = frame.generations().get(generationIndex);
+            for (int generationPosition = 0; generationPosition < generations.size(); generationPosition++) {
+                Generation generation = generations.get(generationPosition);
                 String explicitIndex = choiceIndex(generation);
+                boolean hasIndex = explicitIndex != null;
+                if (usesExplicitChoiceIndexes != null && usesExplicitChoiceIndexes != hasIndex) {
+                    throw streamCorrelationFailure();
+                }
+                usesExplicitChoiceIndexes = hasIndex;
                 ChoiceKey key;
-                if (everyGenerationHasIndex) {
+                if (hasIndex) {
                     key = new ChoiceKey("index:" + explicitIndex);
                 } else {
-                    key = new ChoiceKey("position:" + generationIndex);
+                    if (expectedPositionalChoiceCount != -1 && expectedPositionalChoiceCount != generations.size()) {
+                        throw streamCorrelationFailure();
+                    }
+                    expectedPositionalChoiceCount = generations.size();
+                    key = new ChoiceKey("position:" + generationPosition);
                 }
                 if (!frameKeys.add(key)) {
-                    throw correlationFailure();
+                    throw streamCorrelationFailure();
                 }
                 choices.computeIfAbsent(key, ignored -> new ArrayList<>())
-                        .add(new GenerationOccurrence(frame.responseIndex(), generationIndex, generation));
+                        .add(new GenerationOccurrence(responseIndex, generationPosition, generation));
             }
         }
         return choices;
@@ -185,7 +173,7 @@ final class PrivacyBufferedStreamTransformer {
             }
             replacements.computeIfAbsent(occurrence.responseIndex(), ignored -> new HashMap<>())
                     .put(
-                            occurrence.generationIndex(),
+                            occurrence.generationPosition(),
                             new Generation(replacementMessage, replacementMetadata)
                     );
         }
@@ -227,7 +215,7 @@ final class PrivacyBufferedStreamTransformer {
             AssistantMessage message = occurrence.generation().getOutput();
             PrivacyAssistantMessageSupport.requireSupported(message, PrivacyPhase.OUTPUT_POLICY);
             if (!PrivacyAssistantMessageSupport.haveSameRuntimeType(terminalMessage, message)) {
-                throw correlationFailure();
+                throw streamCorrelationFailure();
             }
             messages.add(message);
             if (message.getText() != null) {
@@ -278,12 +266,12 @@ final class PrivacyBufferedStreamTransformer {
             return List.copyOf(calls.values());
         }
 
-        int arity = chunks.get(0).size();
-        if (arity != 1 || chunks.stream().anyMatch(chunk -> chunk.size() != arity)) {
-            throw correlationFailure();
+        int toolCallCount = chunks.get(0).size();
+        if (toolCallCount != 1 || chunks.stream().anyMatch(chunk -> chunk.size() != toolCallCount)) {
+            throw streamCorrelationFailure();
         }
-        List<AssistantMessage.ToolCall> calls = new ArrayList<>(arity);
-        for (int index = 0; index < arity; index++) {
+        List<AssistantMessage.ToolCall> calls = new ArrayList<>(toolCallCount);
+        for (int index = 0; index < toolCallCount; index++) {
             AssistantMessage.ToolCall merged = chunks.get(0).get(index);
             for (int chunkIndex = 1; chunkIndex < chunks.size(); chunkIndex++) {
                 merged = mergeToolCall(merged, chunks.get(chunkIndex).get(index));
@@ -312,7 +300,7 @@ final class PrivacyBufferedStreamTransformer {
         if (!hasText(current) || previous.equals(current)) {
             return previous;
         }
-        throw correlationFailure();
+        throw streamCorrelationFailure();
     }
 
     private static String mergeFragment(String previous, String current) {
@@ -352,15 +340,16 @@ final class PrivacyBufferedStreamTransformer {
 
     private static String choiceIndex(Generation generation) {
         ChatGenerationMetadata metadata = generation.getMetadata();
-        String generationIndex = metadata == null
+        String generationChoiceIndex = metadata == null
                 ? null : canonicalizeChoiceIndex(metadata.get(CHOICE_INDEX_METADATA));
         AssistantMessage assistantMessage = generation.getOutput();
-        String messageIndex = assistantMessage == null
+        String messageChoiceIndex = assistantMessage == null
                 ? null : canonicalizeChoiceIndex(assistantMessage.getMetadata().get(CHOICE_INDEX_METADATA));
-        if (generationIndex != null && messageIndex != null && !generationIndex.equals(messageIndex)) {
-            throw correlationFailure();
+        if (generationChoiceIndex != null && messageChoiceIndex != null
+                && !generationChoiceIndex.equals(messageChoiceIndex)) {
+            throw streamCorrelationFailure();
         }
-        return generationIndex != null ? generationIndex : messageIndex;
+        return generationChoiceIndex != null ? generationChoiceIndex : messageChoiceIndex;
     }
 
     private static String canonicalizeChoiceIndex(Object index) {
@@ -378,21 +367,18 @@ final class PrivacyBufferedStreamTransformer {
         return value != null && !value.isBlank();
     }
 
-    private static PrivacyGuardrailException correlationFailure() {
+    private static PrivacyGuardrailException streamCorrelationFailure() {
         return new PrivacyGuardrailException(
                 PrivacyFailureCode.TRANSFORMATION_CONFLICT,
                 PrivacyPhase.OUTPUT_POLICY,
-                "Streaming response choices cannot be correlated safely"
+                "Streaming response fragments cannot be correlated safely"
         );
     }
 
     private record ChoiceKey(String value) {
     }
 
-    private record ResponseGenerations(int responseIndex, List<Generation> generations) {
-    }
-
-    private record GenerationOccurrence(int responseIndex, int generationIndex, Generation generation) {
+    private record GenerationOccurrence(int responseIndex, int generationPosition, Generation generation) {
     }
 
     private enum ContentChannel {

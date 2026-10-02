@@ -324,17 +324,24 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
                         PrivacyPhase.OUTPUT_POLICY
                 )
                 : text;
-        PrivacyOutputPolicyExecutor.Result policyResult = PrivacyOutputPolicyExecutor.apply(
-                this.privacyService,
-                handle,
-                policyInput,
-                this.action
-        );
-        if (policyResult.blocked()) {
-            notifyApplicationOutput(PrivacyEnforcementOutcome.BLOCKED);
-            throw new PrivacyOutputBlockedException(this.blockExceptionMessage);
+        if (policyInput == null) {
+            return null;
         }
-        return policyResult.text();
+        return switch (this.action) {
+            case TOKENIZE -> PrivacyJsonPayloadTransformer.tokenize(
+                    this.privacyService, handle, policyInput, PrivacyPhase.OUTPUT_POLICY, false);
+            case REDACT -> PrivacyJsonPayloadTransformer.redact(
+                    this.privacyService, handle, policyInput, PrivacyPhase.OUTPUT_POLICY, false);
+            case BLOCK -> {
+                if (PrivacyJsonPayloadTransformer.containsPii(
+                        this.privacyService, handle, policyInput, PrivacyPhase.OUTPUT_POLICY)) {
+                    notifyApplicationOutput(PrivacyEnforcementOutcome.BLOCKED);
+                    throw new PrivacyOutputBlockedException(this.blockExceptionMessage);
+                }
+                yield PrivacyJsonPayloadTransformer.requireTransformedResult(
+                        policyInput, PrivacyPhase.OUTPUT_POLICY, this.privacyService.processingLimits());
+            }
+        };
     }
 
     private ChatClientRequest prepareOutputBoundaryRequest(

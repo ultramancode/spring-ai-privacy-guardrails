@@ -418,6 +418,81 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
+    void adviseStreamCorrelatesIndexedChoicesAcrossChangingChoiceCountAndEmptyFrames() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
+        ChatClientResponse empty = response(List.of());
+        ChatClientResponse noChatResponse = new ChatClientResponse(null, Map.of());
+
+        // Choice index 7 carries "Ali" + "ce", and index 8 carries "Bo" + "b" across frames.
+        ChatClientResponse aliceStartFrame = response(List.of(new Generation(AssistantMessage.builder()
+                .content("Ali").properties(Map.of("index", 7)).build())));
+        ChatClientResponse bobStartAndAliceEndFrame = response(List.of(
+                new Generation(AssistantMessage.builder()
+                        .content("Bo").properties(Map.of("index", 8)).build()),
+                new Generation(AssistantMessage.builder()
+                        .content("ce").properties(Map.of("index", 7)).build())
+        ));
+        ChatClientResponse bobEndFrame = response(List.of(new Generation(AssistantMessage.builder()
+                .content("b").properties(Map.of("index", 8)).build())));
+        Flux<ChatClientResponse> responses = Flux.just(
+                empty,
+                aliceStartFrame,
+                bobStartAndAliceEndFrame,
+                noChatResponse,
+                bobEndFrame
+        );
+
+        try (PrivacySession session = service.openSession()) {
+            List<ChatClientResponse> results = advisor.protectAtApplicationBoundary(session.handle(), responses)
+                    .collectList().block(Duration.ofSeconds(5));
+
+            assertThat(results).hasSize(5);
+            assertThat(results.get(0)).isSameAs(empty);
+            assertThat(results.get(3)).isSameAs(noChatResponse);
+
+            String aliceStartText = results.get(1).chatResponse().getResult().getOutput().getText();
+            String bobStartText = results.get(2).chatResponse().getResults().get(0).getOutput().getText();
+            String aliceToken = results.get(2).chatResponse().getResults().get(1).getOutput().getText();
+            String bobToken = results.get(4).chatResponse().getResult().getOutput().getText();
+
+            // Earlier fragments must not expose raw text.
+            // Each choice's last fragment carries the complete protected text.
+            assertThat(aliceStartText).isNull();
+            assertThat(bobStartText).isNull();
+            assertThat(aliceToken).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+            assertThat(bobToken).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+            assertThat(service.detokenize(session.handle(), aliceToken)).isEqualTo("Alice");
+            assertThat(service.detokenize(session.handle(), bobToken)).isEqualTo("Bob");
+        }
+    }
+
+    @Test
+    void adviseStreamRejectsDuplicateChoiceIndexesBeforeReplayingAnyFrame() {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
+        Flux<ChatClientResponse> responses = Flux.just(
+                response(List.of(new Generation(AssistantMessage.builder()
+                        .content("Ali").properties(Map.of("index", 0)).build()))),
+                response(List.of(
+                        new Generation(AssistantMessage.builder()
+                                .content("ce").properties(Map.of("index", 0)).build()),
+                        new Generation(AssistantMessage.builder()
+                                .content("Bob").properties(Map.of("index", 0L)).build())
+                ))
+        );
+
+        try (PrivacySession session = service.openSession()) {
+            StepVerifier.create(advisor.protectAtApplicationBoundary(session.handle(), responses))
+                    .expectErrorSatisfies(failure -> assertThat(failure)
+                            .isInstanceOf(PrivacyGuardrailException.class)
+                            .hasFieldOrPropertyWithValue("code", PrivacyFailureCode.TRANSFORMATION_CONFLICT)
+                            .hasFieldOrPropertyWithValue("phase", PrivacyPhase.OUTPUT_POLICY))
+                    .verify(Duration.ofSeconds(5));
+        }
+    }
+
+    @Test
     void adviseStreamFailsClosedWhenChoiceIndexSourcesConflict() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
@@ -819,7 +894,7 @@ class PrivacyOutputAdvisorStreamTest {
                     .block())
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasFieldOrPropertyWithValue("code", PrivacyFailureCode.TRANSFORMATION_CONFLICT)
-                    .hasMessage("Streaming response choices cannot be correlated safely");
+                    .hasMessage("Streaming response fragments cannot be correlated safely");
         }
         assertThat(emittedResponses).hasValue(0);
     }
@@ -934,10 +1009,10 @@ class PrivacyOutputAdvisorStreamTest {
         return new ChatClientResponse(new ChatResponse(generations), Map.of());
     }
 
-    private String streamText(List<ChatClientResponse> responses, int generationIndex) {
+    private String streamText(List<ChatClientResponse> responses, int generationPosition) {
         StringBuilder text = new StringBuilder();
         for (ChatClientResponse response : responses) {
-            String chunk = response.chatResponse().getResults().get(generationIndex).getOutput().getText();
+            String chunk = response.chatResponse().getResults().get(generationPosition).getOutput().getText();
             if (chunk != null) {
                 text.append(chunk);
             }

@@ -1,6 +1,9 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -180,6 +183,44 @@ public final class PrivacyService {
                 texts, this.contextRegistry.requireActiveContext(handle)).stream()
                 .map(PiiAnalysisResult::spans)
                 .toList();
+    }
+
+    /**
+     * Internal JSON integration that redacts resolved scalar texts without reapplying detection policy.
+     * Uses the batch limits of {@link #analyzeTextsFromJsonScalars} and preserves session-owned tokens.
+     *
+     * @hidden
+     */
+    public Map<String, String> redactTextsFromJsonScalars(PrivacyContextHandle handle, List<String> texts) {
+        List<List<ResolvedPiiSpan>> resolvedSpansPerText = analyzeTextsFromJsonScalars(handle, texts);
+        PrivacyContext context = this.contextRegistry.requireActiveContext(handle);
+        Map<String, String> redactedByText = new HashMap<>();
+        for (int index = 0; index < texts.size(); index++) {
+            String text = texts.get(index);
+            redactedByText.put(text, this.textTransformer.redactWithResolvedSpans(text, resolvedSpansPerText.get(index), context));
+        }
+        context.requireActive();
+        return Map.copyOf(redactedByText);
+    }
+
+    /**
+     * Internal JSON integration that identifies scalar texts with resolved PII outside session-owned tokens.
+     * Uses the batch limits of {@link #analyzeTextsFromJsonScalars} without reapplying detection policy.
+     *
+     * @hidden
+     */
+    public Set<String> findPiiTextsFromJsonScalars(PrivacyContextHandle handle, List<String> texts) {
+        List<List<ResolvedPiiSpan>> resolvedSpansPerText = analyzeTextsFromJsonScalars(handle, texts);
+        PrivacyContext context = this.contextRegistry.requireActiveContext(handle);
+        Set<String> textsWithPii = new HashSet<>();
+        for (int index = 0; index < texts.size(); index++) {
+            String text = texts.get(index);
+            if (this.textTransformer.containsPiiWithResolvedSpans(text, resolvedSpansPerText.get(index), context)) {
+                textsWithPii.add(text);
+            }
+        }
+        context.requireActive();
+        return Set.copyOf(textsWithPii);
     }
 
     /**

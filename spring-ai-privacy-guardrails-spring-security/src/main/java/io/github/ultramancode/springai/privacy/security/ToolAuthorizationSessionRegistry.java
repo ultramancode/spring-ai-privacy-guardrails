@@ -32,11 +32,8 @@ final class ToolAuthorizationSessionRegistry {
     ) {
         Objects.requireNonNull(authentication, "authentication must not be null");
         SessionState sessionState = new SessionState(authentication, initialToolCallbacks);
-        ToolAuthorizationSessionHandle handle;
-        do {
-            handle = ToolAuthorizationSessionHandle.create();
-        }
-        while (this.sessions.putIfAbsent(handle, sessionState) != null);
+        ToolAuthorizationSessionHandle handle = new ToolAuthorizationSessionHandle();
+        this.sessions.put(handle, sessionState);
         return new ToolAuthorizationSession(this, handle);
     }
 

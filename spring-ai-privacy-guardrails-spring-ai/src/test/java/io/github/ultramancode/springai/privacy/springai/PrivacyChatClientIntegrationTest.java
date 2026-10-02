@@ -4,7 +4,10 @@ import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
+import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,6 +38,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -54,6 +58,49 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PrivacyChatClientIntegrationTest {
 
     private static final Pattern PERSON_TOKEN = OpaquePiiTokenFormat.patternForEntityType("PERSON");
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void blockRejectsOversizedJsonBeforeDelivery(boolean streaming) {
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
+        PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxOutputCharacters(20).build();
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
+        String payload = " ".repeat(30) + "{\"value\":\"ok\"}";
+        ChatModel model = new ChatModel() {
+            @Override
+            public ChatResponse call(Prompt prompt) {
+                return new ChatResponse(List.of(new Generation(new AssistantMessage(payload))));
+            }
+
+            @Override
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.just(payload.substring(0, 16), payload.substring(16, 32), payload.substring(32))
+                        .map(text -> new ChatResponse(List.of(new Generation(new AssistantMessage(text)))));
+            }
+        };
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.BLOCK, "blocked")
+                .build()
+                .configure(ChatClient.builder(model))
+                .build();
+
+        if (streaming) {
+            StepVerifier.create(chatClient.prompt().user("hello").stream().content())
+                    .expectErrorSatisfies(error -> assertThat(error)
+                            .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                                assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                                assertThat(failure.phase()).isEqualTo(PrivacyPhase.OUTPUT_POLICY);
+                            }))
+                    .verify(Duration.ofSeconds(5));
+        } else {
+            assertThatThrownBy(() -> chatClient.prompt().user("hello").call().content())
+                    .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                        assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                        assertThat(failure.phase()).isEqualTo(PrivacyPhase.OUTPUT_POLICY);
+                    });
+        }
+        assertThat(service.activeSessionCount()).isZero();
+    }
 
     @Test
     void unchangedProtectedPromptSkipsReanalysisAtTheFinalModelBoundary() {

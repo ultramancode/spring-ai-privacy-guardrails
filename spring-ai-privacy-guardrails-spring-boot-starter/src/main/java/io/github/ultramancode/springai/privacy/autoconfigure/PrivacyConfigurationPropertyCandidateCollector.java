@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
 
 /** Collects configuration-property names and the source context needed to diagnose them. */
 final class PrivacyConfigurationPropertyCandidateCollector {
@@ -85,18 +85,16 @@ final class PrivacyConfigurationPropertyCandidateCollector {
                 return;
             }
             if (source instanceof IterableConfigurationPropertySource iterableSource) {
-                collectCandidatesUsingSourceMapping(iterableSource)
-                        .ifPresent(candidates::addAll);
+                candidates.addAll(collectCandidatesUsingSourceMapping(iterableSource));
             }
         }
     }
 
     /**
      * Uses the mapping semantics of one adapted source without exposing partial results.
-     * An empty optional means inspection failed. A present empty list means it succeeded
-     * with no candidates.
+     * Failures discard this source's candidates without affecting other sources.
      */
-    private static Optional<List<PropertyNameCandidate>> collectCandidatesUsingSourceMapping(
+    private static List<PropertyNameCandidate> collectCandidatesUsingSourceMapping(
             IterableConfigurationPropertySource source
     ) {
         try {
@@ -113,114 +111,82 @@ final class PrivacyConfigurationPropertyCandidateCollector {
             }
             return collectCandidatesFromSystemEnvironment(propertySource);
         } catch (RuntimeException ignored) {
-            return Optional.empty();
+            return List.of();
         }
     }
 
     /** Pairs directly enumerated names with their already-adapted source. */
-    private static Optional<List<PropertyNameCandidate>> collectDirectlyEnumeratedCandidates(
+    private static List<PropertyNameCandidate> collectDirectlyEnumeratedCandidates(
             IterableConfigurationPropertySource source
     ) {
-        Optional<List<ConfigurationPropertyName>> names = enumeratePropertyNames(source);
-        if (names.isEmpty()) {
-            return Optional.empty();
-        }
+        List<ConfigurationPropertyName> names = enumeratePropertyNames(source);
         DiagnosticContext context = new DiagnosticContext(source, false);
-        List<PropertyNameCandidate> candidates = new ArrayList<>(names.get().size());
-        for (ConfigurationPropertyName name : names.get()) {
+        List<PropertyNameCandidate> candidates = new ArrayList<>(names.size());
+        for (ConfigurationPropertyName name : names) {
             candidates.add(new PropertyNameCandidate(name, context));
         }
-        return Optional.of(List.copyOf(candidates));
+        return List.copyOf(candidates);
     }
 
-    /** Discards every partially enumerated name if the source iterator fails. */
-    private static Optional<List<ConfigurationPropertyName>> enumeratePropertyNames(
+    /** Propagates enumeration failures to the source boundary before publishing any candidates. */
+    private static List<ConfigurationPropertyName> enumeratePropertyNames(
             IterableConfigurationPropertySource source
     ) {
         List<ConfigurationPropertyName> names = new ArrayList<>();
-        try {
-            for (ConfigurationPropertyName name : source) {
-                if (name == null) {
-                    return Optional.empty();
-                }
-                names.add(name);
-            }
-            return Optional.of(List.copyOf(names));
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
+        for (ConfigurationPropertyName name : source) {
+            names.add(Objects.requireNonNull(name, "property name must not be null"));
         }
+        return List.copyOf(names);
     }
 
     /**
      * Maps every raw variable independently. This mirrors Boot's lookup without reading
      * values and prevents one valid alias from hiding another invalid name.
      */
-    private static Optional<List<PropertyNameCandidate>> collectCandidatesFromSystemEnvironment(
+    private static List<PropertyNameCandidate> collectCandidatesFromSystemEnvironment(
             SystemEnvironmentPropertySource propertySource
     ) {
-        try {
-            if (propertySource instanceof PropertySourceInfo sourceInfo) {
-                String prefix = sourceInfo.getPrefix();
-                if (prefix != null && !prefix.isBlank()) {
-                    // Prefix-aware environment mapping has additional whole-name
-                    // semantics, so skipping it avoids speculative false warnings.
-                    return Optional.of(List.of());
-                }
+        if (propertySource instanceof PropertySourceInfo sourceInfo) {
+            String prefix = sourceInfo.getPrefix();
+            if (prefix != null && !prefix.isBlank()) {
+                // Prefix-aware environment mapping has additional whole-name
+                // semantics, so skipping it avoids speculative false warnings.
+                return List.of();
             }
-            List<PropertyNameCandidate> candidates = new ArrayList<>();
-            for (String propertyName : propertySource.getPropertyNames()) {
-                if (propertyName == null) {
-                    return Optional.empty();
-                }
-                Optional<List<PropertyNameCandidate>> mappedCandidates =
-                        mapEnvironmentVariableToCandidates(
-                                propertySource.getName(),
-                                propertyName
-                        );
-                if (mappedCandidates.isEmpty()) {
-                    return Optional.empty();
-                }
-                candidates.addAll(mappedCandidates.get());
-            }
-            return Optional.of(List.copyOf(candidates));
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
         }
+        List<PropertyNameCandidate> candidates = new ArrayList<>();
+        for (String propertyName : propertySource.getPropertyNames()) {
+            Objects.requireNonNull(propertyName, "property name must not be null");
+            candidates.addAll(mapEnvironmentVariableToCandidates(propertySource.getName(), propertyName));
+        }
+        return List.copyOf(candidates);
     }
 
     /**
      * Maps one environment variable through Boot using a one-entry source, keeping its
      * aliases independent from every other variable in the original source.
      */
-    private static Optional<List<PropertyNameCandidate>> mapEnvironmentVariableToCandidates(
+    private static List<PropertyNameCandidate> mapEnvironmentVariableToCandidates(
             String propertySourceName,
             String environmentVariableName
     ) {
-        try {
-            PropertySource<?> isolatedSource = new SystemEnvironmentPropertySource(
-                    propertySourceName,
-                    Map.of(environmentVariableName, Boolean.TRUE)
-            );
-            List<PropertyNameCandidate> candidates = new ArrayList<>();
-            for (ConfigurationPropertySource source :
-                    ConfigurationPropertySources.from(List.of(isolatedSource))) {
-                if (!(source instanceof IterableConfigurationPropertySource iterableSource)) {
-                    continue;
-                }
-                Optional<List<ConfigurationPropertyName>> mappedNames =
-                        enumeratePropertyNames(iterableSource);
-                if (mappedNames.isEmpty()) {
-                    return Optional.empty();
-                }
-                DiagnosticContext context = new DiagnosticContext(iterableSource, true);
-                for (ConfigurationPropertyName mappedName : mappedNames.get()) {
-                    candidates.add(new PropertyNameCandidate(mappedName, context));
-                }
+        PropertySource<?> isolatedSource = new SystemEnvironmentPropertySource(
+                propertySourceName,
+                Map.of(environmentVariableName, Boolean.TRUE)
+        );
+        List<PropertyNameCandidate> candidates = new ArrayList<>();
+        for (ConfigurationPropertySource source :
+                ConfigurationPropertySources.from(List.of(isolatedSource))) {
+            if (!(source instanceof IterableConfigurationPropertySource iterableSource)) {
+                continue;
             }
-            return Optional.of(List.copyOf(candidates));
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
+            List<ConfigurationPropertyName> mappedNames = enumeratePropertyNames(iterableSource);
+            DiagnosticContext context = new DiagnosticContext(iterableSource, true);
+            for (ConfigurationPropertyName mappedName : mappedNames) {
+                candidates.add(new PropertyNameCandidate(mappedName, context));
+            }
         }
+        return List.copyOf(candidates);
     }
 
     /** Source and mapping mode required while diagnosing one candidate name. */

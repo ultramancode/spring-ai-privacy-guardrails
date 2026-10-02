@@ -12,19 +12,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PiiEvidenceResolverTest {
 
     @Test
-    void resolveConsumesCanonicalEntityAllowlistFromItsServiceCreationBoundary() {
+    void resolveFiltersByCanonicalEntityAllowlist() {
         PiiEvidenceResolver resolver = resolverWithAliases(PiiResolutionPolicy.defaults());
         PiiAnalysisOptions canonicalOptions = PiiAnalysisOptions.builder()
                 .includedEntityTypes(List.of("PERSON"))
                 .build();
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                "Alice alice@example.com",
                 List.of(
                         evidence("PER", 0, 5, "OPENNLP", 0.90),
                         evidence("EMAIL", 6, 23, "REGEX", 0.90)
                 ),
-                Set.of("OPENNLP", "REGEX"),
                 canonicalOptions
         );
 
@@ -40,12 +38,10 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolverWithAliases(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                "Alice",
                 List.of(
                         evidence("PER", 0, 5, "OPENNLP", 0.84),
                         evidence("PERSON", 0, 5, "PRESIDIO", 0.91)
                 ),
-                Set.of("OPENNLP", "PRESIDIO"),
                 PiiAnalysisOptions.defaults()
         );
 
@@ -62,12 +58,10 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                "Spring",
                 List.of(
                         evidence("PERSON", 0, 6, "OPENNLP", 0.85),
                         evidence("ORGANIZATION", 0, 6, "PRESIDIO", 0.90)
                 ),
-                Set.of("OPENNLP", "PRESIDIO"),
                 PiiAnalysisOptions.defaults()
         );
 
@@ -82,12 +76,10 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                "john@example.com",
                 List.of(
                         evidence("PERSON", 0, 4, "OPENNLP", 0.99),
                         evidence("EMAIL_ADDRESS", 0, 16, "REGEX", 0.90)
                 ),
-                Set.of("OPENNLP", "REGEX"),
                 PiiAnalysisOptions.defaults()
         );
 
@@ -104,12 +96,10 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                "Alice Smith",
                 List.of(
                         evidence("PERSON", 0, 5, "OPENNLP", 0.91),
                         evidence("ORGANIZATION", 3, 11, "PRESIDIO", 0.88)
                 ),
-                Set.of("OPENNLP", "PRESIDIO"),
                 PiiAnalysisOptions.defaults()
         );
 
@@ -129,12 +119,10 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(policy);
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                "Alice Bob",
                 List.of(
                         evidence("PERSON", 0, 5, "OPENNLP", 0.80),
                         evidence("PERSON", 6, 9, "PRESIDIO", 0.70)
                 ),
-                Set.of("OPENNLP", "PRESIDIO"),
                 PiiAnalysisOptions.defaults()
         );
 
@@ -142,82 +130,6 @@ class PiiEvidenceResolverTest {
             assertThat(span.start()).isEqualTo(6);
             assertThat(span.end()).isEqualTo(9);
         });
-    }
-
-    @Test
-    void resolveUsesFallbackProvidersOnlyWhenPrimaryIsUnavailable() {
-        PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
-                .primaryProvider("PRESIDIO")
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
-        PiiEvidenceResolver resolver = resolver(policy);
-        List<PiiEvidence> evidence = List.of(
-                evidence("PERSON", 0, 5, "OPENNLP", 0.90),
-                evidence("PERSON", 6, 9, "PRESIDIO", 0.90)
-        );
-
-        assertThat(resolver.resolve(
-                "Alice Bob", evidence, Set.of("OPENNLP", "PRESIDIO"), PiiAnalysisOptions.defaults()))
-                .singleElement().satisfies(span -> {
-                    assertThat(span.start()).isEqualTo(6);
-                    assertThat(span.end()).isEqualTo(9);
-                });
-        assertThat(resolver.resolve(
-                "Alice Bob",
-                List.of(evidence("PERSON", 0, 5, "OPENNLP", 0.90)),
-                Set.of("OPENNLP"),
-                PiiAnalysisOptions.defaults()
-        ))
-                .singleElement().satisfies(span -> {
-                    assertThat(span.start()).isZero();
-                    assertThat(span.end()).isEqualTo(5);
-                });
-    }
-
-    @Test
-    void resolvePrimaryModeNeverFallsBackWhenPrimaryIsUnavailable() {
-        PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY)
-                .primaryProvider("PRESIDIO")
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
-        PiiEvidenceResolver resolver = resolver(policy);
-
-        assertThat(resolver.resolve(
-                "Alice",
-                List.of(evidence("PERSON", 0, 5, "OPENNLP", 0.90)),
-                Set.of("OPENNLP"),
-                PiiAnalysisOptions.defaults()
-        )).isEmpty();
-    }
-
-    @Test
-    void resolveRejectsEvidenceOutsideTheSourceText() {
-        PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
-
-        assertThatThrownBy(() -> resolver.resolve(
-                "Alice",
-                List.of(evidence("PERSON", 0, 99, "PRESIDIO", 0.90)),
-                Set.of("PRESIDIO"),
-                PiiAnalysisOptions.defaults()
-        )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("outside the source text")
-                .hasMessageNotContaining("Alice");
-    }
-
-    @Test
-    void resolveRejectsEvidenceAttributedToAnUnsuccessfulProvider() {
-        PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
-
-        assertThatThrownBy(() -> resolver.resolve(
-                "Alice",
-                List.of(evidence("PERSON", 0, 5, "PRESIDIO", 0.90)),
-                Set.of("OPENNLP"),
-                PiiAnalysisOptions.defaults()
-        )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("provider must be successful")
-                .hasMessageNotContaining("Alice");
     }
 
     @Test
@@ -231,13 +143,10 @@ class PiiEvidenceResolverTest {
         );
 
         assertThatThrownBy(() -> resolver.resolve(
-                "Alice",
                 List.of(evidence("PERSON", 0, 5, "PRESIDIO", 0.90)),
-                Set.of("PRESIDIO"),
                 PiiAnalysisOptions.defaults()
         )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("evidence provider has no entity-type registry")
-                .hasMessageNotContaining("Alice");
+                .hasMessage("evidence provider has no entity-type registry");
     }
 
     private PiiEvidenceResolver resolver(PiiResolutionPolicy policy) {

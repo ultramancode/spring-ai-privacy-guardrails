@@ -584,6 +584,12 @@ resulting final name. Wildcards are not supported, and every entity type that
 requires original disclosure, including `PII`, must be listed explicitly. If a
 tool requires no original values, do not register it in `tools.disclosures`.
 
+Original disclosure is checked against the final entity type after detection
+results are merged. For example, if `PERSON` and `ORGANIZATION` detections are
+merged into a single `PII` span, allowing both `PERSON` and `ORGANIZATION` for
+the tool does not restore the original text. Explicitly allowing `PII` restores
+the original text of the entire merged span.
+
 Before a tool call, the library inspects the input and restores original values
 only for entity types permitted for that tool. It inspects the tool result again
 and protects PII before the result is passed to the model.

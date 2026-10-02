@@ -5,10 +5,10 @@ import org.springframework.ai.chat.model.ToolContext;
 
 import java.util.Map;
 
-/** Repository-only bridge for measuring the direct tool boundary. */
-public final class PrivacyToolContextFactoryBenchmarkAccess {
+/** Test-only bridge for direct wrapper failure-path verification. */
+public final class PrivacyToolContextTestAccess {
 
-    private PrivacyToolContextFactoryBenchmarkAccess() {
+    private PrivacyToolContextTestAccess() {
     }
 
     public static ToolContext create(PrivacyContextHandle handle) {

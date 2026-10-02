@@ -51,7 +51,7 @@ final class PrivacyJsonDocumentProcessor {
             PrivacyPhase phase
     ) throws JacksonException {
         validateAndCollectAnalysisTexts(payload, phase);
-        return rewrite(payload, scalarTransformer, phase);
+        return rewriteValidatedJson(payload, scalarTransformer, phase);
     }
 
     List<String> validateAndCollectAnalysisTexts(
@@ -113,7 +113,7 @@ final class PrivacyJsonDocumentProcessor {
     }
 
     /** Rewrites the same immutable payload already validated by the collection pass. */
-    String rewrite(
+    String rewriteValidatedJson(
             String payload,
             Function<Object, Object> scalarTransformer,
             PrivacyPhase phase

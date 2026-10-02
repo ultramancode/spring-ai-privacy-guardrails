@@ -8,7 +8,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextFactoryTestAccess;
+import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextTestAccess;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -263,7 +263,7 @@ class PrivacyTestProbeTest {
         try (PrivacySession session = privacyService.openSession()) {
             assertThatThrownBy(() -> failingTool.call(
                     toolInput,
-                    PrivacyToolContextFactoryTestAccess.create(session.handle())
+                    PrivacyToolContextTestAccess.create(session.handle())
                     ))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("failure containing " + toolInput);

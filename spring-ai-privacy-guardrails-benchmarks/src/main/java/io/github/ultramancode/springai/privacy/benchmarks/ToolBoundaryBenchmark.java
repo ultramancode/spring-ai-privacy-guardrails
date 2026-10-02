@@ -3,7 +3,7 @@ package io.github.ultramancode.springai.privacy.benchmarks;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextFactoryBenchmarkAccess;
+import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextBenchmarkAccess;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -50,7 +50,7 @@ public class ToolBoundaryBenchmark {
         try (PrivacySession session = this.privacyService.openSession()) {
             String protectedResult = this.protectedTool.call(
                     this.toolInput,
-                    PrivacyToolContextFactoryBenchmarkAccess.create(session.handle())
+                    PrivacyToolContextBenchmarkAccess.create(session.handle())
             );
             if (protectedResult.contains("CUST-9000") || protectedResult.contains("result@example.test")) {
                 throw new IllegalStateException("Benchmark setup crossed the protected result boundary");
@@ -63,7 +63,7 @@ public class ToolBoundaryBenchmark {
         try (PrivacySession session = this.privacyService.openSession()) {
             blackhole.consume(this.protectedTool.call(
                     this.toolInput,
-                    PrivacyToolContextFactoryBenchmarkAccess.create(session.handle())
+                    PrivacyToolContextBenchmarkAccess.create(session.handle())
             ));
         }
     }

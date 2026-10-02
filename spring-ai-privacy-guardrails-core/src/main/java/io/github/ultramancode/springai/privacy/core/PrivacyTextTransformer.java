@@ -40,12 +40,12 @@ final class PrivacyTextTransformer {
             List<ResolvedPiiSpan> resolvedSpans,
             PrivacyContext context
     ) {
-        return tokenizePrepared(text, protectionSpans(resolvedSpans), context);
+        return tokenizeWithProtectionSpans(text, toProtectionSpans(resolvedSpans), context);
     }
 
     String tokenize(String text, List<PiiSpan> spans, PrivacyContext context) {
         List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
-        return tokenizePrepared(text, protectionSpans(resolvedSpans), context);
+        return tokenizeWithProtectionSpans(text, toProtectionSpans(resolvedSpans), context);
     }
 
     String tokenize(String text, PrivacyContext context) {
@@ -72,12 +72,12 @@ final class PrivacyTextTransformer {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
         List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.analyzeEvidence(text).result().spans();
-        return redactPrepared(text, protectionSpans(resolvedSpans));
+        return redactWithProtectionSpans(text, toProtectionSpans(resolvedSpans));
     }
 
     String redact(String text, List<PiiSpan> spans) {
         List<ResolvedPiiSpan> resolvedSpans = this.analysisCoordinator.resolveSuppliedSpans(text, spans);
-        return redactPrepared(text, protectionSpans(resolvedSpans));
+        return redactWithProtectionSpans(text, toProtectionSpans(resolvedSpans));
     }
 
     String redact(String text, List<PiiSpan> spans, PrivacyContext context) {
@@ -95,8 +95,8 @@ final class PrivacyTextTransformer {
     }
 
     String redactWithResolvedSpans(String text, List<ResolvedPiiSpan> resolvedSpans, PrivacyContext context) {
-        List<ProtectionSpan> spans = excludeKnownTokens(text, protectionSpans(resolvedSpans), context);
-        return redactPrepared(text, spans);
+        List<ProtectionSpan> spansOutsideKnownTokens = excludeKnownTokenRanges(text, toProtectionSpans(resolvedSpans), context);
+        return redactWithProtectionSpans(text, spansOutsideKnownTokens);
     }
 
     boolean containsPii(String text, PrivacyContext context) {
@@ -114,7 +114,7 @@ final class PrivacyTextTransformer {
     }
 
     boolean containsPiiWithResolvedSpans(String text, List<ResolvedPiiSpan> resolvedSpans, PrivacyContext context) {
-        return !excludeKnownTokens(text, protectionSpans(resolvedSpans), context).isEmpty();
+        return !excludeKnownTokenRanges(text, toProtectionSpans(resolvedSpans), context).isEmpty();
     }
 
     String detokenize(String text, PrivacyContext context, Set<String> allowedEntityTypes) {
@@ -150,22 +150,22 @@ final class PrivacyTextTransformer {
         return detokenizedText.toString();
     }
 
-    private String tokenizePrepared(String text, List<ProtectionSpan> spans, PrivacyContext context) {
-        List<ProtectionSpan> preparedSpans = excludeKnownTokens(text, spans, context);
-        if (preparedSpans.isEmpty()) {
+    private String tokenizeWithProtectionSpans(String text, List<ProtectionSpan> protectionSpans, PrivacyContext context) {
+        List<ProtectionSpan> spansOutsideKnownTokens = excludeKnownTokenRanges(text, protectionSpans, context);
+        if (spansOutsideKnownTokens.isEmpty()) {
             return requireOutputWithinLimit(text, PrivacyPhase.TOKENIZATION);
         }
 
         // Reject guaranteed overflow before creating mappings, then check actual token lengths.
         int capacity = boundedTransformedLength(
                 text,
-                preparedSpans,
+                spansOutsideKnownTokens,
                 PrivacyPhase.TOKENIZATION,
                 span -> OpaquePiiTokenFormat.minimumGeneratedTokenLength(span.entityType())
         );
         StringBuilder tokenizedText = new StringBuilder(capacity);
         int cursor = 0;
-        for (ProtectionSpan span : preparedSpans) {
+        for (ProtectionSpan span : spansOutsideKnownTokens) {
             appendBounded(tokenizedText, text, cursor, span.start(), PrivacyPhase.TOKENIZATION);
             String token = context.tokenFor(
                     span.entityType(),
@@ -178,20 +178,20 @@ final class PrivacyTextTransformer {
         return tokenizedText.toString();
     }
 
-    private String redactPrepared(String text, List<ProtectionSpan> spans) {
-        if (spans.isEmpty()) {
+    private String redactWithProtectionSpans(String text, List<ProtectionSpan> protectionSpans) {
+        if (protectionSpans.isEmpty()) {
             return requireOutputWithinLimit(text, PrivacyPhase.REDACTION);
         }
 
         int capacity = boundedTransformedLength(
                 text,
-                spans,
+                protectionSpans,
                 PrivacyPhase.REDACTION,
                 span -> redactionMarker(span.entityType()).length()
         );
         StringBuilder redactedText = new StringBuilder(capacity);
         int cursor = 0;
-        for (ProtectionSpan span : spans) {
+        for (ProtectionSpan span : protectionSpans) {
             redactedText.append(text, cursor, span.start());
             redactedText.append(redactionMarker(span.entityType()));
             cursor = span.end();
@@ -199,29 +199,30 @@ final class PrivacyTextTransformer {
         return redactedText.append(text, cursor, text.length()).toString();
     }
 
-    private static List<ProtectionSpan> excludeKnownTokens(
+    /** Returns protection spans excluding overlaps with session-owned token ranges. Leaves source text unchanged. */
+    private static List<ProtectionSpan> excludeKnownTokenRanges(
             String text,
-            List<ProtectionSpan> spans,
+            List<ProtectionSpan> protectionSpans,
             PrivacyContext context
     ) {
-        if (spans.isEmpty() || !context.hasTokens()) {
-            return spans;
+        if (protectionSpans.isEmpty() || !context.hasTokens()) {
+            return protectionSpans;
         }
-        List<TextRange> protectedRanges = knownTokenRanges(text, context);
-        if (protectedRanges.isEmpty()) {
-            return spans;
+        List<TextRange> knownTokenRanges = knownTokenRanges(text, context);
+        if (knownTokenRanges.isEmpty()) {
+            return protectionSpans;
         }
 
         List<ProtectionSpan> spansOutsideKnownTokens = new ArrayList<>();
         int firstPossibleRange = 0;
-        for (ProtectionSpan span : spans) {
-            while (firstPossibleRange < protectedRanges.size()
-                    && protectedRanges.get(firstPossibleRange).end() <= span.start()) {
+        for (ProtectionSpan span : protectionSpans) {
+            while (firstPossibleRange < knownTokenRanges.size()
+                    && knownTokenRanges.get(firstPossibleRange).end() <= span.start()) {
                 firstPossibleRange++;
             }
             int cursor = span.start();
-            for (int index = firstPossibleRange; index < protectedRanges.size(); index++) {
-                TextRange range = protectedRanges.get(index);
+            for (int index = firstPossibleRange; index < knownTokenRanges.size(); index++) {
+                TextRange range = knownTokenRanges.get(index);
                 if (range.start() >= span.end()) {
                     break;
                 }
@@ -253,12 +254,12 @@ final class PrivacyTextTransformer {
 
     private int boundedTransformedLength(
             String text,
-            List<ProtectionSpan> spans,
+            List<ProtectionSpan> protectionSpans,
             PrivacyPhase phase,
             ToIntFunction<ProtectionSpan> replacementLength
     ) {
         long length = text.length();
-        for (ProtectionSpan span : spans) {
+        for (ProtectionSpan span : protectionSpans) {
             length += (long) replacementLength.applyAsInt(span) - (span.end() - span.start());
         }
         requireOutputLength(length, phase);
@@ -302,7 +303,7 @@ final class PrivacyTextTransformer {
         }
     }
 
-    private static List<ProtectionSpan> protectionSpans(List<ResolvedPiiSpan> resolvedSpans) {
+    private static List<ProtectionSpan> toProtectionSpans(List<ResolvedPiiSpan> resolvedSpans) {
         return resolvedSpans.stream()
                 .map(span -> new ProtectionSpan(span.entityType(), span.start(), span.end()))
                 .toList();

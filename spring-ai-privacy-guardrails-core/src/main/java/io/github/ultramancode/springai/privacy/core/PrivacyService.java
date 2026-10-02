@@ -192,15 +192,15 @@ public final class PrivacyService {
      * @hidden
      */
     public Map<String, String> redactTextsFromJsonScalars(PrivacyContextHandle handle, List<String> texts) {
-        List<List<ResolvedPiiSpan>> spans = analyzeTextsFromJsonScalars(handle, texts);
+        List<List<ResolvedPiiSpan>> resolvedSpansPerText = analyzeTextsFromJsonScalars(handle, texts);
         PrivacyContext context = this.contextRegistry.requireActiveContext(handle);
-        Map<String, String> redacted = new HashMap<>();
+        Map<String, String> redactedByText = new HashMap<>();
         for (int index = 0; index < texts.size(); index++) {
             String text = texts.get(index);
-            redacted.put(text, this.textTransformer.redactWithResolvedSpans(text, spans.get(index), context));
+            redactedByText.put(text, this.textTransformer.redactWithResolvedSpans(text, resolvedSpansPerText.get(index), context));
         }
         context.requireActive();
-        return Map.copyOf(redacted);
+        return Map.copyOf(redactedByText);
     }
 
     /**
@@ -210,17 +210,17 @@ public final class PrivacyService {
      * @hidden
      */
     public Set<String> findPiiTextsFromJsonScalars(PrivacyContextHandle handle, List<String> texts) {
-        List<List<ResolvedPiiSpan>> spans = analyzeTextsFromJsonScalars(handle, texts);
+        List<List<ResolvedPiiSpan>> resolvedSpansPerText = analyzeTextsFromJsonScalars(handle, texts);
         PrivacyContext context = this.contextRegistry.requireActiveContext(handle);
-        Set<String> detected = new HashSet<>();
+        Set<String> textsWithPii = new HashSet<>();
         for (int index = 0; index < texts.size(); index++) {
             String text = texts.get(index);
-            if (this.textTransformer.containsPiiWithResolvedSpans(text, spans.get(index), context)) {
-                detected.add(text);
+            if (this.textTransformer.containsPiiWithResolvedSpans(text, resolvedSpansPerText.get(index), context)) {
+                textsWithPii.add(text);
             }
         }
         context.requireActive();
-        return Set.copyOf(detected);
+        return Set.copyOf(textsWithPii);
     }
 
     /**

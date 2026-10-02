@@ -882,7 +882,7 @@ class PrivacyOutputAdvisorStreamTest {
                     .block())
                     .isInstanceOf(PrivacyGuardrailException.class)
                     .hasFieldOrPropertyWithValue("code", PrivacyFailureCode.TRANSFORMATION_CONFLICT)
-                    .hasMessage("Streaming response choices cannot be correlated safely");
+                    .hasMessage("Streaming response fragments cannot be correlated safely");
         }
         assertThat(emittedResponses).hasValue(0);
     }
@@ -997,10 +997,10 @@ class PrivacyOutputAdvisorStreamTest {
         return new ChatClientResponse(new ChatResponse(generations), Map.of());
     }
 
-    private String streamText(List<ChatClientResponse> responses, int generationIndex) {
+    private String streamText(List<ChatClientResponse> responses, int generationPosition) {
         StringBuilder text = new StringBuilder();
         for (ChatClientResponse response : responses) {
-            String chunk = response.chatResponse().getResults().get(generationIndex).getOutput().getText();
+            String chunk = response.chatResponse().getResults().get(generationPosition).getOutput().getText();
             if (chunk != null) {
                 text.append(chunk);
             }

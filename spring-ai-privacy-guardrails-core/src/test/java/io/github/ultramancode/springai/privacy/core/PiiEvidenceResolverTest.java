@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PiiEvidenceResolverTest {
 
     @Test
-    void resolveConsumesCanonicalEntityAllowlistFromItsServiceCreationBoundary() {
+    void resolveFiltersByCanonicalEntityAllowlist() {
         PiiEvidenceResolver resolver = resolverWithAliases(PiiResolutionPolicy.defaults());
         PiiAnalysisOptions canonicalOptions = PiiAnalysisOptions.builder()
                 .includedEntityTypes(List.of("PERSON"))
@@ -146,8 +146,7 @@ class PiiEvidenceResolverTest {
                 List.of(evidence("PERSON", 0, 5, "PRESIDIO", 0.90)),
                 PiiAnalysisOptions.defaults()
         )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("evidence provider has no entity-type registry")
-                .hasMessageNotContaining("Alice");
+                .hasMessage("evidence provider has no entity-type registry");
     }
 
     private PiiEvidenceResolver resolver(PiiResolutionPolicy policy) {

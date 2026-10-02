@@ -236,16 +236,16 @@ final class PrivacyJsonPayloadTransformer {
         PrivacyJsonDocumentProcessor processor =
                 documentProcessor(privacyService.processingLimits());
         return switch (action) {
-            case TOKENIZE, DISCLOSE -> transformJsonWithTokenizedScalars(
+            case TOKENIZE, DISCLOSE -> tokenizeOrDiscloseJson(
                     processor, privacyService, handle, payload, phase,
                     action, allowedEntityTypes, disclosureTracker);
-            case REDACT -> redactJsonWithAnalyzedTexts(
+            case REDACT -> analyzeAndRedactJson(
                     processor, privacyService, handle, payload, phase);
         };
     }
 
     /** Tokenizes JSON scalars, then restores allowed values for DISCLOSE. */
-    private static String transformJsonWithTokenizedScalars(
+    private static String tokenizeOrDiscloseJson(
             PrivacyJsonDocumentProcessor processor,
             PrivacyService privacyService,
             PrivacyContextHandle handle,
@@ -271,10 +271,10 @@ final class PrivacyJsonPayloadTransformer {
                 transformedValuesByScalar.put(sourceScalars.get(index), protectedValue);
             }
         }
-        return processor.rewrite(payload, transformedValuesByScalar::get, phase);
+        return processor.rewriteValidatedJson(payload, transformedValuesByScalar::get, phase);
     }
 
-    private static String redactJsonWithAnalyzedTexts(
+    private static String analyzeAndRedactJson(
             PrivacyJsonDocumentProcessor processor,
             PrivacyService privacyService,
             PrivacyContextHandle handle,
@@ -283,7 +283,7 @@ final class PrivacyJsonPayloadTransformer {
     ) throws JacksonException {
         List<String> analysisTexts = processor.validateAndCollectAnalysisTexts(payload, phase);
         Map<String, String> redactedTexts = privacyService.redactTextsFromJsonScalars(handle, analysisTexts);
-        return processor.rewrite(payload, scalar -> {
+        return processor.rewriteValidatedJson(payload, scalar -> {
             String text = ScalarAnalysisText.toAnalysisText(scalar);
             String redacted = redactedTexts.getOrDefault(text, text);
             return redacted.equals(text) ? scalar : redacted;

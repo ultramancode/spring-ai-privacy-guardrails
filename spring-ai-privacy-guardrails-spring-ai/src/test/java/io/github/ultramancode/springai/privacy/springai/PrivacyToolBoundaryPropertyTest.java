@@ -31,7 +31,7 @@ class PrivacyToolBoundaryPropertyTest {
         ToolCallback wrapped = new PrivacyToolCallbackFactory(
                 service,
                 ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")))
-        ).wrap(delegateInput(delegateInput));
+        ).wrap(recordingToolCallback(delegateInput));
 
         for (int index = 0; index < 250; index++) {
             String customerId = "CUST-%04d".formatted(index);
@@ -76,7 +76,7 @@ class PrivacyToolBoundaryPropertyTest {
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
-    private static ToolCallback delegateInput(AtomicReference<String> delegateInput) {
+    private static ToolCallback recordingToolCallback(AtomicReference<String> delegateInput) {
         return new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {

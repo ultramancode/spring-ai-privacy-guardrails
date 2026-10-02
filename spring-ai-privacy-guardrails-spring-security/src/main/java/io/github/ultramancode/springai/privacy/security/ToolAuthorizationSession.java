@@ -1,6 +1,9 @@
 package io.github.ultramancode.springai.privacy.security;
 
-/** Removes one tool-authorization session from its registry when closed. */
+/**
+ * Removes one tool-authorization session from its registry when closed.
+ * Closing an already closed session has no effect.
+ */
 final class ToolAuthorizationSession implements AutoCloseable {
 
     private final ToolAuthorizationSessionRegistry sessionRegistry;

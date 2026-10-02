@@ -219,6 +219,7 @@ class PrivacyJsonPayloadPolicyTest {
     void strictJsonContractRejectsEveryNonblankParseFailure() {
         PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
         try (PrivacySession session = service.openSession()) {
+            // Unquoted token-like text must not bypass strict JSON validation.
             for (String invalidJson : List.of(
                     "not-json",
                     "[[PII_EMAIL_ADDRESS_0123456789abcdef0123456789abcdef_3]]",

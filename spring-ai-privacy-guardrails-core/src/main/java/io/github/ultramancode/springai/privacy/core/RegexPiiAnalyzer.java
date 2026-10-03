@@ -3,6 +3,7 @@ package io.github.ultramancode.springai.privacy.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
@@ -48,8 +49,8 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
         for (CompiledRule rule : this.rules) {
             Matcher matcher = rule.pattern().matcher(text);
             while (matcher.find()) {
-                PiiSpan span = toSpan(rule, matcher);
-                if (span == null) {
+                Optional<PiiSpan> span = toSpan(rule, matcher);
+                if (span.isEmpty()) {
                     continue;
                 }
                 if (spans.size() >= limits.maxResultSpans()) {
@@ -59,7 +60,7 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
                             "Regex analyzer result exceeded the configured span limit"
                     );
                 }
-                spans.add(span);
+                spans.add(span.get());
             }
         }
         return List.copyOf(spans);
@@ -82,7 +83,7 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    private PiiSpan toSpan(CompiledRule rule, Matcher matcher) {
+    private Optional<PiiSpan> toSpan(CompiledRule rule, Matcher matcher) {
         int captureGroup = rule.rule().captureGroup();
         int start = matcher.start(captureGroup);
         int end = matcher.end(captureGroup);
@@ -99,7 +100,7 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
             String candidate = matcher.group(captureGroup);
             try {
                 if (!matchValidator.isValid(candidate)) {
-                    return null;
+                    return Optional.empty();
                 }
             } catch (RuntimeException failure) {
                 throw new IllegalStateException(
@@ -110,12 +111,12 @@ public final class RegexPiiAnalyzer implements PiiAnalyzer {
             }
         }
 
-        return new PiiSpan(
+        return Optional.of(new PiiSpan(
                 rule.rule().entityType(),
                 start,
                 end,
                 rule.rule().score()
-        );
+        ));
     }
 
     private record CompiledRule(RegexPiiRule rule, Pattern pattern) {

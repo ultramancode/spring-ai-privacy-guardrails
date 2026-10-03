@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -93,8 +94,9 @@ final class PiiAnalysisCoordinator {
         Set<String> successfulProviders = new LinkedHashSet<>();
         List<PiiAnalyzerFailure> failures = new ArrayList<>();
         if (this.resolutionPolicy.mode() == PiiResolutionMode.PRIMARY_WITH_FALLBACK) {
+            String primaryProvider = this.resolutionPolicy.primaryProvider().orElseThrow();
             Set<String> primaryPhaseProviders = new LinkedHashSet<>();
-            primaryPhaseProviders.add(this.resolutionPolicy.primaryProvider());
+            primaryPhaseProviders.add(primaryProvider);
             primaryPhaseProviders.addAll(this.resolutionPolicy.supplementalProviders());
             analyzeProviders(
                     text,
@@ -105,7 +107,7 @@ final class PiiAnalysisCoordinator {
                     successfulProviders,
                     failures
             );
-            if (!successfulProviders.contains(this.resolutionPolicy.primaryProvider())) {
+            if (!successfulProviders.contains(primaryProvider)) {
                 analyzeProviders(
                         text,
                         this.analyzers.stream()
@@ -195,8 +197,9 @@ final class PiiAnalysisCoordinator {
         Set<String> successfulProviders = new LinkedHashSet<>();
         List<PiiAnalyzerFailure> failures = new ArrayList<>();
         if (this.resolutionPolicy.mode() == PiiResolutionMode.PRIMARY_WITH_FALLBACK) {
+            String primaryProvider = this.resolutionPolicy.primaryProvider().orElseThrow();
             Set<String> primaryPhaseProviders = new LinkedHashSet<>();
-            primaryPhaseProviders.add(this.resolutionPolicy.primaryProvider());
+            primaryPhaseProviders.add(primaryProvider);
             primaryPhaseProviders.addAll(this.resolutionPolicy.supplementalProviders());
             analyzeSegmentProviders(
                     texts,
@@ -207,7 +210,7 @@ final class PiiAnalysisCoordinator {
                     successfulProviders,
                     failures
             );
-            if (!successfulProviders.contains(this.resolutionPolicy.primaryProvider())) {
+            if (!successfulProviders.contains(primaryProvider)) {
                 analyzeSegmentProviders(
                         texts,
                         this.analyzers.stream()
@@ -278,10 +281,10 @@ final class PiiAnalysisCoordinator {
         Set<String> configuredProviders = this.analyzers.stream()
                 .map(ConfiguredAnalyzer::provider)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        String primaryProvider = this.resolutionPolicy.primaryProvider();
-        if (primaryProvider != null && !configuredProviders.contains(primaryProvider)) {
+        Optional<String> primaryProvider = this.resolutionPolicy.primaryProvider();
+        if (primaryProvider.isPresent() && !configuredProviders.contains(primaryProvider.get())) {
             throw new IllegalArgumentException(
-                    "Primary PII provider " + primaryProvider + " is not configured"
+                    "Primary PII provider " + primaryProvider.get() + " is not configured"
             );
         }
         for (String provider : this.resolutionPolicy.supplementalProviders()) {
@@ -300,7 +303,7 @@ final class PiiAnalysisCoordinator {
         }
         if (this.resolutionPolicy.mode() == PiiResolutionMode.PRIMARY) {
             Set<String> selectedProviders = new LinkedHashSet<>(this.resolutionPolicy.supplementalProviders());
-            selectedProviders.add(primaryProvider);
+            selectedProviders.add(primaryProvider.orElseThrow());
             Set<String> ignoredProviders = new LinkedHashSet<>(configuredProviders);
             ignoredProviders.removeAll(selectedProviders);
             if (!ignoredProviders.isEmpty()) {
@@ -310,7 +313,7 @@ final class PiiAnalysisCoordinator {
             }
         }
         if (this.resolutionPolicy.mode() == PiiResolutionMode.PRIMARY_WITH_FALLBACK
-                && configuredProviders.stream().allMatch(primaryProvider::equals)) {
+                && configuredProviders.stream().allMatch(primaryProvider.orElseThrow()::equals)) {
             throw new IllegalArgumentException(
                     "PRIMARY_WITH_FALLBACK requires at least one configured non-primary provider"
             );
@@ -576,7 +579,7 @@ final class PiiAnalysisCoordinator {
             return true;
         }
         return this.resolutionPolicy.failurePolicy() == PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY
-                && Objects.equals(this.resolutionPolicy.primaryProvider(), provider);
+                && this.resolutionPolicy.primaryProvider().orElseThrow().equals(provider);
     }
 
     private record ConfiguredAnalyzer(PiiAnalyzer analyzer, String provider) {

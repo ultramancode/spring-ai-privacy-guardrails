@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: df66e6747856b929ab2cbd202d87c136a97d8d054c66b2d0645ce73d40bd831c -->
+<!-- i18n-source-sha256: d35328eb959a96ca32c65265518ba028e856ea33fe791e96ccb7ddcb87212574 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -311,21 +311,10 @@ final class CustomToolCallingAdvisor extends ToolCallingAdvisor {
 | `newCopy()` | 부모의 `copy()`가 호출합니다. 설정을 복사해 넣을 새 `Builder`를 만듭니다. |
 | `build()` | `getToolCallingManager()`로 Factory가 설정한 `ToolCallingManager`를 읽어, 나머지 설정과 함께 `CustomToolCallingAdvisor` 생성자에 전달합니다. |
 
-Factory가 builder에 권한 검사용 `ToolCallingManager`를 설정하면, 직접 작성한
-`build()`는 `getToolCallingManager()`로 그 값을 받아 Advisor 생성자에 넘깁니다. 위 코드의
-`manager` 변수가 그 값입니다.
-
-생성자는 `super(manager, checker, order, history)`의 첫 번째 인자로 같은
-`ToolCallingManager`를 부모 `ToolCallingAdvisor`에 전달합니다. 나머지 세 인자는 도구
-실행 조건, Advisor 실행 순서, 대화 기록 사용 여부입니다. 부모 Advisor는 전달받은
-`ToolCallingManager`로 도구를 호출합니다.
-
 `ToolCallingManager`, 실행 조건, 실행 순서, 대화 기록 설정은 부모의 `copy()`가
 새 builder에 복사합니다.
-
 builder에 별도 설정 필드를 추가했다면, `copy()`에서 `super.copy()`로 얻은 복사본에
-해당 필드의 값을 옮긴 뒤 반환하세요. `newCopy()`는 위 예시처럼 새 builder를 생성하는
-역할을 맡습니다.
+해당 필드의 값을 옮긴 뒤 반환하세요.
 
 클라이언트를 만들 때는 이 builder를 Factory에 전달합니다.
 

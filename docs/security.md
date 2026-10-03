@@ -325,22 +325,11 @@ The three methods have the following roles:
 | `newCopy()` | Called by the parent's `copy()`. Creates the new `Builder` that will receive the copied settings. |
 | `build()` | Reads the `ToolCallingManager` set by the factory through `getToolCallingManager()` and passes it, along with the remaining settings, to the `CustomToolCallingAdvisor` constructor. |
 
-The factory sets the authorization-aware `ToolCallingManager` on the builder.
-Your `build()` implementation reads it through `getToolCallingManager()` and
-passes it to the advisor constructor. The `manager` variable above holds this value.
-
-The constructor passes that same `ToolCallingManager` to the parent
-`ToolCallingAdvisor` as the first argument of `super(manager, checker, order, history)`.
-The remaining three arguments configure tool execution eligibility, advisor
-execution order, and conversation history. The parent advisor uses the supplied
-`ToolCallingManager` to call tools.
-
 The parent's `copy()` copies the `ToolCallingManager`, execution eligibility checker,
 execution order, and conversation history setting into the new builder.
-
 If your builder adds configuration fields, assign their values to the copy
 returned by `super.copy()` inside your `copy()` implementation, then return that
-copy. As shown above, `newCopy()` is responsible for creating the new builder.
+copy.
 
 Pass this builder to the factory when creating the client:
 

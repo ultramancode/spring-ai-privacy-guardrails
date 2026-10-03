@@ -306,6 +306,29 @@ is unaffected.
 See [Spring Security Tool Authorization](security.md) for authorization
 policies, custom tool execution, and authentication in asynchronous calls.
 
+## Optional Content Inspection
+
+[Content inspection](inspection.md) runs through the existing model request boundary. Its execution order is privacy transformation,
+tool-definition authorization, then inspection of supported runtime payloads.
+Inspection receives the prepared text without changing it or accessing privacy
+session mappings. A block prevents the pending business model call.
+
+Inspection contracts and providers remain independent of the PII analyzer SPI.
+PII analysis operates on runtime values and may reuse session analysis. Input
+inspection evaluates complete bodies, known reasoning fields and tool-call arguments
+on each model request, including JSON keys and structure. Application configuration
+is excluded. Its input, findings and deadline budgets are configured independently
+of privacy processing limits. Rule and HTTP providers share completion and
+policy contracts, but each provider owns its detection and protocol semantics.
+
+An optional output advisor reuses the same core contracts to allow or block final
+application-facing assistant text, including `returnDirect`. It is disabled by default.
+It runs after Privacy output transformations. Streams discard intermediate tool-loop
+frames and release only the inspected final frames after ALLOW. Assembly budgets cover
+the complete loop. Output segments are `PROCESSED` only when configured privacy output
+processing completed for the same text unit. Otherwise their status is `UNKNOWN`.
+Provider-specific reasoning fields and tool-call arguments are outside output inspection.
+
 ## Errors and Diagnostics
 
 Library-owned privacy failures use `PrivacyGuardrailException` and

@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: f918155b94450b87fd0ca21da8cedc74bf2ab8ba36dbfbd5023b90e02f06fda5 -->
+<!-- i18n-source-sha256: 680b3d9546e85e1d9f35609612873ddfc70d6101e89c9b2d9551602659399526 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -284,7 +284,10 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 등록 방법, 결과의 의미와 콜백 실행 지침은
 [개인정보 보호 런타임 관측](docs/ko/configuration.md#개인정보-보호-런타임-관측)을 참고하세요.
 
-## 배포 모듈
+## 라이브러리 모듈
+
+규칙, HTTP 검사 모델과
+모델 요청 경계 조합은 [콘텐츠 검사](docs/ko/inspection.md)를 참고하세요.
 
 분석기별 스타터는 해당 런타임 모듈을 전이 의존성으로 가져옵니다. 테스트 지원은
 애플리케이션의 테스트 범위에 별도로 추가합니다.
@@ -298,6 +301,11 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 | `spring-ai-privacy-guardrails-opennlp` | 사용자 제공 OpenNLP 모델용 JVM 전용 어댑터 |
 | `spring-ai-privacy-guardrails-spring-security` | Spring AI 도구를 위한 Spring Security 권한 부여 경계 |
 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Spring Security 도구 권한 경계를 자동 구성하는 스타터 |
+| `spring-ai-privacy-guardrails-inspection-core` | 독립적인 콘텐츠 검사 계약과 정책 |
+| `spring-ai-privacy-guardrails-inspection-rules` | 문자열 및 RE2/J 규칙 검사 |
+| `spring-ai-privacy-guardrails-inspection-openai-compatible` | 명시적 프로토콜에 따른 HTTP guard 모델 호출 |
+| `spring-ai-privacy-guardrails-inspection-spring-ai` | 모델 입력 검사와 선택적 최종 출력 검사 |
+| `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | 선택한 클라이언트의 콘텐츠 검사 빈 구성 |
 | `spring-ai-privacy-guardrails-test` | 선택형 모델·도구 프로브와 AssertJ 검증 API |
 
 모듈의 책임과 의존성 구조는 [아키텍처](docs/ko/architecture.md)를 참고하세요. 저장소 전용
@@ -327,6 +335,7 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 - [설정과 사용법](docs/ko/configuration.md): 스타터, 분석기, 도구와 출력 정책
 - [Spring Security 도구 권한](docs/ko/security.md): 도구 권한 정책, 고급 도구
   구성, Tool Search와 보안 컨텍스트 전달
+- [콘텐츠 검사](docs/ko/inspection.md): 선택적 규칙, HTTP 검사 모델
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역
 - [평가와 벤치마크](docs/ko/evaluation.md): 검증 항목과 해석 범위

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.PrivacyOutputProcessing;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -195,9 +196,7 @@ final class PrivacyBufferedStreamTransformer {
 
     private static ContentChannel contentChannel(AssistantMessage message) {
         PrivacyAssistantMessageSupport.requireSupported(message, PrivacyPhase.OUTPUT_POLICY);
-        Map<String, Object> metadata = message.getMetadata();
-        return Boolean.TRUE.equals(metadata.get("isThought"))
-                || Boolean.TRUE.equals(metadata.get("thinking"))
+        return PrivacyOutputProcessing.isThought(message)
                 ? ContentChannel.THOUGHT
                 : ContentChannel.DEFAULT;
     }

@@ -299,7 +299,10 @@ not include PII, opaque tokens, payloads, tool names, or request identifiers.
 See [Privacy-Safe Runtime Observation](docs/configuration.md#privacy-safe-runtime-observation)
 for registration, outcome semantics, and callback execution guidance.
 
-## Published Modules
+## Library Modules
+
+See [Content Inspection](docs/inspection.md) for rules, HTTP guard models,
+and composition with the model request boundary.
 
 Analyzer-specific starters bring in their runtime modules as transitive
 dependencies. Add test support separately in the application's test scope.
@@ -313,6 +316,11 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |
 | `spring-ai-privacy-guardrails-spring-security` | Optional Spring Security authorization boundary for Spring AI tools |
 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Opt-in auto-configuration for the Spring Security tool boundary |
+| `spring-ai-privacy-guardrails-inspection-core` | Independent content inspection contracts and policies |
+| `spring-ai-privacy-guardrails-inspection-rules` | Literal and RE2/J inspectors |
+| `spring-ai-privacy-guardrails-inspection-openai-compatible` | HTTP guard models with explicit protocols |
+| `spring-ai-privacy-guardrails-inspection-spring-ai` | Model-input inspection and optional final-output inspection |
+| `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | Opt-in inspection wiring for selected clients |
 | `spring-ai-privacy-guardrails-test` | Optional model and tool probes with AssertJ assertions |
 
 See [Architecture](docs/architecture.md) for module responsibilities and the
@@ -345,6 +353,7 @@ is recommended for new users.
   and output policies
 - [Spring Security Tool Authorization](docs/security.md): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
+- [Content Inspection](docs/inspection.md): opt-in rules and HTTP guard models
 - [Architecture](docs/architecture.md): modules and model, tool, and session
   execution flow
 - [Threat Model](docs/threat-model.md): protected assets, trust boundaries,

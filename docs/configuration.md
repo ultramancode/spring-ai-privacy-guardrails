@@ -87,7 +87,9 @@ configurers with `ModelRequestBoundaryConfigurer.compose(...)` before calling
 `configure(builder)` once. The shared boundary runs privacy, authorization, then
 inspection, skipping unconfigured stages. Configuring each feature separately
 creates duplicate boundaries, which are rejected at request time. Here,
-inspection checks the prepared model request, not the model's output.
+inspection checks the prepared model request. Optional final application-output content inspection
+is configured separately with `spring.ai.inspection.output.enabled` and defaults to false.
+See [Content Inspection](inspection.md#optional-model-output-inspection).
 
 To combine privacy protection with tool authorization, create clients with
 `PrivacySecurityChatClientFactory`. This factory configures privacy protection,

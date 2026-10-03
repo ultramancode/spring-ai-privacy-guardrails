@@ -148,7 +148,7 @@ final class PrivacyJsonPayloadTransformer {
             } catch (JacksonException | PrivacyJsonDocumentProcessor.InvalidJsonPayload ignored) {
                 return privacyService.containsPii(handle, payload);
             }
-            return !privacyService.findPiiTextsFromJsonScalars(handle, analysisTexts).isEmpty();
+            return privacyService.containsPiiInJsonScalars(handle, analysisTexts);
         } catch (PrivacyGuardrailException failure) {
             throw remapProcessingLimit(failure, phase);
         }

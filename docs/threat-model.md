@@ -150,7 +150,9 @@ The protections described here apply when using the library's privacy APIs and
 supported Spring AI integrations. The application and deployment environment
 must manage the following areas separately.
 
-- Prompt injection and model content safety.
+- Prompt injection and model content safety beyond the optional
+  [content inspection](inspection.md) scope. Inspection does not guarantee detection
+  of every attack or safe model output.
 - Application and host security, authentication, authorization policy design,
   tool calls that bypass authorization checks, storage access control,
   network security, and log management.

@@ -13,7 +13,7 @@ privacyBuild {
         module.denyAllExternalMainDependencies()
         module.springIndependentPublication()
     }
-    ['rules', 'openai-compatible'].each { backend ->
+    ['rules', 'openai-compatible', 'onnx'].each { backend ->
         module("spring-ai-privacy-guardrails-inspection-${backend}") { module ->
             module.publication("io.github.ultramancode.springai.privacy.inspection.${backend.replace('-', '')}", "Spring AI Privacy Guardrails Inspection ${backend}")
             module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-core'

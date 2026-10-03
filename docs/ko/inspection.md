@@ -1,6 +1,6 @@
 ---
 description: >-
-  규칙, HTTP 검사 모델로 모델 입력과 최종 출력을 검사합니다.
+  규칙, 로컬 ONNX 분류기, HTTP 검사 모델로 모델 입력과 최종 출력을 검사합니다.
 ---
 
 # 콘텐츠 검사
@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: e405bc4a2e163af15c9ff42ae278d9d9904365b74c9d358968d973df9deca622 -->
+<!-- i18n-source-sha256: b9f384d40d9b206600f1383b98035eb081820ce5a4747b4c3cd2f1c7122082de -->
 
 콘텐츠 검사는 규칙이나 검사 모델로 모델 입력을 평가하고, 설정한 정책을 위반하는 요청을
 차단합니다. 도구 루프의 후속 호출을 포함해 매 모델 호출 전에 실행합니다.
@@ -166,6 +166,72 @@ HTTP 검사기는 별도의 HTTP 클라이언트로 텍스트 구간마다 요�
 `PROCESSED`는 설정된 개인정보 정책의 처리 완료를 뜻하며, 모든 개인정보를
 탐지했다는 보장은 아닙니다.
 
+## 로컬 ONNX 분류기
+
+`spring-ai-privacy-guardrails-inspection-onnx`를 추가하면 DJL ONNX Engine을 통해
+CPU에서 분류기를 실행할 수 있습니다. DJL이 모델을 로드하고 ONNX Runtime을
+백엔드로 사용해 추론합니다. 서로 호환되는 모델과 토크나이저 파일을 준비하고 검사기를 등록합니다.
+
+```java
+@Bean(destroyMethod = "close")
+OnnxContentInspector localGuard() {
+    Path directory = Path.of("/opt/models/prompt-guard-2");
+    return new OnnxContentInspector("local-guard",
+        OnnxInspectionConfig.defaults(directory.resolve("model.onnx")),
+        OnnxClassificationConfig.promptGuard2(
+            directory.resolve("tokenizer.json"),
+            directory.resolve("tokenizer_config.json"),
+            0.9));
+}
+```
+
+`promptGuard2`는 모델의 악성 입력 클래스를 `PROMPT_ATTACK`으로 매핑합니다.
+임계값은 예시이므로 애플리케이션에서 사용하는 언어의 정상 입력과 공격 입력으로
+조정하세요. 모델 선택 시 [Prompt Guard 2 모델 카드](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M)를
+참고하세요.
+
+시작 전에 `model.onnx`, `tokenizer.json`, `tokenizer_config.json`과 모델이 참조하는
+외부 데이터 파일을 준비합니다. 검사기는 모델을 내려받지 않습니다. 오프라인 환경에서는
+DJL의 네이티브 토크나이저 라이브러리도 미리 준비해야 할 수 있습니다.
+위 빈 선언처럼 더 이상 사용하지 않을 때 검사기를 닫도록 구성합니다.
+
+### 모델 요구 사항
+
+| 구성 요소 | 지원 형식 |
+| --- | --- |
+| 입력 | `input_ids`, 선택적 `attention_mask`와 `token_type_ids`. 각각 `[1, maxTokens]` 형태 |
+| 토큰 타입 | 기본 INT64. INT32 모델은 모든 토큰 입력의 타입을 명시적으로 설정 |
+| 출력 | 2차원 FLOAT `logits`. 배치 1, 로짓 수는 정확히 `classCount` |
+
+다른 시퀀스 분류기는 `OnnxClassificationConfig`에서 토큰 창 길이, 중첩 길이,
+클래스 수, 활성화 함수와 레이블을 지정합니다.
+`Label(index, category, code, threshold)`은 모델 출력을 탐지 결과에 매핑합니다.
+코드가 다르면 여러 레이블이 같은 출력 인덱스를 사용할 수 있습니다. 임계값은 각각 독립적으로
+적용되므로 점수가 여러 임계값을 충족하면 해당하는 레이블마다 탐지 결과가 생성됩니다.
+상호 배타적인 클래스에는 `SOFTMAX`를, 독립적인 레이블에는 `SIGMOID`를 사용합니다.
+INT32로 내보낸 모델은 생성자의 마지막 인수에 `OnnxClassificationConfig.TokenInputType.INT32`를
+전달합니다. 입력 이름은 DJL에서 가져옵니다. 입력 타입과 그래프 차원을 시작 시 별도로
+검사하지 않으며, 호환되지 않는 입력은 추론 중 백엔드가 오류로 보고합니다.
+로짓이 없거나 해석할 수 없는 형태이거나 점수가 유한하지 않으면 `MODEL_ERROR`로 처리합니다.
+모델 로딩 실패는 `CONFIGURATION`으로 처리합니다.
+
+완전한 Hugging Face fast-tokenizer 내보내기 파일을 사용합니다.
+토큰화는 `tokenizer.json`에 저장된 그래프를 따릅니다.
+`tokenizer_config.json`에 명시한 패딩과 잘림 방향 설정이 우선합니다.
+패딩 토큰의 ID는 추가 토큰을 포함한 토크나이저 어휘에서 결정합니다.
+창 길이에는 특수 토큰과 패딩이 포함되며, 중첩 길이는 남은 본문 용량보다 작아야 합니다.
+
+긴 텍스트는 겹치는 창으로 나눠 검사합니다. 기본 한도는 요청 전체에 걸쳐 256개 창입니다.
+매핑한 레이블마다 각 구간에서 임계값을 통과한 최고 점수를 보존합니다.
+모든 창을 검사해야 해당 구간의 검사가 완료됩니다.
+
+같은 검사기에 들어온 동시 요청은 순서대로 실행합니다. 대기, 토큰화와 추론 모두 요청의
+제한 시간을 사용합니다. 동기 토큰화와 추론의 전후에 시간 초과와 인터럽트를 확인합니다.
+진행 중인 네이티브 호출은 반환을 기다리므로 제한 시간이 정확한 반환 시점을 보장하지는
+않습니다. 시간 초과 후 반환된 결과로 구간을 완료 처리하지 않습니다.
+사용 가능한 자원에 맞춰 입력 한도를 설정하세요.
+로컬 ONNX 검사기와 규칙 검사기는 개인정보 처리가 완료된 텍스트만 요구하지 않습니다.
+
 ## 결과, 정책, 실패
 
 `InspectionService`는 Spring 빈 순서(`@Order`)대로 검사기를 실행합니다.
@@ -271,12 +337,13 @@ JSON 출력에서는 문자열과 숫자 값을 각각 검사하고 키, boolean
 | --- | --- |
 | `inspection-core` | Spring에 의존하지 않는 검사 계약, 정책과 실행 |
 | `inspection-rules` | 문자열 및 RE2/J 규칙 매칭 |
+| `inspection-onnx` | 로컬 ONNX 시퀀스 분류기 |
 | `inspection-openai-compatible` | 명시적 프로토콜에 따른 HTTP 검사 모델 호출 |
 | `inspection-spring-ai` | 클라이언트별 입력·출력 검사 |
 | `inspection-spring-boot-starter` | Spring Boot 설정과 빈 구성 |
 
 ## 검증
 
-`./gradlew check`는 규칙 테스트, 로컬 HTTP 테스트와 Spring AI 통합 테스트를
+`./gradlew check`는 규칙 테스트, 로컬 HTTP·ONNX 테스트와 Spring AI 통합 테스트를
 실행합니다. 모델의 탐지 품질이 아닌 실행과 정책 적용을 검증합니다.
 저장소 검증 방법은 [평가](evaluation.md)를 참고하세요.

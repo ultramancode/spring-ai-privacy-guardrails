@@ -1,6 +1,6 @@
 ---
 description: >-
-  Inspect model input and final output with rules or an HTTP guard model.
+  Inspect model input and final output with rules, a local ONNX classifier or an HTTP guard model.
 ---
 
 # Content inspection
@@ -164,6 +164,74 @@ Each request is bounded by both the configured timeout and the remaining inspect
 deadline. `PROCESSED` reflects the configured privacy policy, not a guarantee that
 every piece of personal data was detected.
 
+## Local ONNX classifiers
+
+Add `spring-ai-privacy-guardrails-inspection-onnx` to run a classifier locally on the
+CPU through DJL ONNX Engine. DJL loads and runs the model with ONNX Runtime as
+its backend. Supply matching model and tokenizer files and register the inspector:
+
+```java
+@Bean(destroyMethod = "close")
+OnnxContentInspector localGuard() {
+    Path directory = Path.of("/opt/models/prompt-guard-2");
+    return new OnnxContentInspector("local-guard",
+        OnnxInspectionConfig.defaults(directory.resolve("model.onnx")),
+        OnnxClassificationConfig.promptGuard2(
+            directory.resolve("tokenizer.json"),
+            directory.resolve("tokenizer_config.json"),
+            0.9));
+}
+```
+
+The `promptGuard2` helper maps the model's malicious class to `PROMPT_ATTACK`.
+The threshold is illustrative. Calibrate it against representative benign and attack
+inputs, including the languages your application supports. Consult the
+[Prompt Guard 2 model card](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M)
+when choosing a model.
+
+Provision `model.onnx`, `tokenizer.json`, `tokenizer_config.json` and any external
+graph data before startup. The inspector does not download model files. Offline
+deployments may also need to provision DJL's native tokenizer library. Close the
+inspector when it is no longer needed, as the bean declaration above does.
+
+### Model requirements
+
+| Component | Supported form |
+| --- | --- |
+| Inputs | `input_ids`, optional `attention_mask` and `token_type_ids`, shaped `[1, maxTokens]` |
+| Token type | INT64 by default, or explicitly configured INT32 for all token inputs |
+| Output | FLOAT `logits`, rank two, batch 1 and exactly `classCount` logits |
+
+For another sequence classifier, use `OnnxClassificationConfig` to specify token-window
+length, overlap, class count, activation and labels. Each
+`Label(index, category, code, threshold)` maps an output to a finding.
+Labels may share an output index with distinct codes. Thresholds apply independently,
+so a score meeting multiple thresholds produces a finding for each matching label.
+Use `SOFTMAX` for mutually exclusive classes and `SIGMOID` for independent labels.
+For an INT32 export, pass `OnnxClassificationConfig.TokenInputType.INT32` as the final
+constructor argument. Input names come from DJL. Input types and graph dimensions
+are not independently validated at startup. The backend reports incompatible inputs
+during inference. Missing or incompatible logits and nonfinite scores produce
+`MODEL_ERROR`. Model-loading failures produce `CONFIGURATION`.
+
+Use a complete Hugging Face fast-tokenizer export. Tokenization follows the saved
+`tokenizer.json` graph. Explicit padding and truncation direction settings in
+`tokenizer_config.json` take precedence. The padding token ID is resolved from the
+tokenizer vocabulary, including added tokens. The configured window length includes
+special tokens and padding, and overlap must be smaller than the remaining content
+capacity.
+
+Long text is inspected in overlapping windows. The default limit is 256 windows
+across the entire request. Each mapped label retains its highest qualifying score
+per segment. A segment is complete only after all its windows finish.
+
+Concurrent calls to the same inspector run serially. Waiting, tokenization and inference
+all consume the request deadline. Deadline and interruption checks run before and
+after synchronous tokenization and inference. An in-progress native call is allowed
+to return, so the deadline is not a hard return-time bound. Late results do not mark
+a segment complete. Choose input limits appropriate to your resources.
+Local ONNX and rule inspectors do not require privacy-processed content.
+
 ## Results, policies and failures
 
 `InspectionService` runs inspectors in Spring bean order (`@Order`), or list order
@@ -270,12 +338,13 @@ content or detection of every attack.
 | --- | --- |
 | `inspection-core` | Spring-independent inspection contracts, policies and execution |
 | `inspection-rules` | Literal and RE2/J rule matching |
+| `inspection-onnx` | Local ONNX sequence classifiers |
 | `inspection-openai-compatible` | HTTP guard models with explicit protocols |
 | `inspection-spring-ai` | Client-scoped input and output inspection |
 | `inspection-spring-boot-starter` | Spring Boot configuration and bean wiring |
 
 ## Verification
 
-`./gradlew check` runs rule tests, local HTTP fixtures, and Spring AI
+`./gradlew check` runs rule tests, local HTTP and ONNX fixtures, and Spring AI
 integration tests. These verify execution and enforcement, not model detection quality.
 See [Evaluation](evaluation.md) for repository verification guidance.

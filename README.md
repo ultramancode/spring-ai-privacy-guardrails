@@ -301,7 +301,7 @@ for registration, outcome semantics, and callback execution guidance.
 
 ## Library Modules
 
-See [Content Inspection](docs/inspection.md) for rules, HTTP guard models,
+See [Content Inspection](docs/inspection.md) for rules, local ONNX classifiers, HTTP guard models,
 and composition with the model request boundary.
 
 Analyzer-specific starters bring in their runtime modules as transitive
@@ -318,6 +318,7 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Opt-in auto-configuration for the Spring Security tool boundary |
 | `spring-ai-privacy-guardrails-inspection-core` | Independent content inspection contracts and policies |
 | `spring-ai-privacy-guardrails-inspection-rules` | Literal and RE2/J inspectors |
+| `spring-ai-privacy-guardrails-inspection-onnx` | Local CPU sequence classifiers with explicit labels and complete token-window coverage |
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | HTTP guard models with explicit protocols |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | Model-input inspection and optional final-output inspection |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | Opt-in inspection wiring for selected clients |
@@ -353,7 +354,7 @@ is recommended for new users.
   and output policies
 - [Spring Security Tool Authorization](docs/security.md): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
-- [Content Inspection](docs/inspection.md): opt-in rules and HTTP guard models
+- [Content Inspection](docs/inspection.md): opt-in rules, local ONNX classifiers and HTTP guard models
 - [Architecture](docs/architecture.md): modules and model, tool, and session
   execution flow
 - [Threat Model](docs/threat-model.md): protected assets, trust boundaries,

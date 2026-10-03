@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 23c2cd4e5983cd153fbcc43fdaab6834fed8b881701cf88f87d3e5c125990f97 -->
+<!-- i18n-source-sha256: 7850451a0c673ac368bca603a2de9e4f1e8a046e817e7c3be347ebf02e2ade1a -->
 
 ## 책임 범위
 
@@ -290,7 +290,7 @@ Spring Boot 스타터는 도구 권한 검사가 적용된 클라이언트를 �
 도구 호출 인자를 매 모델 요청마다 다시 평가하며, JSON 키와 구조를 포함한 본문 전체를
 검사합니다. 애플리케이션 설정은 제외합니다. 입력 크기, 탐지 결과 수와 제한 시간은
 개인정보 처리 한도와 별도로 설정합니다.
-규칙과 HTTP 검사기는 완료 보고와 정책 계약을 공유하지만 탐지와
+규칙, ONNX와 HTTP 검사기는 완료 보고와 정책 계약을 공유하지만 탐지와
 프로토콜 처리는 각 검사기가 담당합니다.
 
 선택적 출력 Advisor는 같은 core 계약을 재사용해 애플리케이션에 전달되는 최종 응답 텍스트를

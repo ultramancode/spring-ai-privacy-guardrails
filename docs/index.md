@@ -45,7 +45,7 @@ See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 | [Sample / Demo Guide](sample.md) | Inspector scenarios, expected results, endpoints, and language selection. |
 | [Configuration](configuration.md) | Starters, analyzers, output policy, tool disclosure, and processing limits. |
 | [Spring Security Tool Authorization](security.md) | Optional principal-aware tool discovery and execution checks, Tool Search, and asynchronous context. |
-| [Content Inspection](inspection.md) | Input and optional output inspection with rules or HTTP guard models. |
+| [Content Inspection](inspection.md) | Input and optional output inspection with rules, local ONNX classifiers or HTTP guard models. |
 | [Architecture](architecture.md) | Module boundaries, request sessions, evidence resolution, and execution lifecycle. |
 | [Threat model](threat-model.md) | Protected assets, trust boundaries, controls, limitations, and separately managed areas. |
 | [Evaluation](evaluation.md) | Boundary tests, the deterministic analyzer baseline, and repository benchmarks. |

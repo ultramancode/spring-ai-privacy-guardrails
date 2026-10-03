@@ -318,7 +318,7 @@ PII analysis operates on runtime values and may reuse session analysis. Input
 inspection evaluates complete bodies, known reasoning fields and tool-call arguments
 on each model request, including JSON keys and structure. Application configuration
 is excluded. Its input, findings and deadline budgets are configured independently
-of privacy processing limits. Rule and HTTP providers share completion and
+of privacy processing limits. Rule, ONNX and HTTP providers share completion and
 policy contracts, but each provider owns its detection and protocol semantics.
 
 An optional output advisor reuses the same core contracts to allow or block final

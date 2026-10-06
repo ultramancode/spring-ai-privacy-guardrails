@@ -1,16 +1,11 @@
-description = 'Local sequence classification with DJL ONNX Engine and Hugging Face tokenizers.'
+description = 'Local sequence classification with ONNX Runtime and DJL tokenizers.'
 
 dependencies {
     api project(':spring-ai-privacy-guardrails-inspection-core')
     implementation "ai.djl:api:${providers.gradleProperty('djlVersion').get()}"
     implementation "ai.djl.huggingface:tokenizers:${providers.gradleProperty('djlVersion').get()}"
-    runtimeOnly "ai.djl.onnxruntime:onnxruntime-engine:${providers.gradleProperty('djlVersion').get()}"
+    implementation "com.microsoft.onnxruntime:onnxruntime:${providers.gradleProperty('onnxRuntimeVersion').get()}"
     testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
-    constraints {
-        runtimeOnly("com.microsoft.onnxruntime:onnxruntime:${providers.gradleProperty('onnxRuntimeVersion').get()}") {
-            because 'Keep the tested native backend version when loading it through DJL.'
-        }
-    }
 }
 
 tasks.named('test') { useJUnitPlatform { excludeTags 'live' } }

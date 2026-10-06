@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,9 +38,16 @@ class TokenWindowTokenizerTest {
     }
 
     private OnnxClassificationConfig classification() {
-        var profile = OnnxClassificationConfig.promptGuard2(tokenizer, settings, 0.5);
-        return new OnnxClassificationConfig(tokenizer, settings, 8, 1, 2,
-                profile.activation(), profile.labels());
+        return OnnxClassificationConfig.builder()
+                .tokenizer(tokenizer)
+                .tokenizerConfig(settings)
+                .maxTokens(8)
+                .overlapTokens(1)
+                .logitCount(2)
+                .activation(OnnxClassificationConfig.Activation.SOFTMAX)
+                .labels(List.of(new OnnxClassificationConfig.Label(1,
+                        InspectionFinding.Category.PROMPT_ATTACK, "MALICIOUS", 0.5)))
+                .build();
     }
 
     private JsonObject definition() throws Exception {

@@ -43,18 +43,25 @@ class OnnxClassifierLiveTest {
         Path model = verifiedArtifact(directory, "model", reference);
         Path tokenizer = verifiedArtifact(directory, "tokenizer", reference);
         Path tokenizerConfig = verifiedArtifact(directory, "tokenizerConfig", reference);
-        int classes = Integer.parseInt(reference.getProperty("class.count"));
+        int logitCount = Integer.parseInt(reference.getProperty("logit.count"));
         List<OnnxClassificationConfig.Label> labels = new ArrayList<>();
-        for (int i = 0; i < classes; i++) {
+        for (int i = 0; i < logitCount; i++) {
             // Numeric labels exercise every head without implying product-specific label semantics.
             labels.add(new OnnxClassificationConfig.Label(i, InspectionFinding.Category.POLICY_VIOLATION,
                     "LABEL_" + i, 1e-300));
         }
-        OnnxClassificationConfig classification = new OnnxClassificationConfig(tokenizer, tokenizerConfig,
-                Integer.parseInt(reference.getProperty("window.tokens")),
-                Integer.parseInt(reference.getProperty("overlap.tokens")), classes,
-                OnnxClassificationConfig.Activation.valueOf(reference.getProperty("activation")), labels,
-                OnnxClassificationConfig.TokenInputType.valueOf(reference.getProperty("token.type", "INT64")));
+        OnnxClassificationConfig classification = OnnxClassificationConfig.builder()
+                .tokenizer(tokenizer)
+                .tokenizerConfig(tokenizerConfig)
+                .maxTokens(Integer.parseInt(reference.getProperty("window.tokens")))
+                .overlapTokens(Integer.parseInt(reference.getProperty("overlap.tokens")))
+                .logitCount(logitCount)
+                .activation(OnnxClassificationConfig.Activation.valueOf(reference.getProperty("activation")))
+                .labels(labels)
+                .tokenInputType(OnnxClassificationConfig.TokenInputType.valueOf(
+                        reference.getProperty("token.type")))
+                .modelOutputName(reference.getProperty("model.output.name"))
+                .build();
         OnnxInspectionConfig config = OnnxInspectionConfig.defaults(model);
         try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(classification);
                 OnnxSequenceClassifier classifier = new OnnxSequenceClassifier(config, classification);
@@ -65,7 +72,7 @@ class OnnxClassifierLiveTest {
                 String text = new String(Base64.getDecoder().decode(reference.getProperty(prefix + "text")), StandardCharsets.UTF_8);
                 List<Encoding> windows = windowTokenizer.encodeWindows(text);
                 assertThat(windows).as(prefix).hasSize(Integer.parseInt(reference.getProperty(prefix + "windows")));
-                double[] maximum = new double[classes];
+                double[] maximum = new double[logitCount];
                 for (int window = 0; window < windows.size(); window++) {
                     Encoding encoded = windows.get(window);
                     String windowPrefix = prefix + "window." + window + ".";
@@ -74,7 +81,7 @@ class OnnxClassifierLiveTest {
                     assertTensor(reference, windowPrefix, "token_type_ids", encoded.getTypeIds());
                     double[] scores = classifier.classify(encoded);
                     String[] expected = reference.getProperty(windowPrefix + "scores").split(",");
-                    for (int label = 0; label < classes; label++) {
+                    for (int label = 0; label < logitCount; label++) {
                         assertThat(scores[label]).as(windowPrefix + label)
                                 .isCloseTo(Double.parseDouble(expected[label]), within(1e-4));
                         maximum[label] = Math.max(maximum[label], Double.parseDouble(expected[label]));
@@ -84,7 +91,7 @@ class OnnxClassifierLiveTest {
                 assertThat(result.status()).as(prefix + result.failure()).isEqualTo(InspectionResult.Status.COMPLETED);
                 assertThat(result.completedSegmentIds()).containsExactly("synthetic");
                 int expectedCount = 0;
-                for (int label = 0; label < classes; label++) {
+                for (int label = 0; label < logitCount; label++) {
                     if (maximum[label] >= 1e-300) {
                         final String code = "LABEL_" + label;
                         final double score = maximum[label];

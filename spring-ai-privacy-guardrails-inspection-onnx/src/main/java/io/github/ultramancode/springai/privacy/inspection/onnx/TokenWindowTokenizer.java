@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Produces padded, overlapping token windows from matching Hugging Face tokenizer artifacts. */
+/** Produces padded, overlapping token windows from matching Tokenizers JSON files supported by DJL. */
 final class TokenWindowTokenizer implements AutoCloseable {
 
     private final HuggingFaceTokenizer tokenizer;

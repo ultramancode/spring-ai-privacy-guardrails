@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Local, thread-safe CPU inspection with overlapping token windows. Owns its tokenizer and DJL model.
+ * Local, thread-safe CPU inspection with overlapping token windows. Owns its tokenizer and ONNX session.
  * One finding per mapped label and segment retains the maximum qualifying window score.
  * Partial findings survive failure. Coverage is complete only after every window finishes.
  * Concurrent calls wait within their shared deadline. Activity is checked between synchronous calls,
@@ -132,7 +132,7 @@ public final class OnnxContentInspector implements ContentInspector, AutoCloseab
         }
     }
 
-    /** Waits for an active inspection to finish, then closes the tokenizer, predictor and model once. */
+    /** Waits for an active inspection to finish, then closes the tokenizer and ONNX session once. */
     @Override
     public void close() {
         lock.lock();

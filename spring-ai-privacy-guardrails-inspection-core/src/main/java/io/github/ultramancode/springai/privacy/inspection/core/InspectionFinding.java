@@ -5,12 +5,13 @@ import java.util.Objects;
 /**
  * Inspector-specific evidence normalized to a category. No matching text is retained.
  * A non-null score is local to the inspector/model and is not comparable across models.
+ * It need not be a calibrated probability. Inspectors without numeric scores use null.
  *
  * @param segmentId ID of the segment containing the finding
  * @param category what was detected, independent of the detection method
  * @param code inspector-defined machine-readable ID, without source text. It must contain
  *        1-128 ASCII letters, digits, underscores, dots or hyphens and start with a letter or digit
- * @param score optional inspector-specific confidence between zero and one
+ * @param score optional inspector-specific detection score between zero and one
  */
 public record InspectionFinding(String segmentId, Category category, String code, Double score) {
 

@@ -9,6 +9,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
@@ -70,27 +71,35 @@ class OnnxContentInspectorTest {
         }
     }
 
+    private OnnxClassificationConfig.Builder classificationBuilder() {
+        return OnnxClassificationConfig.builder()
+                .tokenizer(tokenizer)
+                .tokenizerConfig(tokenizerConfig)
+                .maxTokens(512)
+                .overlapTokens(64)
+                .logitCount(2)
+                .activation(SOFTMAX)
+                .labels(List.of(new OnnxClassificationConfig.Label(1, PROMPT_ATTACK, "MALICIOUS", 0.5)));
+    }
+
     private OnnxClassificationConfig classification() {
-        return OnnxClassificationConfig.promptGuard2(tokenizer, tokenizerConfig, 0.5);
+        return classificationBuilder().build();
     }
 
     private OnnxContentInspector inspector(String profile) throws Exception {
-        OnnxClassificationConfig classification = classification();
+        OnnxClassificationConfig.Builder builder = classificationBuilder();
         if (profile.equals("int32")) {
-            classification = new OnnxClassificationConfig(tokenizer, tokenizerConfig, 512, 64, 2,
-                    SOFTMAX, classification.labels(), OnnxClassificationConfig.TokenInputType.INT32);
+            builder.tokenInputType(OnnxClassificationConfig.TokenInputType.INT32);
         }
-        return new OnnxContentInspector("local", OnnxInspectionConfig.defaults(graph(profile)), classification);
+        return new OnnxContentInspector("local", OnnxInspectionConfig.defaults(graph(profile)), builder.build());
     }
 
     @Test
     void unsafeContentWindowFailsAtInspectorConstruction() throws Exception {
-        var profile = classification();
-        var config = new OnnxClassificationConfig(tokenizer, tokenizerConfig, 4, 2,
-                profile.classCount(), profile.activation(), profile.labels());
+        OnnxClassificationConfig config = classificationBuilder().maxTokens(4).overlapTokens(2).build();
         OnnxInspectionConfig inspectionConfig = OnnxInspectionConfig.defaults(graph("binary"));
         assertThatThrownBy(() -> {
-            try (var ignored = new OnnxContentInspector("local", inspectionConfig, config)) {
+            try (OnnxContentInspector ignored = new OnnxContentInspector("local", inspectionConfig, config)) {
                 // No request is needed to reject the unsafe combination.
             }
         }).isInstanceOfSatisfying(InspectionException.class,
@@ -112,8 +121,8 @@ class OnnxContentInspectorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"binary", "int32", "ids-only", "fixed"})
-    void djlRunsNamedTokenInputsWithTheConfiguredType(String profile) throws Exception {
+    @ValueSource(strings = {"binary", "int32", "ids-only", "fixed", "multiple-outputs"})
+    void onnxRuntimeRunsNamedTokenInputsWithTheConfiguredType(String profile) throws Exception {
         try (OnnxContentInspector inspector = inspector(profile)) {
             assertThat(inspector.requiresPrivacyProcessedContent()).isFalse();
             InspectionResult safe = inspector.inspect(request("hello world"));
@@ -176,12 +185,38 @@ class OnnxContentInspectorTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {128, 256})
+    void configuredWindowsStillInspectTheTail(int maxTokens) throws Exception {
+        OnnxClassificationConfig config = classificationBuilder()
+                .maxTokens(maxTokens)
+                .overlapTokens(32)
+                .build();
+        String text = "hello ".repeat(1100) + "attack";
+        try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(config)) {
+            List<Encoding> windows = windowTokenizer.encodeWindows(text);
+            assertThat(windows.size()).isGreaterThan(1);
+            assertThat(windows).allSatisfy(window -> assertThat(window.getIds()).hasSize(maxTokens));
+            assertThat(windows.get(windows.size() - 1).getIds()).contains(20);
+        }
+        try (OnnxContentInspector inspector = new OnnxContentInspector(
+                "local", OnnxInspectionConfig.defaults(graph("binary")), config)) {
+            InspectionResult result = inspector.inspect(request(text));
+            assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
+            assertThat(result.completedSegmentIds()).containsExactly("s0");
+            assertThat(result.findings()).singleElement().satisfies(finding -> {
+                assertThat(finding.code()).isEqualTo("MALICIOUS");
+                assertThat(finding.category()).isEqualTo(PROMPT_ATTACK);
+                assertThat(finding.score()).isGreaterThan(0.99);
+            });
+        }
+    }
+
     @Test
     void sameOutputIndexSupportsIndependentThresholdsAndKeepsEachCodesMaximumScore() throws Exception {
-        OnnxClassificationConfig config = new OnnxClassificationConfig(tokenizer, tokenizerConfig,
-                512, 64, 2, SOFTMAX, List.of(
+        OnnxClassificationConfig config = classificationBuilder().labels(List.of(
                         new OnnxClassificationConfig.Label(1, PROMPT_ATTACK, "CAUTION", 0.6),
-                        new OnnxClassificationConfig.Label(1, PROMPT_ATTACK, "HIGH_RISK", 0.9)));
+                        new OnnxClassificationConfig.Label(1, PROMPT_ATTACK, "HIGH_RISK", 0.9))).build();
         try (OnnxContentInspector inspector = new OnnxContentInspector("local",
                 OnnxInspectionConfig.defaults(graph("binary")), config)) {
             InspectionResult moderate = inspector.inspect(request("word14"));
@@ -241,20 +276,81 @@ class OnnxContentInspectorTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({"0.9, BLOCK", "0.99, ALLOW"})
+    void softmaxScoresReachFindingsAndTheDefaultPolicy(double threshold, InspectionDecision decision) throws Exception {
+        OnnxClassificationConfig config = classificationBuilder()
+                .logitCount(3)
+                .labels(List.of(
+                        new OnnxClassificationConfig.Label(1, PROMPT_INJECTION, "INJECTION", threshold),
+                        new OnnxClassificationConfig.Label(2, PROMPT_LEAKING, "LEAKING", 0.9)))
+                .build();
+        try (OnnxContentInspector inspector = new OnnxContentInspector("local",
+                OnnxInspectionConfig.defaults(graph("multilabel")), config)) {
+            // This native fixture returns [3, 7, -3] for word17. All three logits contribute to SOFTMAX.
+            InspectionReport report = new InspectionService(List.of(inspector)).inspect(request("word17"));
+            assertThat(report.decision()).isEqualTo(decision);
+            assertThat(report.outcomes()).singleElement().satisfies(outcome -> {
+                assertThat(outcome.result().status()).isEqualTo(InspectionResult.Status.COMPLETED);
+                assertThat(outcome.result().completedSegmentIds()).containsExactly("s0");
+                if (decision == InspectionDecision.BLOCK) {
+                    assertThat(outcome.result().findings()).singleElement().satisfies(finding -> {
+                        assertThat(finding.code()).isEqualTo("INJECTION");
+                        assertThat(finding.category()).isEqualTo(PROMPT_INJECTION);
+                        assertThat(finding.score()).isCloseTo(0.9819700105182744, within(1e-12));
+                    });
+                } else {
+                    assertThat(outcome.result().findings()).isEmpty();
+                }
+            });
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0.5, BLOCK", "0.5000000000000001, ALLOW"})
+    void thresholdIncludesTheExactScore(double threshold, InspectionDecision decision) throws Exception {
+        OnnxClassificationConfig config = classificationBuilder()
+                .logitCount(1)
+                .activation(SIGMOID)
+                .labels(List.of(new OnnxClassificationConfig.Label(0, PROMPT_ATTACK, "ATTACK", threshold)))
+                .build();
+        try (OnnxContentInspector inspector = new OnnxContentInspector("local",
+                OnnxInspectionConfig.defaults(graph("single")), config)) {
+            // word10 produces a zero logit. SIGMOID converts it to exactly 0.5.
+            InspectionReport report = new InspectionService(List.of(inspector)).inspect(request("word10"));
+            assertThat(report.decision()).isEqualTo(decision);
+            assertThat(report.outcomes()).singleElement().satisfies(outcome -> {
+                if (decision == InspectionDecision.BLOCK) {
+                    assertThat(outcome.result().findings()).singleElement()
+                            .satisfies(finding -> assertThat(finding.score()).isEqualTo(0.5));
+                } else {
+                    assertThat(outcome.result().findings()).isEmpty();
+                }
+            });
+        }
+    }
+
     @Test
     void sigmoidUsesIndependentLabelThresholdsAndSupportsOneLogit() throws Exception {
-        OnnxClassificationConfig multilabel = new OnnxClassificationConfig(tokenizer, tokenizerConfig,
-                1024, 64, 3, SIGMOID, List.of(
+        OnnxClassificationConfig multilabel = classificationBuilder()
+                .maxTokens(1024)
+                .logitCount(3)
+                .activation(SIGMOID)
+                .labels(List.of(
                         new OnnxClassificationConfig.Label(0, POLICY_VIOLATION, "A", 0.9),
                         new OnnxClassificationConfig.Label(1, PROMPT_INJECTION, "B", 0.99),
-                        new OnnxClassificationConfig.Label(2, PROMPT_LEAKING, "C", 0.5)));
+                        new OnnxClassificationConfig.Label(2, PROMPT_LEAKING, "C", 0.5)))
+                .build();
         try (OnnxContentInspector inspector = new OnnxContentInspector("multi",
                 OnnxInspectionConfig.defaults(graph("multilabel")), multilabel)) {
             assertThat(inspector.inspect(request("attack")).findings())
                     .extracting(InspectionFinding::code).containsExactly("A", "B");
         }
-        OnnxClassificationConfig single = new OnnxClassificationConfig(tokenizer, tokenizerConfig,
-                512, 64, 1, SIGMOID, List.of(new OnnxClassificationConfig.Label(0, PROMPT_ATTACK, "A", 0.5)));
+        OnnxClassificationConfig single = classificationBuilder()
+                .logitCount(1)
+                .activation(SIGMOID)
+                .labels(List.of(new OnnxClassificationConfig.Label(0, PROMPT_ATTACK, "A", 0.5)))
+                .build();
         try (OnnxContentInspector inspector = new OnnxContentInspector("single",
                 OnnxInspectionConfig.defaults(graph("single")), single)) {
             assertThat(inspector.inspect(request("attack")).findings()).hasSize(1);
@@ -263,12 +359,25 @@ class OnnxContentInspectorTest {
     }
 
     @Test
+    void singleLogitBinaryModelRejectsAnExpectedOutputWidthOfTwo() throws Exception {
+        OnnxClassificationConfig config = classificationBuilder()
+                .logitCount(2)
+                .activation(SIGMOID)
+                .labels(List.of(new OnnxClassificationConfig.Label(0, PROMPT_ATTACK, "ATTACK", 0.5)))
+                .build();
+        Path model = graph("single");
+        assertThatThrownBy(() -> new OnnxContentInspector("single", OnnxInspectionConfig.defaults(model), config))
+                .isInstanceOfSatisfying(InspectionException.class,
+                        failure -> assertThat(failure.failure()).isEqualTo(InspectionFailureCode.CONFIGURATION))
+                .hasNoCause();
+    }
+
+    @Test
     void nonzeroPadIdAndConfiguredWindowLengthComeFromMatchingTokenizerArtifacts() throws Exception {
         String json = Files.readString(tokenizer).replace("\"id\": 0", "\"id\": 7")
                 .replace("\"[PAD]\": 0", "\"[PAD]\": 7").replace("\"word7\": 7", "\"word7\": 0");
         Files.writeString(tokenizer, json);
-        OnnxClassificationConfig longWindow = new OnnxClassificationConfig(tokenizer, tokenizerConfig,
-                2048, 64, 2, SOFTMAX, classification().labels());
+        OnnxClassificationConfig longWindow = classificationBuilder().maxTokens(2048).build();
         try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(longWindow)) {
             Encoding encoded = windowTokenizer.encodeWindows("hello").get(0);
             assertThat(encoded.getIds()).hasSize(2048).startsWith(2, 4, 3).endsWith(7, 7);
@@ -291,14 +400,45 @@ class OnnxContentInspectorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"input-float", "unknown-input", "wrong-length",
-            "rank-one", "wrong-output", "multilabel", "dynamic-wrong"})
-    void incompatibleGraphsReportModelErrorDuringInference(String profile) throws Exception {
-        try (OnnxContentInspector inspector = inspector(profile)) {
+    @ValueSource(strings = {"input-float", "unknown-input", "wrong-length", "int32",
+            "rank-one", "wrong-output", "multilabel", "output-double", "output-rank-one", "missing-ids"})
+    void incompatibleModelMetadataFailsBeforeAnyInspection(String profile) throws Exception {
+        Path model = graph(profile);
+        assertThatThrownBy(() -> new OnnxContentInspector("local", OnnxInspectionConfig.defaults(model), classification()))
+                .isInstanceOfSatisfying(InspectionException.class,
+                        failure -> assertThat(failure.failure()).isEqualTo(InspectionFailureCode.CONFIGURATION))
+                .hasMessageNotContaining(temp.toString()).hasNoCause();
+    }
+
+    @Test
+    void configuredOutputNameUsesTheSelectedRawLogits() throws Exception {
+        OnnxClassificationConfig config = classificationBuilder().modelOutputName("scores").build();
+        try (OnnxContentInspector inspector = new OnnxContentInspector("local",
+                OnnxInspectionConfig.defaults(graph("wrong-output")), config)) {
+            assertThat(inspector.inspect(request("hello")).findings()).isEmpty();
+            assertThat(inspector.inspect(request("attack")).findings()).singleElement()
+                    .satisfies(finding -> assertThat(finding.code()).isEqualTo("MALICIOUS"));
+        }
+    }
+
+    @Test
+    void dynamicOutputWidthStillRequiresValidationDuringInference() throws Exception {
+        try (OnnxContentInspector inspector = inspector("dynamic-wrong")) {
             InspectionResult result = inspector.inspect(request("hello"));
             assertThat(result.failure()).isEqualTo(InspectionFailureCode.MODEL_ERROR);
             assertThat(result.completedSegmentIds()).isEmpty();
             assertThat(result.findings()).isEmpty();
+        }
+    }
+
+    @Test
+    void dynamicOutputWidthAcceptsMatchingInferenceResults() throws Exception {
+        OnnxClassificationConfig config = classificationBuilder().logitCount(3).build();
+        try (OnnxContentInspector inspector = new OnnxContentInspector("local",
+                OnnxInspectionConfig.defaults(graph("dynamic-wrong")), config)) {
+            assertThat(inspector.inspect(request("hello")).status()).isEqualTo(InspectionResult.Status.COMPLETED);
+            assertThat(inspector.inspect(request("attack")).findings()).singleElement()
+                    .satisfies(finding -> assertThat(finding.code()).isEqualTo("MALICIOUS"));
         }
     }
 
@@ -327,9 +467,7 @@ class OnnxContentInspectorTest {
         Files.writeString(tokenizerConfig, """
                 {"pad_token":{"content":"word7"},"padding_side":"left","pad_token_type_id":3}
                 """);
-        var profile = classification();
-        var smallWindow = new OnnxClassificationConfig(tokenizer, tokenizerConfig, 8, 1, 2,
-                SOFTMAX, profile.labels());
+        OnnxClassificationConfig smallWindow = classificationBuilder().maxTokens(8).overlapTokens(1).build();
         try (OnnxContentInspector inspector = new OnnxContentInspector("padding",
                 OnnxInspectionConfig.defaults(graph("padding")), smallWindow)) {
             assertThat(inspector.inspect(request("hello world")).findings()).singleElement()

@@ -30,6 +30,7 @@ def main():
     parser.add_argument("--window-tokens", type=int, default=512)
     parser.add_argument("--overlap-tokens", type=int, default=64)
     parser.add_argument("--activation", choices=["softmax", "sigmoid"], default="softmax")
+    parser.add_argument("--model-output-name", default="logits")
     args = parser.parse_args()
     tokenizer = Tokenizer.from_file(str(args.tokenizer))
     config = json.loads(args.tokenizer_config.read_text(encoding="utf-8"))
@@ -64,7 +65,8 @@ def main():
              "ｈｅｌｌｏ ＨＥＬＬＯ ﬁ café cafe\u0301", "[CLS] Hello [SEP] <SPECIAL>world"]
     properties = {"python.onnxruntime": ort.__version__, "python.tokenizers": tokenizers.__version__,
                   "window.tokens": args.window_tokens, "overlap.tokens": args.overlap_tokens,
-                  "activation": args.activation.upper(), "token.type": token_type, "cases": len(cases)}
+                  "activation": args.activation.upper(), "token.type": token_type,
+                  "model.output.name": args.model_output_name, "cases": len(cases)}
     for name, path in [("model", args.model), ("tokenizer", args.tokenizer), ("tokenizerConfig", args.tokenizer_config)]:
         properties[name + ".file"] = os.path.relpath(path.resolve(), args.output.resolve().parent).replace("\\", "/")
         properties[name + ".sha256"] = file_hash(path)
@@ -84,7 +86,7 @@ def main():
                 properties[window_prefix + node.name + ".sha256"] = hashlib.sha256(values_array.tobytes()).hexdigest()
                 dtype = np.int32 if node.type == "tensor(int32)" else np.int64
                 inputs[node.name] = values_array.astype(dtype)[None, :]
-            logits = session.run(["logits"], inputs)[0][0].astype(np.float64)
+            logits = session.run([args.model_output_name], inputs)[0][0].astype(np.float64)
             if not np.all(np.isfinite(logits)):
                 raise ValueError("Reference model produced nonfinite logits")
             if args.activation == "softmax":
@@ -92,7 +94,7 @@ def main():
                 scores /= scores.sum()
             else:
                 scores = 1 / (1 + np.exp(-logits))
-            properties["class.count"] = len(scores)
+            properties["logit.count"] = len(logits)
             properties[window_prefix + "scores"] = ",".join(str(float(value)) for value in scores)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("# Local synthetic-input reference, not a detection-quality benchmark.\n"

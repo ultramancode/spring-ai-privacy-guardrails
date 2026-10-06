@@ -80,8 +80,15 @@ class OnnxInspectionIntegrationTest {
         server.start();
         try (OnnxContentInspector onnx = new OnnxContentInspector("local",
                 OnnxInspectionConfig.defaults(copy("binary.onnx.base64", true)),
-                OnnxClassificationConfig.promptGuard2(copy("tokenizer.json", false),
-                        copy("tokenizer_config.json", false), 0.5))) {
+                OnnxClassificationConfig.builder()
+                        .tokenizer(copy("tokenizer.json", false))
+                        .tokenizerConfig(copy("tokenizer_config.json", false))
+                        .maxTokens(512)
+                        .overlapTokens(64)
+                        .logitCount(2)
+                        .activation(OnnxClassificationConfig.Activation.SOFTMAX)
+                        .labels(List.of(new OnnxClassificationConfig.Label(1, PROMPT_ATTACK, "MALICIOUS", 0.5)))
+                        .build())) {
             PiiAnalyzer analyzer = (text, options, limits) -> {
                 int start = text.indexOf("Alice");
                 return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));

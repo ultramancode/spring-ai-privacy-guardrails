@@ -5,6 +5,7 @@ import ai.djl.util.JsonUtils;
 import com.google.gson.JsonObject;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,10 +60,16 @@ class TokenizerWindowTest {
             configuration.add("truncation_side", window.get("direction"));
         }
         Files.writeString(settings, configuration.toString());
-        var profile = OnnxClassificationConfig.promptGuard2(tokenizer, settings, 0.5);
-        return new OnnxClassificationConfig(tokenizer, settings,
-                window.get("maxTokens").getAsInt(), window.get("overlapTokens").getAsInt(),
-                2, profile.activation(), profile.labels());
+        return OnnxClassificationConfig.builder()
+                .tokenizer(tokenizer)
+                .tokenizerConfig(settings)
+                .maxTokens(window.get("maxTokens").getAsInt())
+                .overlapTokens(window.get("overlapTokens").getAsInt())
+                .logitCount(2)
+                .activation(OnnxClassificationConfig.Activation.SOFTMAX)
+                .labels(List.of(new OnnxClassificationConfig.Label(1,
+                        InspectionFinding.Category.PROMPT_ATTACK, "MALICIOUS", 0.5)))
+                .build();
     }
 
     @ParameterizedTest(name = "{0} invalid window {index}")

@@ -4,6 +4,7 @@ import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.util.JsonUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -49,9 +50,16 @@ class TokenizerReferenceTest {
         Path settings = temp.resolve("tokenizer_config.json");
         Files.writeString(tokenizer, fixture.get("tokenizer").toString());
         Files.writeString(settings, fixture.get("config").toString());
-        var profile = OnnxClassificationConfig.promptGuard2(tokenizer, settings, 0.5);
-        var config = new OnnxClassificationConfig(tokenizer, settings, window, overlap, 2,
-                profile.activation(), profile.labels());
+        var config = OnnxClassificationConfig.builder()
+                .tokenizer(tokenizer)
+                .tokenizerConfig(settings)
+                .maxTokens(window)
+                .overlapTokens(overlap)
+                .logitCount(2)
+                .activation(OnnxClassificationConfig.Activation.SOFTMAX)
+                .labels(List.of(new OnnxClassificationConfig.Label(1,
+                        InspectionFinding.Category.PROMPT_ATTACK, "MALICIOUS", 0.5)))
+                .build();
         try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(config)) {
             List<Encoding> actual = windowTokenizer.encodeWindows(expected.get("text").getAsString());
             JsonArray windows = expected.getAsJsonArray("windows");

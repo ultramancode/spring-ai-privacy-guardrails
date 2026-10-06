@@ -49,8 +49,7 @@ The example blocks input containing `ignore previous instructions` by throwing
 are inspected. Enabling inspection requires at least one `ContentInspector` bean.
 
 Literal rules are case-sensitive. Use `InspectionRule.regex(...)` for RE2/J patterns.
-Choose rules that fit your application. This example alone is not a general
-prompt-injection detector.
+Choose matching phrases and patterns that fit your application.
 
 ### Combine with privacy or tool authorization
 
@@ -82,20 +81,18 @@ spring:
         enabled: true
 ```
 
-It checks the final assistant text delivered to the application, including
-`returnDirect` tool results. `ALLOW` returns the response and `BLOCK` raises
-`InspectionBlockedException`. It does not rewrite text or prevent tools from
-executing before the final response is inspected.
+Output inspection runs after model calls and tool execution, checking the final
+assistant text before delivery to the application, including `returnDirect` tool
+results. `ALLOW` returns the response and `BLOCK` raises `InspectionBlockedException`.
 
 When privacy output protection is also enabled, content inspection runs after it.
-An HTTP inspector requiring privacy-processed content accepts output only when
-privacy processing completed for that text. Input protection alone is not enough.
+Enable privacy output protection when using an HTTP inspector that requires
+privacy-processed output.
 
-Streaming responses are buffered until inspection finishes. Only the final model
-round or tool result is delivered, so enabling output inspection adds latency and
-omits intermediate tool-loop text. Failed or cancelled stream assembly releases no
-buffered content, even with `FAIL_OPEN`. Assembly limits are listed
-[below](#scope-and-limits).
+Streaming responses are buffered and delivered after inspection. The application
+receives the final model round or tool result. Intermediate tool-loop text is omitted.
+If stream assembly fails or is cancelled, buffered content is discarded, including
+with `FAIL_OPEN`. Assembly limits are listed [below](#scope-and-limits).
 
 Boot uses the same inspectors and policy for input and output. For different output
 rules, attach an advisor backed by a separate service:
@@ -145,7 +142,7 @@ selected protocol. Implement `GuardModelProtocol` for another response format.
 The final configuration argument, `requirePrivacyProcessedContent`, controls whether
 text may be sent to the guard model. With `true`, every segment must have completed
 privacy processing. With `false`, content can be sent without privacy protection.
-This setting checks processing status and does not perform PII detection itself.
+This setting checks completion of the processing applied by privacy protection.
 
 | Privacy status | Meaning |
 | --- | --- |
@@ -159,40 +156,55 @@ For direct Java configuration, the default resolver returns `UNKNOWN`. Supply a
 use `PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)` to map
 `true` to `PROCESSED` and `false` to `UNKNOWN`.
 
-The HTTP inspector sends one request per text segment using a separate HTTP client.
+The HTTP inspector sends one request per text segment.
 Each request is bounded by both the configured timeout and the remaining inspection
-deadline. `PROCESSED` reflects the configured privacy policy, not a guarantee that
-every piece of personal data was detected.
+deadline.
 
 ## Local ONNX classifiers
 
 Add `spring-ai-privacy-guardrails-inspection-onnx` to run a classifier locally on the
-CPU through DJL ONNX Engine. DJL loads and runs the model with ONNX Runtime as
-its backend. Supply matching model and tokenizer files and register the inspector:
+CPU through ONNX Runtime. DJL provides tokenization. Supply matching model and
+tokenizer files and register the inspector:
+
+This example configures a model with outputs ordered as benign (0), injection (1)
+and leaking (2). Set `Label.index` to match your model's actual output order.
 
 ```java
 @Bean(destroyMethod = "close")
 OnnxContentInspector localGuard() {
-    Path directory = Path.of("/opt/models/prompt-guard-2");
+    Path directory = Path.of("/opt/models/local-classifier");
+    OnnxClassificationConfig onnxClassificationConfig = OnnxClassificationConfig.builder()
+        .tokenizer(directory.resolve("tokenizer.json"))
+        .tokenizerConfig(directory.resolve("tokenizer_config.json"))
+        .maxTokens(256)
+        .overlapTokens(32)
+        .logitCount(3)
+        .activation(OnnxClassificationConfig.Activation.SOFTMAX)
+        .labels(List.of(
+            new OnnxClassificationConfig.Label(1,
+                InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.9),
+            new OnnxClassificationConfig.Label(2,
+                InspectionFinding.Category.PROMPT_LEAKING, "LEAKING", 0.9)))
+        .tokenInputType(OnnxClassificationConfig.TokenInputType.INT64)
+        .build();
     return new OnnxContentInspector("local-guard",
         OnnxInspectionConfig.defaults(directory.resolve("model.onnx")),
-        OnnxClassificationConfig.promptGuard2(
-            directory.resolve("tokenizer.json"),
-            directory.resolve("tokenizer_config.json"),
-            0.9));
+        onnxClassificationConfig);
 }
 ```
 
-The `promptGuard2` helper maps the model's malicious class to `PROMPT_ATTACK`.
-The threshold is illustrative. Calibrate it against representative benign and attack
-inputs, including the languages your application supports. Consult the
-[Prompt Guard 2 model card](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M)
-when choosing a model.
+The 32-token overlap and `0.9` threshold are example application settings.
+Calibrate thresholds with representative benign and attack inputs in your application's
+languages. Recalibrate after changing window size, overlap or model quantization.
+
+The builder requires both tokenizer files, `maxTokens`, `logitCount`, `activation`
+and `labels`. It defaults the overlap to zero, token input type to INT64 and
+model output name to `logits`.
 
 Provision `model.onnx`, `tokenizer.json`, `tokenizer_config.json` and any external
-graph data before startup. The inspector does not download model files. Offline
-deployments may also need to provision DJL's native tokenizer library. Close the
-inspector when it is no longer needed, as the bean declaration above does.
+graph data before startup. Offline deployments may also need to provision DJL's
+native tokenizer library. Close the inspector when it is no longer needed, as the
+bean declaration above does.
 
 ### Model requirements
 
@@ -200,53 +212,136 @@ inspector when it is no longer needed, as the bean declaration above does.
 | --- | --- |
 | Inputs | `input_ids`, optional `attention_mask` and `token_type_ids`, shaped `[1, maxTokens]` |
 | Token type | INT64 by default, or explicitly configured INT32 for all token inputs |
-| Output | FLOAT `logits`, rank two, batch 1 and exactly `classCount` logits |
+| Output | FLOAT raw logits shaped `[1, logitCount]`. The output name defaults to `logits` |
 
-For another sequence classifier, use `OnnxClassificationConfig` to specify token-window
-length, overlap, class count, activation and labels. Each
-`Label(index, category, code, threshold)` maps an output to a finding.
-Labels may share an output index with distinct codes. Thresholds apply independently,
-so a score meeting multiple thresholds produces a finding for each matching label.
-Use `SOFTMAX` for mutually exclusive classes and `SIGMOID` for independent labels.
-For an INT32 export, pass `OnnxClassificationConfig.TokenInputType.INT32` as the final
-constructor argument. Input names come from DJL. Input types and graph dimensions
-are not independently validated at startup. The backend reports incompatible inputs
-during inference. Missing or incompatible logits and nonfinite scores produce
-`MODEL_ERROR`. Model-loading failures produce `CONFIGURATION`.
+If the export uses another output name, set `.modelOutputName("classification_output")`
+on the builder.
 
-Use a complete Hugging Face fast-tokenizer export. Tokenization follows the saved
-`tokenizer.json` graph. Explicit padding and truncation direction settings in
-`tokenizer_config.json` take precedence. The padding token ID is resolved from the
-tokenizer vocabulary, including added tokens. The configured window length includes
-special tokens and padding, and overlap must be smaller than the remaining content
-capacity.
+Initialization checks input names, types and fixed dimensions, along with the selected
+output. Model-loading failures and incompatible metadata raise `InspectionException`
+with `CONFIGURATION` before inspection. Dynamic output shapes are checked during
+inference. Unexpected output shapes and nonfinite logits produce `MODEL_ERROR`.
 
-Long text is inspected in overlapping windows. The default limit is 256 windows
-across the entire request. Each mapped label retains its highest qualifying score
+Models with different input names, preprocessing or output structure require a matching
+export or a separate `ContentInspector` implementation.
+
+### Classification settings
+
+Use the model documentation and exported graph to set output names, indices, types
+and scoring conventions. Choose finding mappings, thresholds and overlap for your
+application. Supply these values through `OnnxClassificationConfig`.
+
+| Setting | How to set it |
+| --- | --- |
+| `tokenizer`, `tokenizerConfig` | Supply local tokenizer files matching the model. |
+| `modelOutputName` | Use the exported name of the raw logits output. Defaults to `logits`. |
+| `logitCount` | Use N from the output shape `[1, N]`, including outputs without a finding mapping. |
+| `activation` | Match the model's documented conversion from logits to scores. |
+| `Label.index` | Use the position of the selected output, starting from zero. |
+| `tokenInputType` | Match the integer type of every token input in the export. |
+| `maxTokens` | Choose a supported window length, including special tokens and padding. Fixed-length graphs require their exact length. |
+| `overlapTokens` | Choose the number of content tokens repeated between windows. It must be smaller than the window's content capacity. |
+| `Label.category`, `Label.code` | Assign a finding category and diagnostic code to each detected condition. |
+| `Label.threshold` | Set the minimum score after activation that emits a finding, including equality. |
+
+`labels` maps selected outputs to findings. In the example, the benign output is
+unmapped. Labels may share an output index with distinct codes and independent
+thresholds. Each qualifying mapping produces a finding.
+
+### Choosing `activation` and thresholds
+
+`OnnxClassificationConfig.activation` specifies how the inspector converts raw model
+outputs (logits) to scores between zero and one. The inspector performs the conversion
+and compares the scores with `Label.threshold`. Select the value documented for your model:
+
+| `activation` | When to use it |
+| --- | --- |
+| `SOFTMAX` | A model that chooses one of mutually exclusive categories, such as benign, injection or leaking. Requires at least two logits. |
+| `SIGMOID` | A model that evaluates labels independently, or a binary classifier that returns one logit. |
+
+A single-logit binary classifier uses `logitCount=1`. Model outputs must be raw logits
+before activation. An export that already returns probabilities requires a raw-logit
+export or a separate inspector.
+
+For a numeric example, suppose one window returns `logits = [[3.0, 7.0, -3.0]]`
+in the benign, injection, leaking order used above. `[1, 3]` means one window with
+three raw scores.
+
+| Output index | Meaning | Raw logit | Score after SOFTMAX |
+| --- | --- | --- | --- |
+| 0 | Benign | 3.0 | 0.017985 |
+| 1 | Injection | 7.0 | 0.981970 |
+| 2 | Leaking | -3.0 | 0.000045 |
+
+With the example's `0.9` thresholds, only output 1 qualifies. The inspector returns:
+
+```java
+new InspectionFinding("s0", InspectionFinding.Category.PROMPT_INJECTION,
+    "INJECTION", 0.9819700105182744);
+```
+
+The default policy blocks this finding. With an injection threshold of `0.99`,
+neither mapped output qualifies, so the inspector returns no findings and the default
+policy allows the completed inspection. Thresholds compare scores after activation,
+using `score >= threshold`. The inspector returns the qualifying findings with
+their scores.
+
+### Tokenizer files
+
+Supply `tokenizer.json` in the Tokenizers JSON format supported by DJL's Hugging Face
+Tokenizers implementation. The graph must preserve the model's normalization,
+pre-tokenization, vocabulary, added tokens and special-token processing.
+See [DJL's tokenizer loading](https://github.com/deepjavalibrary/djl/blob/v0.38.0/extensions/tokenizers/README.md#from-huggingface-pipeline).
+
+Padding and truncation directions in `tokenizer_config.json` take precedence over
+the graph's settings. The padding token must exist in the vocabulary or added tokens.
+Other tokenizer formats require a matching JSON export or a separate `ContentInspector`.
+
+### Execution limits
+
+Set CPU threads (`intraOpThreads`) and the request's window limit (`maxWindows`) in
+`OnnxInspectionConfig`. Defaults are two threads and 256 windows. Set the shared
+inspection deadline in `InspectionLimits`, which defaults to 10 seconds.
+Choose these resource limits for your model and expected input lengths.
+
+Long text is inspected in overlapping windows. The window limit applies across the
+entire request. Each mapped label retains its highest qualifying score
 per segment. A segment is complete only after all its windows finish.
 
 Concurrent calls to the same inspector run serially. Waiting, tokenization and inference
 all consume the request deadline. Deadline and interruption checks run before and
-after synchronous tokenization and inference. An in-progress native call is allowed
-to return, so the deadline is not a hard return-time bound. Late results do not mark
-a segment complete. Choose input limits appropriate to your resources.
-Local ONNX and rule inspectors do not require privacy-processed content.
+after synchronous tokenization and inference. A native call that exceeds the deadline
+is handled as `TIMEOUT` after it returns, leaving the segment incomplete.
+Local ONNX and rule inspectors accept text regardless of its privacy-processing status.
 
 ## Results, policies and failures
 
-`InspectionService` runs inspectors in Spring bean order (`@Order`), or list order
-when constructed directly. The default policy blocks any finding and stops subsequent
-inspectors. Provide an `InspectionPolicy` bean to customize this decision.
+The starter orders inspector beans by `@Order`. When constructing `InspectionService`
+directly, use the list order to control execution. The default policy blocks any
+finding regardless of its score and stops subsequent inspectors.
+Provide an `InspectionPolicy` bean to customize this decision.
 Detection thresholds belong to each inspector. Scores from different models are
 not directly comparable.
 
-Reports identify the inspector and text segment, with findings carrying a category
-and code rather than inspected text. Categories are `PROMPT_ATTACK`, `PROMPT_INJECTION`,
-`PROMPT_LEAKING` and `POLICY_VIOLATION`. Keep custom IDs and codes free of user content.
+`InspectionFinding` contains a segment ID, `category`, `code` and optional `score`.
+It does not contain the inspected text. Scores range from zero to one when present.
+ONNX findings use scores after activation. Rule, Kanana and JSON-verdict findings
+use `null`.
+
+| Category | Meaning |
+| --- | --- |
+| `PROMPT_ATTACK` | A prompt attack whose specific type was not determined |
+| `PROMPT_INJECTION` | An attempt to override intended instructions |
+| `PROMPT_LEAKING` | An attempt to extract hidden prompts or instructions |
+| `POLICY_VIOLATION` | An application content violation outside the prompt-attack categories |
+
+Inspector IDs, segment IDs and finding codes must contain 1–128 ASCII letters,
+digits, underscores, dots or hyphens and start with a letter or digit.
+Use stable diagnostic identifiers without inspected text.
 
 The default failure policy is `FAIL_CLOSED`. Set
 `spring.ai.inspection.failure-policy=FAIL_OPEN` only to allow eligible operational
-failures. It never overrides a content-policy block.
+failures. Content-policy blocks apply with either failure policy.
 
 | Failure | Behavior |
 | --- | --- |
@@ -286,8 +381,7 @@ InspectionObserver inspectionObserver() {
 The audit methods are application hooks. `onInspection` receives allow and block
 decisions, while `onFailure` receives hard inspection failures. Callbacks may run
 concurrently and should return promptly. Observer runtime exceptions do not change
-enforcement. Reports contain diagnostic identifiers and findings, not prompt or
-response text.
+enforcement.
 
 ## Scope and limits
 
@@ -326,11 +420,6 @@ The following properties use the `spring.ai.inspection` prefix:
 Each model call receives new inspection limits. Output inspection has its own budget.
 These settings are independent of `spring.ai.privacy.processing` and
 `spring.ai.privacy.response-inspection`. Direct API callers supply `InspectionLimits`.
-A deadline cannot forcibly stop arbitrary custom code.
-
-Inspection supplements privacy protection and tool authorization. Validate detection
-quality with your application's data. A completed inspection does not guarantee safe
-content or detection of every attack.
 
 ## Modules and responsibilities
 
@@ -343,8 +432,9 @@ content or detection of every attack.
 | `inspection-spring-ai` | Client-scoped input and output inspection |
 | `inspection-spring-boot-starter` | Spring Boot configuration and bean wiring |
 
-## Verification
+## Evaluation
 
-`./gradlew check` runs rule tests, local HTTP and ONNX fixtures, and Spring AI
-integration tests. These verify execution and enforcement, not model detection quality.
-See [Evaluation](evaluation.md) for repository verification guidance.
+Evaluate detection quality with benign and attack inputs representative of your
+application's languages and use cases.
+
+See [Evaluation](evaluation.md) for project tests and evaluation tools.

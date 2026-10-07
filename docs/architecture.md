@@ -306,6 +306,24 @@ is unaffected.
 See [Spring Security Tool Authorization](security.md) for authorization
 policies, custom tool execution, and authentication in asynchronous calls.
 
+## Optional Content Inspection
+
+[Content inspection](inspection.md) evaluates request text with rules or a guard model
+before each model call, including tool-loop continuations. When combined with privacy
+protection and tool authorization, it runs after privacy processing and tool-definition
+authorization. If the policy blocks the request, the model is not called.
+
+Output inspection is disabled by default. When enabled, it allows or blocks final
+model responses and `returnDirect` tool results before delivery to the application.
+If privacy output protection is also enabled, content inspection runs after it.
+Streaming responses are buffered until inspection finishes, and intermediate tool-loop
+text is omitted. Content inspection does not modify text.
+
+Input size and time limits are configured separately from privacy processing
+limits. See [Scope and limits](inspection.md#scope-and-limits) for the inspected fields
+and streaming limits, and [HTTP guard models and privacy](inspection.md#http-guard-models-and-privacy)
+for the conditions under which text is sent to an external guard model.
+
 ## Errors and Diagnostics
 
 Library-owned privacy failures use `PrivacyGuardrailException` and

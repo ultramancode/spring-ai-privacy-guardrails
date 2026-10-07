@@ -1,7 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -204,23 +203,24 @@ public final class PrivacyService {
     }
 
     /**
-     * Internal JSON integration that identifies scalar texts with resolved PII outside session-owned tokens.
+     * Internal JSON integration that checks whether any scalar text has resolved PII outside session-owned tokens.
      * Uses the batch limits of {@link #analyzeTextsFromJsonScalars} without reapplying detection policy.
      *
      * @hidden
      */
-    public Set<String> findPiiTextsFromJsonScalars(PrivacyContextHandle handle, List<String> texts) {
+    public boolean containsPiiInJsonScalars(PrivacyContextHandle handle, List<String> texts) {
         List<List<ResolvedPiiSpan>> resolvedSpansPerText = analyzeTextsFromJsonScalars(handle, texts);
         PrivacyContext context = this.contextRegistry.requireActiveContext(handle);
-        Set<String> textsWithPii = new HashSet<>();
+        boolean containsPii = false;
         for (int index = 0; index < texts.size(); index++) {
             String text = texts.get(index);
             if (this.textTransformer.containsPiiWithResolvedSpans(text, resolvedSpansPerText.get(index), context)) {
-                textsWithPii.add(text);
+                containsPii = true;
+                break;
             }
         }
         context.requireActive();
-        return Set.copyOf(textsWithPii);
+        return containsPii;
     }
 
     /**

@@ -151,9 +151,6 @@ final class PresidioResponseParser {
                 unicodeCodePointStart,
                 unicodeCodePointEnd
         );
-        if (utf16Span == null) {
-            throw invalidResponseContract();
-        }
         try {
             return new PiiSpan(entityType, utf16Span.start(), utf16Span.end(), score);
         } catch (IllegalArgumentException exception) {
@@ -229,12 +226,12 @@ final class PresidioResponseParser {
         private Utf16Span toUtf16Span(int codePointStart, int codePointEnd) {
             int codePointLength = this.utf16OffsetByCodePoint.length - 1;
             if (!isValidSpan(codePointStart, codePointEnd, codePointLength)) {
-                return null;
+                throw invalidResponseContract();
             }
             int utf16Start = this.utf16OffsetByCodePoint[codePointStart];
             int utf16End = this.utf16OffsetByCodePoint[codePointEnd];
             if (!isValidSpan(utf16Start, utf16End, this.utf16Length)) {
-                return null;
+                throw invalidResponseContract();
             }
             return new Utf16Span(utf16Start, utf16End);
         }

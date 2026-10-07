@@ -866,7 +866,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                 .run(context -> {
                     PiiResolutionPolicy policy = context.getBean(PiiResolutionPolicy.class);
                     assertThat(policy.mode()).isEqualTo(PiiResolutionMode.PRIMARY);
-                    assertThat(policy.primaryProvider()).isEqualTo("PRESIDIO");
+                    assertThat(policy.primaryProvider()).contains("PRESIDIO");
                     assertThat(policy.failurePolicy()).isEqualTo(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY);
                     assertThat(policy.providerMinimumScores()).containsEntry("PRESIDIO", 0.72);
 

@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /** Immutable policy for provider selection, failure handling, thresholds, and type conflicts. */
@@ -107,10 +108,10 @@ public final class PiiResolutionPolicy {
     /**
      * Returns the canonical primary provider ID, when the policy defines one.
      *
-     * @return primary provider ID, or {@code null} when none is configured
+     * @return primary provider ID, or an empty optional when none is configured
      */
-    public String primaryProvider() {
-        return this.primaryProvider;
+    public Optional<String> primaryProvider() {
+        return Optional.ofNullable(this.primaryProvider);
     }
 
     /**

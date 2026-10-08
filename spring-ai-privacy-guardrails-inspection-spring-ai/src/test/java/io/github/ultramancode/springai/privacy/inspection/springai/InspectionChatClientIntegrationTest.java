@@ -203,7 +203,9 @@ class InspectionChatClientIntegrationTest {
                 return "message-recorder";
             }
 
-            public boolean requiresPrivacyProcessedContent() { return false; }
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
 
             public InspectionResult inspect(InspectionRequest request) {
                 inspected.set(request);
@@ -392,7 +394,7 @@ class InspectionChatClientIntegrationTest {
     void cancellationDuringInspectionNeverStartsBusinessModel() throws Exception {
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch interrupted = new CountDownLatch(1);
-        ContentInspector blocking =
+        ContentInspector blockingInspector =
                 new ContentInspector() {
                     @Override
                     public String inspectorId() {
@@ -419,7 +421,7 @@ class InspectionChatClientIntegrationTest {
         InspectionChatClientConfigurer config =
                 new InspectionChatClientConfigurer(
                         new InspectionService(
-                                List.of(blocking),
+                                List.of(blockingInspector),
                                 InspectionPolicy.blockFindings(),
                                 InspectionFailurePolicy.FAIL_OPEN));
         Disposable subscription =

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.inspection.core;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -12,6 +13,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InspectionRequestTest {
 
+    @Test
+    void validatesLimitsAndDoesNotExposeRequestText() {
+        ContentSegment segment = new ContentSegment("s1", ContentSegment.Role.USER,
+                ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "private raw text");
+        List<ContentSegment> segments = List.of(segment);
+        InspectionRequest request = new InspectionRequest(segments, InspectionLimits.defaults());
+        InspectionLimits restrictiveLimits = new InspectionLimits(1, 1, Duration.ofSeconds(1));
+
+        assertThat(request.toString()).doesNotContain("private raw text");
+        assertThat(segment.toString()).doesNotContain("private raw text");
+        assertThatThrownBy(() -> new InspectionLimits(1, 1, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new InspectionRequest(segments, restrictiveLimits))
+                .hasMessageContaining("LIMIT_EXCEEDED");
+        assertThatThrownBy(() -> new InspectionRequest(List.of(segment, segment), InspectionLimits.defaults()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @ParameterizedTest
     @CsvSource({
             "false, false,",
@@ -20,7 +39,7 @@ class InspectionRequestTest {
             "true, true, CANCELLED"
     })
     void checksExecutionBudgetWithoutClearingInterruption(
-            boolean expired, boolean interrupted, InspectionFailureCode expected) {
+            boolean expired, boolean interrupted, InspectionFailureCode expectedFailureCode) {
         Duration timeout = Duration.ofMinutes(1);
         if (expired) {
             timeout = Duration.ofNanos(1);
@@ -33,12 +52,12 @@ class InspectionRequestTest {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
-            if (expected == null) {
+            if (expectedFailureCode == null) {
                 assertThatNoException().isThrownBy(request::checkActive);
             } else {
                 assertThatThrownBy(request::checkActive)
                         .isInstanceOfSatisfying(InspectionException.class,
-                                ex -> assertThat(ex.failureCode()).isEqualTo(expected));
+                                ex -> assertThat(ex.failureCode()).isEqualTo(expectedFailureCode));
             }
             assertThat(Thread.currentThread().isInterrupted()).isEqualTo(interrupted);
         } finally {

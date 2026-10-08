@@ -38,7 +38,10 @@ class InspectionStructuredOutputTest {
         createRequest.setAccessible(true);
         AtomicReference<String> wire = new AtomicReference<>();
         var model = new ChatModel() {
-            public ChatOptions getOptions() { return options; }
+            public ChatOptions getOptions() {
+                return options;
+            }
+
             public ChatResponse call(Prompt prompt) {
                 try {
                     wire.set(createRequest.invoke(serializer, buildPrompt.invoke(serializer, prompt), false).toString());
@@ -47,7 +50,10 @@ class InspectionStructuredOutputTest {
                 }
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("{\"ok\":true}"))));
             }
-            public Flux<ChatResponse> stream(Prompt prompt) { return Flux.defer(() -> Flux.just(call(prompt))); }
+
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.defer(() -> Flux.just(call(prompt)));
+            }
         };
         var client = new InspectionChatClientConfigurer(InspectionRuntimeScopeTest.service())
                 .withOutputInspection(new InspectionOutputAdvisor(InspectionRuntimeScopeTest.service()))
@@ -69,7 +75,10 @@ class InspectionStructuredOutputTest {
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder().name("lookup").description("attack").inputSchema(schema).build();
             }
-            public String call(String arguments) { throw new AssertionError("No tool execution expected"); }
+
+            public String call(String arguments) {
+                throw new AssertionError("No tool execution expected");
+            }
         };
         ToolCallbackProvider provider = () -> new ToolCallback[] {tool};
         client.prompt().user("hello").tools(provider).call().content();

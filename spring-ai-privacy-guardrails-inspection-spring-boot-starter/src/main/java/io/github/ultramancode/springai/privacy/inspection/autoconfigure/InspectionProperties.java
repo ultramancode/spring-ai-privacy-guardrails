@@ -42,15 +42,34 @@ public class InspectionProperties {
         /** Maximum total stream assembly duration, including model rounds and tool execution. */
         private Duration streamTimeout = InspectionOutputAdvisor.DEFAULT_STREAM_TIMEOUT;
 
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean value) { enabled = value; }
-        public int getMaxFrames() { return maxFrames; }
-        public void setMaxFrames(int value) { maxFrames = value; }
-        public Duration getStreamTimeout() { return streamTimeout; }
-        public void setStreamTimeout(Duration value) { streamTimeout = value; }
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean value) {
+            enabled = value;
+        }
+
+        public int getMaxFrames() {
+            return maxFrames;
+        }
+
+        public void setMaxFrames(int value) {
+            maxFrames = value;
+        }
+
+        public Duration getStreamTimeout() {
+            return streamTimeout;
+        }
+
+        public void setStreamTimeout(Duration value) {
+            streamTimeout = value;
+        }
     }
 
-    public Output getOutput() { return output; }
+    public Output getOutput() {
+        return output;
+    }
 
     public InspectionLimits limits() {
         return new InspectionLimits(maxSegments, maxCharacters, timeout);

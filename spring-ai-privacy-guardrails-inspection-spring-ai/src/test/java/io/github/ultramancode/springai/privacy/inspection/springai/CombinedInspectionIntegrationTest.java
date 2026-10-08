@@ -77,6 +77,11 @@ class CombinedInspectionIntegrationTest {
     }
 
     private ApplicationContextRunner runner() {
+        PiiAnalyzer analyzer = (text, options, limits) -> {
+            int start = text.indexOf("Alice");
+            return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
+        };
+
         return new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         PrivacyGuardrailsAutoConfiguration.class,
@@ -84,10 +89,7 @@ class CombinedInspectionIntegrationTest {
                         PrivacySecurityAutoConfiguration.class))
                 .withUserConfiguration(Policy.class)
                 .withBean(ToolCallingManager.class, () -> ToolCallingManager.builder().build())
-                .withBean(PiiAnalyzer.class, () -> (text, options, limits) -> {
-                    int start = text.indexOf("Alice");
-                    return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
-                });
+                .withBean(PiiAnalyzer.class, () -> analyzer);
     }
 
     @ParameterizedTest(name = "streaming={0}, toolSearch={1}")

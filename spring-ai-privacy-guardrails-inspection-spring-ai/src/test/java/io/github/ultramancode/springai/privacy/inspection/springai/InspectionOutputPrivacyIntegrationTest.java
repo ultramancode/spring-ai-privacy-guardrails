@@ -2,6 +2,7 @@ package io.github.ultramancode.springai.privacy.inspection.springai;
 
 import com.sun.net.httpserver.HttpServer;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
@@ -83,19 +84,25 @@ class InspectionOutputPrivacyIntegrationTest {
         });
         server.start();
         URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/guard");
-        ContentInspector http = new OpenAiCompatibleContentInspector("http",
+        ContentInspector httpInspector = new OpenAiCompatibleContentInspector("http",
                 new OpenAiCompatibleInspectionConfig(endpoint, "fixture", null, WAIT, 4096, true),
                 new KananaPromptProtocol());
-        ContentInspector recorder = new ContentInspector() {
-            public String inspectorId() { return "record-output"; }
-            public boolean requiresPrivacyProcessedContent() { return false; }
+        ContentInspector recordingInspector = new ContentInspector() {
+            public String inspectorId() {
+                return "record-output";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
             public InspectionResult inspect(InspectionRequest request) {
                 inspected.addAll(request.segments());
                 return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
                         .collect(Collectors.toSet()), List.of());
             }
         };
-        output = new InspectionOutputAdvisor(new InspectionService(List.of(recorder, http)));
+        output = new InspectionOutputAdvisor(new InspectionService(List.of(recordingInspector, httpInspector)));
     }
 
     @AfterEach
@@ -161,8 +168,13 @@ class InspectionOutputPrivacyIntegrationTest {
                 .content("Ali").properties(Map.of(thoughtMarker, true)).build())));
         ChatResponse answer = response("ce");
         ChatModel model = new ChatModel() {
-            public ChatResponse call(Prompt prompt) { return answer; }
-            public Flux<ChatResponse> stream(Prompt prompt) { return Flux.just(thought, answer); }
+            public ChatResponse call(Prompt prompt) {
+                return answer;
+            }
+
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.just(thought, answer);
+            }
         };
         ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
                 .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked").build()
@@ -185,8 +197,13 @@ class InspectionOutputPrivacyIntegrationTest {
         ChatResponse first = new ChatResponse(List.of(indexed(0, "Ali"), indexed(1, "cl")));
         ChatResponse last = new ChatResponse(List.of(indexed(1, "ear"), indexed(0, "ce")));
         ChatModel model = new ChatModel() {
-            public ChatResponse call(Prompt prompt) { return first; }
-            public Flux<ChatResponse> stream(Prompt prompt) { return Flux.just(first, last); }
+            public ChatResponse call(Prompt prompt) {
+                return first;
+            }
+
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.just(first, last);
+            }
         };
         ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
                 .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
@@ -206,19 +223,29 @@ class InspectionOutputPrivacyIntegrationTest {
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder().name("lookup").description("fixture").inputSchema("{}").build();
             }
+
             public ToolMetadata getToolMetadata() {
                 return ToolMetadata.builder().returnDirect(true).build();
             }
-            public String call(String arguments) { return "Hello Alice"; }
+
+            public String call(String arguments) {
+                return "Hello Alice";
+            }
         };
         ToolCallback wrapped = new PrivacyToolCallbackFactory(privacy, ToolDisclosurePolicy.denyAll()).wrap(tool);
         ChatModel model = new ChatModel() {
-            public ChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
             public ChatResponse call(Prompt prompt) {
                 return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("")
                         .toolCalls(List.of(new AssistantMessage.ToolCall("id", "function", "lookup", "{}"))).build())));
             }
-            public Flux<ChatResponse> stream(Prompt prompt) { return Flux.just(call(prompt)); }
+
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.just(call(prompt));
+            }
         };
         ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
                 .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
@@ -252,16 +279,21 @@ class InspectionOutputPrivacyIntegrationTest {
     }
 
     private PrivacyService privacyService(List<String> analyzed) {
-        return new PrivacyService(List.of((text, options, limits) -> {
+        PiiAnalyzer analyzer = (text, options, limits) -> {
             analyzed.add(text);
             int at = text.indexOf("Alice");
             return at < 0 ? List.of() : List.of(new PiiSpan("PERSON", at, at + 5, 1.0));
-        }), PiiAnalysisOptions.defaults());
+        };
+
+        return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
     private ChatModel model(String raw) {
         return new ChatModel() {
-            public ChatResponse call(Prompt prompt) { return response(raw); }
+            public ChatResponse call(Prompt prompt) {
+                return response(raw);
+            }
+
             public Flux<ChatResponse> stream(Prompt prompt) {
                 int middle = raw.length() / 2;
                 return Flux.just(response(raw.substring(0, middle)), response(raw.substring(middle)));
@@ -298,11 +330,18 @@ class InspectionOutputPrivacyIntegrationTest {
             this.duplicateFrames = duplicateFrames;
         }
 
-        public String getName() { return "ResponseMutation"; }
-        public int getOrder() { return InspectionOutputAdvisor.DEFAULT_ORDER + 1; }
+        public String getName() {
+            return "ResponseMutation";
+        }
+
+        public int getOrder() {
+            return InspectionOutputAdvisor.DEFAULT_ORDER + 1;
+        }
+
         public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
             return replace(chain.nextCall(request));
         }
+
         public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
             Flux<ChatClientResponse> responses = chain.nextStream(request);
             if (duplicateFrames) {
@@ -310,6 +349,7 @@ class InspectionOutputPrivacyIntegrationTest {
             }
             return responses.map(this::replace);
         }
+
         private ChatClientResponse replace(ChatClientResponse original) {
             return original.mutate().chatResponse(response("new unprocessed text")).build();
         }

@@ -82,9 +82,11 @@ class InspectionAutoConfigurationTest {
                             "spring.ai.inspection.output.enabled",
                             "spring.ai.inspection.output.max-frames",
                             "spring.ai.inspection.output.stream-timeout");
-            assertThat(properties).allSatisfy(property ->
-                    assertThat(((Map<?, ?>) property).get("description"))
-                            .isInstanceOfSatisfying(String.class, description -> assertThat(description).isNotBlank()));
+            for (Object property : properties) {
+                Object description = ((Map<?, ?>) property).get("description");
+                assertThat(description).isInstanceOf(String.class);
+                assertThat((String) description).isNotBlank();
+            }
         }
     }
 
@@ -299,7 +301,10 @@ class InspectionAutoConfigurationTest {
                 return "failing-inspector";
             }
 
-            public boolean requiresPrivacyProcessedContent() { return false; }
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
             public InspectionResult inspect(InspectionRequest request) {
                 List<InspectionFinding> findings = findingPresent ? List.of(new InspectionFinding(
                         request.segments().get(0).id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
@@ -312,6 +317,7 @@ class InspectionAutoConfigurationTest {
                 observedReport.set(report);
                 throw new IllegalStateException("observer unavailable");
             }
+
             public void onFailure(InspectionException failure) {
                 observedFailure.set(failure);
                 throw new IllegalStateException("observer unavailable");
@@ -322,6 +328,7 @@ class InspectionAutoConfigurationTest {
                 modelCalls.incrementAndGet();
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
             }
+
             public Flux<ChatResponse> stream(Prompt prompt) {
                 return Flux.defer(() -> Flux.just(call(prompt)));
             }

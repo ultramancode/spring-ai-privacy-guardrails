@@ -66,8 +66,14 @@ final class InspectionFinalOutputStream implements StreamAdvisor {
 
     private StreamAdvisor roundMarker() {
         return new StreamAdvisor() {
-            public String getName() { return "InspectionOutputRoundBoundary"; }
-            public int getOrder() { return order + 1; }
+            public String getName() {
+                return "InspectionOutputRoundBoundary";
+            }
+
+            public int getOrder() {
+                return order + 1;
+            }
+
             public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
                 return Flux.defer(() -> {
                     frames.clear();
@@ -123,8 +129,12 @@ final class InspectionFinalOutputStream implements StreamAdvisor {
     }
 
     @Override
-    public String getName() { return "InspectionFinalOutputStream"; }
+    public String getName() {
+        return "InspectionFinalOutputStream";
+    }
 
     @Override
-    public int getOrder() { return order - 1; }
+    public int getOrder() {
+        return order - 1;
+    }
 }

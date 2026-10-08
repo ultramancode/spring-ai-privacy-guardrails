@@ -2,6 +2,7 @@ package io.github.ultramancode.springai.privacy.inspection.springai;
 
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
@@ -78,12 +79,19 @@ class InspectionOutputAdvisorTest {
 
     private ChatModel model(ChatResponse call, Flux<ChatResponse> stream) {
         return new ChatModel() {
-            public ChatResponse call(Prompt prompt) { return call; }
-            public Flux<ChatResponse> stream(Prompt prompt) { return stream; }
+            public ChatResponse call(Prompt prompt) {
+                return call;
+            }
+
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return stream;
+            }
         };
     }
 
-    private InspectionOutputAdvisor advisor() { return new InspectionOutputAdvisor(InspectionRuntimeScopeTest.service()); }
+    private InspectionOutputAdvisor advisor() {
+        return new InspectionOutputAdvisor(InspectionRuntimeScopeTest.service());
+    }
 
     @Test
     void outputOnlyRegistrationNeedsNoInputInspectionOrPrivacyConfigurer() {
@@ -98,11 +106,18 @@ class InspectionOutputAdvisorTest {
     void inspectsResponsesWithoutBuiltInModelAdvisors(String text) {
         ChatClientResponse response = ChatClientResponse.builder().chatResponse(response(text)).build();
         class ResponseAdvisor implements CallAdvisor, StreamAdvisor {
-            public String getName() { return "application-response"; }
-            public int getOrder() { return 100; }
+            public String getName() {
+                return "application-response";
+            }
+
+            public int getOrder() {
+                return 100;
+            }
+
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
                 return response;
             }
+
             public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
                 return Flux.just(response);
             }
@@ -230,8 +245,13 @@ class InspectionOutputAdvisorTest {
         for (InspectionLimits limits : List.of(new InspectionLimits(2, 3, WAIT), new InspectionLimits(1, 100, WAIT))) {
             AtomicInteger failures = new AtomicInteger();
             var observer = new InspectionObserver() {
-                public void onInspection(InspectionReport report) { fail("No inspection before assembly succeeds"); }
-                public void onFailure(InspectionException failure) { failures.incrementAndGet(); }
+                public void onInspection(InspectionReport report) {
+                    fail("No inspection before assembly succeeds");
+                }
+
+                public void onFailure(InspectionException failure) {
+                    failures.incrementAndGet();
+                }
             };
             var output = new InspectionOutputAdvisor(InspectionRuntimeScopeTest.service(), limits, observer, 10, WAIT);
             var excess = new ChatResponse(List.of(indexed(0, "safe"), indexed(1, "x")));
@@ -291,8 +311,14 @@ class InspectionOutputAdvisorTest {
     void outputStatusNeverInheritsInputPrivacyAndSessionsCloseOnBlock(boolean streaming) {
         List<ContentSegment> captured = new CopyOnWriteArrayList<>();
         var inspector = new ContentInspector() {
-            public String inspectorId() { return "output-status"; }
-            public boolean requiresPrivacyProcessedContent() { return false; }
+            public String inspectorId() {
+                return "output-status";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
             public InspectionResult inspect(InspectionRequest request) {
                 captured.addAll(request.segments());
                 request.requirePrivacyProcessed();
@@ -354,18 +380,24 @@ class InspectionOutputAdvisorTest {
         for (boolean outputFirst : List.of(false, true)) {
             for (var action : List.of(PrivacyOutputAction.REDACT,
                     PrivacyOutputAction.TOKENIZE)) {
-                var privacy = new PrivacyService(List.of((text, options, limits) -> {
+                PiiAnalyzer analyzer = (text, options, limits) -> {
                     int at = text.indexOf("attack");
                     return at < 0 ? List.of() : List.of(new PiiSpan(
                             "PERSON", at, at + 6, 0.95));
-                }), PiiAnalysisOptions.defaults());
+                };
+
+                var privacy = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
                 var configurer = PrivacyChatClientConfigurer.builder(privacy).outputProtection(action, "blocked").build();
                 List<String> inspected = new CopyOnWriteArrayList<>();
                 var output = recordingAdvisor(inspected);
                 var builder = ChatClient.builder(model(response("attack"), Flux.just(response("at"), response("tack"))));
-                if (outputFirst) { builder.defaultAdvisors(output); }
+                if (outputFirst) {
+                    builder.defaultAdvisors(output);
+                }
                 configurer.configure(builder);
-                if (!outputFirst) { builder.defaultAdvisors(output); }
+                if (!outputFirst) {
+                    builder.defaultAdvisors(output);
+                }
                 String delivered = invoke(builder.build(), streaming);
                 assertThat(delivered).doesNotContain("attack");
                 assertThat(inspected).containsExactly(delivered);
@@ -376,11 +408,13 @@ class InspectionOutputAdvisorTest {
 
     @Test
     void filtersIntermediateStreamTextBeforePrivacyOutputProtection() {
-        var privacy = new PrivacyService(List.of((text, options, limits) -> {
+        PiiAnalyzer analyzer = (text, options, limits) -> {
             int at = text.indexOf("attack intermediate");
             return at < 0 ? List.of() : List.of(new PiiSpan(
                     "PERSON", at, at + "attack intermediate".length(), 0.95));
-        }), PiiAnalysisOptions.defaults());
+        };
+
+        var privacy = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         var configurer = PrivacyChatClientConfigurer.builder(privacy)
                 .outputProtection(PrivacyOutputAction.BLOCK, "blocked").build();
         AtomicInteger tools = new AtomicInteger();
@@ -448,8 +482,14 @@ class InspectionOutputAdvisorTest {
         // Supply its response directly so both versions test how intermediate text is replaced.
         // Spring AI's exception-to-response conversion is outside this test's scope.
         class LimitResponseToolAdvisor implements ToolAdvisor, StreamAdvisor {
-            public String getName() { return "LimitResponseToolAdvisor"; }
-            public int getOrder() { return 100; }
+            public String getName() {
+                return "LimitResponseToolAdvisor";
+            }
+
+            public int getOrder() {
+                return 100;
+            }
+
             public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
                 return chain.nextStream(request).concatWith(Flux.just(
                         ChatClientResponse.builder().chatResponse(limitResponse).build()));
@@ -472,8 +512,14 @@ class InspectionOutputAdvisorTest {
     void anEmptyFinalRoundDoesNotReleaseIntermediateText() {
         var rounds = new AtomicInteger();
         var model = new ChatModel() {
-            public ChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
-            public ChatResponse call(Prompt prompt) { throw new AssertionError("stream only"); }
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
+            public ChatResponse call(Prompt prompt) {
+                throw new AssertionError("stream only");
+            }
+
             public Flux<ChatResponse> stream(Prompt prompt) {
                 return Flux.defer(() -> rounds.getAndIncrement() == 0
                         ? Flux.just(response("attack intermediate"), toolCall("")) : Flux.empty());
@@ -488,8 +534,14 @@ class InspectionOutputAdvisorTest {
     void cannotSilentlyRunFinalStreamFilteringInsideAPriorityToolLoop() {
         class PriorityTool implements org.springframework.ai.chat.client.advisor.api.ToolAdvisor,
                 org.springframework.ai.chat.client.advisor.api.StreamAdvisor, org.springframework.core.PriorityOrdered {
-            public String getName() { return "priority-tool"; }
-            public int getOrder() { return 0; }
+            public String getName() {
+                return "priority-tool";
+            }
+
+            public int getOrder() {
+                return 0;
+            }
+
             public Flux<org.springframework.ai.chat.client.ChatClientResponse> adviseStream(
                     org.springframework.ai.chat.client.ChatClientRequest request,
                     org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain chain) {
@@ -505,8 +557,14 @@ class InspectionOutputAdvisorTest {
     @Test
     void concurrentToolStreamsDoNotShareRoundBuffers() {
         var model = new ChatModel() {
-            public ChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
-            public ChatResponse call(Prompt prompt) { throw new AssertionError("stream only"); }
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
+            public ChatResponse call(Prompt prompt) {
+                throw new AssertionError("stream only");
+            }
+
             public Flux<ChatResponse> stream(Prompt prompt) {
                 boolean followup = prompt.getInstructions().stream().anyMatch(ToolResponseMessage.class::isInstance);
                 String text = prompt.getUserMessage().getText();
@@ -527,8 +585,14 @@ class InspectionOutputAdvisorTest {
 
     private InspectionOutputAdvisor recordingAdvisor(List<String> captured) {
         var recorder = new ContentInspector() {
-            public String inspectorId() { return "record-output"; }
-            public boolean requiresPrivacyProcessedContent() { return false; }
+            public String inspectorId() {
+                return "record-output";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
             public InspectionResult inspect(InspectionRequest request) {
                 request.segments().forEach(s -> captured.add(s.text()));
                 return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
@@ -543,10 +607,14 @@ class InspectionOutputAdvisorTest {
 
     private ChatModel toolModel(AtomicInteger rounds, String finalText, int toolRounds) {
         return new ChatModel() {
-            public ChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
             public ChatResponse call(Prompt prompt) {
                 return rounds.getAndIncrement() < toolRounds ? toolCall("attack intermediate") : response(finalText);
             }
+
             public Flux<ChatResponse> stream(Prompt prompt) {
                 return Flux.defer(() -> rounds.getAndIncrement() < toolRounds
                         ? Flux.just(response("attack intermediate"), toolCall(""))
@@ -566,16 +634,29 @@ class InspectionOutputAdvisorTest {
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder().name("lookup").description("fixture").inputSchema("{}").build();
             }
-            public ToolMetadata getToolMetadata() { return ToolMetadata.builder().returnDirect(direct).build(); }
-            public String call(String arguments) { calls.incrementAndGet(); return result; }
+
+            public ToolMetadata getToolMetadata() {
+                return ToolMetadata.builder().returnDirect(direct).build();
+            }
+
+            public String call(String arguments) {
+                calls.incrementAndGet();
+                return result;
+            }
         };
     }
 
     @Test
     void outputUsesExistingFailOpenPolicyAndSanitizesHardFailures() {
         var outputInspector = new ContentInspector() {
-            public String inspectorId() { return "unavailable"; }
-            public boolean requiresPrivacyProcessedContent() { return false; }
+            public String inspectorId() {
+                return "unavailable";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
             public InspectionResult inspect(InspectionRequest request) {
                 return InspectionResult.failed(InspectionFailureCode.TRANSPORT_ERROR, Set.of(), List.of());
             }
@@ -586,13 +667,24 @@ class InspectionOutputAdvisorTest {
                 .prompt().user("hello").call().chatResponse()).isSameAs(safe);
         AtomicInteger failures = new AtomicInteger();
         var broken = new ContentInspector() {
-            public String inspectorId() { return "broken"; }
-            public boolean requiresPrivacyProcessedContent() { return false; }
-            public InspectionResult inspect(InspectionRequest request) { throw new IllegalArgumentException("private-output"); }
+            public String inspectorId() {
+                return "broken";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
+            public InspectionResult inspect(InspectionRequest request) {
+                throw new IllegalArgumentException("private-output");
+            }
         };
         var observer = new InspectionObserver() {
             public void onInspection(InspectionReport report) {}
-            public void onFailure(InspectionException failure) { failures.incrementAndGet(); throw new IllegalArgumentException("observer"); }
+            public void onFailure(InspectionException failure) {
+                failures.incrementAndGet();
+                throw new IllegalArgumentException("observer");
+            }
         };
         var output = new InspectionOutputAdvisor(new InspectionService(List.of(broken)), InspectionLimits.defaults(), observer, 10, WAIT);
         assertThatThrownBy(() -> client(model(safe, Flux.just(safe)), output).prompt().user("hello").call().content())

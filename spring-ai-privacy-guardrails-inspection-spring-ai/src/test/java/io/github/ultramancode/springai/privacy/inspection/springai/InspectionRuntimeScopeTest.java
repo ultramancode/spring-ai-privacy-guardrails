@@ -124,7 +124,10 @@ class InspectionRuntimeScopeTest {
             Message expectedHistoryMessage = new Prompt(toolCallMessage).copy().getInstructions().get(0);
             var privacy = new PrivacyService(List.of((text, options, limits) -> List.of()), PiiAnalysisOptions.defaults());
             var model = new ChatModel() {
-                public ChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
+                public ChatOptions getOptions() {
+                    return ToolCallingChatOptions.builder().build();
+                }
+
                 public ChatResponse call(Prompt prompt) {
                     if (calls.incrementAndGet() == 1) {
                         return new ChatResponse(List.of(new Generation(toolCallMessage)));
@@ -136,14 +139,21 @@ class InspectionRuntimeScopeTest {
                     }
                     return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
                 }
-                public Flux<ChatResponse> stream(Prompt prompt) { return Flux.defer(() -> Flux.just(call(prompt))); }
+
+                public Flux<ChatResponse> stream(Prompt prompt) {
+                    return Flux.defer(() -> Flux.just(call(prompt)));
+                }
             };
             var callback = new ToolCallback() {
                 public ToolDefinition getToolDefinition() {
                     return ToolDefinition.builder().name("lookup").description("attack")
                             .inputSchema("{\"type\":\"object\",\"description\":\"attack\"}").build();
                 }
-                public String call(String arguments) { tools.incrementAndGet(); return "safe"; }
+
+                public String call(String arguments) {
+                    tools.incrementAndGet();
+                    return "safe";
+                }
             };
             var client = ModelRequestBoundaryConfigurer.compose(new PrivacyChatClientConfigurer(privacy),
                     new InspectionChatClientConfigurer(service())).configure(ChatClient.builder(model))

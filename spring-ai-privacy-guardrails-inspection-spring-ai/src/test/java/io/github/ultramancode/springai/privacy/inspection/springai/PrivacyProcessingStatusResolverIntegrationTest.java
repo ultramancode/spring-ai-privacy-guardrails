@@ -81,13 +81,15 @@ class PrivacyProcessingStatusResolverIntegrationTest {
         InspectionFailureCode expected = interrupted ? InspectionFailureCode.CANCELLED
                 : mode == Failure.DECLARED ? InspectionFailureCode.DISCLOSURE_DENIED : InspectionFailureCode.INVALID_RESULT;
         try {
-            assertThatThrownBy(() -> invoke(client, streaming)).isInstanceOfSatisfying(InspectionException.class, failure -> {
-                assertThat(failure.failureCode()).isEqualTo(expected);
-                assertThat(failure).hasMessage("Content inspection failed: " + expected).hasNoCause();
-                assertThat(failure.getSuppressed()).noneMatch(ex -> ex.getMessage().contains("synthetic-private-text"));
-                assertThat(failure.report()).isEmpty();
-                assertThat(failures).containsExactly(failure);
-            });
+            assertThatThrownBy(() -> invoke(client, streaming))
+                    .isInstanceOfSatisfying(InspectionException.class, failure -> {
+                        assertThat(failure.failureCode()).isEqualTo(expected);
+                        assertThat(failure).hasMessage("Content inspection failed: " + expected).hasNoCause();
+                        assertThat(failure.getSuppressed())
+                                .noneMatch(ex -> ex.getMessage().contains("synthetic-private-text"));
+                        assertThat(failure.report()).isEmpty();
+                        assertThat(failures).containsExactly(failure);
+                    });
             assertThat(interruptObserved.get()).isEqualTo(interrupted);
             assertThat(reports).hasValue(0);
             assertThat(inspections).hasValue(0);
@@ -117,24 +119,32 @@ class PrivacyProcessingStatusResolverIntegrationTest {
         var model = new InspectionChatClientIntegrationTest.RecordingModel();
         ChatClient client = new InspectionChatClientConfigurer(service(inspections), InspectionLimits.defaults(),
                 PrivacyProcessingStatusResolver.unknown(), observer).configure(ChatClient.builder(model)).build();
-        assertThatThrownBy(() -> invoke(client, streaming)).isInstanceOfSatisfying(InspectionException.class, failure -> {
-            assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
-            assertThat(failure).hasNoCause();
-            assertThat(failures).containsExactly(failure);
-            assertThat(failure.report()).isPresent();
-            assertThat(failure.report().orElseThrow().outcomes()).singleElement().satisfies(outcome -> {
-                assertThat(outcome.inspectorId()).isEqualTo("test");
-                assertThat(outcome.result().failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
-            });
-        });
+        assertThatThrownBy(() -> invoke(client, streaming))
+                .isInstanceOfSatisfying(InspectionException.class, failure -> {
+                    assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
+                    assertThat(failure).hasNoCause();
+                    assertThat(failures).containsExactly(failure);
+
+                    InspectionReport report = failure.report().orElseThrow();
+                    assertThat(report.outcomes()).hasSize(1);
+                    InspectionReport.Outcome outcome = report.outcomes().get(0);
+                    assertThat(outcome.inspectorId()).isEqualTo("test");
+                    assertThat(outcome.result().failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
+                });
         assertThat(inspections).hasValue(1);
         assertThat(model.calls).hasValue(0);
     }
 
     private InspectionService service(AtomicInteger inspections) {
         ContentInspector inspector = new ContentInspector() {
-            public String inspectorId() { return "test"; }
-            public boolean requiresPrivacyProcessedContent() { return false; }
+            public String inspectorId() {
+                return "test";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
             public InspectionResult inspect(InspectionRequest request) {
                 inspections.incrementAndGet();
                 return InspectionResult.failed(InspectionFailureCode.INVALID_RESULT);

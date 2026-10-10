@@ -114,7 +114,7 @@ public final class RepositoryVerificationPlugin implements Plugin<Project> {
                 verification -> {
                     verification.setGroup("verification");
                     verification.setDescription(
-                            "Verifies stable JPMS names and a single package for every published module."
+                            "Verifies stable JPMS names and package boundaries for every published module."
                     );
                     verification.getExpectedAutomaticModuleNames().convention(Map.of());
                     verification.getProjectVersion().set(project.getVersion().toString());

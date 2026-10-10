@@ -87,9 +87,10 @@ public abstract class VerifyAutomaticModuleNames extends DefaultTask {
             if (actualName != null && !actualNames.add(actualName)) {
                 violations.add("Duplicate Automatic-Module-Name " + actualName);
             }
-            if (!classPackages.equals(Set.of(expectedName))) {
-                violations.add(moduleName + " classes must remain in the single package " + expectedName
-                        + ", found " + classPackages);
+            if (classPackages.isEmpty() || classPackages.stream().anyMatch(packageName ->
+                    !packageName.equals(expectedName) && !packageName.startsWith(expectedName + "."))) {
+                violations.add(moduleName + " classes must remain in " + expectedName
+                        + " or its subpackages, found " + classPackages);
             }
         }
 
@@ -100,7 +101,7 @@ public abstract class VerifyAutomaticModuleNames extends DefaultTask {
         }
         validateModulePath(jarsByModule.values());
         getLogger().lifecycle(
-                "Verified {} published automatic modules and single-package JARs.",
+                "Verified {} published automatic modules and module package boundaries.",
                 actualNames.size()
         );
     }

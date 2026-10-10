@@ -9,6 +9,20 @@ privacyBuild {
         module.denyExternalGroup 'org.springframework.boot'
     }
 
+    module('spring-ai-privacy-guardrails-inspection-core') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.inspection.core', 'Spring AI Privacy Guardrails Inspection Core')
+        module.denyAllExternalMainDependencies()
+        module.springIndependentPublication()
+    }
+    ['rules', 'openai-compatible'].each { backend ->
+        module("spring-ai-privacy-guardrails-inspection-${backend}") { module ->
+            module.publication("io.github.ultramancode.springai.privacy.inspection.${backend.replace('-', '')}", "Spring AI Privacy Guardrails Inspection ${backend}")
+            module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-core'
+            module.denyExternalGroup 'org.springframework'
+            module.springIndependentPublication()
+        }
+    }
+
     module('spring-ai-privacy-guardrails-core') { module ->
         module.publication(
                 'io.github.ultramancode.springai.privacy.core',

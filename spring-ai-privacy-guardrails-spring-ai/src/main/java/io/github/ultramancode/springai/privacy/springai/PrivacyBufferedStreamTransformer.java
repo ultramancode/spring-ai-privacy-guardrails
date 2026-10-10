@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.OutputResponseContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -103,6 +104,11 @@ final class PrivacyBufferedStreamTransformer {
             Set<ChoiceKey> frameKeys = new LinkedHashSet<>();
             for (int generationPosition = 0; generationPosition < generations.size(); generationPosition++) {
                 Generation generation = generations.get(generationPosition);
+                if (OutputResponseContext.isCompleteToolResponse(responses.get(responseIndex))) {
+                    ChoiceKey key = new ChoiceKey("tool-response:" + responseIndex + ":" + generationPosition);
+                    choices.put(key, List.of(new GenerationOccurrence(responseIndex, generationPosition, generation)));
+                    continue;
+                }
                 String explicitIndex = choiceIndex(generation);
                 boolean hasIndex = explicitIndex != null;
                 if (usesExplicitChoiceIndexes != null && usesExplicitChoiceIndexes != hasIndex) {
@@ -195,9 +201,7 @@ final class PrivacyBufferedStreamTransformer {
 
     private static ContentChannel contentChannel(AssistantMessage message) {
         PrivacyAssistantMessageSupport.requireSupported(message, PrivacyPhase.OUTPUT_POLICY);
-        Map<String, Object> metadata = message.getMetadata();
-        return Boolean.TRUE.equals(metadata.get("isThought"))
-                || Boolean.TRUE.equals(metadata.get("thinking"))
+        return OutputResponseContext.isThought(message)
                 ? ContentChannel.THOUGHT
                 : ContentChannel.DEFAULT;
     }

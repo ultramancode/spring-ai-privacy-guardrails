@@ -1,6 +1,7 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
+import io.github.ultramancode.springai.privacy.boundary.OutputResponseContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -66,7 +67,12 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
             if (outputAdvisor != null) {
                 response = outputAdvisor.protectAtApplicationBoundary(session.handle(), response);
             }
-            return PrivacyRequestContextSupport.stripInternalPrivacyEntries(response);
+            response = OutputResponseContext.clearInternalMarkers(
+                    PrivacyRequestContextSupport.stripInternalPrivacyEntries(response));
+            if (outputAdvisor != null && OutputResponseContext.isPrivacyTrackingRequested(request)) {
+                return OutputResponseContext.markPrivacyProcessed(response);
+            }
+            return response;
         }
     }
 
@@ -84,7 +90,14 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
                     if (outputAdvisor != null) {
                         responses = outputAdvisor.protectAtApplicationBoundary(session.handle(), responses);
                     }
-                    return responses.map(PrivacyRequestContextSupport::stripInternalPrivacyEntries);
+                    return responses.map(response -> {
+                        ChatClientResponse cleaned = OutputResponseContext.clearPrivacyTracking(
+                                PrivacyRequestContextSupport.stripInternalPrivacyEntries(response));
+                        if (outputAdvisor != null && OutputResponseContext.isPrivacyTrackingRequested(request)) {
+                            return OutputResponseContext.markPrivacyProcessed(cleaned);
+                        }
+                        return cleaned;
+                    });
                 },
                 PrivacySession::close
         );

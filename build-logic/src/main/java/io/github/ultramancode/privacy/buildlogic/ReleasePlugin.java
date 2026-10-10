@@ -83,7 +83,7 @@ public final class ReleasePlugin implements Plugin<Project> {
                     );
                     task.dependsOn(verifyPublished);
                     task.setDir(project.file("samples/published-artifact-consumer"));
-                    task.setTasks(List.of("clean", "run", "securityOnlyRun"));
+                    task.setTasks(List.of("clean", "run", "securityOnlyRun", "inspectionOnlyRun"));
                     task.getStartParameter().setProjectProperties(Map.of(
                             "privacyRepository",
                             project.getLayout().getBuildDirectory()
@@ -127,7 +127,7 @@ public final class ReleasePlugin implements Plugin<Project> {
                     task.dependsOn(verifyPublished, preparePomOnlyConsumer);
                     task.mustRunAfter(artifactSmokeTest);
                     task.setDir(pomOnlyConsumerDirectory.get().getAsFile());
-                    task.setTasks(List.of("clean", "run", "securityOnlyRun"));
+                    task.setTasks(List.of("clean", "run", "securityOnlyRun", "inspectionOnlyRun"));
                     task.getStartParameter().setProjectProperties(Map.of(
                             "privacyRepository",
                             project.getLayout().getBuildDirectory()

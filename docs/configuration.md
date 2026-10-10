@@ -86,8 +86,10 @@ When combining privacy with another model-request feature, combine the feature
 configurers with `ModelRequestBoundaryConfigurer.compose(...)` before calling
 `configure(builder)` once. The shared boundary runs privacy, authorization, then
 inspection, skipping unconfigured stages. Configuring each feature separately
-creates duplicate boundaries, which are rejected at request time. Here,
-inspection checks the prepared model request, not the model's output.
+creates duplicate boundaries, which are rejected at request time.
+
+To apply content inspection to model responses as well, enable
+[output inspection](inspection.md#optional-model-output-inspection) separately.
 
 To combine privacy protection with tool authorization, create clients with
 `PrivacySecurityChatClientFactory`. This factory configures privacy protection,

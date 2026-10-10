@@ -17,6 +17,9 @@ sourceSets {
     securityOnly {
         java.srcDir 'src/securityOnly/java'
     }
+    inspectionOnly {
+        java.srcDir 'src/inspectionOnly/java'
+    }
 }
 
 dependencies {
@@ -36,6 +39,13 @@ dependencies {
     securityOnlyImplementation platform("org.springframework.ai:spring-ai-bom:${consumerSpringAiVersion.get()}")
     securityOnlyImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     securityOnlyImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
+
+    inspectionOnlyImplementation enforcedPlatform(
+            "org.springframework.boot:spring-boot-dependencies:${consumerSpringBootVersion.get()}"
+    )
+    inspectionOnlyImplementation platform("org.springframework.ai:spring-ai-bom:${consumerSpringAiVersion.get()}")
+    inspectionOnlyImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
+    inspectionOnlyImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:${providers.gradleProperty('privacyVersion').get()}"
 }
 
 application {
@@ -61,7 +71,8 @@ tasks.register('verifySpringBootAlignment') {
 
 tasks.register('verifySpringAiAlignment') {
     doLast {
-        [configurations.runtimeClasspath, configurations.securityOnlyRuntimeClasspath].each { configuration ->
+        [configurations.runtimeClasspath, configurations.securityOnlyRuntimeClasspath,
+         configurations.inspectionOnlyRuntimeClasspath].each { configuration ->
             Set<String> selectedVersions = configuration.incoming.resolutionResult.allComponents
                     .collect { component -> component.moduleVersion }
                     .findAll { module -> module != null && module.group == 'org.springframework.ai' }
@@ -112,4 +123,36 @@ tasks.register('securityOnlyRun', JavaExec) {
     dependsOn tasks.named('verifySpringAiAlignment')
     classpath = sourceSets.securityOnly.runtimeClasspath
     mainClass = 'example.SecurityOnlyPublishedArtifactConsumer'
+}
+
+tasks.register('verifyInspectionOnlyDependencies') {
+    doLast {
+        Set<String> firstPartyArtifacts = configurations.inspectionOnlyRuntimeClasspath.incoming
+                .resolutionResult
+                .allComponents
+                .collect { component -> component.moduleVersion }
+                .findAll { module -> module != null && module.group == 'io.github.ultramancode' }
+                .collect { module -> module.name }
+                .toSet()
+        Set<String> expectedArtifacts = Set.of(
+                'spring-ai-privacy-guardrails-spring-ai-boundary',
+                'spring-ai-privacy-guardrails-inspection-core',
+                'spring-ai-privacy-guardrails-inspection-rules',
+                'spring-ai-privacy-guardrails-inspection-spring-ai',
+                'spring-ai-privacy-guardrails-inspection-spring-boot-starter'
+        )
+        if (firstPartyArtifacts != expectedArtifacts) {
+            throw new GradleException(
+                    "Expected only Inspection and common boundary artifacts but resolved ${firstPartyArtifacts}"
+            )
+        }
+    }
+}
+
+tasks.register('inspectionOnlyRun', JavaExec) {
+    dependsOn tasks.named('inspectionOnlyClasses')
+    dependsOn tasks.named('verifyInspectionOnlyDependencies')
+    dependsOn tasks.named('verifySpringAiAlignment')
+    classpath = sourceSets.inspectionOnly.runtimeClasspath
+    mainClass = 'example.InspectionOnlyPublishedArtifactConsumer'
 }

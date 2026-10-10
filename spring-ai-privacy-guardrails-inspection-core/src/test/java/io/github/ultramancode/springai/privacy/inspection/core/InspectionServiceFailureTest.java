@@ -40,6 +40,17 @@ class InspectionServiceFailureTest {
         };
     }
 
+    private void waitUntilDeadlineExpires(InspectionRequest request) {
+        while (true) {
+            try {
+                LockSupport.parkNanos(request.remaining().toNanos());
+            } catch (InspectionException expired) {
+                assertThat(expired.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT);
+                return;
+            }
+        }
+    }
+
     @ParameterizedTest
     @EnumSource(InspectionFailurePolicy.class)
     void policyRuntimeFailureIsSanitizedAndRetainsTheCollectedReport(
@@ -152,16 +163,5 @@ class InspectionServiceFailureTest {
         assertThatThrownBy(() -> service.inspect(request(Duration.ofMillis(500))))
                 .isInstanceOfSatisfying(InspectionException.class, failure ->
                         assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION));
-    }
-
-    private void waitUntilDeadlineExpires(InspectionRequest request) {
-        while (true) {
-            try {
-                LockSupport.parkNanos(request.remaining().toNanos());
-            } catch (InspectionException expired) {
-                assertThat(expired.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT);
-                return;
-            }
-        }
     }
 }

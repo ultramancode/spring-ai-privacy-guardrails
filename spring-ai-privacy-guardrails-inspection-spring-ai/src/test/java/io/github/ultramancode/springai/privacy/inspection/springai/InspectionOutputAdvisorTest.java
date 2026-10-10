@@ -54,6 +54,7 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
+import org.springframework.core.PriorityOrdered;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -91,6 +92,90 @@ class InspectionOutputAdvisorTest {
 
     private InspectionOutputAdvisor advisor() {
         return new InspectionOutputAdvisor(InspectionRuntimeScopeTest.service());
+    }
+
+    private ChatClient client(ChatModel model, InspectionOutputAdvisor output) {
+        return new InspectionChatClientConfigurer(InspectionRuntimeScopeTest.service()).withOutputInspection(output)
+                .configure(ChatClient.builder(model)).build();
+    }
+
+    private Generation indexed(int index, String text) {
+        return new Generation(new AssistantMessage(text), ChatGenerationMetadata.builder().metadata("index", index).build());
+    }
+
+    private InspectionOutputAdvisor recordingAdvisor(List<String> captured) {
+        var recorder = new ContentInspector() {
+            public String inspectorId() {
+                return "record-output";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
+            public InspectionResult inspect(InspectionRequest request) {
+                request.segments().forEach(s -> captured.add(s.text()));
+                return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
+                        .collect(Collectors.toSet()), List.of());
+            }
+        };
+        return new InspectionOutputAdvisor(new InspectionService(List.of(recorder,
+                new RuleBasedContentInspector("rules", List.of(
+                        InspectionRule.literal("attack",
+                                InspectionFinding.Category.PROMPT_ATTACK, "attack"))))));
+    }
+
+    private ChatModel toolModel(AtomicInteger rounds, String finalText, int toolRounds) {
+        return new ChatModel() {
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
+            public ChatResponse call(Prompt prompt) {
+                return rounds.getAndIncrement() < toolRounds ? toolCall("attack intermediate") : response(finalText);
+            }
+
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.defer(() -> rounds.getAndIncrement() < toolRounds
+                        ? Flux.just(response("attack intermediate"), toolCall(""))
+                        : Flux.just(response(finalText.substring(0, 2)), response(finalText.substring(2))));
+            }
+        };
+    }
+
+    private ChatResponse toolCall(String text) {
+        return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content(text)
+                .toolCalls(List.of(new AssistantMessage.ToolCall("id", "function", "lookup",
+                        "{\"q\":\"attack argument\"}"))).build())));
+    }
+
+    private ToolCallback tool(boolean direct, String result, AtomicInteger calls) {
+        return new ToolCallback() {
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder().name("lookup").description("fixture").inputSchema("{}").build();
+            }
+
+            public ToolMetadata getToolMetadata() {
+                return ToolMetadata.builder().returnDirect(direct).build();
+            }
+
+            public String call(String arguments) {
+                calls.incrementAndGet();
+                return result;
+            }
+        };
+    }
+
+    private void assertBlocked(ChatClient client, boolean streaming) {
+        assertThatThrownBy(() -> invoke(client, streaming)).isInstanceOf(InspectionBlockedException.class);
+    }
+
+    private String invoke(ChatClient client, boolean streaming) {
+        if (streaming) {
+            return client.prompt().user("hello").stream().content().collectList()
+                    .map(parts -> String.join("", parts)).block(WAIT);
+        }
+        return client.prompt().user("hello").call().content();
     }
 
     @Test
@@ -133,11 +218,6 @@ class InspectionOutputAdvisorTest {
             assertThat(chain.nextCall(request)).isSameAs(response);
             StepVerifier.create(chain.nextStream(request)).expectNext(response).verifyComplete();
         }
-    }
-
-    private ChatClient client(ChatModel model, InspectionOutputAdvisor output) {
-        return new InspectionChatClientConfigurer(InspectionRuntimeScopeTest.service()).withOutputInspection(output)
-                .configure(ChatClient.builder(model)).build();
     }
 
     @Test
@@ -217,10 +297,6 @@ class InspectionOutputAdvisorTest {
                 .verify(WAIT);
     }
 
-    private Generation indexed(int index, String text) {
-        return new Generation(new AssistantMessage(text), ChatGenerationMetadata.builder().metadata("index", index).build());
-    }
-
     @Test
     void splitReasoningMetadataAndJsonKeysAreExcluded() {
         var first = new ChatResponse(List.of(new Generation(DeepSeekAssistantMessage.builder().content("").reasoningContent("at").build())));
@@ -242,7 +318,10 @@ class InspectionOutputAdvisorTest {
 
     @Test
     void bufferingEnforcesCharacterSegmentAndFrameBudgetsAndNotifiesOnce() {
-        for (InspectionLimits limits : List.of(new InspectionLimits(2, 3, WAIT), new InspectionLimits(1, 100, WAIT))) {
+        List<InspectionLimits> restrictiveLimits = List.of(
+                new InspectionLimits(2, 3, WAIT), new InspectionLimits(1, 100, WAIT));
+
+        for (InspectionLimits limits : restrictiveLimits) {
             AtomicInteger failures = new AtomicInteger();
             var observer = new InspectionObserver() {
                 public void onInspection(InspectionReport report) {
@@ -331,7 +410,7 @@ class InspectionOutputAdvisorTest {
                 .withOutputInspection(new InspectionOutputAdvisor(new InspectionService(List.of(inspector))));
         var client = ModelRequestBoundaryConfigurer.compose(new PrivacyChatClientConfigurer(privacy), inspection)
                 .configure(ChatClient.builder(model(response("fresh"), Flux.just(response("fresh"))))).build();
-        assertThatThrownBy(() -> invoke(client, streaming)).hasMessageContaining("DISCLOSURE_DENIED");
+        assertThatThrownBy(() -> invoke(client, streaming)).hasMessageContaining("PRIVACY_PROCESSING_REQUIRED");
         assertThat(captured).allSatisfy(s -> assertThat(s.privacyProcessingStatus()).isEqualTo(ContentSegment.PrivacyProcessingStatus.UNKNOWN));
         assertThat(privacy.activeSessionCount()).isZero();
     }
@@ -532,8 +611,7 @@ class InspectionOutputAdvisorTest {
 
     @Test
     void cannotSilentlyRunFinalStreamFilteringInsideAPriorityToolLoop() {
-        class PriorityTool implements org.springframework.ai.chat.client.advisor.api.ToolAdvisor,
-                org.springframework.ai.chat.client.advisor.api.StreamAdvisor, org.springframework.core.PriorityOrdered {
+        class PriorityTool implements ToolAdvisor, StreamAdvisor, PriorityOrdered {
             public String getName() {
                 return "priority-tool";
             }
@@ -542,9 +620,8 @@ class InspectionOutputAdvisorTest {
                 return 0;
             }
 
-            public Flux<org.springframework.ai.chat.client.ChatClientResponse> adviseStream(
-                    org.springframework.ai.chat.client.ChatClientRequest request,
-                    org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain chain) {
+            public Flux<ChatClientResponse> adviseStream(
+                    ChatClientRequest request, StreamAdvisorChain chain) {
                 throw new AssertionError("Invalid output boundary must be rejected before tool execution");
             }
         }
@@ -581,69 +658,6 @@ class InspectionOutputAdvisorTest {
                     assertThat(pair.getT1()).containsExactly("first final");
                     assertThat(pair.getT2()).containsExactly("second final");
                 }).verifyComplete();
-    }
-
-    private InspectionOutputAdvisor recordingAdvisor(List<String> captured) {
-        var recorder = new ContentInspector() {
-            public String inspectorId() {
-                return "record-output";
-            }
-
-            public boolean requiresPrivacyProcessedContent() {
-                return false;
-            }
-
-            public InspectionResult inspect(InspectionRequest request) {
-                request.segments().forEach(s -> captured.add(s.text()));
-                return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
-                        .collect(Collectors.toSet()), List.of());
-            }
-        };
-        return new InspectionOutputAdvisor(new InspectionService(List.of(recorder,
-                new RuleBasedContentInspector("rules", List.of(
-                        InspectionRule.literal("attack",
-                                InspectionFinding.Category.PROMPT_ATTACK, "attack"))))));
-    }
-
-    private ChatModel toolModel(AtomicInteger rounds, String finalText, int toolRounds) {
-        return new ChatModel() {
-            public ChatOptions getOptions() {
-                return ToolCallingChatOptions.builder().build();
-            }
-
-            public ChatResponse call(Prompt prompt) {
-                return rounds.getAndIncrement() < toolRounds ? toolCall("attack intermediate") : response(finalText);
-            }
-
-            public Flux<ChatResponse> stream(Prompt prompt) {
-                return Flux.defer(() -> rounds.getAndIncrement() < toolRounds
-                        ? Flux.just(response("attack intermediate"), toolCall(""))
-                        : Flux.just(response(finalText.substring(0, 2)), response(finalText.substring(2))));
-            }
-        };
-    }
-
-    private ChatResponse toolCall(String text) {
-        return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content(text)
-                .toolCalls(List.of(new AssistantMessage.ToolCall("id", "function", "lookup",
-                        "{\"q\":\"attack argument\"}"))).build())));
-    }
-
-    private ToolCallback tool(boolean direct, String result, AtomicInteger calls) {
-        return new ToolCallback() {
-            public ToolDefinition getToolDefinition() {
-                return ToolDefinition.builder().name("lookup").description("fixture").inputSchema("{}").build();
-            }
-
-            public ToolMetadata getToolMetadata() {
-                return ToolMetadata.builder().returnDirect(direct).build();
-            }
-
-            public String call(String arguments) {
-                calls.incrementAndGet();
-                return result;
-            }
-        };
     }
 
     @Test
@@ -690,17 +704,5 @@ class InspectionOutputAdvisorTest {
         assertThatThrownBy(() -> client(model(safe, Flux.just(safe)), output).prompt().user("hello").call().content())
                 .isInstanceOf(InspectionException.class).hasNoCause().hasMessageNotContaining("private-output");
         assertThat(failures).hasValue(1);
-    }
-
-    private void assertBlocked(ChatClient client, boolean streaming) {
-        assertThatThrownBy(() -> invoke(client, streaming)).isInstanceOf(InspectionBlockedException.class);
-    }
-
-    private String invoke(ChatClient client, boolean streaming) {
-        if (streaming) {
-            return client.prompt().user("hello").stream().content().collectList()
-                    .map(parts -> String.join("", parts)).block(WAIT);
-        }
-        return client.prompt().user("hello").call().content();
     }
 }

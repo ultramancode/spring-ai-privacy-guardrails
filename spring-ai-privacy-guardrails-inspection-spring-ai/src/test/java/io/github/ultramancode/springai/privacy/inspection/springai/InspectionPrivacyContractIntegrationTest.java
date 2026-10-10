@@ -207,7 +207,7 @@ class InspectionPrivacyContractIntegrationTest {
                 changeMessages, inspection(inspector, InspectionLimits.defaults()))
                 .configure(ChatClient.builder(model)).build();
 
-        assertThatThrownBy(() -> invoke(client, "hello", streaming)).hasMessageContaining("DISCLOSURE_DENIED");
+        assertThatThrownBy(() -> invoke(client, "hello", streaming)).hasMessageContaining("PRIVACY_PROCESSING_REQUIRED");
         assertThat(inspections).hasValue(0);
         assertThat(model.calls).hasValue(0);
         assertThat(privacy.activeSessionCount()).isZero();

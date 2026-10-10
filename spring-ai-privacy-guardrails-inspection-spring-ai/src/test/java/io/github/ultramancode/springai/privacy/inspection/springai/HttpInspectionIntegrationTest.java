@@ -9,7 +9,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
-import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaPromptProtocol;
+import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaSafeguardPromptProtocol;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.OpenAiCompatibleContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.OpenAiCompatibleInspectionConfig;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
@@ -64,9 +64,9 @@ class HttpInspectionIntegrationTest {
                 return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
             };
             PrivacyService privacy = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-            URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions");
+            URI baseUrl = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
             OpenAiCompatibleContentInspector inspector = new OpenAiCompatibleContentInspector("guard", new OpenAiCompatibleInspectionConfig(
-                    endpoint, "fixture", null, Duration.ofSeconds(5), 4096, true), new KananaPromptProtocol());
+                    baseUrl, "fixture", null, Duration.ofSeconds(5), 4096, true), new KananaSafeguardPromptProtocol());
             InspectionChatClientConfigurer inspection = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)),
                     InspectionLimits.defaults(),
                     request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)

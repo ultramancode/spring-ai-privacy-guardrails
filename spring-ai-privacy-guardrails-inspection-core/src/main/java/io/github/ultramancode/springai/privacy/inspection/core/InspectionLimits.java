@@ -4,13 +4,13 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * Finite input and execution limits for one inspection request.
+ * Size and time limits shared by the inspectors handling one request.
  *
  * @param maxSegments maximum number of text segments in the request
  * @param maxCharacters maximum combined text length in UTF-16 code units
- * @param timeout elapsed time budget for further inspection work and response waits,
- *        starting when the {@link InspectionRequest} is constructed. Policy evaluation also
- *        consumes this budget
+ * @param timeout time available for inspection work and response waits, measured from
+ *        construction of the {@link InspectionRequest}. Time spent evaluating the content
+ *        policy also counts toward this limit
  */
 public record InspectionLimits(int maxSegments, int maxCharacters, Duration timeout) {
 

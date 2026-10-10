@@ -5,10 +5,10 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import java.util.Objects;
 
 /**
- * Inspection blocked a model request or the release of a model response.
+ * Indicates that an inspection decision blocked a model request or final response.
  *
  * <p>Earlier model calls in the same tool loop may already have completed.
- * Carries only payload-free inspection evidence.
+ * The attached report contains inspector results without inspected text.
  */
 public final class InspectionBlockedException extends RuntimeException {
 

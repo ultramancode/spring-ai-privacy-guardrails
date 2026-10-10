@@ -7,7 +7,7 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-/** Final supported runtime content inspection before each model call, including tool continuations. */
+/** Inspects input text before each model call, including calls made after tool execution. */
 final class ContentInspectionStage implements Consumer<ChatClientRequest> {
     private final InspectionEnforcement enforcement;
     private final InspectionLimits limits;

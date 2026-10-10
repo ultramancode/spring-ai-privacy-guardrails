@@ -72,7 +72,7 @@ class InspectionEnforcementTest {
                 (inspectorId, inspectedFindings) -> InspectionDecision.ALLOW, InspectionFailurePolicy.FAIL_OPEN);
         InspectionEnforcement enforcement = new InspectionEnforcement(service, InspectionLimits.defaults(), observer);
         List<InspectionReport.Outcome> expectedOutcomes =
-                List.of(new InspectionReport.Outcome(inspector.inspectorId(), inspectorResult));
+                List.of(new InspectionReport.Outcome(inspector.inspectorId(), true, inspectorResult));
 
         try {
             assertThatThrownBy(() -> enforcement.inspect(() -> List.of(segment)))

@@ -5,8 +5,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * One inspector's completion status, completed segment IDs and findings.
- * Failed results must retain findings collected before failure.
+ * The completion status and findings from one inspector.
+ * A completed result must identify every request segment. If inspection fails, retain
+ * the IDs of fully inspected segments and all findings collected before the failure.
  *
  * @param completedSegmentIds IDs of segments whose inspection finished. Completion does not imply safety
  * @param failureCode required for {@link Status#FAILED}, must be {@code null} for {@link Status#COMPLETED}
@@ -18,7 +19,9 @@ public record InspectionResult(
         InspectionFailureCode failureCode) {
 
     public enum Status {
+        /** All request segments were inspected. Findings may still cause the policy to block the request. */
         COMPLETED,
+        /** Inspection could not complete, or a requirement prevented it from starting. */
         FAILED
     }
 

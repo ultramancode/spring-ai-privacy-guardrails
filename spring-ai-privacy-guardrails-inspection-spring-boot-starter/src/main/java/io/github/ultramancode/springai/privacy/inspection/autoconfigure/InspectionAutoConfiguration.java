@@ -21,7 +21,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.function.Predicate;
 
-/** Opt-in, explicit-client configuration. Enabling without inspectors fails startup. */
+/** Provides inspection services and a client configurer when spring.ai.inspection.enabled is true. */
 @AutoConfiguration(
         afterName =
                 "io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration")

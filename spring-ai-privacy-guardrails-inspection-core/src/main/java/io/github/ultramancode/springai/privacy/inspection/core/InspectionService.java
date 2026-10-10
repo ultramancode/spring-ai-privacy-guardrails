@@ -8,7 +8,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Executes inspectors in order and applies content and failure policies. */
+/** Runs inspectors in the supplied order and decides whether the request may proceed. */
 public final class InspectionService {
 
     private record RegisteredInspector(
@@ -29,8 +29,10 @@ public final class InspectionService {
     }
 
     /**
-     * Applies overrides by inspector ID, falling back to {@code defaultFailurePolicy}.
-     * Override IDs must match configured inspectors. Failure policies are fixed at construction.
+     * Creates a service with a content policy and failure policies for its inspectors.
+     * The override map uses inspector IDs as keys. IDs must match configured inspectors.
+     * Inspectors without an override use {@code defaultFailurePolicy}.
+     * Later changes to the supplied collections do not change this service's configuration.
      */
     public InspectionService(
             List<ContentInspector> inspectors,
@@ -62,18 +64,22 @@ public final class InspectionService {
     }
 
     /**
-     * Checks privacy-processing requirements, then runs inspectors in configured order.
-     * The request's time budget bounds further inspection work and response waits.
-     * Expiry does not invalidate completed results or content policy decisions.
-     * Results are validated before content policy evaluation. A block stops further inspectors.
-     * Each inspector's {@link InspectionFailurePolicy} applies to eligible failures.
-     * Allowed failures remain as failed outcomes in the report.
+     * Checks the input's privacy processing status, then runs the configured inspectors.
+     * If the input fails a privacy requirement, no inspector runs. The exception report
+     * identifies the first inspector whose requirement could not be met.
+     *
+     * <p>Each result is validated before its findings are evaluated by the content policy.
+     * A decision to block stops subsequent inspectors. Eligible failures are handled by
+     * each inspector's {@link InspectionFailurePolicy} and remain in the report even if allowed.
+     *
+     * <p>The request's timeout limits further work and response waits. Results and policy
+     * decisions already produced remain valid after the timeout expires.
      *
      * @param request content and execution limits
-     * @return final decision and inspector outcomes in execution order
+     * @return final decision and inspector outcomes in configured order
      * @throws InspectionException on cancellation, exceeded limits, unmet privacy-processing
      *         requirements, configuration errors, unsupported content, invalid inspector results
-     *         or content policy errors. The exception includes the outcomes collected so far
+     *         or content policy errors. The exception includes the results collected so far
      */
     public InspectionReport inspect(InspectionRequest request) {
         Objects.requireNonNull(request, "request");
@@ -82,16 +88,22 @@ public final class InspectionService {
             InspectionRequest.checkInterrupted();
             for (RegisteredInspector registered : inspectors) {
                 if (registered.inspector().requiresPrivacyProcessedContent()) {
-                    request.requirePrivacyProcessed();
+                    try {
+                        request.requirePrivacyProcessed();
+                    } catch (InspectionException ex) {
+                        InspectionResult result = InspectionResult.failed(ex.failureCode());
+                        outcomes.add(new InspectionReport.Outcome(registered.id(), false, result));
+                        throw ex;
+                    }
                 }
             }
             Set<String> expectedSegmentIds = request.segments().stream()
                     .map(ContentSegment::id).collect(Collectors.toSet());
             for (RegisteredInspector registered : inspectors) {
                 InspectionRequest.checkInterrupted();
-                InspectionResult result = executeInspector(
-                        registered.inspector(), request, expectedSegmentIds);
-                outcomes.add(new InspectionReport.Outcome(registered.id(), result));
+                InspectionReport.Outcome outcome = executeInspector(registered, request, expectedSegmentIds);
+                outcomes.add(outcome);
+                InspectionResult result = outcome.result();
                 InspectionRequest.checkInterrupted();
                 if (cannotFailOpen(result.failureCode())) {
                     throw new InspectionException(result.failureCode());
@@ -119,18 +131,21 @@ public final class InspectionService {
         }
     }
 
-    private static InspectionResult executeInspector(
-            ContentInspector inspector, InspectionRequest request, Set<String> expectedSegmentIds) {
+    private static InspectionReport.Outcome executeInspector(
+            RegisteredInspector registered, InspectionRequest request, Set<String> expectedSegmentIds) {
+        boolean inspectorInvoked = false;
         InspectionResult result;
         try {
             request.checkActive();
-            result = inspector.inspect(request);
+            inspectorInvoked = true;
+            result = registered.inspector().inspect(request);
         } catch (InspectionException ex) {
             result = InspectionResult.failed(ex.failureCode());
         } catch (RuntimeException ex) {
             result = InspectionResult.failed(InspectionFailureCode.INVALID_RESULT);
         }
-        return validateResult(result, expectedSegmentIds);
+        InspectionResult validatedResult = validateResult(result, expectedSegmentIds);
+        return new InspectionReport.Outcome(registered.id(), inspectorInvoked, validatedResult);
     }
 
     private static InspectionResult validateResult(InspectionResult result, Set<String> expectedSegmentIds) {

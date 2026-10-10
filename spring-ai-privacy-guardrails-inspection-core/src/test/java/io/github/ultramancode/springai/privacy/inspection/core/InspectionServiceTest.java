@@ -53,6 +53,17 @@ class InspectionServiceTest {
         return InspectionResult.completed(Set.of("s1"), List.of());
     }
 
+    private void waitUntilDeadlineExpires(InspectionRequest request) {
+        while (true) {
+            try {
+                LockSupport.parkNanos(request.remaining().toNanos());
+            } catch (InspectionException expired) {
+                assertThat(expired.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT);
+                return;
+            }
+        }
+    }
+
     @Test
     void allowsCompletedInspectionWithoutFindings() {
         InspectionService service = new InspectionService(
@@ -61,6 +72,7 @@ class InspectionServiceTest {
         InspectionReport report = service.inspect(request());
 
         assertThat(report.decision()).isEqualTo(InspectionDecision.ALLOW);
+        assertThat(report.outcomes().get(0).inspectorInvoked()).isTrue();
     }
 
     @Test
@@ -94,7 +106,7 @@ class InspectionServiceTest {
     @CsvSource({
             "CANCELLED, false", "CANCELLED, true",
             "LIMIT_EXCEEDED, false", "LIMIT_EXCEEDED, true",
-            "DISCLOSURE_DENIED, false", "DISCLOSURE_DENIED, true",
+            "PRIVACY_PROCESSING_REQUIRED, false", "PRIVACY_PROCESSING_REQUIRED, true",
             "CONFIGURATION, false", "CONFIGURATION, true",
             "UNSUPPORTED_CONTENT, false", "UNSUPPORTED_CONTENT, true",
             "INVALID_RESULT, false", "INVALID_RESULT, true"
@@ -297,7 +309,8 @@ class InspectionServiceTest {
 
     @ParameterizedTest
     @EnumSource(value = ContentSegment.PrivacyProcessingStatus.class, names = {"UNKNOWN", "UNPROCESSED"})
-    void disclosureIsPreflightedForAllInspectorsAndCannotFailOpen(ContentSegment.PrivacyProcessingStatus status) {
+    void privacyPreflightFailureIdentifiesInspectorAndPreventsAllExecution(
+            ContentSegment.PrivacyProcessingStatus status) {
         AtomicInteger inspectorCalls = new AtomicInteger();
         ContentInspector remoteInspector = new ContentInspector() {
             @Override
@@ -330,8 +343,13 @@ class InspectionServiceTest {
                 InspectionLimits.defaults());
 
         assertThatThrownBy(() -> service.inspect(mixedRequest))
-                .isInstanceOf(InspectionException.class)
-                .hasMessageContaining("DISCLOSURE_DENIED");
+                .isInstanceOfSatisfying(InspectionException.class, ex -> {
+                    assertThat(ex.failureCode()).isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED);
+                    InspectionReport report = ex.report().orElseThrow();
+                    assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
+                    assertThat(report.outcomes()).containsExactly(new InspectionReport.Outcome(
+                            "remote", false, InspectionResult.failed(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED)));
+                });
         assertThat(inspectorCalls).hasValue(0);
     }
 
@@ -364,13 +382,14 @@ class InspectionServiceTest {
                 .isInstanceOfSatisfying(InspectionException.class, failure -> {
                     assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
                     assertThat(failure.getCause()).isNull();
-                    assertThat(failure.report().orElseThrow().toString())
-                            .doesNotContain("secret", "customer@example.com");
+                    InspectionReport report = failure.report().orElseThrow();
+                    assertThat(report.outcomes().get(0).inspectorInvoked()).isTrue();
+                    assertThat(report.toString()).doesNotContain("secret", "customer@example.com");
                 });
     }
 
     @Test
-    void fatalErrorsAreNotSwallowed() {
+    void inspectorErrorsArePropagated() {
         ContentInspector failingInspector = inspector("one", ignoredRequest -> {
             throw new AssertionError("fatal");
         });
@@ -384,7 +403,7 @@ class InspectionServiceTest {
     void invalidResultsCannotFailOpenOrClaimCompletion(InspectionFailurePolicy failurePolicy) {
         InspectionFinding finding =
                 new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
-        for (InspectionResult result : new InspectionResult[] {
+        InspectionResult[] invalidResults = {
                 null,
                 InspectionResult.completed(Set.of(), List.of()),
                 InspectionResult.completed(Set.of(), List.of(finding)),
@@ -394,7 +413,9 @@ class InspectionServiceTest {
                 InspectionResult.failed(InspectionFailureCode.MODEL_ERROR, Set.of("other"), List.of(finding)),
                 InspectionResult.failed(InspectionFailureCode.MODEL_ERROR, Set.of(), List.of(
                         new InspectionFinding("other", InspectionFinding.Category.PROMPT_ATTACK, "x", null)))
-        }) {
+        };
+
+        for (InspectionResult result : invalidResults) {
             AtomicInteger policyCalls = new AtomicInteger();
             InspectionPolicy allowingPolicy = (inspectorId, findings) -> {
                 policyCalls.incrementAndGet();
@@ -416,13 +437,15 @@ class InspectionServiceTest {
 
     @ParameterizedTest
     @EnumSource(value = InspectionFailureCode.class, names = {
-            "CANCELLED", "LIMIT_EXCEEDED", "DISCLOSURE_DENIED", "CONFIGURATION", "UNSUPPORTED_CONTENT"
+            "CANCELLED", "LIMIT_EXCEEDED", "PRIVACY_PROCESSING_REQUIRED", "CONFIGURATION", "UNSUPPORTED_CONTENT"
     })
-    void invalidAssociationsNeverDowngradeHardFailures(InspectionFailureCode failureCode) {
-        for (InspectionResult result : List.of(
+    void invalidAssociationsPreserveHardFailureCodes(InspectionFailureCode failureCode) {
+        List<InspectionResult> invalidResults = List.of(
                 InspectionResult.failed(failureCode, Set.of("unknown"), List.of()),
                 InspectionResult.failed(failureCode, Set.of(), List.of(
-                        new InspectionFinding("unknown", InspectionFinding.Category.PROMPT_ATTACK, "x", null))))) {
+                        new InspectionFinding("unknown", InspectionFinding.Category.PROMPT_ATTACK, "x", null))));
+
+        for (InspectionResult result : invalidResults) {
             InspectionService service = new InspectionService(List.of(inspector("one", ignoredRequest -> result)),
                     InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);
             assertThatThrownBy(() -> service.inspect(request()))
@@ -509,6 +532,8 @@ class InspectionServiceTest {
         assertThat(laterInspectorCalls).hasValue(0);
         assertThat(report.outcomes()).extracting(InspectionReport.Outcome::inspectorId)
                 .containsExactly("first", "later");
+        assertThat(report.outcomes()).extracting(InspectionReport.Outcome::inspectorInvoked)
+                .containsExactly(true, false);
         InspectionResult firstResult = report.outcomes().get(0).result();
         assertThat(firstResult.failureCode()).isEqualTo(InspectionFailureCode.MODEL_ERROR);
         if (throwsException) {
@@ -537,6 +562,7 @@ class InspectionServiceTest {
         InspectionReport report = service.inspect(request());
 
         assertThat(report.allowedAfterFailure()).isTrue();
+        assertThat(report.outcomes().get(0).inspectorInvoked()).isTrue();
         assertThat(report.outcomes().get(0).result().failureCode()).isEqualTo(failureCode);
     }
 
@@ -697,17 +723,6 @@ class InspectionServiceTest {
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
-        }
-    }
-
-    private void waitUntilDeadlineExpires(InspectionRequest request) {
-        while (true) {
-            try {
-                LockSupport.parkNanos(request.remaining().toNanos());
-            } catch (InspectionException expired) {
-                assertThat(expired.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT);
-                return;
-            }
         }
     }
 }

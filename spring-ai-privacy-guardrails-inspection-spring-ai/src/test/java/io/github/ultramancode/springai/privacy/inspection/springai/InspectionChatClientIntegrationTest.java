@@ -14,8 +14,6 @@ import io.github.ultramancode.springai.privacy.inspection.rules.InspectionRule;
 import io.github.ultramancode.springai.privacy.inspection.rules.RuleBasedContentInspector;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientAttributes;
@@ -41,15 +39,17 @@ import org.springframework.util.MimeTypeUtils;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
+import reactor.test.StepVerifierOptions;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -247,34 +247,33 @@ class InspectionChatClientIntegrationTest {
         assertThat(model.calls).hasValue(1);
     }
 
-    @ParameterizedTest(name = "{0}, streaming={2}")
-    @MethodSource("unsupportedMessages")
-    void rejectsUnsupportedContentBeforeBusinessModel(String description, Message message, boolean streaming) {
-        RecordingModel model = new RecordingModel();
-        ChatClient.ChatClientRequestSpec request = client(model).prompt(new Prompt(List.of(message)));
-        if (streaming) {
-            StepVerifier.create(request.stream().content())
-                    .expectErrorMatches(error -> error instanceof InspectionException failure
-                            && failure.failureCode() == InspectionFailureCode.UNSUPPORTED_CONTENT)
-                    .verify(Duration.ofSeconds(5));
-        } else {
-            assertThatThrownBy(() -> request.call().content()).hasMessageContaining("UNSUPPORTED_CONTENT");
-        }
-        assertThat(model.calls).hasValue(0);
-    }
-
-    private static Stream<Arguments> unsupportedMessages() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void rejectsUnsupportedContentBeforeBusinessModel(boolean streaming) {
         Media media = Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG).data(new byte[] {1}).build();
-        Message custom = new UserMessage("hello") {};
-        Message userMedia = UserMessage.builder().text("hello").media(List.of(media)).build();
-        Message assistantMedia = AssistantMessage.builder().content("hello").media(List.of(media)).build();
-        return Stream.of(
-                Arguments.of("custom user message", custom, false),
-                Arguments.of("custom user message", custom, true),
-                Arguments.of("user media", userMedia, false),
-                Arguments.of("user media", userMedia, true),
-                Arguments.of("assistant media", assistantMedia, false),
-                Arguments.of("assistant media", assistantMedia, true));
+        Map<String, Message> unsupportedMessages = new LinkedHashMap<>();
+        unsupportedMessages.put("custom user message", new UserMessage("hello") {});
+        unsupportedMessages.put("user media", UserMessage.builder().text("hello").media(List.of(media)).build());
+        unsupportedMessages.put("assistant media", AssistantMessage.builder().content("hello").media(List.of(media)).build());
+
+        for (Map.Entry<String, Message> entry : unsupportedMessages.entrySet()) {
+            String description = entry.getKey();
+            RecordingModel model = new RecordingModel();
+            ChatClient.ChatClientRequestSpec request = client(model).prompt(new Prompt(List.of(entry.getValue())));
+            if (streaming) {
+                StepVerifierOptions verifierOptions = StepVerifierOptions.create().scenarioName(description);
+                StepVerifier.create(request.stream().content(), verifierOptions)
+                        .expectErrorMatches(error -> error instanceof InspectionException failure
+                                && failure.failureCode() == InspectionFailureCode.UNSUPPORTED_CONTENT)
+                        .verify(Duration.ofSeconds(5));
+            } else {
+                assertThatThrownBy(() -> request.call().content())
+                        .as(description)
+                        .isInstanceOfSatisfying(InspectionException.class, failure ->
+                                assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.UNSUPPORTED_CONTENT));
+            }
+            assertThat(model.calls).as(description).hasValue(0);
+        }
     }
 
     @Test

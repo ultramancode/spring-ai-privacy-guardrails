@@ -4,9 +4,10 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Inspection failure without source text, model responses or an underlying exception cause.
- * {@link InspectionService} converts exceptions thrown by an inspector into failed results
- * and applies the failure policy. Exceptions propagated out of the service block the request.
+ * Reports an inspection failure using a failure code and an optional report.
+ * {@link InspectionService} handles exceptions from inspectors according to the failure policy.
+ * An exception that leaves the service stops the request. The service does not include
+ * inspected text, model responses or the original exception cause in the exception it throws.
  */
 public final class InspectionException extends RuntimeException {
 
@@ -18,8 +19,8 @@ public final class InspectionException extends RuntimeException {
     }
 
     /**
-     * Creates a sanitized failure with outcomes collected before inspection stopped.
-     * A null report means no aggregate report is attached.
+     * Creates a failure with the results collected before inspection stopped.
+     * The report may be {@code null}. A supplied report must have a BLOCK decision.
      */
     public InspectionException(InspectionFailureCode failureCode, InspectionReport report) {
         super("Content inspection failed: " + Objects.requireNonNull(failureCode, "failureCode").name());
@@ -34,6 +35,12 @@ public final class InspectionException extends RuntimeException {
         return failureCode;
     }
 
+    /**
+     * Returns the inspection report, if available.
+     * For exceptions thrown by {@link InspectionService}, {@link #failureCode()} describes
+     * why the overall inspection stopped. The report preserves individual inspector results,
+     * whose failure codes may differ from this exception's code.
+     */
     public Optional<InspectionReport> report() {
         return Optional.ofNullable(report);
     }

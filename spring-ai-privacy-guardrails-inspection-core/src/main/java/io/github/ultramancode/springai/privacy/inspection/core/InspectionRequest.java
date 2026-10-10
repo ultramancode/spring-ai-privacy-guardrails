@@ -7,8 +7,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Immutable inspection input with a time budget starting at construction.
- * Do not retain after inspection.
+ * The text segments and limits for one inspection.
+ * The request is immutable, and its timeout starts when it is constructed.
+ * It contains the inspected text, so do not retain it after inspection.
  */
 public final class InspectionRequest {
 
@@ -44,7 +45,7 @@ public final class InspectionRequest {
         return limits;
     }
 
-    /** Returns the remaining time for further inspection work and response waits. */
+    /** Returns the time remaining for inspection. Throws if the timeout expired or the thread was interrupted. */
     public Duration remaining() {
         checkInterrupted();
         long remaining = limits.timeout().toNanos() - (System.nanoTime() - startedNanos);
@@ -54,7 +55,7 @@ public final class InspectionRequest {
         return Duration.ofNanos(remaining);
     }
 
-    /** Checks whether further inspection work may start. */
+    /** Throws if the timeout expired or the thread was interrupted, preventing further inspection work. */
     public void checkActive() {
         remaining();
     }
@@ -66,17 +67,17 @@ public final class InspectionRequest {
     }
 
     /**
-     * Requires every segment to be marked {@link ContentSegment.PrivacyProcessingStatus#PROCESSED}.
-     * Checks the supplied status without performing privacy processing.
+     * Checks that every segment is marked {@link ContentSegment.PrivacyProcessingStatus#PROCESSED}.
+     * This method checks the supplied status and does not perform privacy processing.
      *
-     * @throws InspectionException with {@link InspectionFailureCode#DISCLOSURE_DENIED} if any segment
+     * @throws InspectionException with {@link InspectionFailureCode#PRIVACY_PROCESSING_REQUIRED} if any segment
      *         is not marked as privacy-processed
      */
     public void requirePrivacyProcessed() {
         for (ContentSegment segment : segments) {
             if (segment.privacyProcessingStatus()
                     != ContentSegment.PrivacyProcessingStatus.PROCESSED) {
-                throw new InspectionException(InspectionFailureCode.DISCLOSURE_DENIED);
+                throw new InspectionException(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED);
             }
         }
     }

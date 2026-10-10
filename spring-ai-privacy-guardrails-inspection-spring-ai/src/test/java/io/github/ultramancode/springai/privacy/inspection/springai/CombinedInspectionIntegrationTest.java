@@ -92,6 +92,48 @@ class CombinedInspectionIntegrationTest {
                 .withBean(PiiAnalyzer.class, () -> analyzer);
     }
 
+    private InspectionChatClientConfigurer inspectionConfigurer(List<InspectionRequest> inspected) {
+        ContentInspector inspector = new ContentInspector() {
+            @Override
+            public String inspectorId() {
+                return "protected-content";
+            }
+
+            @Override
+            public boolean requiresPrivacyProcessedContent() {
+                return true;
+            }
+
+            @Override
+            public InspectionResult inspect(InspectionRequest request) {
+                request.requirePrivacyProcessed();
+                assertThat(request.segments())
+                        .allSatisfy(segment -> assertThat(segment.text()).doesNotContain("Alice"));
+                inspected.add(request);
+                List<InspectionFinding> findings = request.segments().stream()
+                        .filter(s -> s.text().contains("attack"))
+                        .map(s -> new InspectionFinding(s.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
+                        .toList();
+                return InspectionResult.completed(
+                        request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()), findings);
+            }
+        };
+        return new InspectionChatClientConfigurer(
+                new InspectionService(List.of(inspector)),
+                InspectionLimits.defaults(),
+                request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
+                        ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                        : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
+                ignored -> {});
+    }
+
+    private static ChatResponse toolCallResponse(String name, String arguments) {
+        return new ChatResponse(List.of(new Generation(AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + name, "function", name, arguments)))
+                .build())));
+    }
+
     @ParameterizedTest(name = "streaming={0}, toolSearch={1}")
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
     void combinedFactoryInspectsProtectedToolResults(boolean streaming, boolean toolSearchEnabled) {
@@ -99,10 +141,50 @@ class CombinedInspectionIntegrationTest {
             assertThat(context).hasNotFailed();
             List<InspectionRequest> inspected = new CopyOnWriteArrayList<>();
             AtomicInteger modelCalls = new AtomicInteger();
+            ChatModel model = new ChatModel() {
+                @Override
+                public ChatOptions getOptions() {
+                    return ToolCallingChatOptions.builder().build();
+                }
+
+                @Override
+                public ChatResponse call(Prompt prompt) {
+                    int round = modelCalls.incrementAndGet();
+                    if (toolSearchEnabled && round == 1) {
+                        return toolCallResponse("toolSearchTool", "{\"query\":\"lookup\"}");
+                    }
+                    return toolCallResponse("lookup", "{}");
+                }
+
+                @Override
+                public Flux<ChatResponse> stream(Prompt prompt) {
+                    return Flux.defer(() -> Flux.just(call(prompt)));
+                }
+            };
+            ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder();
+            if (toolSearchEnabled) {
+                ToolIndex index = mock(ToolIndex.class);
+                when(index.search(any())).thenReturn(ToolSearchResponse.builder()
+                        .addToolReference(ToolReference.builder().toolName("lookup").summary("Lookup").build())
+                        .build());
+                toolAdvisorBuilder = ToolSearchToolCallingAdvisor.builder()
+                        .toolIndex(index).systemMessageSuffix("Search for tools.");
+            }
+            ToolCallback lookupTool = new ToolCallback() {
+                @Override
+                public ToolDefinition getToolDefinition() {
+                    return ToolDefinition.builder().name("lookup").description("Lookup").inputSchema("{}").build();
+                }
+
+                @Override
+                public String call(String arguments) {
+                    return "Alice attack";
+                }
+            };
+
             ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
-                    .builder(toolCallingModel(toolSearchEnabled, modelCalls), toolAdvisorBuilder(toolSearchEnabled),
-                            inspectionConfigurer(inspected))
-                    .defaultTools(context.getBean(PrivacyToolCallbackFactory.class).wrap(lookupTool()))
+                    .builder(model, toolAdvisorBuilder, inspectionConfigurer(inspected))
+                    .defaultTools(context.getBean(PrivacyToolCallbackFactory.class).wrap(lookupTool))
                     .build();
             UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken.authenticated(
                     "test", "unused", List.of());
@@ -206,95 +288,5 @@ class CombinedInspectionIntegrationTest {
         assertThat(inspected).hasSize(1);
         assertThat(prompts.get(0)).doesNotContain("Alice");
         assertThat(prompts.get(1)).isEqualTo("Alice");
-    }
-
-    private InspectionChatClientConfigurer inspectionConfigurer(List<InspectionRequest> inspected) {
-        ContentInspector inspector = new ContentInspector() {
-            @Override
-            public String inspectorId() {
-                return "protected-content";
-            }
-
-            @Override
-            public boolean requiresPrivacyProcessedContent() {
-                return true;
-            }
-
-            @Override
-            public InspectionResult inspect(InspectionRequest request) {
-                request.requirePrivacyProcessed();
-                assertThat(request.segments())
-                        .allSatisfy(segment -> assertThat(segment.text()).doesNotContain("Alice"));
-                inspected.add(request);
-                List<InspectionFinding> findings = request.segments().stream()
-                        .filter(s -> s.text().contains("attack"))
-                        .map(s -> new InspectionFinding(s.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
-                        .toList();
-                return InspectionResult.completed(
-                        request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()), findings);
-            }
-        };
-        return new InspectionChatClientConfigurer(
-                new InspectionService(List.of(inspector)),
-                InspectionLimits.defaults(),
-                request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
-                        ? ContentSegment.PrivacyProcessingStatus.PROCESSED
-                        : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
-                ignored -> {});
-    }
-
-    private ChatModel toolCallingModel(boolean toolSearchEnabled, AtomicInteger modelCalls) {
-        return new ChatModel() {
-            @Override
-            public ChatOptions getOptions() {
-                return ToolCallingChatOptions.builder().build();
-            }
-
-            @Override
-            public ChatResponse call(Prompt prompt) {
-                int round = modelCalls.incrementAndGet();
-                if (toolSearchEnabled && round == 1) {
-                    return toolCallResponse("toolSearchTool", "{\"query\":\"lookup\"}");
-                }
-                return toolCallResponse("lookup", "{}");
-            }
-
-            @Override
-            public Flux<ChatResponse> stream(Prompt prompt) {
-                return Flux.defer(() -> Flux.just(call(prompt)));
-            }
-        };
-    }
-
-    private ToolCallingAdvisor.Builder<?> toolAdvisorBuilder(boolean toolSearchEnabled) {
-        if (!toolSearchEnabled) {
-            return ToolCallingAdvisor.builder();
-        }
-        ToolIndex index = mock(ToolIndex.class);
-        when(index.search(any())).thenReturn(ToolSearchResponse.builder()
-                .addToolReference(ToolReference.builder().toolName("lookup").summary("Lookup").build())
-                .build());
-        return ToolSearchToolCallingAdvisor.builder().toolIndex(index).systemMessageSuffix("Search for tools.");
-    }
-
-    private ToolCallback lookupTool() {
-        return new ToolCallback() {
-            @Override
-            public ToolDefinition getToolDefinition() {
-                return ToolDefinition.builder().name("lookup").description("Lookup").inputSchema("{}").build();
-            }
-
-            @Override
-            public String call(String arguments) {
-                return "Alice attack";
-            }
-        };
-    }
-
-    private static ChatResponse toolCallResponse(String name, String arguments) {
-        return new ChatResponse(List.of(new Generation(AssistantMessage.builder()
-                .content("")
-                .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + name, "function", name, arguments)))
-                .build())));
     }
 }

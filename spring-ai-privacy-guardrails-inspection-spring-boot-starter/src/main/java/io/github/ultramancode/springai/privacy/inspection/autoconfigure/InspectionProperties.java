@@ -13,13 +13,13 @@ import java.util.Map;
 @ConfigurationProperties("spring.ai.inspection")
 public class InspectionProperties {
 
-    /** Enables inspection configuration for explicitly selected ChatClient instances. */
+    /** Enables the inspection service and configurer. Apply the configurer to each client to inspect. */
     private boolean enabled;
 
-    /** Maximum text segments per model request or separately inspected final application response. */
+    /** Maximum number of text segments in one input or output inspection. */
     private int maxSegments = InspectionLimits.DEFAULT_MAX_SEGMENTS;
 
-    /** Maximum combined source payload length in UTF-16 units, including JSON syntax. */
+    /** Maximum combined text length in UTF-16 code units, including JSON syntax. */
     private int maxCharacters = InspectionLimits.DEFAULT_MAX_CHARACTERS;
 
     /** Timeout shared by inspectors and policy evaluation for one input or output inspection. */
@@ -33,9 +33,9 @@ public class InspectionProperties {
 
     private final Output output = new Output();
 
-    /** Optional final application-output inspection using the common service and inspection limits. */
+    /** Output inspection settings. Input and output use the same service and configured limits. */
     public static class Output {
-        /** Enables final application-facing text ALLOW/BLOCK inspection, including returnDirect. Disabled by default. */
+        /** Enables inspection of final responses, including returnDirect tool results. Disabled by default. */
         private boolean enabled;
         /** Maximum buffered frames and model frames across a streamed tool loop, including empty frames. */
         private int maxFrames = InspectionOutputAdvisor.DEFAULT_MAX_FRAMES;

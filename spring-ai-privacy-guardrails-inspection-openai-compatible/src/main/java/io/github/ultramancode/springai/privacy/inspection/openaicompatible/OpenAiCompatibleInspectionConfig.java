@@ -5,18 +5,18 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * Explicit endpoint and model contract. The endpoint is the full chat/completions URL.
+ * Connection settings and privacy requirements for an HTTP guard model.
  *
- * @param endpoint full HTTP(S) chat-completions URL, including any deployment-specific query parameters
+ * @param baseUrl HTTP(S) API base URL, such as {@code http://localhost:8000/v1}
  * @param model deployed guard model name
- * @param apiKey bearer token, or null or blank to omit the Authorization header
- * @param requestTimeout maximum time per HTTP request, also bounded by the shared inspection deadline
+ * @param apiKey bearer token. A null or blank value sends {@code Bearer not-required} for unauthenticated servers
+ * @param requestTimeout maximum time per HTTP request, also limited by the time remaining for inspection
  * @param maxResponseBytes maximum response body size in bytes
- * @param requirePrivacyProcessedContent whether every segment must already be marked PROCESSED.
- *        False permits UNKNOWN and UNPROCESSED content to be sent. This setting does not run privacy processing
+ * @param requirePrivacyProcessedContent whether all segments must be marked {@code PROCESSED} before sending.
+ *        This setting does not perform privacy processing.
  */
 public record OpenAiCompatibleInspectionConfig(
-        URI endpoint,
+        URI baseUrl,
         String model,
         String apiKey,
         Duration requestTimeout,
@@ -24,21 +24,18 @@ public record OpenAiCompatibleInspectionConfig(
         boolean requirePrivacyProcessedContent) {
 
     public OpenAiCompatibleInspectionConfig {
-        Objects.requireNonNull(endpoint, "endpoint");
+        Objects.requireNonNull(baseUrl, "baseUrl");
         Objects.requireNonNull(requestTimeout, "requestTimeout");
-        if (!endpoint.isAbsolute()
-                || endpoint.getHost() == null
-                || endpoint.getUserInfo() != null
-                || endpoint.getFragment() != null
-                || !("https".equals(endpoint.getScheme()) || "http".equals(endpoint.getScheme()))) {
-            throw new IllegalArgumentException(
-                    "Endpoint must be an absolute HTTP(S) URL without credentials or fragment");
+        String scheme = baseUrl.getScheme();
+        boolean httpScheme = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+        if (!httpScheme || baseUrl.getHost() == null) {
+            throw new IllegalArgumentException("baseUrl must be an HTTP(S) URL with a host");
         }
-        if (model == null
-                || model.isBlank()
-                || model.chars().anyMatch(Character::isISOControl)) {
-            throw new IllegalArgumentException(
-                    "model must be non-blank and contain no control characters");
+        if (baseUrl.getUserInfo() != null || baseUrl.getFragment() != null) {
+            throw new IllegalArgumentException("baseUrl must not contain credentials or a fragment");
+        }
+        if (model == null || model.isBlank()) {
+            throw new IllegalArgumentException("model must not be blank");
         }
         if (requestTimeout.isZero() || requestTimeout.isNegative()) {
             throw new IllegalArgumentException("requestTimeout must be positive");
@@ -51,16 +48,18 @@ public record OpenAiCompatibleInspectionConfig(
         if (maxResponseBytes < 1) {
             throw new IllegalArgumentException("maxResponseBytes must be positive");
         }
-        if (apiKey != null
-                && apiKey.chars().anyMatch(Character::isISOControl)) {
-            throw new IllegalArgumentException(
-                    "apiKey must contain no control characters");
-        }
     }
 
     @Override
     public String toString() {
-        return "OpenAiCompatibleInspectionConfig[endpoint=<configured>, model=<configured>, apiKey=<redacted>, requirePrivacyProcessedContent="
+        String displayedBaseUrl = baseUrl.toString();
+        int queryStart = displayedBaseUrl.indexOf('?');
+        if (queryStart >= 0) {
+            displayedBaseUrl = displayedBaseUrl.substring(0, queryStart) + "?<redacted>";
+        }
+        return "OpenAiCompatibleInspectionConfig[baseUrl="
+                + displayedBaseUrl
+                + ", model=<configured>, apiKey=<redacted>, requirePrivacyProcessedContent="
                 + requirePrivacyProcessedContent
                 + "]";
     }

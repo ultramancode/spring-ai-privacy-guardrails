@@ -217,6 +217,22 @@ class InspectionAutoConfigurationTest {
     void privacyProtectionPrecedesRequiredProtectedInspectionForCallAndStream() {
         for (boolean streaming : List.of(false, true)) {
             AtomicInteger inspections = new AtomicInteger();
+            PiiAnalyzer analyzer = (text, options, limits) -> {
+                int start = text.indexOf("Alice");
+                return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
+            };
+            ChatModel model = new ChatModel() {
+                @Override
+                public ChatResponse call(Prompt prompt) {
+                    assertThat(prompt.getContents()).doesNotContain("Alice");
+                    return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
+                }
+
+                @Override
+                public Flux<ChatResponse> stream(Prompt prompt) {
+                    return Flux.defer(() -> Flux.just(call(prompt)));
+                }
+            };
             ContentInspector protectedInspector = new ContentInspector() {
                 @Override
                 public String inspectorId() {
@@ -249,7 +265,7 @@ class InspectionAutoConfigurationTest {
                     .withPropertyValues("spring.ai.inspection.enabled=true",
                             "spring.ai.inspection.output.enabled=true", "spring.ai.privacy.output.enabled=true")
                     .withBean(ContentInspector.class, () -> protectedInspector)
-                    .withBean(PiiAnalyzer.class, this::aliceAnalyzer)
+                    .withBean(PiiAnalyzer.class, () -> analyzer)
                     .run(
                             context -> {
                                 assertThat(context).hasNotFailed();
@@ -257,7 +273,7 @@ class InspectionAutoConfigurationTest {
                                                 context.getBean(PrivacyChatClientConfigurer.class)
                                                         .forToolAdvisorOrder(ToolCallingAdvisor.DEFAULT_ORDER),
                                                 context.getBean(InspectionChatClientConfigurer.class))
-                                        .configure(ChatClient.builder(privacyCheckingModel()))
+                                        .configure(ChatClient.builder(model))
                                         .build();
                                 String result =
                                         streaming
@@ -274,13 +290,6 @@ class InspectionAutoConfigurationTest {
                                 assertThat(inspections).hasValue(2);
                             });
         }
-    }
-
-    private PiiAnalyzer aliceAnalyzer() {
-        return (text, options, limits) -> {
-            int start = text.indexOf("Alice");
-            return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
-        };
     }
 
     @ParameterizedTest(name = "streaming={0}, failure={1}, finding={2}")
@@ -366,20 +375,5 @@ class InspectionAutoConfigurationTest {
                         assertThat(modelCalls).hasValue(1);
                     }
                 });
-    }
-
-    private ChatModel privacyCheckingModel() {
-        return new ChatModel() {
-            @Override
-            public ChatResponse call(Prompt prompt) {
-                assertThat(prompt.getContents()).doesNotContain("Alice");
-                return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
-            }
-
-            @Override
-            public Flux<ChatResponse> stream(Prompt prompt) {
-                return Flux.defer(() -> Flux.just(call(prompt)));
-            }
-        };
     }
 }

@@ -22,10 +22,14 @@ public final class RuleBasedContentInspector implements ContentInspector {
     public RuleBasedContentInspector(String id, List<InspectionRule> rules) {
         this.id = InspectionIdentifiers.requireValid(id);
         this.rules = List.copyOf(rules);
-        if (this.rules.isEmpty()
-                || this.rules.stream().map(InspectionRule::id).distinct().count()
-                        != this.rules.size()) {
-            throw new IllegalArgumentException("Configure at least one uniquely identified rule");
+        if (this.rules.isEmpty()) {
+            throw new IllegalArgumentException("At least one inspection rule is required");
+        }
+        Set<String> ruleIds = new HashSet<>();
+        for (InspectionRule rule : this.rules) {
+            if (!ruleIds.add(rule.id())) {
+                throw new IllegalArgumentException("Rule IDs must be distinct");
+            }
         }
     }
 
@@ -48,9 +52,9 @@ public final class RuleBasedContentInspector implements ContentInspector {
                 for (InspectionRule rule : rules) {
                     request.checkActive();
                     if (rule.matches(segment.text())) {
-                        findings.add(
-                                new InspectionFinding(
-                                        segment.id(), rule.category(), rule.id(), null));
+                        InspectionFinding finding =
+                                new InspectionFinding(segment.id(), rule.category(), rule.id(), null);
+                        findings.add(finding);
                     }
                 }
                 completedSegmentIds.add(segment.id());

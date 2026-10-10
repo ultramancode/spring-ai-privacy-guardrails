@@ -24,15 +24,15 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Allows or blocks final assistant text delivered to the application, including returnDirect results.
- * Provider-specific reasoning fields, tool-call arguments and metadata are outside this scope.
+ * Inspects final assistant text before returning it to the application, including returnDirect tool results.
+ * Provider-specific reasoning fields, tool-call arguments and metadata are excluded from inspection.
  *
- * <p>Runs after configured privacy output processing. Output is PROCESSED only when that
- * processing completed for the same text, otherwise UNKNOWN.
+ * <p>Inspection runs after any configured privacy output processing. The output status is
+ * PROCESSED when privacy processing completed for that text, and UNKNOWN otherwise.
  *
- * <p>Streams buffer through completion and release only the inspected final round.
- * A block, assembly failure or cancellation releases no buffered content.
- * Frame and assembly-time limits cover the complete tool loop, including tool execution.
+ * <p>Streaming responses are collected before inspection. Only the final response is delivered.
+ * If inspection blocks the response, or stream collection fails or is cancelled, no buffered
+ * content is delivered. Frame and collection-time limits include all model calls and tool execution.
  */
 public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor, PriorityOrdered {
     public static final int DEFAULT_MAX_FRAMES = 4096;
@@ -49,7 +49,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
                 DEFAULT_MAX_FRAMES, DEFAULT_STREAM_TIMEOUT);
     }
 
-    /** Input and output inspection budgets are independent. Stream assembly includes tool execution time. */
+    /** Sets limits for output inspection and stream collection. Input inspection has separate limits. */
     public InspectionOutputAdvisor(InspectionService service, InspectionLimits limits,
             InspectionObserver observer, int maxFrames, Duration streamTimeout) {
         this.enforcement = new InspectionEnforcement(service, limits, observer);

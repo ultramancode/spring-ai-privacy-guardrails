@@ -1,0 +1,32 @@
+services:
+  kanana:
+    image: vllm/vllm-openai-cpu:v0.17.1@sha256:1537f35f623890795cd3e9445ceb309be83225b4592704574a9abc35fe70f68c
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - "${KANANA_MODEL_CACHE:-${HOME}/.cache/huggingface}:/root/.cache/huggingface"
+    environment:
+      VLLM_CPU_KVCACHE_SPACE: "1"
+      VLLM_CPU_OMP_THREADS_BIND: nobind
+    shm_size: 1gb
+    command:
+      - kakaocorp/kanana-safeguard-prompt-2.1b
+      - --revision
+      - 167d74d4706b236580b0e48318337c7ac6ba7848
+      - --dtype
+      - bfloat16
+      - --max-model-len
+      - "256"
+      - --max-num-seqs
+      - "1"
+      - --enforce-eager
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 180
+      start_period: 180s

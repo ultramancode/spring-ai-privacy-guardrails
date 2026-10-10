@@ -1,13 +1,14 @@
 package io.github.ultramancode.springai.privacy.inspection.core;
 
 /**
- * Chooses how to handle failures eligible for fail-open according to
- * {@link InspectionFailureCode#isFailOpenEligible()}.
+ * Controls whether an inspection failure blocks the request.
+ * Only failures identified by {@link InspectionFailureCode#isFailOpenEligible()}
+ * can be allowed by this policy.
  */
 public enum InspectionFailurePolicy {
 
     /** Blocks when the inspector fails. */
     FAIL_CLOSED,
-    /** Allows eligible failures only when the content policy also allows the retained findings. */
+    /** Continues after an eligible failure if the content policy allows the findings collected so far. */
     FAIL_OPEN
 }

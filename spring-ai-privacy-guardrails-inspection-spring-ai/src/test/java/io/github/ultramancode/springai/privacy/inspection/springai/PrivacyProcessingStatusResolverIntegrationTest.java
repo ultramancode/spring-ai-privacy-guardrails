@@ -36,6 +36,33 @@ class PrivacyProcessingStatusResolverIntegrationTest {
                 Stream.of(Failure.values()).map(failure -> Arguments.of(streaming, observerThrows, failure))));
     }
 
+    private InspectionService service(AtomicInteger inspections) {
+        ContentInspector inspector = new ContentInspector() {
+            public String inspectorId() {
+                return "test";
+            }
+
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
+
+            public InspectionResult inspect(InspectionRequest request) {
+                inspections.incrementAndGet();
+                return InspectionResult.failed(InspectionFailureCode.INVALID_RESULT);
+            }
+        };
+        return new InspectionService(List.of(inspector), InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);
+    }
+
+    private void invoke(ChatClient client, boolean streaming) {
+        var request = client.prompt().user("synthetic-private-text");
+        if (streaming) {
+            request.stream().content().collectList().block(Duration.ofSeconds(5));
+        } else {
+            request.call().content();
+        }
+    }
+
     @ParameterizedTest(name = "streaming={0}, observerThrows={1}, resolver={2}")
     @MethodSource("failures")
     void resolverFailuresAreSanitizedObservedOnceAndCannotFailOpen(
@@ -69,7 +96,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
                 return ContentSegment.PrivacyProcessingStatus.PROCESSED;
             }
             RuntimeException failure = mode == Failure.DECLARED
-                    ? new InspectionException(InspectionFailureCode.DISCLOSURE_DENIED)
+                    ? new InspectionException(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED)
                     : new IllegalStateException(request.prompt().getContents());
             failure.initCause(new IllegalArgumentException(request.prompt().getContents()));
             failure.addSuppressed(new IllegalStateException(request.prompt().getContents()));
@@ -79,7 +106,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
         ChatClient client = new InspectionChatClientConfigurer(service(inspections), InspectionLimits.defaults(),
                 resolver, observer).configure(ChatClient.builder(model)).build();
         InspectionFailureCode expected = interrupted ? InspectionFailureCode.CANCELLED
-                : mode == Failure.DECLARED ? InspectionFailureCode.DISCLOSURE_DENIED : InspectionFailureCode.INVALID_RESULT;
+                : mode == Failure.DECLARED ? InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED : InspectionFailureCode.INVALID_RESULT;
         try {
             assertThatThrownBy(() -> invoke(client, streaming))
                     .isInstanceOfSatisfying(InspectionException.class, failure -> {
@@ -133,32 +160,5 @@ class PrivacyProcessingStatusResolverIntegrationTest {
                 });
         assertThat(inspections).hasValue(1);
         assertThat(model.calls).hasValue(0);
-    }
-
-    private InspectionService service(AtomicInteger inspections) {
-        ContentInspector inspector = new ContentInspector() {
-            public String inspectorId() {
-                return "test";
-            }
-
-            public boolean requiresPrivacyProcessedContent() {
-                return false;
-            }
-
-            public InspectionResult inspect(InspectionRequest request) {
-                inspections.incrementAndGet();
-                return InspectionResult.failed(InspectionFailureCode.INVALID_RESULT);
-            }
-        };
-        return new InspectionService(List.of(inspector), InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);
-    }
-
-    private void invoke(ChatClient client, boolean streaming) {
-        var request = client.prompt().user("synthetic-private-text");
-        if (streaming) {
-            request.stream().content().collectList().block(Duration.ofSeconds(5));
-        } else {
-            request.call().content();
-        }
     }
 }

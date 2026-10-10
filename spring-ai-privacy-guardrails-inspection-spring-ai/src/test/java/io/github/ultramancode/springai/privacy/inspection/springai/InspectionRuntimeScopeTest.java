@@ -38,6 +38,12 @@ class InspectionRuntimeScopeTest {
                 InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_ATTACK, "attack")))));
     }
 
+    private String invoke(ChatClient client, Message message, boolean streaming) {
+        var request = client.prompt(new Prompt(List.of(new UserMessage("hello"), message)));
+        return streaming ? request.stream().content().collectList().map(parts -> String.join("", parts))
+                .block(Duration.ofSeconds(5)) : request.call().content();
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void inspectsSupportedRuntimePayloadsAndPreservesExcludedFields(boolean streaming) {
@@ -170,11 +176,5 @@ class InspectionRuntimeScopeTest {
             assertThat(tools).hasValue(1);
             assertThat(privacy.activeSessionCount()).isZero();
         }
-    }
-
-    private String invoke(ChatClient client, Message message, boolean streaming) {
-        var request = client.prompt(new Prompt(List.of(new UserMessage("hello"), message)));
-        return streaming ? request.stream().content().collectList().map(parts -> String.join("", parts))
-                .block(Duration.ofSeconds(5)) : request.call().content();
     }
 }

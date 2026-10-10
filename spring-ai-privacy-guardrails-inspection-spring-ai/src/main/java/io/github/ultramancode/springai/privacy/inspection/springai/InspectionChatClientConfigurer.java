@@ -9,14 +9,15 @@ import org.springframework.ai.chat.client.ChatClient;
 import java.util.Objects;
 
 /**
- * Client-scoped runtime input inspection with optional final application-output inspection.
- * Use {@link ModelRequestBoundaryConfigurer#compose}
- * to combine privacy and inspection, or pass this contribution to a managed security factory.
- * No shared model or global client builder is modified.
+ * Adds input inspection to a selected {@link ChatClient}.
+ * Use {@link #withOutputInspection(InspectionOutputAdvisor)} to inspect final responses as well.
+ * Combine privacy protection and inspection with {@link ModelRequestBoundaryConfigurer#compose},
+ * or pass this configurer to a security factory's {@code builderWithBoundary} method.
+ * Inspection applies only to clients built with this configurer.
  *
- * <p>Input inspectors receive each complete runtime payload as one segment, including
+ * <p>Input inspectors receive each complete text body as one segment, including
  * JSON keys, syntax and escape sequences. When combined with privacy processing,
- * they receive the privacy-transformed payload.</p>
+ * they receive the body after privacy processing.</p>
  */
 public final class InspectionChatClientConfigurer implements ModelRequestBoundaryConfigurer {
 
@@ -27,7 +28,7 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
     private final InspectionOutputAdvisor outputAdvisor;
 
     /**
-     * Creates input inspection with default limits and UNKNOWN privacy processing status.
+     * Creates a configurer with default limits and an input privacy status of UNKNOWN.
      *
      * <p>For inspectors requiring privacy-processed input, supply a trusted resolver
      * through the four-argument constructor.
@@ -43,12 +44,12 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
     }
 
     /**
-     * Creates input inspection with explicit limits, privacy status resolution and observation.
+     * Creates a configurer with the supplied limits, privacy status resolver and observer.
      *
      * @param service inspectors and policies to apply before each model call
      * @param limits limits shared by inspectors for each model request
      * @param privacyProcessingStatusResolver trusted source of the input's privacy processing status
-     * @param observer observer for inspection reports and hard failures
+     * @param observer receives inspection reports and exceptions
      */
     public InspectionChatClientConfigurer(
             InspectionService service,
@@ -79,8 +80,7 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
     }
 
     /**
-     * Contributes one inspection stage that runs the service's configured inspectors
-     * at the selected client's model request boundary.
+     * Registers input inspection before each model call and adds the output advisor if configured.
      */
     @Override
     public void contributeToBoundary(ChatClient.Builder builder, ModelRequestBoundarySpec boundary) {

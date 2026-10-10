@@ -6,7 +6,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionIdentif
 
 import java.util.Objects;
 
-/** Configured literal or linear-time RE2 pattern. Never logs the pattern or matching text. */
+/** A content inspection rule for literal text or RE2/J regular expressions. */
 public final class InspectionRule {
 
     private final String id;

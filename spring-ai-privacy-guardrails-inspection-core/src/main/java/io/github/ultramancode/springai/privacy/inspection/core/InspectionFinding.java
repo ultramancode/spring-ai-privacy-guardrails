@@ -3,8 +3,9 @@ package io.github.ultramancode.springai.privacy.inspection.core;
 import java.util.Objects;
 
 /**
- * Inspector-specific evidence normalized to a category. No matching text is retained.
- * A non-null score is local to the inspector/model and is not comparable across models.
+ * An issue detected in a text segment, identified by category and an inspector-defined code.
+ * The matching text is not included. Scores depend on the inspector or model and cannot
+ * be compared directly across models.
  *
  * @param segmentId ID of the segment containing the finding
  * @param category what was detected, independent of the detection method

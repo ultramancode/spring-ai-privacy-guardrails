@@ -12,7 +12,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
-import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaPromptProtocol;
+import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaSafeguardPromptProtocol;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.OpenAiCompatibleContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.OpenAiCompatibleInspectionConfig;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
@@ -70,7 +70,7 @@ class InspectionOutputPrivacyIntegrationTest {
     void startHttpInspector() throws Exception {
         JsonMapper json = JsonMapper.builder().build();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/guard", exchange -> {
+        server.createContext("/v1/chat/completions", exchange -> {
             try {
                 sentTexts.add(json.readTree(exchange.getRequestBody().readAllBytes())
                         .path("messages").get(0).path("content").asString());
@@ -83,10 +83,10 @@ class InspectionOutputPrivacyIntegrationTest {
             }
         });
         server.start();
-        URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/guard");
+        URI baseUrl = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
         ContentInspector httpInspector = new OpenAiCompatibleContentInspector("http",
-                new OpenAiCompatibleInspectionConfig(endpoint, "fixture", null, WAIT, 4096, true),
-                new KananaPromptProtocol());
+                new OpenAiCompatibleInspectionConfig(baseUrl, "fixture", null, WAIT, 4096, true),
+                new KananaSafeguardPromptProtocol());
         ContentInspector recordingInspector = new ContentInspector() {
             public String inspectorId() {
                 return "record-output";
@@ -273,7 +273,7 @@ class InspectionOutputPrivacyIntegrationTest {
     private void assertDisclosureDenied(ChatClient client, boolean streaming) {
         assertThatThrownBy(() -> invoke(client, streaming)).isInstanceOf(InspectionException.class)
                 .satisfies(error -> assertThat(((InspectionException) error).failureCode())
-                        .isEqualTo(InspectionFailureCode.DISCLOSURE_DENIED));
+                        .isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED));
         assertThat(sentTexts).isEmpty();
         assertThat(inspected).isEmpty();
     }

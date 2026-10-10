@@ -1,0 +1,62 @@
+name: Inspection model smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kanana-live:
+    name: Kanana CPU smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      KANANA_MODEL_CACHE: ${{ github.workspace }}/build/kanana-model-cache
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Cache pinned Kanana model
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ env.KANANA_MODEL_CACHE }}
+          key: kanana-safeguard-prompt-${{ runner.os }}-167d74d4706b236580b0e48318337c7ac6ba7848
+
+      - name: Start pinned Kanana CPU server
+        run: docker compose -f samples/openai-compatible-inspection/docker-compose.yml up -d --wait --wait-timeout 1200
+
+      - name: Verify safe and unsafe classifications
+        env:
+          INSPECTION_OPENAI_BASE_URL: http://localhost:8000/v1
+        run: ./gradlew --no-daemon :spring-ai-privacy-guardrails-inspection-openai-compatible:liveTest -PtestJavaVersion=17
+
+      - name: Show model server resource usage
+        if: always()
+        run: |
+          kanana_container_id=$(docker compose -f samples/openai-compatible-inspection/docker-compose.yml ps -q)
+          if [[ -n "$kanana_container_id" ]]; then
+            docker stats --no-stream "$kanana_container_id"
+          fi
+
+      - name: Show model server logs
+        if: failure()
+        run: docker compose -f samples/openai-compatible-inspection/docker-compose.yml logs
+
+      - name: Stop model server
+        if: always()
+        run: docker compose -f samples/openai-compatible-inspection/docker-compose.yml down

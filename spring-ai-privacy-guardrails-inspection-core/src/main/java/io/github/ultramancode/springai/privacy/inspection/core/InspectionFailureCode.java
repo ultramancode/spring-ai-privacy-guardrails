@@ -1,6 +1,6 @@
 package io.github.ultramancode.springai.privacy.inspection.core;
 
-/** Inspection failure reasons and their eligibility for explicit fail-open handling. */
+/** Reasons why inspection failed, including whether FAIL_OPEN may allow the request to continue. */
 public enum InspectionFailureCode {
 
     /** The shared time budget prevented further inspection work, or an individual operation timed out. */
@@ -13,15 +13,15 @@ public enum InspectionFailureCode {
     HTTP_ERROR(true),
     /** An inspector explicitly reported a model execution failure. */
     MODEL_ERROR(true),
-    /** An inspector explicitly reports incomplete work, retaining any valid partial evidence. */
+    /** An inspector did not finish its work. Results may include completed segments and findings. */
     INCOMPLETE(true),
 
     /** Inspection was interrupted or cancelled. */
     CANCELLED(false),
     /** A configured count or size limit was exceeded. */
     LIMIT_EXCEEDED(false),
-    /** Content did not meet an inspector's privacy processing requirement. */
-    DISCLOSURE_DENIED(false),
+    /** An inspector requires privacy processing, but the input does not meet that requirement. */
+    PRIVACY_PROCESSING_REQUIRED(false),
     /** An inspector violated its contract, including an unclassified runtime exception. */
     INVALID_RESULT(false),
     /** Inspection could not run with the supplied configuration. */

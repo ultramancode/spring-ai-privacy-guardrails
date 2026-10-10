@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: cb40a579eb289d63af38c3ec7c25aa2c31364606a3b21aa6cea12d2a694e2e74 -->
+<!-- i18n-source-sha256: 7be41d781a0f6fb89c74988a3c7796a1b37913faf520215892299180e9c02083 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -85,7 +85,9 @@ ChatClient chatClient(
 기능별 configurer를 합친 뒤 `configure(builder)`를 한 번 호출하세요. 공통 바운더리는
 개인정보 보호 → 도구 인가 → 모델 요청 최종 검사 순서로 실행하며, 등록하지 않은 단계는
 건너뜁니다. 각 기능을 따로 구성하면 바운더리가 중복 생성되어 요청 시 거부됩니다.
-여기서 최종 검사는 모델의 출력이 아니라 준비된 모델 요청을 검사하는 단계입니다.
+
+모델 응답에도 콘텐츠 검사를 적용하려면
+[출력 검사](inspection.md#선택적-모델-출력-검사)를 별도로 활성화하세요.
 
 개인정보 보호와 도구 권한 검사를 함께 적용하려면 `PrivacySecurityChatClientFactory`로
 클라이언트를 생성하세요. 이 Factory는 개인정보 보호도 구성하므로 반환된 builder에

@@ -41,6 +41,10 @@ The optional [Spring Security integration](docs/security.md) controls which tool
 are shown to the model and checks authorization before tool execution. It can
 be used independently of PII protection.
 
+The optional [content inspection](docs/inspection.md) modules check model input and
+final responses with application-defined rules or an HTTP guard model. They can be
+used with or without PII protection and tool authorization.
+
 ## Why It Exists
 
 **Detection is the first step. Control where original values go.**
@@ -131,11 +135,15 @@ Choose the starters for the capabilities your application needs.
 | Presidio integration | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
 | Apache OpenNLP integration | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | Principal-aware tool discovery and execution | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
+| Content inspection with rules or a guard model | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` |
 
 The Presidio and OpenNLP starters already include the base Privacy Guardrails
 starter, so do not add it separately. Add the Spring Security starter by itself
 for tool authorization alone, or add it alongside a privacy starter to use both
 capabilities.
+
+For content inspection, also choose an inspector implementation and follow the
+[inspection setup](docs/inspection.md#set-up-input-inspection).
 
 Adding a starter dependency alone does not apply its protection. Follow the
 example below and the relevant guide to complete the setup.
@@ -299,20 +307,28 @@ not include PII, opaque tokens, payloads, tool names, or request identifiers.
 See [Privacy-Safe Runtime Observation](docs/configuration.md#privacy-safe-runtime-observation)
 for registration, outcome semantics, and callback execution guidance.
 
-## Published Modules
+## Library Modules
+
+See [Content Inspection](docs/inspection.md) to inspect model input and responses
+with rules or an HTTP guard model, and combine inspection with privacy protection.
 
 Analyzer-specific starters bring in their runtime modules as transitive
 dependencies. Add test support separately in the application's test scope.
 
 | Module | Purpose |
 | --- | --- |
-| `spring-ai-privacy-guardrails-core` | Analyzer SPI, detection resolution, sessions, regex analysis, and PII tokenization |
-| `spring-ai-privacy-guardrails-spring-ai-boundary` | Shared model-request boundary for privacy, authorization, and inspection stages |
-| `spring-ai-privacy-guardrails-spring-ai` | Advisors and per-tool original-disclosure boundaries |
+| `spring-ai-privacy-guardrails-core` | PII detection and tokenization, built-in Regex analysis, and request-scoped sessions |
+| `spring-ai-privacy-guardrails-spring-ai-boundary` | Combines privacy protection, tool authorization, and content inspection before model calls |
+| `spring-ai-privacy-guardrails-spring-ai` | Privacy protection for Spring AI model calls, tool execution, and responses |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |
 | `spring-ai-privacy-guardrails-opennlp` | JVM-only adapter for user-supplied OpenNLP models |
-| `spring-ai-privacy-guardrails-spring-security` | Optional Spring Security authorization boundary for Spring AI tools |
-| `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Opt-in auto-configuration for the Spring Security tool boundary |
+| `spring-ai-privacy-guardrails-spring-security` | Tool discovery and execution permission checks using Spring Security |
+| `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Spring Boot configuration for tool authorization |
+| `spring-ai-privacy-guardrails-inspection-core` | Content inspection, allow/block policies, and inspection results |
+| `spring-ai-privacy-guardrails-inspection-rules` | Literal and RE2/J inspectors |
+| `spring-ai-privacy-guardrails-inspection-openai-compatible` | Calls guard models through OpenAI-compatible HTTP APIs |
+| `spring-ai-privacy-guardrails-inspection-spring-ai` | Model-input inspection and optional final-output inspection |
+| `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | Spring Boot configuration for inspecting selected clients |
 | `spring-ai-privacy-guardrails-test` | Optional model and tool probes with AssertJ assertions |
 
 See [Architecture](docs/architecture.md) for module responsibilities and the
@@ -345,6 +361,7 @@ is recommended for new users.
   and output policies
 - [Spring Security Tool Authorization](docs/security.md): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
+- [Content Inspection](docs/inspection.md): opt-in rules and HTTP guard models
 - [Architecture](docs/architecture.md): modules and model, tool, and session
   execution flow
 - [Threat Model](docs/threat-model.md): protected assets, trust boundaries,

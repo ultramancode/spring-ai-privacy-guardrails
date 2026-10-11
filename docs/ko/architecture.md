@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 19f77f0433878feea8444729f24d3edcaa11e51c274eb1622fdc685c7d8c3794 -->
+<!-- i18n-source-sha256: dc452294ffa53e724efd196803769517aa70d1cbb9396b2d7363c4ed7d3002ba -->
 
 ## 책임 범위
 
@@ -76,8 +76,8 @@ Spring Security 연동은 Spring AI의 도구 호출 API와 `spring-security-cor
 사용합니다. 전용 Spring Boot 스타터는 기본 스타터와 독립적으로 사용할 수 있습니다.
 
 두 연동 모듈은 `spring-ai-privacy-guardrails-spring-ai-boundary`에 의존합니다.
-이 공통 모듈은 모델 요청 단계를 개인정보 보호 → 도구 인가 → 최종 검사 순서로
-실행하며, 등록하지 않은 단계는 건너뜁니다.
+이 공통 모듈은 매 모델 호출 전에 개인정보 보호 → 도구 인가 → 모델 입력 콘텐츠 검사
+순서로 실행하며, 등록하지 않은 단계는 건너뜁니다.
 
 개인정보 보호와 도구 권한 검사를 함께 사용하려면 개인정보 보호 스타터와 Spring
 Security 스타터를 함께 추가하고, 두 기능을 동일한 `ChatClient`에 적용하세요. `core`와

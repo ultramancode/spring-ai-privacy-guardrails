@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: df66e6747856b929ab2cbd202d87c136a97d8d054c66b2d0645ce73d40bd831c -->
+<!-- i18n-source-sha256: 0aaf463a859465bf4bef920ae461a45edcc2e370173b378d1387a05097f6f6c0 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -442,7 +442,7 @@ Spring Boot 없이 개인정보 보호도 함께 적용하려면 개인정보 �
 `PrivacySecurityChatClientFactory`에 전달하세요.
 
 두 Factory 모두 `builderWithBoundary(model, additionalConfigurer)`와
-`builder(model, toolAdvisorBuilder, additionalConfigurer)`를 통해 모델 요청 최종 검사
+`builder(model, toolAdvisorBuilder, additionalConfigurer)`를 통해 모델 입력 콘텐츠 검사
 같은 추가 기능을 동일한 바운더리에 합칠 수 있습니다. 반환된 builder에 다른 바운더리
 configurer를 따로 적용하지 마세요.
 

@@ -230,15 +230,16 @@ class CombinedInspectionIntegrationTest {
                     return Flux.defer(() -> Flux.just(call(prompt)));
                 }
             };
-            InspectionChatClientConfigurer inspection =
-                    new InspectionChatClientConfigurer(new InspectionService(List.of(
-                            new RuleBasedContentInspector("application-rules", List.of(InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack"))))));
-            ChatClient.Builder builder = privacyEnabled
-                    ? context.getBean(PrivacySecurityChatClientFactory.class)
-                            .builderWithBoundary(model, inspection).clone()
-                    : context.getBean(ToolAuthorizationChatClientFactory.class)
-                            .builderWithBoundary(model, inspection).clone();
-            ChatClient.ChatClientRequestSpec request = builder.build().prompt().user("Alice attack");
+            InspectionRule rule = InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack");
+            ContentInspector inspector = new RuleBasedContentInspector("application-rules", List.of(rule));
+            InspectionChatClientConfigurer inspection = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)));
+            ChatClient.Builder builder;
+            if (privacyEnabled) {
+                builder = context.getBean(PrivacySecurityChatClientFactory.class).builderWithBoundary(model, inspection);
+            } else {
+                builder = context.getBean(ToolAuthorizationChatClientFactory.class).builderWithBoundary(model, inspection);
+            }
+            ChatClient.ChatClientRequestSpec request = builder.clone().build().prompt().user("Alice attack");
 
             if (streaming) {
                 assertThatThrownBy(() -> request.stream().content().collectList().block(Duration.ofSeconds(5)))

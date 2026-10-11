@@ -98,7 +98,7 @@ class InspectionAutoConfigurationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void outputInspectionRequiresSeparateOptIn(boolean enabled) {
-        var model = new ChatModel() {
+        ChatModel model = new ChatModel() {
             public ChatResponse call(Prompt prompt) {
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("attack"))));
             }
@@ -106,7 +106,7 @@ class InspectionAutoConfigurationTest {
         runner.withPropertyValues("spring.ai.inspection.enabled=true", "spring.ai.inspection.output.enabled=" + enabled)
                 .withBean(ContentInspector.class, this::rules).run(context -> {
                     assertThat(context).hasNotFailed();
-                    var client = context.getBean(InspectionChatClientConfigurer.class).configure(ChatClient.builder(model)).build();
+                    ChatClient client = context.getBean(InspectionChatClientConfigurer.class).configure(ChatClient.builder(model)).build();
                     if (enabled) {
                         assertThatThrownBy(() -> client.prompt().user("hello").call().content())
                                 .isInstanceOf(InspectionBlockedException.class);
@@ -275,17 +275,13 @@ class InspectionAutoConfigurationTest {
                                                 context.getBean(InspectionChatClientConfigurer.class))
                                         .configure(ChatClient.builder(model))
                                         .build();
-                                String result =
-                                        streaming
-                                                ? client.prompt().user("Hello Alice").stream()
-                                                        .content()
-                                                        .collectList()
-                                                        .block(Duration.ofSeconds(5))
-                                                        .get(0)
-                                                : client.prompt()
-                                                        .user("Hello Alice")
-                                                        .call()
-                                                        .content();
+                                ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello Alice");
+                                String result;
+                                if (streaming) {
+                                    result = request.stream().content().collectList().block(Duration.ofSeconds(5)).get(0);
+                                } else {
+                                    result = request.call().content();
+                                }
                                 assertThat(result).isEqualTo("done");
                                 assertThat(inspections).hasValue(2);
                             });

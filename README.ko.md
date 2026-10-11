@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 5f879af5015e170d7d61dd7ef5fef6ef061ebf3d9c14787b1c8b3414ada49b4c -->
+<!-- i18n-source-sha256: 2609f5de3cc992a29898e9463e52aa05399c3c8aeb57d6a3f9bf3e35f5359a02 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -175,7 +175,7 @@ spring:
             score: 0.90
 ```
 
-`output` 설정은 선택 사항이며, 생략하면 최종 응답 검사가 비활성화됩니다.
+`output` 설정은 선택 사항이며, 생략하면 개인정보 출력 보호가 비활성화됩니다.
 
 이 규칙은 `EMP-1234` 형식만 탐지하는 애플리케이션 전용 예제입니다. 일반적인 개인정보
 탐지 성능을 의미하지 않으므로, 운영에 사용할 분석기는 해당 환경을 대표하는 데이터로

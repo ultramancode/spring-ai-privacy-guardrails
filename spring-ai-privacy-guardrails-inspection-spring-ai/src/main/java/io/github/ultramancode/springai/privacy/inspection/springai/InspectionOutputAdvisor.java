@@ -49,7 +49,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     public static final int DEFAULT_MAX_FRAMES = 4096;
     /** Default total duration allowed for stream collection. */
     public static final Duration DEFAULT_STREAM_TIMEOUT = Duration.ofSeconds(60);
-    /** Runs outside the privacy lifecycle so output inspection sees completed privacy processing. */
+    /** Orders output inspection after privacy output protection. */
     public static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE + 1;
 
     private final InspectionEnforcement enforcement;
@@ -112,7 +112,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
             }
             return extractor.segments();
         });
-        return OutputResponseContext.clearInternalMarkers(response);
+        return OutputResponseContext.clearPrivacyTracking(response);
     }
 
     @Override
@@ -122,7 +122,8 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
             InspectionOutputBuffer buffer = new InspectionOutputBuffer(limits, maxFrames);
             StreamAdvisorChain preparedChain = InspectionOutputStreamGuard.prepare(chain, this, limits, maxFrames,
                     enforcement);
-            return preparedChain.nextStream(OutputResponseContext.requestPrivacyTracking(request))
+            Mono<InspectionOutputBuffer> collectedOutput = preparedChain
+                    .nextStream(OutputResponseContext.requestPrivacyTracking(request))
                     .doOnNext(response -> {
                         try {
                             buffer.accept(response);
@@ -130,15 +131,26 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
                             throw enforcement.failure(ex);
                         }
                     })
-                    .then(Mono.just(buffer))
-                    // Mono timeout bounds total assembly time, not merely the gap between frames.
-                    .timeout(streamTimeout, Mono.defer(() -> Mono.error(enforcement.failure(
-                            new InspectionException(InspectionFailureCode.TIMEOUT)))))
-                    .flatMapMany(completed -> Mono.fromCallable(() -> {
-                        enforcement.inspect(completed::segments);
-                        return completed.frames();
-                    }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(Flux::fromIterable));
+                    .then(Mono.just(buffer));
+            Mono<InspectionOutputBuffer> timeoutFailure = Mono.defer(() -> {
+                InspectionException timeout = new InspectionException(InspectionFailureCode.TIMEOUT);
+                return Mono.error(enforcement.failure(timeout));
+            });
+            // Mono timeout bounds total assembly time, not merely the gap between frames.
+            return collectedOutput
+                    .timeout(streamTimeout, timeoutFailure)
+                    .flatMapMany(this::inspectAndEmit);
         });
+    }
+
+    private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer buffer) {
+        Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
+            enforcement.inspect(buffer::segments);
+            return buffer.frames();
+        });
+        return inspectedFrames
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMapMany(Flux::fromIterable);
     }
 
     private void validateChain(List<? extends Advisor> advisors) {

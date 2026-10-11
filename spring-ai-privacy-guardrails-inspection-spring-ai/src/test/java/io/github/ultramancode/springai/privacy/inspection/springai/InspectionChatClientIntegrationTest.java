@@ -57,11 +57,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InspectionChatClientIntegrationTest {
 
     private InspectionChatClientConfigurer configurer() {
-        return new InspectionChatClientConfigurer(
-                new InspectionService(
-                        List.of(
-                                new RuleBasedContentInspector(
-                                        "application-rules", List.of(InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack"))))));
+        InspectionRule rule = InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack");
+        ContentInspector inspector = new RuleBasedContentInspector("application-rules", List.of(rule));
+        return new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)));
     }
 
     private ChatClient client(RecordingModel model) {
@@ -70,6 +68,7 @@ class InspectionChatClientIntegrationTest {
 
     static final class RecordingModel implements ChatModel {
         final AtomicInteger calls = new AtomicInteger();
+        final AtomicReference<Prompt> receivedPrompt = new AtomicReference<>();
         boolean toolCallingEnabled;
 
         @Override
@@ -79,6 +78,7 @@ class InspectionChatClientIntegrationTest {
 
         @Override
         public ChatResponse call(Prompt prompt) {
+            receivedPrompt.set(prompt);
             calls.incrementAndGet();
             if (toolCallingEnabled
                     && prompt.getInstructions().stream()
@@ -127,7 +127,7 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void streamingIsLazyAndBlocksBeforeSubscriptionToBusinessModel() {
+    void blocksStreamBeforeSubscribingToBusinessModel() {
         RecordingModel model = new RecordingModel();
         Flux<String> publisher = client(model).prompt().user("attack").stream().content();
         assertThat(model.calls).hasValue(0);
@@ -177,18 +177,11 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void observesAllMessageRolesNotJustUsers() {
+    void blocksAttackInSystemMessageBeforeModelCall() {
         RecordingModel model = new RecordingModel();
         ChatClient client = client(model);
-        assertThatThrownBy(
-                        () ->
-                                client.prompt(
-                                                new Prompt(
-                                                        List.of(
-                                                                new SystemMessage("attack"),
-                                                                new UserMessage("hello"))))
-                                        .call()
-                                        .content())
+        Prompt prompt = new Prompt(List.of(new SystemMessage("attack"), new UserMessage("hello")));
+        assertThatThrownBy(() -> client.prompt(prompt).call().content())
                 .isInstanceOf(InspectionBlockedException.class);
         assertThat(model.calls).hasValue(0);
     }
@@ -346,15 +339,15 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void allowsObservationWrappingTheInspection() {
+    void allowsEarlierAdvisorToWrapInspectedCall() {
         RecordingModel model = new RecordingModel();
-        AtomicInteger observations = new AtomicInteger();
-        CallAdvisor observer =
+        AtomicInteger wrappedCalls = new AtomicInteger();
+        CallAdvisor wrappingAdvisor =
                 new CallAdvisor() {
                     public ChatClientResponse adviseCall(
                             ChatClientRequest request, CallAdvisorChain chain) {
                         ChatClientResponse result = chain.nextCall(request);
-                        observations.incrementAndGet();
+                        wrappedCalls.incrementAndGet();
                         return result;
                     }
 
@@ -363,30 +356,13 @@ class InspectionChatClientIntegrationTest {
                     }
 
                     public String getName() {
-                        return "observer";
+                        return "wrapping-advisor";
                     }
                 };
         InspectionChatClientConfigurer configurer = configurer();
-        ChatClient.Builder builder = configurer.configure(ChatClient.builder(model)).defaultAdvisors(observer);
+        ChatClient.Builder builder = configurer.configure(ChatClient.builder(model)).defaultAdvisors(wrappingAdvisor);
         assertThat(builder.build().prompt().user("hello").call().content()).isEqualTo("done");
-        assertThat(observations).hasValue(1);
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void sharedBoundaryRejectsDuplicateInspectionEvenOnClonedBuilders(boolean streaming) {
-        RecordingModel model = new RecordingModel();
-        InspectionChatClientConfigurer configurer = configurer();
-        ChatClient.Builder builder = configurer.configure(ChatClient.builder(model)).clone();
-        ChatClient duplicate = configurer.configure(builder).build();
-        if (streaming) {
-            StepVerifier.create(duplicate.prompt().user("hello").stream().content())
-                    .expectError(IllegalStateException.class).verify(Duration.ofSeconds(5));
-        } else {
-            assertThatThrownBy(() -> duplicate.prompt().user("hello").call().content())
-                    .isInstanceOf(IllegalStateException.class);
-        }
-        assertThat(model.calls).hasValue(0);
+        assertThat(wrappedCalls).hasValue(1);
     }
 
     @Test

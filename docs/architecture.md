@@ -80,8 +80,8 @@ Spring Security Core. Its Spring Boot starter can be used independently of the
 base starter.
 
 Both integration modules depend on `spring-ai-privacy-guardrails-spring-ai-boundary`.
-This shared module runs model-request stages in privacy, authorization, then
-inspection order, skipping unconfigured stages.
+Before each model call, this shared module runs privacy protection, tool authorization,
+and content inspection in that order. Unconfigured stages are skipped.
 
 To use privacy protection and tool authorization together, add a privacy
 starter alongside the Spring Security starter and apply both capabilities to

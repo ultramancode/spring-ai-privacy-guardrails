@@ -4,12 +4,14 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.model.tool.ToolExecutionResult;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Internal context markers shared by Privacy output protection and output inspection.
+ * Internal response support shared by Privacy output protection and output inspection.
  * Tracks privacy processing for each response and identifies complete tool responses.
  * Applications should use the feature configurers.
  *
@@ -17,9 +19,9 @@ import java.util.Map;
  */
 public final class OutputResponseContext {
     private static final String PRIVACY_PROCESSING_KEY = "io.github.ultramancode.springai.privacy.output-processing";
-    private static final String TOOL_RESPONSE_KEY = "io.github.ultramancode.springai.privacy.output-tool-response";
+    // ToolCallLimitExceededException is unavailable in the supported Spring AI 2.0.0 baseline.
+    private static final String TOOL_CALL_LIMIT_EXCEEDED = "toolCallLimitExceeded";
     private static final Object PRIVACY_TRACKING_REQUESTED = new Object();
-    private static final Object COMPLETE_TOOL_RESPONSE = new Object();
 
     private OutputResponseContext() {
     }
@@ -33,14 +35,11 @@ public final class OutputResponseContext {
         return request.context().get(PRIVACY_PROCESSING_KEY) == PRIVACY_TRACKING_REQUESTED;
     }
 
-    /** Marks a complete returnDirect or tool-call-limit response emitted by the tool advisor. */
-    public static ChatClientResponse markCompleteToolResponse(ChatClientResponse response) {
-        return response.mutate().context(TOOL_RESPONSE_KEY, COMPLETE_TOOL_RESPONSE).build();
-    }
-
     /** Complete tool responses are separate text units from preceding model fragments. */
-    public static boolean isCompleteToolResponse(ChatClientResponse response) {
-        return response.context().get(TOOL_RESPONSE_KEY) == COMPLETE_TOOL_RESPONSE;
+    public static boolean isCompleteToolResponse(Generation generation) {
+        String finishReason = generation.getMetadata().getFinishReason();
+        return ToolExecutionResult.FINISH_REASON.equals(finishReason)
+                || TOOL_CALL_LIMIT_EXCEEDED.equals(finishReason);
     }
 
     /** Marks the response after its configured Privacy output policy succeeds. */
@@ -65,7 +64,7 @@ public final class OutputResponseContext {
         return chatResponse == null || chatResponse.getClass() == ChatResponse.class;
     }
 
-    /** Removes privacy tracking while preserving markers for complete tool responses. */
+    /** Removes internal privacy tracking from the response context. */
     public static ChatClientResponse clearPrivacyTracking(ChatClientResponse response) {
         if (!response.context().containsKey(PRIVACY_PROCESSING_KEY)) {
             return response;
@@ -73,17 +72,6 @@ public final class OutputResponseContext {
         Map<String, Object> context = new HashMap<>(response.context());
         context.remove(PRIVACY_PROCESSING_KEY);
         return new ChatClientResponse(response.chatResponse(), context);
-    }
-
-    /** Removes privacy tracking and markers for complete tool responses. */
-    public static ChatClientResponse clearInternalMarkers(ChatClientResponse response) {
-        ChatClientResponse cleared = clearPrivacyTracking(response);
-        if (!cleared.context().containsKey(TOOL_RESPONSE_KEY)) {
-            return cleared;
-        }
-        Map<String, Object> context = new HashMap<>(cleared.context());
-        context.remove(TOOL_RESPONSE_KEY);
-        return new ChatClientResponse(cleared.chatResponse(), context);
     }
 
     /** Text-bearing thought frames form a separate logical unit from answer frames. */

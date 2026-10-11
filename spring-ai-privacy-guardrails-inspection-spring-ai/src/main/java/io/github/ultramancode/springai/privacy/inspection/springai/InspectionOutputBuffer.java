@@ -45,7 +45,7 @@ final class InspectionOutputBuffer {
                 AssistantMessage message = generation.getOutput();
                 InspectionTextExtractor.requireSupportedAssistant(message);
                 String choiceKey;
-                if (OutputResponseContext.isCompleteToolResponse(response)) {
+                if (OutputResponseContext.isCompleteToolResponse(generation)) {
                     choiceKey = "tool-response/" + frames.size() + "/" + position;
                 } else {
                     choiceKey = choiceKey(generation, position, generations.size());
@@ -112,8 +112,9 @@ final class InspectionOutputBuffer {
     }
 
     List<ContentSegment> segments() {
-        ContentSegment.PrivacyProcessingStatus emptyStatus = !frames.isEmpty()
-                && frames.stream().allMatch(OutputResponseContext::isPrivacyProcessed)
+        boolean allFramesProcessed = !frames.isEmpty()
+                && frames.stream().allMatch(OutputResponseContext::isPrivacyProcessed);
+        ContentSegment.PrivacyProcessingStatus emptyStatus = allFramesProcessed
                 ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         InspectionTextExtractor extractor = new InspectionTextExtractor(limits, emptyStatus, "output-");
         for (OutputText output : payloads.values()) {
@@ -126,7 +127,7 @@ final class InspectionOutputBuffer {
     }
 
     List<ChatClientResponse> frames() {
-        return frames.stream().map(OutputResponseContext::clearInternalMarkers).toList();
+        return frames.stream().map(OutputResponseContext::clearPrivacyTracking).toList();
     }
 
     private static InspectionException limit() {

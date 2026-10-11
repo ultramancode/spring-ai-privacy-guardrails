@@ -84,9 +84,9 @@ protection is enabled, it also adds the output boundary.
 
 When combining privacy with another model-request feature, combine the feature
 configurers with `ModelRequestBoundaryConfigurer.compose(...)` before calling
-`configure(builder)` once. The shared boundary runs privacy, authorization, then
-inspection, skipping unconfigured stages. Configuring each feature separately
-creates duplicate boundaries, which are rejected at request time.
+`configure(builder)` once. The shared boundary runs privacy protection, tool authorization,
+then content inspection of model input, skipping unconfigured stages. Configuring each
+feature separately creates duplicate boundaries, which are rejected at request time.
 
 To apply content inspection to model responses as well, enable
 [output inspection](inspection.md#optional-model-output-inspection) separately.

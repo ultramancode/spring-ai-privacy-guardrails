@@ -18,6 +18,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,8 +33,15 @@ class PrivacyProcessingStatusResolverIntegrationTest {
     enum Failure { NULL, RUNTIME, DECLARED, INTERRUPTED_RUNTIME, INTERRUPTED_NULL, INTERRUPTED_RETURN }
 
     static Stream<Arguments> failures() {
-        return Stream.of(false, true).flatMap(streaming -> Stream.of(false, true).flatMap(observerThrows ->
-                Stream.of(Failure.values()).map(failure -> Arguments.of(streaming, observerThrows, failure))));
+        List<Arguments> cases = new ArrayList<>();
+        for (boolean streaming : List.of(false, true)) {
+            for (boolean observerThrows : List.of(false, true)) {
+                for (Failure failure : Failure.values()) {
+                    cases.add(Arguments.of(streaming, observerThrows, failure));
+                }
+            }
+        }
+        return cases.stream();
     }
 
     private InspectionService service(AtomicInteger inspections) {
@@ -55,7 +63,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
     }
 
     private void invoke(ChatClient client, boolean streaming) {
-        var request = client.prompt().user("synthetic-private-text");
+        ChatClient.ChatClientRequestSpec request = client.prompt().user("synthetic-private-text");
         if (streaming) {
             request.stream().content().collectList().block(Duration.ofSeconds(5));
         } else {
@@ -102,11 +110,17 @@ class PrivacyProcessingStatusResolverIntegrationTest {
             failure.addSuppressed(new IllegalStateException(request.prompt().getContents()));
             throw failure;
         };
-        var model = new InspectionChatClientIntegrationTest.RecordingModel();
+        InspectionChatClientIntegrationTest.RecordingModel model = new InspectionChatClientIntegrationTest.RecordingModel();
         ChatClient client = new InspectionChatClientConfigurer(service(inspections), InspectionLimits.defaults(),
                 resolver, observer).configure(ChatClient.builder(model)).build();
-        InspectionFailureCode expected = interrupted ? InspectionFailureCode.CANCELLED
-                : mode == Failure.DECLARED ? InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED : InspectionFailureCode.INVALID_RESULT;
+        InspectionFailureCode expected;
+        if (interrupted) {
+            expected = InspectionFailureCode.CANCELLED;
+        } else if (mode == Failure.DECLARED) {
+            expected = InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED;
+        } else {
+            expected = InspectionFailureCode.INVALID_RESULT;
+        }
         try {
             assertThatThrownBy(() -> invoke(client, streaming))
                     .isInstanceOfSatisfying(InspectionException.class, failure -> {
@@ -143,7 +157,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
                 failures.add(failure);
             }
         };
-        var model = new InspectionChatClientIntegrationTest.RecordingModel();
+        InspectionChatClientIntegrationTest.RecordingModel model = new InspectionChatClientIntegrationTest.RecordingModel();
         ChatClient client = new InspectionChatClientConfigurer(service(inspections), InspectionLimits.defaults(),
                 PrivacyProcessingStatusResolver.unknown(), observer).configure(ChatClient.builder(model)).build();
         assertThatThrownBy(() -> invoke(client, streaming))

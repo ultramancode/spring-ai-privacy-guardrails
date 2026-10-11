@@ -1,6 +1,5 @@
 package io.github.ultramancode.springai.privacy.inspection.springai;
 
-import io.github.ultramancode.springai.privacy.boundary.OutputResponseContext;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
@@ -10,18 +9,13 @@ import org.springframework.ai.chat.client.advisor.api.BaseAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.ToolAdvisor;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.model.tool.ToolExecutionResult;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
 
 /** Enforces frame and text-length limits across a streamed tool loop. */
 final class InspectionOutputStreamGuard implements StreamAdvisor {
-    // ToolCallLimitExceededException is unavailable in the supported Spring AI 2.0.0 baseline.
-    private static final String TOOL_CALL_LIMIT_EXCEEDED = "toolCallLimitExceeded";
-
     private final int toolAdvisorOrder;
     private final InspectionLimits limits;
     private final int maxFrames;
@@ -100,25 +94,12 @@ final class InspectionOutputStreamGuard implements StreamAdvisor {
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-        return chain.nextStream(request).map(response -> {
+        return chain.nextStream(request).doOnNext(response -> {
             try {
                 checkLimits(response);
             } catch (RuntimeException ex) {
                 throw enforcement.failure(ex);
             }
-            ChatResponse chatResponse = response.chatResponse();
-            if (chatResponse == null) {
-                return response;
-            }
-            for (Generation generation : chatResponse.getResults()) {
-                String finishReason = generation.getMetadata().getFinishReason();
-                boolean directToolResult = ToolExecutionResult.FINISH_REASON.equals(finishReason);
-                boolean toolCallLimitExceeded = TOOL_CALL_LIMIT_EXCEEDED.equals(finishReason);
-                if (directToolResult || toolCallLimitExceeded) {
-                    return OutputResponseContext.markCompleteToolResponse(response);
-                }
-            }
-            return response;
         });
     }
 

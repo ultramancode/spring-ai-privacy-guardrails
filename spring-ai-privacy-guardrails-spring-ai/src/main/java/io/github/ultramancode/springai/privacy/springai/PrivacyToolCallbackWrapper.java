@@ -95,7 +95,7 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
                 disclosureScope
         );
         String cleanInput = inputResult.payload();
-        ToolContext delegateContext = withoutInternalPrivacyEntries(toolContext);
+        ToolContext delegateContext = withoutInternalPrivacyContext(toolContext);
         this.enforcementNotifier.notify(
                 PrivacyEnforcementBoundary.TOOL_INPUT,
                 inputResult.disclosed()
@@ -182,8 +182,8 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
         return handle;
     }
 
-    private ToolContext withoutInternalPrivacyEntries(ToolContext toolContext) {
-        return new ToolContext(PrivacyRequestContextSupport.stripInternalPrivacyEntries(toolContext.getContext()));
+    private ToolContext withoutInternalPrivacyContext(ToolContext toolContext) {
+        return new ToolContext(PrivacyRequestContextSupport.withoutInternalPrivacyContext(toolContext.getContext()));
     }
 
     private static ToolDefinition readToolDefinition(ToolCallback delegate) {

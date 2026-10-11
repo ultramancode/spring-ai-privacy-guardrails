@@ -19,7 +19,7 @@ public interface InspectionObserver {
     void onInspection(InspectionReport report);
 
     /**
-     * Receives inspection failures from text extraction, stream limits or inspector execution.
+     * Receives inspection failures reported as {@link InspectionException}.
      * The exception includes an inspection report when available.
      *
      * @param failure the classified inspection failure

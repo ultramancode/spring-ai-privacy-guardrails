@@ -465,7 +465,7 @@ with this authorization factory to `PrivacySecurityChatClientFactory`.
 
 Both factories support `builderWithBoundary(model, additionalConfigurer)` and
 `builder(model, toolAdvisorBuilder, additionalConfigurer)` for composing extra
-features, such as final model-request inspection, into the same boundary.
+features, such as content inspection of model input, into the same boundary.
 Do not apply another boundary configurer separately to the returned builder.
 
 ## Tool Search

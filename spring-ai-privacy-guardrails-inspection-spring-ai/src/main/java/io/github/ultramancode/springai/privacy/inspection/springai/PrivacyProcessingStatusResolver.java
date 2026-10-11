@@ -6,8 +6,9 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 /**
  * Supplies the privacy processing status for text extracted from a model request.
  * Determine this status from trusted application state, never from user-controlled metadata.
- * Return UNKNOWN if processing cannot be confirmed. A missing processing marker alone
- * does not establish that the text is UNPROCESSED.
+ * Return {@code PROCESSED} when the configured privacy processing has completed,
+ * {@code UNPROCESSED} when it is known not to have been applied, and {@code UNKNOWN}
+ * when the processing status cannot be confirmed.
  */
 @FunctionalInterface
 public interface PrivacyProcessingStatusResolver {

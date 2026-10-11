@@ -97,16 +97,14 @@ class PrivacyOutputAdvisorStreamTest {
                     PrivacyPhase.TOOL_OUTPUT,
                     true
             );
-            int split = tokenizedResult.length() / 2;
-            when(chain.nextStream(any())).thenReturn(Flux.just(
-                    response(tokenizedResult.substring(0, split)),
-                    response(List.of(new Generation(
-                            new AssistantMessage(tokenizedResult.substring(split)),
-                            ChatGenerationMetadata.builder()
-                                    .finishReason(ToolExecutionResult.FINISH_REASON)
-                                    .build()
-                    )))
-            ));
+            // ToolCallingAdvisor emits returnDirect output as one complete response.
+            Generation toolResult = new Generation(
+                    new AssistantMessage(tokenizedResult),
+                    ChatGenerationMetadata.builder()
+                            .finishReason(ToolExecutionResult.FINISH_REASON)
+                            .build()
+            );
+            when(chain.nextStream(any())).thenReturn(Flux.just(response(List.of(toolResult))));
 
             List<ChatClientResponse> results = protectStreamAtApplicationBoundary(
                     advisor,

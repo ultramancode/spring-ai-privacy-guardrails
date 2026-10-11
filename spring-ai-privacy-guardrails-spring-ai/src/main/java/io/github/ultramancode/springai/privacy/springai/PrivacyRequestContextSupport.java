@@ -15,7 +15,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Owns opaque session metadata and removes all privacy internals at request boundaries. */
+/**
+ * Manages privacy session context and removes privacy runtime metadata
+ * from response and tool contexts.
+ */
 final class PrivacyRequestContextSupport {
 
     static final String CONTEXT_HANDLE = "io.github.ultramancode.springai.privacy.context-handle";
@@ -73,7 +76,7 @@ final class PrivacyRequestContextSupport {
         }
     }
 
-    static ChatClientResponse stripInternalPrivacyEntries(ChatClientResponse response) {
+    static ChatClientResponse withoutInternalPrivacyContext(ChatClientResponse response) {
         Objects.requireNonNull(response, "response must not be null");
         if (!response.context().containsKey(CONTEXT_HANDLE)
                 && !response.context().containsKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION)
@@ -84,11 +87,11 @@ final class PrivacyRequestContextSupport {
         }
         return new ChatClientResponse(
                 response.chatResponse(),
-                stripInternalPrivacyEntries(response.context())
+                withoutInternalPrivacyContext(response.context())
         );
     }
 
-    static Map<String, Object> stripInternalPrivacyEntries(Map<String, Object> context) {
+    static Map<String, Object> withoutInternalPrivacyContext(Map<String, Object> context) {
         Objects.requireNonNull(context, "context must not be null");
         Map<String, Object> applicationContext = new HashMap<>(context);
         applicationContext.remove(CONTEXT_HANDLE);

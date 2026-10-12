@@ -105,10 +105,10 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
             if (response.chatResponse() != null) {
                 for (Generation generation : response.chatResponse().getResults()) {
                     InspectionTextExtractor.requireSupportedAssistant(generation.getOutput());
-                    extractor.outputPayload(generation.getOutput().getText(), status);
+                    extractor.addOutputPayload(generation.getOutput().getText(), status);
                 }
             }
-            return extractor.segments();
+            return extractor.buildSegments();
         });
         return OutputResponseContext.clearPrivacyTracking(response);
     }
@@ -141,7 +141,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
 
     private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer buffer) {
         Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
-            enforcement.inspect(buffer::segments);
+            enforcement.inspect(buffer::buildSegments);
             return buffer.framesWithoutPrivacyTracking();
         });
         return inspectedFrames

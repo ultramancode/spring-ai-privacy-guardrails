@@ -15,82 +15,88 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Read-only extraction of supported runtime payloads. Tool definitions and tool-call identifiers are excluded. */
+/** Collects supported runtime text into inspection segments without modifying source messages. */
 final class InspectionTextExtractor {
-    static final List<String> TEXT_METADATA_KEYS = List.of("reasoningContent", "thinking");
+    private static final List<String> REASONING_METADATA_KEYS = List.of("reasoningContent", "thinking");
     private final InspectionLimits limits;
-    private final ContentSegment.PrivacyProcessingStatus status;
+    private final ContentSegment.PrivacyProcessingStatus defaultPrivacyStatus;
     private final String idPrefix;
     private final List<ContentSegment> segments = new ArrayList<>();
-    private int characters;
+    private int totalCharacters;
 
-    InspectionTextExtractor(InspectionLimits limits, ContentSegment.PrivacyProcessingStatus status,
+    InspectionTextExtractor(InspectionLimits limits, ContentSegment.PrivacyProcessingStatus defaultPrivacyStatus,
             String idPrefix) {
         this.limits = limits;
-        this.status = status;
+        this.defaultPrivacyStatus = defaultPrivacyStatus;
         this.idPrefix = idPrefix;
     }
 
-    void message(Message message) {
+    void addMessage(Message message) {
         InspectionRequest.checkInterrupted();
         if (message.getClass() == ToolResponseMessage.class) {
             for (ToolResponseMessage.ToolResponse response : ((ToolResponseMessage) message).getResponses()) {
-                payload(response.responseData(), ContentSegment.Role.TOOL);
+                addInputPayload(response.responseData(), ContentSegment.Role.TOOL);
             }
         } else if (message.getClass() == UserMessage.class) {
             if (!((UserMessage) message).getMedia().isEmpty()) {
                 throw unsupported();
             }
-            payload(message.getText(), ContentSegment.Role.USER);
+            addInputPayload(message.getText(), ContentSegment.Role.USER);
         } else if (message.getClass() == SystemMessage.class) {
-            payload(message.getText(), ContentSegment.Role.SYSTEM);
+            addInputPayload(message.getText(), ContentSegment.Role.SYSTEM);
         } else if (message instanceof AssistantMessage assistant) {
-            requireSupportedAssistant(assistant);
-            payload(assistant.getText(), ContentSegment.Role.ASSISTANT);
-            String reasoning = reasoning(assistant);
-            if (reasoning != null) {
-                payload(reasoning, ContentSegment.Role.ASSISTANT);
-            }
-            metadata(assistant.getMetadata());
-            for (AssistantMessage.ToolCall call : assistant.getToolCalls()) {
-                payload(call.arguments(), ContentSegment.Role.ASSISTANT);
-            }
+            addAssistantMessage(assistant);
         } else {
             throw unsupported();
         }
     }
 
+    private void addAssistantMessage(AssistantMessage assistant) {
+        requireSupportedAssistant(assistant);
+        // getText() returns the body only. Reasoning, metadata text and tool arguments are separate fields.
+        addInputPayload(assistant.getText(), ContentSegment.Role.ASSISTANT);
+        String reasoning = deepSeekReasoning(assistant);
+        if (reasoning != null) {
+            addInputPayload(reasoning, ContentSegment.Role.ASSISTANT);
+        }
+        addReasoningMetadataText(assistant.getMetadata());
+        for (AssistantMessage.ToolCall call : assistant.getToolCalls()) {
+            addInputPayload(call.arguments(), ContentSegment.Role.ASSISTANT);
+        }
+    }
+
     static void requireSupportedAssistant(AssistantMessage message) {
-        if ((message.getClass() != AssistantMessage.class && !isDeepSeek(message))
-                || !message.getMedia().isEmpty()) {
+        boolean supportedType = message.getClass() == AssistantMessage.class || isDeepSeek(message);
+        if (!supportedType || !message.getMedia().isEmpty()) {
             throw unsupported();
         }
     }
 
     private static boolean isDeepSeek(AssistantMessage message) {
+        // Check the class name before accessing the optional DeepSeek dependency.
         return message.getClass().getName().equals("org.springframework.ai.deepseek.DeepSeekAssistantMessage")
                 && InspectionDeepSeekSupport.isExactType(message);
     }
 
-    static String reasoning(AssistantMessage message) {
+    private static String deepSeekReasoning(AssistantMessage message) {
         return isDeepSeek(message) ? InspectionDeepSeekSupport.reasoning(message) : null;
     }
 
-    void metadata(Map<String, Object> metadata) {
-        for (String key : TEXT_METADATA_KEYS) {
+    private void addReasoningMetadataText(Map<String, Object> metadata) {
+        for (String key : REASONING_METADATA_KEYS) {
             if (metadata.get(key) instanceof String text) {
-                payload(text, ContentSegment.Role.ASSISTANT);
+                addInputPayload(text, ContentSegment.Role.ASSISTANT);
             }
         }
     }
 
     /** Input inspectors receive each complete payload, including JSON keys, syntax and escapes. */
-    void payload(String text, ContentSegment.Role role) {
-        addSegment(text, role, status);
+    private void addInputPayload(String text, ContentSegment.Role role) {
+        addSegment(text, role, defaultPrivacyStatus);
     }
 
     /** Output inspectors receive each complete body, including JSON keys, syntax and escapes. */
-    void outputPayload(String text, ContentSegment.PrivacyProcessingStatus outputStatus) {
+    void addOutputPayload(String text, ContentSegment.PrivacyProcessingStatus outputStatus) {
         addSegment(text, ContentSegment.Role.ASSISTANT, outputStatus);
     }
 
@@ -101,16 +107,16 @@ final class InspectionTextExtractor {
             throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
         }
         String content = text == null ? "" : text;
-        if (content.length() > limits.maxCharacters() - characters) {
+        if (content.length() > limits.maxCharacters() - totalCharacters) {
             throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
         }
-        characters += content.length();
+        totalCharacters += content.length();
         segments.add(new ContentSegment(idPrefix + segments.size(), role, privacyStatus, content));
     }
 
-    List<ContentSegment> segments() {
+    List<ContentSegment> buildSegments() {
         if (segments.isEmpty()) {
-            payload("", ContentSegment.Role.UNKNOWN);
+            addSegment("", ContentSegment.Role.UNKNOWN, defaultPrivacyStatus);
         }
         return List.copyOf(segments);
     }

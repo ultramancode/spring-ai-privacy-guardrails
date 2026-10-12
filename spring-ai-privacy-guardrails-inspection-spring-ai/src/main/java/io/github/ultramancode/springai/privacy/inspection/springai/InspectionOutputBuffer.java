@@ -17,15 +17,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Per-subscription runtime text aggregation. Original frames are retained only for unchanged replay. */
+/** Buffers streamed response frames and assembles their text for inspection. */
 final class InspectionOutputBuffer {
     private final InspectionLimits limits;
     private final int maxFrames;
     private final List<ChatClientResponse> frames = new ArrayList<>();
-    private final Map<String, OutputText> payloads = new LinkedHashMap<>();
-    private Boolean usesChoiceIndexes;
+    private final Map<String, OutputText> outputTextsByGroup = new LinkedHashMap<>();
+    private Boolean usesExplicitChoiceIndexes;
     private Integer positionalChoiceCount;
-    private int characters;
+    private int totalCharacters;
 
     InspectionOutputBuffer(InspectionLimits limits, int maxFrames) {
         this.limits = limits;
@@ -68,10 +68,10 @@ final class InspectionOutputBuffer {
         }
         String choiceIndex = generationIndex != null ? generationIndex : messageIndex;
         boolean hasIndex = choiceIndex != null;
-        if (usesChoiceIndexes != null && usesChoiceIndexes != hasIndex) {
+        if (usesExplicitChoiceIndexes != null && usesExplicitChoiceIndexes != hasIndex) {
             throw InspectionTextExtractor.unsupported();
         }
-        usesChoiceIndexes = hasIndex;
+        usesExplicitChoiceIndexes = hasIndex;
         if (hasIndex) {
             return "index/" + choiceIndex;
         }
@@ -95,15 +95,15 @@ final class InspectionOutputBuffer {
     private void append(String key, String text, boolean privacyProcessed) {
         InspectionRequest.checkInterrupted();
         String value = text == null ? "" : text;
-        if (value.length() > limits.maxCharacters() - characters) {
+        if (value.length() > limits.maxCharacters() - totalCharacters) {
             throw limit();
         }
         // Only new keys add inspection segments.
-        if (!payloads.containsKey(key) && payloads.size() >= limits.maxSegments()) {
+        if (!outputTextsByGroup.containsKey(key) && outputTextsByGroup.size() >= limits.maxSegments()) {
             throw limit();
         }
-        characters += value.length();
-        OutputText output = payloads.computeIfAbsent(key, ignored -> new OutputText());
+        totalCharacters += value.length();
+        OutputText output = outputTextsByGroup.computeIfAbsent(key, ignored -> new OutputText());
         output.text.append(value);
         // Keep the complete text from Privacy processing to compare with the accumulated text.
         // Later empty frames must not overwrite it.
@@ -112,20 +112,20 @@ final class InspectionOutputBuffer {
         }
     }
 
-    List<ContentSegment> segments() {
+    List<ContentSegment> buildSegments() {
         boolean allFramesProcessed = !frames.isEmpty()
                 && frames.stream().allMatch(OutputResponseContext::isPrivacyProcessed);
         ContentSegment.PrivacyProcessingStatus emptyStatus = allFramesProcessed
                 ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         InspectionTextExtractor extractor = new InspectionTextExtractor(limits, emptyStatus, "output-");
         // LinkedHashMap preserves the order in which output groups first appear.
-        for (OutputText output : payloads.values()) {
+        for (OutputText output : outputTextsByGroup.values()) {
             String text = output.text.toString();
             ContentSegment.PrivacyProcessingStatus privacyStatus = text.equals(output.privacyProcessedText)
                     ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
-            extractor.outputPayload(text, privacyStatus);
+            extractor.addOutputPayload(text, privacyStatus);
         }
-        return extractor.segments();
+        return extractor.buildSegments();
     }
 
     List<ChatClientResponse> framesWithoutPrivacyTracking() {

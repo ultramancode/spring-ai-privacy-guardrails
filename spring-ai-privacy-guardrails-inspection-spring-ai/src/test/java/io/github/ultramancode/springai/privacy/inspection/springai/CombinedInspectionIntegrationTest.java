@@ -92,7 +92,7 @@ class CombinedInspectionIntegrationTest {
                 .withBean(PiiAnalyzer.class, () -> analyzer);
     }
 
-    private InspectionChatClientConfigurer inspectionConfigurer(List<InspectionRequest> inspected) {
+    private InspectionChatClientConfigurer attackBlockingInspectionConfigurer(List<InspectionRequest> inspectionRequests) {
         ContentInspector inspector = new ContentInspector() {
             @Override
             public String inspectorId() {
@@ -109,7 +109,7 @@ class CombinedInspectionIntegrationTest {
                 request.requirePrivacyProcessed();
                 assertThat(request.segments())
                         .allSatisfy(segment -> assertThat(segment.text()).doesNotContain("Alice"));
-                inspected.add(request);
+                inspectionRequests.add(request);
                 List<InspectionFinding> findings = request.segments().stream()
                         .filter(s -> s.text().contains("attack"))
                         .map(s -> new InspectionFinding(s.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
@@ -136,10 +136,10 @@ class CombinedInspectionIntegrationTest {
 
     @ParameterizedTest(name = "streaming={0}, toolSearch={1}")
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
-    void combinedFactoryInspectsProtectedToolResults(boolean streaming, boolean toolSearchEnabled) {
+    void combinedFactoryBlocksToolResultsAfterPrivacyProcessing(boolean streaming, boolean toolSearchEnabled) {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
-            List<InspectionRequest> inspected = new CopyOnWriteArrayList<>();
+            List<InspectionRequest> inspectionRequests = new CopyOnWriteArrayList<>();
             AtomicInteger modelCalls = new AtomicInteger();
             ChatModel model = new ChatModel() {
                 @Override
@@ -183,7 +183,7 @@ class CombinedInspectionIntegrationTest {
             };
 
             ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
-                    .builder(model, toolAdvisorBuilder, inspectionConfigurer(inspected))
+                    .builder(model, toolAdvisorBuilder, attackBlockingInspectionConfigurer(inspectionRequests))
                     .defaultTools(context.getBean(PrivacyToolCallbackFactory.class).wrap(lookupTool))
                     .build();
             UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken.authenticated(
@@ -202,9 +202,13 @@ class CombinedInspectionIntegrationTest {
                     assertThatThrownBy(() -> request.call().content())
                             .isInstanceOf(InspectionBlockedException.class);
                 }
-                assertThat(modelCalls).hasValue(toolSearchEnabled ? 2 : 1);
-                assertThat(inspected).hasSize(toolSearchEnabled ? 3 : 2);
-                assertThat(inspected.get(inspected.size() - 1).segments())
+                int expectedModelCalls = toolSearchEnabled ? 2 : 1;
+                assertThat(modelCalls).hasValue(expectedModelCalls);
+                // The blocked request is recorded by the inspector but never increments modelCalls.
+                assertThat(inspectionRequests).hasSize(expectedModelCalls + 1);
+                InspectionRequest lastInspectionRequest =
+                        inspectionRequests.get(inspectionRequests.size() - 1);
+                assertThat(lastInspectionRequest.segments())
                         .anyMatch(s -> s.role() == ContentSegment.Role.TOOL && s.text().contains("attack"));
             } finally {
                 SecurityContextHolder.clearContext();
@@ -230,7 +234,7 @@ class CombinedInspectionIntegrationTest {
                     return Flux.defer(() -> Flux.just(call(prompt)));
                 }
             };
-            InspectionRule rule = InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack");
+            InspectionRule rule = InspectionRule.literal("attack-rule", InspectionFinding.Category.PROMPT_INJECTION, "attack");
             ContentInspector inspector = new RuleBasedContentInspector("application-rules", List.of(rule));
             InspectionChatClientConfigurer inspection = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)));
             ChatClient.Builder builder;
@@ -260,12 +264,12 @@ class CombinedInspectionIntegrationTest {
             return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
         };
         PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-        List<InspectionRequest> inspected = new CopyOnWriteArrayList<>();
-        List<String> prompts = new CopyOnWriteArrayList<>();
+        List<InspectionRequest> inspectionRequests = new CopyOnWriteArrayList<>();
+        List<String> modelInputTexts = new CopyOnWriteArrayList<>();
         ChatModel model = new ChatModel() {
             @Override
             public ChatResponse call(Prompt prompt) {
-                prompts.add(prompt.getContents());
+                modelInputTexts.add(prompt.getContents());
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
             }
 
@@ -274,11 +278,11 @@ class CombinedInspectionIntegrationTest {
                 return Flux.defer(() -> Flux.just(call(prompt)));
             }
         };
-        ChatClient selected = ModelRequestBoundaryConfigurer.compose(
-                inspectionConfigurer(inspected), new PrivacyChatClientConfigurer(privacyService))
+        ChatClient protectedClient = ModelRequestBoundaryConfigurer.compose(
+                attackBlockingInspectionConfigurer(inspectionRequests), new PrivacyChatClientConfigurer(privacyService))
                 .configure(ChatClient.builder(model)).build();
-        ChatClient ordinary = ChatClient.builder(model).build();
-        for (ChatClient client : List.of(selected, ordinary)) {
+        ChatClient unprotectedClient = ChatClient.builder(model).build();
+        for (ChatClient client : List.of(protectedClient, unprotectedClient)) {
             ChatClient.ChatClientRequestSpec request = client.prompt().user("Alice");
             if (streaming) {
                 request.stream().content().collectList().block(Duration.ofSeconds(5));
@@ -286,8 +290,8 @@ class CombinedInspectionIntegrationTest {
                 request.call().content();
             }
         }
-        assertThat(inspected).hasSize(1);
-        assertThat(prompts.get(0)).doesNotContain("Alice");
-        assertThat(prompts.get(1)).isEqualTo("Alice");
+        assertThat(inspectionRequests).hasSize(1);
+        assertThat(modelInputTexts.get(0)).doesNotContain("Alice");
+        assertThat(modelInputTexts.get(1)).isEqualTo("Alice");
     }
 }

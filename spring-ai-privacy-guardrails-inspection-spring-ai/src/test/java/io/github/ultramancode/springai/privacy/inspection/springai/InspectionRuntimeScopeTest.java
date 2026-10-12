@@ -92,12 +92,12 @@ class InspectionRuntimeScopeTest {
         InspectionTextExtractor extractor = new InspectionTextExtractor(InspectionLimits.defaults(),
                 ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
         String json = "{\"attack\":\"safe\",\"dup\":\"at\\u0074ack\",\"dup\":42,\"n\":1e999999,\"b\":true,\"z\":null}";
-        extractor.message(new UserMessage(json));
-        extractor.message(ToolResponseMessage.builder().responses(List.of(
+        extractor.addMessage(new UserMessage(json));
+        extractor.addMessage(ToolResponseMessage.builder().responses(List.of(
                 new ToolResponseMessage.ToolResponse("attack", "attack", "[\"one\",{\"attack\":\"two\"}]"))).build());
-        extractor.message(new UserMessage("{malformed attack"));
-        extractor.message(new UserMessage("\"first\" \"attack\""));
-        assertThat(extractor.segments()).extracting(ContentSegment::text).containsExactly(
+        extractor.addMessage(new UserMessage("{malformed attack"));
+        extractor.addMessage(new UserMessage("\"first\" \"attack\""));
+        assertThat(extractor.buildSegments()).extracting(ContentSegment::text).containsExactly(
                 json, "[\"one\",{\"attack\":\"two\"}]", "{malformed attack", "\"first\" \"attack\"");
     }
 
@@ -122,11 +122,11 @@ class InspectionRuntimeScopeTest {
     void extractionBudgetsIncludeSerializedPayloadsAndEmptyFields() {
         InspectionLimits limits = new InspectionLimits(2, 20, Duration.ofSeconds(2));
         InspectionTextExtractor extractor = new InspectionTextExtractor(limits, ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
-        assertThatThrownBy(() -> extractor.message(new UserMessage("{\"" + "key".repeat(10) + "\":0}")))
+        assertThatThrownBy(() -> extractor.addMessage(new UserMessage("{\"" + "key".repeat(10) + "\":0}")))
                 .hasMessageContaining("LIMIT_EXCEEDED");
         InspectionTextExtractor empty = new InspectionTextExtractor(limits, ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
-        empty.message(AssistantMessage.builder().content("").properties(Map.of("thinking", "")).build());
-        assertThatThrownBy(() -> empty.message(new UserMessage(""))).hasMessageContaining("LIMIT_EXCEEDED");
+        empty.addMessage(AssistantMessage.builder().content("").properties(Map.of("thinking", "")).build());
+        assertThatThrownBy(() -> empty.addMessage(new UserMessage(""))).hasMessageContaining("LIMIT_EXCEEDED");
     }
 
     @ParameterizedTest

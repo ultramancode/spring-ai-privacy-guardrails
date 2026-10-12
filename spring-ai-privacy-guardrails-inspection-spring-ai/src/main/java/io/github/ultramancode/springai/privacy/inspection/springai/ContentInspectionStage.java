@@ -27,8 +27,8 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
             ContentSegment.PrivacyProcessingStatus status =
                     Objects.requireNonNull(resolver.resolve(request), "privacyProcessingStatus");
             InspectionTextExtractor extractor = new InspectionTextExtractor(limits, status, "segment-");
-            request.prompt().getInstructions().forEach(extractor::message);
-            return extractor.segments();
+            request.prompt().getInstructions().forEach(extractor::addMessage);
+            return extractor.buildSegments();
         });
     }
 }

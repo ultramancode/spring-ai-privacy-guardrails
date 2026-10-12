@@ -56,20 +56,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InspectionChatClientIntegrationTest {
 
-    private InspectionChatClientConfigurer configurer() {
-        InspectionRule rule = InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack");
+    private InspectionChatClientConfigurer attackBlockingInspectionConfigurer() {
+        InspectionRule rule = InspectionRule.literal("attack-rule", InspectionFinding.Category.PROMPT_INJECTION, "attack");
         ContentInspector inspector = new RuleBasedContentInspector("application-rules", List.of(rule));
         return new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)));
     }
 
-    private ChatClient client(RecordingModel model) {
-        return configurer().configure(ChatClient.builder(model)).build();
+    private ChatClient createInspectionClient(RecordingModel model) {
+        return attackBlockingInspectionConfigurer().configure(ChatClient.builder(model)).build();
     }
 
     static final class RecordingModel implements ChatModel {
         final AtomicInteger calls = new AtomicInteger();
         final AtomicReference<Prompt> receivedPrompt = new AtomicReference<>();
-        boolean toolCallingEnabled;
+        boolean lookupToolCallEnabled;
 
         @Override
         public ChatOptions getOptions() {
@@ -80,7 +80,7 @@ class InspectionChatClientIntegrationTest {
         public ChatResponse call(Prompt prompt) {
             receivedPrompt.set(prompt);
             calls.incrementAndGet();
-            if (toolCallingEnabled
+            if (lookupToolCallEnabled
                     && prompt.getInstructions().stream()
                             .noneMatch(ToolResponseMessage.class::isInstance)) {
                 AssistantMessage.ToolCall toolCall =
@@ -100,7 +100,7 @@ class InspectionChatClientIntegrationTest {
         }
     }
 
-    private ToolCallback tool(String response) {
+    private ToolCallback lookupToolReturning(String toolResult) {
         return new ToolCallback() {
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder()
@@ -111,15 +111,15 @@ class InspectionChatClientIntegrationTest {
             }
 
             public String call(String arguments) {
-                return response;
+                return toolResult;
             }
         };
     }
 
     @Test
-    void permitsBenignAndBlocksAttackBeforeBusinessCall() {
+    void allowsSafeInputAndBlocksAttackBeforeModelCall() {
         RecordingModel model = new RecordingModel();
-        ChatClient client = client(model);
+        ChatClient client = createInspectionClient(model);
         assertThat(client.prompt().user("hello").call().content()).isEqualTo("done");
         assertThatThrownBy(() -> client.prompt().user("attack").call().content())
                 .isInstanceOf(InspectionBlockedException.class);
@@ -127,29 +127,30 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void blocksStreamBeforeSubscribingToBusinessModel() {
+    void allowsSafeInputAndBlocksAttackBeforeModelCallWhenStreaming() {
         RecordingModel model = new RecordingModel();
-        Flux<String> publisher = client(model).prompt().user("attack").stream().content();
+        Flux<String> publisher = createInspectionClient(model).prompt().user("attack").stream().content();
         assertThat(model.calls).hasValue(0);
         StepVerifier.create(publisher)
                 .expectError(InspectionBlockedException.class)
                 .verify(Duration.ofSeconds(5));
         assertThat(model.calls).hasValue(0);
-        StepVerifier.create(client(model).prompt().user("hello").stream().content())
+        StepVerifier.create(createInspectionClient(model).prompt().user("hello").stream().content())
                 .expectNext("done")
-                .verifyComplete();
+                .expectComplete()
+                .verify(Duration.ofSeconds(5));
         assertThat(model.calls).hasValue(1);
     }
 
     @Test
-    void toolResultIsInspectedBeforeTheSecondModelCall() {
+    void blocksAttackToolResultBeforeSecondModelCall() {
         for (boolean streaming : List.of(false, true)) {
             RecordingModel model = new RecordingModel();
-            model.toolCallingEnabled = true;
+            model.lookupToolCallEnabled = true;
             ChatClient client =
-                    configurer()
+                    attackBlockingInspectionConfigurer()
                             .configure(ChatClient.builder(model))
-                            .defaultTools(tool("attack"))
+                            .defaultTools(lookupToolReturning("attack"))
                             .build();
             if (streaming) {
                 StepVerifier.create(client.prompt().user("lookup").stream().content())
@@ -164,13 +165,13 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void benignToolResultAllowsSecondModelCall() {
+    void allowsSafeToolResultBeforeSecondModelCall() {
         RecordingModel model = new RecordingModel();
-        model.toolCallingEnabled = true;
+        model.lookupToolCallEnabled = true;
         ChatClient client =
-                configurer()
+                attackBlockingInspectionConfigurer()
                         .configure(ChatClient.builder(model))
-                        .defaultTools(tool("benign result"))
+                        .defaultTools(lookupToolReturning("safe result"))
                         .build();
         assertThat(client.prompt().user("lookup").call().content()).isEqualTo("done");
         assertThat(model.calls).hasValue(2);
@@ -179,7 +180,7 @@ class InspectionChatClientIntegrationTest {
     @Test
     void blocksAttackInSystemMessageBeforeModelCall() {
         RecordingModel model = new RecordingModel();
-        ChatClient client = client(model);
+        ChatClient client = createInspectionClient(model);
         Prompt prompt = new Prompt(List.of(new SystemMessage("attack"), new UserMessage("hello")));
         assertThatThrownBy(() -> client.prompt(prompt).call().content())
                 .isInstanceOf(InspectionBlockedException.class);
@@ -252,7 +253,7 @@ class InspectionChatClientIntegrationTest {
         for (Map.Entry<String, Message> entry : unsupportedMessages.entrySet()) {
             String description = entry.getKey();
             RecordingModel model = new RecordingModel();
-            ChatClient.ChatClientRequestSpec request = client(model).prompt(new Prompt(List.of(entry.getValue())));
+            ChatClient.ChatClientRequestSpec request = createInspectionClient(model).prompt(new Prompt(List.of(entry.getValue())));
             if (streaming) {
                 StepVerifierOptions verifierOptions = StepVerifierOptions.create().scenarioName(description);
                 StepVerifier.create(request.stream().content(), verifierOptions)
@@ -296,7 +297,7 @@ class InspectionChatClientIntegrationTest {
                     }
                 };
         assertThatThrownBy(
-                        () -> client(model).prompt().user("hello").advisors(rag).call().content())
+                        () -> createInspectionClient(model).prompt().user("hello").advisors(rag).call().content())
                 .isInstanceOf(InspectionBlockedException.class);
         assertThat(model.calls).hasValue(0);
     }
@@ -304,7 +305,7 @@ class InspectionChatClientIntegrationTest {
     @Test
     void permitsApplicationOwnedFormattingWithoutInspectingIt() {
         RecordingModel model = new RecordingModel();
-        ChatClient client = client(model);
+        ChatClient client = createInspectionClient(model);
         String key = ChatClientAttributes.OUTPUT_FORMAT.getKey();
         assertThat(client.prompt().user("hello").advisors(a -> a.param(key, "attack"))
                 .call().content()).isEqualTo("done");
@@ -332,7 +333,7 @@ class InspectionChatClientIntegrationTest {
                     }
                 };
         assertThatThrownBy(
-                        () -> client(model).prompt().user("hello").advisors(late).call().content())
+                        () -> createInspectionClient(model).prompt().user("hello").advisors(late).call().content())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("terminal model advisor");
         assertThat(model.calls).hasValue(0);
@@ -359,8 +360,8 @@ class InspectionChatClientIntegrationTest {
                         return "wrapping-advisor";
                     }
                 };
-        InspectionChatClientConfigurer configurer = configurer();
-        ChatClient.Builder builder = configurer.configure(ChatClient.builder(model)).defaultAdvisors(wrappingAdvisor);
+        InspectionChatClientConfigurer inspectionConfigurer = attackBlockingInspectionConfigurer();
+        ChatClient.Builder builder = inspectionConfigurer.configure(ChatClient.builder(model)).defaultAdvisors(wrappingAdvisor);
         assertThat(builder.build().prompt().user("hello").call().content()).isEqualTo("done");
         assertThat(wrappedCalls).hasValue(1);
     }

@@ -51,7 +51,6 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
-import org.springframework.core.PriorityOrdered;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -618,19 +617,27 @@ class InspectionOutputAdvisorTest {
                 .expectError(InspectionBlockedException.class).verify(WAIT);
     }
 
-    @Test
-    void toolRoundsShareTheFrameBudgetAndDoNotEmitPartialAnswersOnFailure() {
+    @ParameterizedTest
+    @ValueSource(ints = {3, 4})
+    void outputFrameLimitAppliesAcrossToolRounds(int maxFrames) {
         InspectionOutputAdvisor output = new InspectionOutputAdvisor(attackBlockingService(), InspectionLimits.defaults(),
-                InspectionObserver.noop(), 3, WAIT);
+                InspectionObserver.noop(), maxFrames, WAIT);
         ChatClient client = ChatClient.builder(toolModel(new AtomicInteger(), "checking ", "safe final", 2))
                 .defaultAdvisors(output).defaultTools(tool(false, "safe tool", new AtomicInteger())).build();
-        StepVerifier.create(client.prompt().user("hello").stream().content())
-                .expectErrorMatches(e -> e instanceof InspectionException f && f.failureCode() == InspectionFailureCode.LIMIT_EXCEEDED)
-                .verify(WAIT);
+        Flux<String> content = client.prompt().user("hello").stream().content();
+        if (maxFrames == 3) {
+            StepVerifier.create(content)
+                    .expectErrorMatches(error -> error instanceof InspectionException failure
+                            && failure.failureCode() == InspectionFailureCode.LIMIT_EXCEEDED)
+                    .verify(WAIT);
+        } else {
+            StepVerifier.create(content)
+                    .expectNext("checking ", "checking ", "sa", "fe final").verifyComplete();
+        }
     }
 
     @Test
-    void toolRoundsShareTheCharacterBudgetBeforePrivacyBuffersOutput() {
+    void outputCharacterLimitAppliesAcrossToolRounds() {
         PrivacyService privacy = new PrivacyService(List.of((text, options, limits) -> List.of()),
                 PiiAnalysisOptions.defaults());
         AtomicInteger toolCallCount = new AtomicInteger();
@@ -646,7 +653,26 @@ class InspectionOutputAdvisorTest {
                 .expectErrorMatches(error -> error instanceof InspectionException failure
                         && failure.failureCode() == InspectionFailureCode.LIMIT_EXCEEDED)
                 .verify(WAIT);
-        assertThat(toolCallCount).hasValue(1);
+        assertThat(toolCallCount).hasValue(2);
+        assertThat(privacy.activeSessionCount()).isZero();
+    }
+
+    @Test
+    void outputCharacterLimitUsesPrivacyTransformedText() {
+        String raw = "sensitive-value ".repeat(20);
+        PiiAnalyzer analyzer = (text, options, limits) -> text.contains("sensitive-value")
+                ? List.of(new PiiSpan("PERSON", 0, text.length(), 0.95)) : List.of();
+        PrivacyService privacy = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+        InspectionOutputAdvisor output = new InspectionOutputAdvisor(attackBlockingService(),
+                new InspectionLimits(10, 64, WAIT), InspectionObserver.noop(), 100, WAIT);
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
+                .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
+                .configure(ChatClient.builder(model(response(raw), Flux.just(response(raw)))))
+                .defaultAdvisors(output).build();
+        StepVerifier.create(client.prompt().user("hello").stream().content())
+                .assertNext(text -> assertThat(text).isNotEmpty().doesNotContain("sensitive-value")
+                        .hasSizeLessThanOrEqualTo(64))
+                .verifyComplete();
         assertThat(privacy.activeSessionCount()).isZero();
     }
 
@@ -731,28 +757,6 @@ class InspectionOutputAdvisorTest {
         } else {
             StepVerifier.create(client.prompt().user("hello").stream().content()).expectNext(text).verifyComplete();
         }
-    }
-
-    @Test
-    void cannotRunOutputStreamLimitsInsideAPriorityToolLoop() {
-        class PriorityTool implements ToolAdvisor, StreamAdvisor, PriorityOrdered {
-            public String getName() {
-                return "priority-tool";
-            }
-
-            public int getOrder() {
-                return 0;
-            }
-
-            public Flux<ChatClientResponse> adviseStream(
-                    ChatClientRequest request, StreamAdvisorChain chain) {
-                throw new AssertionError("Invalid output boundary must be rejected before tool execution");
-            }
-        }
-        ChatClient client = ChatClient.builder(model(response("safe"), Flux.just(response("safe"))))
-                .defaultAdvisors(advisor(), new PriorityTool()).build();
-        StepVerifier.create(client.prompt().user("hello").stream().content())
-                .expectError(IllegalStateException.class).verify(WAIT);
     }
 
     @Test

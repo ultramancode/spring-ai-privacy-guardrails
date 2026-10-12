@@ -23,7 +23,7 @@ final class InspectionOutputBuffer {
     private final int maxFrames;
     private final List<ChatClientResponse> frames = new ArrayList<>();
     private final Map<String, OutputText> payloads = new LinkedHashMap<>();
-    private Boolean usesChoiceIndices;
+    private Boolean usesChoiceIndexes;
     private Integer positionalChoiceCount;
     private int characters;
 
@@ -39,22 +39,22 @@ final class InspectionOutputBuffer {
         }
         if (response.chatResponse() != null) {
             List<Generation> generations = response.chatResponse().getResults();
-            Set<String> frameChoiceKeys = new HashSet<>();
+            Set<String> frameOutputGroupKeys = new HashSet<>();
             for (int position = 0; position < generations.size(); position++) {
                 Generation generation = generations.get(position);
                 AssistantMessage message = generation.getOutput();
                 InspectionTextExtractor.requireSupportedAssistant(message);
-                String choiceKey;
+                String outputGroupKey;
                 if (OutputResponseContext.isCompleteToolResponse(generation)) {
-                    choiceKey = "tool-response/" + frames.size() + "/" + position;
+                    outputGroupKey = "tool-response/" + frames.size() + "/" + position;
                 } else {
-                    choiceKey = choiceKey(generation, position, generations.size());
+                    outputGroupKey = choiceKey(generation, position, generations.size());
                 }
-                if (!frameChoiceKeys.add(choiceKey)) {
+                if (!frameOutputGroupKeys.add(outputGroupKey)) {
                     throw InspectionTextExtractor.unsupported();
                 }
                 String channel = OutputResponseContext.isThought(message) ? "/thought" : "/answer";
-                append(choiceKey + channel, message.getText(), OutputResponseContext.isPrivacyProcessed(response));
+                append(outputGroupKey + channel, message.getText(), OutputResponseContext.isPrivacyProcessed(response));
             }
         }
         frames.add(response);
@@ -66,14 +66,14 @@ final class InspectionOutputBuffer {
         if (generationIndex != null && messageIndex != null && !generationIndex.equals(messageIndex)) {
             throw InspectionTextExtractor.unsupported();
         }
-        String explicitIndex = generationIndex != null ? generationIndex : messageIndex;
-        boolean hasIndex = explicitIndex != null;
-        if (usesChoiceIndices != null && usesChoiceIndices != hasIndex) {
+        String choiceIndex = generationIndex != null ? generationIndex : messageIndex;
+        boolean hasIndex = choiceIndex != null;
+        if (usesChoiceIndexes != null && usesChoiceIndexes != hasIndex) {
             throw InspectionTextExtractor.unsupported();
         }
-        usesChoiceIndices = hasIndex;
+        usesChoiceIndexes = hasIndex;
         if (hasIndex) {
-            return "index/" + explicitIndex;
+            return "index/" + choiceIndex;
         }
         if (positionalChoiceCount != null && positionalChoiceCount != choiceCount) {
             throw InspectionTextExtractor.unsupported();
@@ -92,22 +92,23 @@ final class InspectionOutputBuffer {
         throw InspectionTextExtractor.unsupported();
     }
 
-    private void append(String key, String text, boolean processed) {
+    private void append(String key, String text, boolean privacyProcessed) {
         InspectionRequest.checkInterrupted();
         String value = text == null ? "" : text;
         if (value.length() > limits.maxCharacters() - characters) {
             throw limit();
         }
+        // Only new keys add inspection segments.
         if (!payloads.containsKey(key) && payloads.size() >= limits.maxSegments()) {
             throw limit();
         }
         characters += value.length();
         OutputText output = payloads.computeIfAbsent(key, ignored -> new OutputText());
         output.text.append(value);
-        // Privacy emits each complete protected choice/channel in its terminal frame.
-        // Cleared or empty frames add no text. Concatenating other content invalidates completion.
-        if (processed && (output.processedText == null || !value.isEmpty())) {
-            output.processedText = value;
+        // Keep the complete text from Privacy processing to compare with the accumulated text.
+        // Later empty frames must not overwrite it.
+        if (privacyProcessed && (output.privacyProcessedText == null || !value.isEmpty())) {
+            output.privacyProcessedText = value;
         }
     }
 
@@ -117,16 +118,17 @@ final class InspectionOutputBuffer {
         ContentSegment.PrivacyProcessingStatus emptyStatus = allFramesProcessed
                 ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         InspectionTextExtractor extractor = new InspectionTextExtractor(limits, emptyStatus, "output-");
+        // LinkedHashMap preserves the order in which output groups first appear.
         for (OutputText output : payloads.values()) {
             String text = output.text.toString();
-            ContentSegment.PrivacyProcessingStatus status = text.equals(output.processedText)
+            ContentSegment.PrivacyProcessingStatus privacyStatus = text.equals(output.privacyProcessedText)
                     ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
-            extractor.outputPayload(text, status);
+            extractor.outputPayload(text, privacyStatus);
         }
         return extractor.segments();
     }
 
-    List<ChatClientResponse> frames() {
+    List<ChatClientResponse> framesWithoutPrivacyTracking() {
         return frames.stream().map(OutputResponseContext::clearPrivacyTracking).toList();
     }
 
@@ -136,6 +138,6 @@ final class InspectionOutputBuffer {
 
     private static final class OutputText {
         private final StringBuilder text = new StringBuilder();
-        private String processedText;
+        private String privacyProcessedText;
     }
 }

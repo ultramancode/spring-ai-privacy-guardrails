@@ -353,11 +353,11 @@ The following properties use the `spring.ai.inspection` prefix:
 | `max-segments` | 64 | Extracted text segments, including empty bodies |
 | `max-characters` | 131072 | Maximum combined text length per inspection |
 | `timeout` | 10s | Time available to all inspectors in one request, including policy evaluation |
-| `output.max-frames` | 4096 | Frames across a streamed tool loop, including empty frames |
+| `output.max-frames` | 4096 | Maximum response frames collected for output inspection, including empty frames |
 | `output.stream-timeout` | 60s | Total stream assembly time, including model calls and tool execution |
 
 Input limits apply separately to each model call. Output limits apply to the complete
-output, including intermediate tool-loop text.
+response collected for the application, including intermediate text returned during the tool loop.
 These settings are independent of `spring.ai.privacy.processing` and
 `spring.ai.privacy.response-inspection`. Direct API callers supply `InspectionLimits`.
 

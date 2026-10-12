@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: b7b0ce87ff9096a0a5da0c6295d8e9698aa399d42afaeb97f7e769d001fec8e9 -->
+<!-- i18n-source-sha256: 57bbfd2ba8ee098dd4f18f8e76861a690c12325e0f228f75b4e630b5eda34413 -->
 
 콘텐츠 검사는 규칙이나 검사 모델을 사용해 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -352,11 +352,11 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 | `max-segments` | 64 | 빈 본문을 포함한 최대 텍스트 구간 수 |
 | `max-characters` | 131072 | 한 번의 검사에서 처리하는 텍스트의 최대 합산 길이 |
 | `timeout` | 10s | 정책 평가를 포함해 한 요청의 모든 검사기가 함께 사용하는 제한 시간 |
-| `output.max-frames` | 4096 | 빈 프레임을 포함한 스트리밍 도구 루프 전체의 프레임 수 |
+| `output.max-frames` | 4096 | 출력 검사에서 수집하는 최대 응답 프레임 수. 빈 프레임 포함 |
 | `output.stream-timeout` | 60s | 모델 호출과 도구 실행을 포함한 전체 스트림 수집 시간 |
 
-입력 한도는 매 모델 호출에 각각 적용합니다. 출력 한도는 도구 루프의 중간 텍스트를 포함한
-전체 출력에 적용합니다.
+입력 한도는 매 모델 호출에 각각 적용합니다. 출력 한도는 도구 루프에서 반환된 중간 텍스트를
+포함해 애플리케이션에 전달할 전체 응답에 적용합니다.
 `spring.ai.privacy.processing`, `spring.ai.privacy.response-inspection` 설정과는
 독립적입니다. 직접 API를 사용할 때는 `InspectionLimits`를 전달합니다.
 

@@ -42,7 +42,7 @@ public class InspectionProperties {
     public static class Output {
         /** Enables inspection of application output, including returnDirect tool results. Disabled by default. */
         private boolean enabled;
-        /** Maximum buffered frames and model frames across a streamed tool loop, including empty frames. */
+        /** Maximum response frames collected for output inspection, including empty frames. */
         private int maxFrames = InspectionOutputAdvisor.DEFAULT_MAX_FRAMES;
         /** Maximum total stream assembly duration, including model rounds and tool execution. */
         private Duration streamTimeout = InspectionOutputAdvisor.DEFAULT_STREAM_TIMEOUT;

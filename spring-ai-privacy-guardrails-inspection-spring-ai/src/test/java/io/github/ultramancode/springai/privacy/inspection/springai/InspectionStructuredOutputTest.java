@@ -47,15 +47,15 @@ class InspectionStructuredOutputTest {
                 .id("fixture").model("fixture").created(0).choices(List.of(choice)).build();
         OpenAIClient openAiClient = mock(OpenAIClient.class);
         ChatService chatService = mock(ChatService.class);
-        ChatCompletionService completions = mock(ChatCompletionService.class);
+        ChatCompletionService chatCompletionService = mock(ChatCompletionService.class);
         when(openAiClient.chat()).thenReturn(chatService);
-        when(chatService.completions()).thenReturn(completions);
+        when(chatService.completions()).thenReturn(chatCompletionService);
         // Spring AI 2.0.0 uses the overload that supplies default request options.
-        when(completions.create(any(ChatCompletionCreateParams.class))).thenCallRealMethod();
-        AtomicReference<ChatCompletionCreateParams> capturedRequest = new AtomicReference<>();
-        when(completions.create(any(ChatCompletionCreateParams.class), any(RequestOptions.class)))
+        when(chatCompletionService.create(any(ChatCompletionCreateParams.class))).thenCallRealMethod();
+        AtomicReference<ChatCompletionCreateParams> capturedOpenAiRequest = new AtomicReference<>();
+        when(chatCompletionService.create(any(ChatCompletionCreateParams.class), any(RequestOptions.class)))
                 .thenAnswer(invocation -> {
-                    capturedRequest.set(invocation.getArgument(0));
+                    capturedOpenAiRequest.set(invocation.getArgument(0));
                     return completion;
                 });
         OpenAiChatModel model = OpenAiChatModel.builder()
@@ -65,43 +65,43 @@ class InspectionStructuredOutputTest {
                 .withOutputInspection(new InspectionOutputAdvisor(attackBlockingService()))
                 .configure(ChatClient.builder(model)).build();
         assertThat(client.prompt().user("hello").call().entity(Answer.class)).isEqualTo(new Answer(true));
-        assertThat(capturedRequest.get().messages()).singleElement().satisfies(userMessage ->
+        assertThat(capturedOpenAiRequest.get().messages()).singleElement().satisfies(userMessage ->
                 assertThat(userMessage.asUser().content().asText()).contains("\"ok\""));
         assertThat(client.prompt().user("hello").call().entity(Answer.class, p -> p.useProviderStructuredOutput()))
                 .isEqualTo(new Answer(true));
-        ResponseFormatJsonSchema.JsonSchema.Schema generatedSchema = capturedRequest.get().responseFormat()
+        ResponseFormatJsonSchema.JsonSchema.Schema generatedSchema = capturedOpenAiRequest.get().responseFormat()
                 .orElseThrow().asJsonSchema().jsonSchema().schema().orElseThrow();
         JsonField<?> generatedProperties = generatedSchema._additionalProperties().get("properties");
         assertThat(generatedProperties.asObject().orElseThrow()).containsKey("ok");
-        String schema = "{\"type\":\"object\",\"description\":\"attack\",\"properties\":{\"ok\":{\"type\":\"boolean\"}}}";
-        assertThat(client.prompt().user("hello").options(OpenAiChatOptions.builder().outputSchema(schema))
+        String schemaJson = "{\"type\":\"object\",\"description\":\"attack\",\"properties\":{\"ok\":{\"type\":\"boolean\"}}}";
+        assertThat(client.prompt().user("hello").options(OpenAiChatOptions.builder().outputSchema(schemaJson))
                 .call().content()).isEqualTo("{\"ok\":true}");
-        ResponseFormatJsonSchema.JsonSchema.Schema customSchema = capturedRequest.get().responseFormat()
+        ResponseFormatJsonSchema.JsonSchema.Schema customSchema = capturedOpenAiRequest.get().responseFormat()
                 .orElseThrow().asJsonSchema().jsonSchema().schema().orElseThrow();
         assertThat(customSchema._additionalProperties()).containsEntry("description", JsonValue.from("attack"));
         client.prompt().user("hello").advisors(a -> a.param(ChatClientAttributes.OUTPUT_FORMAT.getKey(), "attack"))
                 .call().content();
-        assertThat(capturedRequest.get().messages()).singleElement().satisfies(userMessage ->
+        assertThat(capturedOpenAiRequest.get().messages()).singleElement().satisfies(userMessage ->
                 assertThat(userMessage.asUser().content().asText()).contains("attack"));
 
-        ToolCallback tool = new ToolCallback() {
+        ToolCallback lookupToolCallback = new ToolCallback() {
             public ToolDefinition getToolDefinition() {
-                return ToolDefinition.builder().name("lookup").description("attack").inputSchema(schema).build();
+                return ToolDefinition.builder().name("lookup").description("attack").inputSchema(schemaJson).build();
             }
 
             public String call(String arguments) {
                 throw new AssertionError("No tool execution expected");
             }
         };
-        ToolCallbackProvider provider = () -> new ToolCallback[] {tool};
-        client.prompt().user("hello").tools(provider).call().content();
-        assertThat(capturedRequest.get().tools().orElseThrow()).singleElement().satisfies(requestTool -> {
+        ToolCallbackProvider toolCallbackProvider = () -> new ToolCallback[] {lookupToolCallback};
+        client.prompt().user("hello").tools(toolCallbackProvider).call().content();
+        assertThat(capturedOpenAiRequest.get().tools().orElseThrow()).singleElement().satisfies(requestTool -> {
             FunctionDefinition function = requestTool.asFunction().function();
             assertThat(function.name()).isEqualTo("lookup");
             assertThat(function.description()).contains("attack");
             assertThat(function.parameters().orElseThrow()._additionalProperties())
                     .containsEntry("description", JsonValue.from("attack"));
         });
-        verify(completions, times(5)).create(any(ChatCompletionCreateParams.class), any(RequestOptions.class));
+        verify(chatCompletionService, times(5)).create(any(ChatCompletionCreateParams.class), any(RequestOptions.class));
     }
 }

@@ -70,7 +70,7 @@ class InspectionChatClientIntegrationTest {
     }
 
     static final class RecordingModel implements ChatModel {
-        final AtomicInteger calls = new AtomicInteger();
+        final AtomicInteger modelCallCount = new AtomicInteger();
         final AtomicReference<Prompt> receivedPrompt = new AtomicReference<>();
         boolean lookupToolCallEnabled;
 
@@ -82,7 +82,7 @@ class InspectionChatClientIntegrationTest {
         @Override
         public ChatResponse call(Prompt prompt) {
             receivedPrompt.set(prompt);
-            calls.incrementAndGet();
+            modelCallCount.incrementAndGet();
             if (lookupToolCallEnabled
                     && prompt.getInstructions().stream()
                             .noneMatch(ToolResponseMessage.class::isInstance)) {
@@ -126,23 +126,23 @@ class InspectionChatClientIntegrationTest {
         assertThat(client.prompt().user("hello").call().content()).isEqualTo("done");
         assertThatThrownBy(() -> client.prompt().user("attack").call().content())
                 .isInstanceOf(InspectionBlockedException.class);
-        assertThat(model.calls).hasValue(1);
+        assertThat(model.modelCallCount).hasValue(1);
     }
 
     @Test
     void allowsSafeInputAndBlocksAttackBeforeModelCallWhenStreaming() {
         RecordingModel model = new RecordingModel();
         Flux<String> publisher = createInspectionClient(model).prompt().user("attack").stream().content();
-        assertThat(model.calls).hasValue(0);
+        assertThat(model.modelCallCount).hasValue(0);
         StepVerifier.create(publisher)
                 .expectError(InspectionBlockedException.class)
                 .verify(Duration.ofSeconds(5));
-        assertThat(model.calls).hasValue(0);
+        assertThat(model.modelCallCount).hasValue(0);
         StepVerifier.create(createInspectionClient(model).prompt().user("hello").stream().content())
                 .expectNext("done")
                 .expectComplete()
                 .verify(Duration.ofSeconds(5));
-        assertThat(model.calls).hasValue(1);
+        assertThat(model.modelCallCount).hasValue(1);
     }
 
     @Test
@@ -163,7 +163,7 @@ class InspectionChatClientIntegrationTest {
                 assertThatThrownBy(() -> client.prompt().user("lookup").call().content())
                         .isInstanceOf(InspectionBlockedException.class);
             }
-            assertThat(model.calls).hasValue(1);
+            assertThat(model.modelCallCount).hasValue(1);
         }
     }
 
@@ -177,7 +177,7 @@ class InspectionChatClientIntegrationTest {
                         .defaultTools(lookupToolReturning("safe result"))
                         .build();
         assertThat(client.prompt().user("lookup").call().content()).isEqualTo("done");
-        assertThat(model.calls).hasValue(2);
+        assertThat(model.modelCallCount).hasValue(2);
     }
 
     @Test
@@ -187,13 +187,13 @@ class InspectionChatClientIntegrationTest {
         Prompt prompt = new Prompt(List.of(new SystemMessage("attack"), new UserMessage("hello")));
         assertThatThrownBy(() -> client.prompt(prompt).call().content())
                 .isInstanceOf(InspectionBlockedException.class);
-        assertThat(model.calls).hasValue(0);
+        assertThat(model.modelCallCount).hasValue(0);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void preservesMessageOrderAndSeparatesEachToolResponseWithoutGroupingByRole(boolean streaming) {
-        AtomicReference<InspectionRequest> recordedRequest = new AtomicReference<>();
+    void preservesMessageOrderAndSeparateToolResponseSegments(boolean streaming) {
+        AtomicReference<InspectionRequest> recordedInspectionRequest = new AtomicReference<>();
         ContentInspector inspector = new ContentInspector() {
             @Override
             public String inspectorId() {
@@ -205,7 +205,7 @@ class InspectionChatClientIntegrationTest {
             }
 
             public InspectionResult inspect(InspectionRequest request) {
-                recordedRequest.set(request);
+                recordedInspectionRequest.set(request);
                 return InspectionResult.completed(
                         request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()),
                         List.of());
@@ -233,17 +233,17 @@ class InspectionChatClientIntegrationTest {
             assertThat(client.prompt(prompt).call().content()).isEqualTo("done");
         }
 
-        List<ContentSegment> segments = recordedRequest.get().segments();
-        assertThat(segments).extracting(ContentSegment::role).containsExactly(
+        List<ContentSegment> inspectedInputSegments = recordedInspectionRequest.get().segments();
+        assertThat(inspectedInputSegments).extracting(ContentSegment::role).containsExactly(
                 ContentSegment.Role.SYSTEM, ContentSegment.Role.USER, ContentSegment.Role.ASSISTANT,
                 ContentSegment.Role.USER, ContentSegment.Role.TOOL, ContentSegment.Role.TOOL);
-        assertThat(segments).extracting(ContentSegment::text).containsExactly(
+        assertThat(inspectedInputSegments).extracting(ContentSegment::text).containsExactly(
                 "instructions", "first user text", "assistant text", "second user text",
                 "first tool result", "second tool result");
-        assertThat(segments).extracting(ContentSegment::id).doesNotHaveDuplicates();
-        assertThat(segments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
+        assertThat(inspectedInputSegments).extracting(ContentSegment::id).doesNotHaveDuplicates();
+        assertThat(inspectedInputSegments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.UNKNOWN));
-        assertThat(model.calls).hasValue(1);
+        assertThat(model.modelCallCount).hasValue(1);
     }
 
     @ParameterizedTest
@@ -271,7 +271,7 @@ class InspectionChatClientIntegrationTest {
                         .isInstanceOfSatisfying(InspectionException.class, failure ->
                                 assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.UNSUPPORTED_CONTENT));
             }
-            assertThat(model.calls).as(description).hasValue(0);
+            assertThat(model.modelCallCount).as(description).hasValue(0);
         }
     }
 
@@ -298,7 +298,7 @@ class InspectionChatClientIntegrationTest {
         ChatClient client = createInspectionClient(model);
         assertThatThrownBy(() -> client.prompt().user("hello").advisors(retrievalAdvisor).call().content())
                 .isInstanceOf(InspectionBlockedException.class);
-        assertThat(model.calls).hasValue(0);
+        assertThat(model.modelCallCount).hasValue(0);
     }
 
     @Test
@@ -310,20 +310,20 @@ class InspectionChatClientIntegrationTest {
                 .call().content()).isEqualTo("done");
         StepVerifier.create(client.prompt().user("hello").advisors(a -> a.param(key, "attack"))
                 .stream().content()).expectNext("done").verifyComplete();
-        assertThat(model.calls).hasValue(2);
+        assertThat(model.modelCallCount).hasValue(2);
     }
 
     @Test
     void rejectsRequestAdvisorAfterModelAdvisorBeforeModelCall() {
         RecordingModel model = new RecordingModel();
-        CallAdvisor lateAdvisor = new CallAdvisor() {
+        CallAdvisor lateRequestAdvisor = new CallAdvisor() {
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
                 return chain.nextCall(request);
             }
 
             public int getOrder() {
                 // ChatModelCallAdvisor also uses Integer.MAX_VALUE.
-                // In this test, Spring AI's default chain places lateAdvisor after ChatModelCallAdvisor.
+                // In this test, Spring AI's default chain places lateRequestAdvisor after ChatModelCallAdvisor.
                 return Integer.MAX_VALUE;
             }
 
@@ -331,20 +331,20 @@ class InspectionChatClientIntegrationTest {
                 return "late";
             }
         };
-        assertThatThrownBy(() -> createInspectionClient(model).prompt().user("hello").advisors(lateAdvisor).call().content())
+        assertThatThrownBy(() -> createInspectionClient(model).prompt().user("hello").advisors(lateRequestAdvisor).call().content())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("that advisor must be last");
-        assertThat(model.calls).hasValue(0);
+        assertThat(model.modelCallCount).hasValue(0);
     }
 
     @Test
     void allowsEarlierAdvisorToWrapInspectedCall() {
         RecordingModel model = new RecordingModel();
-        AtomicInteger wrappedCalls = new AtomicInteger();
+        AtomicInteger wrappedCallCount = new AtomicInteger();
         CallAdvisor wrappingAdvisor = new CallAdvisor() {
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
                 ChatClientResponse result = chain.nextCall(request);
-                wrappedCalls.incrementAndGet();
+                wrappedCallCount.incrementAndGet();
                 return result;
             }
 
@@ -359,7 +359,7 @@ class InspectionChatClientIntegrationTest {
         InspectionChatClientConfigurer inspectionConfigurer = attackBlockingInspectionConfigurer();
         ChatClient.Builder builder = inspectionConfigurer.configure(ChatClient.builder(model)).defaultAdvisors(wrappingAdvisor);
         assertThat(builder.build().prompt().user("hello").call().content()).isEqualTo("done");
-        assertThat(wrappedCalls).hasValue(1);
+        assertThat(wrappedCallCount).hasValue(1);
     }
 
     @Test
@@ -407,16 +407,16 @@ class InspectionChatClientIntegrationTest {
                 inspectionService, InspectionLimits.defaults(),
                 PrivacyProcessingStatusResolver.unknown(), inspectionObserver);
         ChatClient client = inspectionConfigurer.configure(ChatClient.builder(model)).build();
-        Disposable subscription = client.prompt().user("hello").stream().content().subscribe();
+        Disposable streamSubscription = client.prompt().user("hello").stream().content().subscribe();
         try {
             assertThat(inspectionStarted.await(5, TimeUnit.SECONDS)).isTrue();
-            subscription.dispose();
+            streamSubscription.dispose();
             assertThat(inspectionInterrupted.await(5, TimeUnit.SECONDS)).isTrue();
-            InspectionException cancellation = inspectionFailure.get(5, TimeUnit.SECONDS);
-            assertThat(cancellation.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
-            assertThat(model.calls).hasValue(0);
+            InspectionException cancellationException = inspectionFailure.get(5, TimeUnit.SECONDS);
+            assertThat(cancellationException.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+            assertThat(model.modelCallCount).hasValue(0);
         } finally {
-            subscription.dispose();
+            streamSubscription.dispose();
         }
     }
 }

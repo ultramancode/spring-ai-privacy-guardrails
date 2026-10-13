@@ -48,11 +48,11 @@ class HttpInspectionIntegrationTest {
         server.createContext("/v1/chat/completions", exchange -> {
             try {
                 inspectionRequestBodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-                String json = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\""
+                String inspectionResponseJson = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\""
                         + inspectionVerdict.get() + "\"}}]}";
-                byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-                exchange.sendResponseHeaders(200, bytes.length);
-                exchange.getResponseBody().write(bytes);
+                byte[] inspectionResponseBytes = inspectionResponseJson.getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, inspectionResponseBytes.length);
+                exchange.getResponseBody().write(inspectionResponseBytes);
             } finally {
                 exchange.close();
             }
@@ -72,10 +72,10 @@ class HttpInspectionIntegrationTest {
                     request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
                             ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
                     InspectionObserver.noop());
-            AtomicInteger modelCalls = new AtomicInteger();
+            AtomicInteger modelCallCount = new AtomicInteger();
             ChatModel model = new ChatModel() {
                 public ChatResponse call(Prompt prompt) {
-                    modelCalls.incrementAndGet();
+                    modelCallCount.incrementAndGet();
                     assertThat(prompt.getContents()).doesNotContain("Alice");
                     String lastInspectionRequestBody =
                             inspectionRequestBodies.get(inspectionRequestBodies.size() - 1);
@@ -99,10 +99,10 @@ class HttpInspectionIntegrationTest {
                 }
             };
             invokeChatClient.run();
-            assertThat(modelCalls).hasValue(1);
+            assertThat(modelCallCount).hasValue(1);
             inspectionVerdict.set("<UNSAFE-A1>");
             assertThatThrownBy(invokeChatClient::run).isInstanceOf(InspectionBlockedException.class);
-            assertThat(modelCalls).hasValue(1);
+            assertThat(modelCallCount).hasValue(1);
             assertThat(inspectionRequestBodies).hasSize(2).allSatisfy(body -> {
                 String inspectedText = jsonMapper.readTree(body).path("messages").get(0).path("content").asString();
                 assertThat(inspectedText).doesNotContain("Alice");

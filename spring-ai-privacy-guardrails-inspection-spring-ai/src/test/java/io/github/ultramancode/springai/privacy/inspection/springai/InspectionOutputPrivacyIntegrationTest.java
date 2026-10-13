@@ -64,24 +64,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InspectionOutputPrivacyIntegrationTest {
     private static final Duration WAIT = Duration.ofSeconds(5);
-    private final List<String> sentTexts = new CopyOnWriteArrayList<>();
-    private final List<ContentSegment> inspected = new CopyOnWriteArrayList<>();
-    private final AtomicInteger inspectionCalls = new AtomicInteger();
+    private final List<String> httpInspectionTexts = new CopyOnWriteArrayList<>();
+    private final List<ContentSegment> inspectedOutputSegments = new CopyOnWriteArrayList<>();
+    private final AtomicInteger inspectionCount = new AtomicInteger();
     private HttpServer server;
-    private InspectionOutputAdvisor output;
+    private InspectionOutputAdvisor inspectionOutputAdvisor;
 
     @BeforeEach
     void startHttpInspector() throws Exception {
-        JsonMapper json = JsonMapper.builder().build();
+        JsonMapper jsonMapper = JsonMapper.builder().build();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             try {
-                sentTexts.add(json.readTree(exchange.getRequestBody().readAllBytes())
+                httpInspectionTexts.add(jsonMapper.readTree(exchange.getRequestBody().readAllBytes())
                         .path("messages").get(0).path("content").asString());
-                byte[] bytes = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"<SAFE>\"}}]}"
+                byte[] inspectionResponseBytes = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"<SAFE>\"}}]}"
                         .getBytes(StandardCharsets.UTF_8);
-                exchange.sendResponseHeaders(200, bytes.length);
-                exchange.getResponseBody().write(bytes);
+                exchange.sendResponseHeaders(200, inspectionResponseBytes.length);
+                exchange.getResponseBody().write(inspectionResponseBytes);
             } finally {
                 exchange.close();
             }
@@ -101,13 +101,13 @@ class InspectionOutputPrivacyIntegrationTest {
             }
 
             public InspectionResult inspect(InspectionRequest request) {
-                inspectionCalls.incrementAndGet();
-                inspected.addAll(request.segments());
+                inspectionCount.incrementAndGet();
+                inspectedOutputSegments.addAll(request.segments());
                 return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
                         .collect(Collectors.toSet()), List.of());
             }
         };
-        output = new InspectionOutputAdvisor(new InspectionService(List.of(recordingInspector, httpInspector)));
+        inspectionOutputAdvisor = new InspectionOutputAdvisor(new InspectionService(List.of(recordingInspector, httpInspector)));
     }
 
     @AfterEach
@@ -117,109 +117,109 @@ class InspectionOutputPrivacyIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({"false,TOKENIZE", "true,TOKENIZE", "false,REDACT", "true,REDACT", "false,BLOCK", "true,BLOCK"})
-    void completedOutputReachesHttpWhetherOrNotItsTextChanges(boolean streaming, PrivacyOutputAction action) {
-        for (boolean structured : List.of(false, true)) {
+    void httpInspectionReceivesPrivacyProcessedOutput(boolean streaming, PrivacyOutputAction action) {
+        for (boolean jsonOutput : List.of(false, true)) {
             for (String value : List.of("clear", "Alice")) {
                 if (action == PrivacyOutputAction.BLOCK && value.equals("Alice")) {
                     continue;
                 }
-                inspected.clear();
-                sentTexts.clear();
-                PrivacyService privacy = privacyService(new CopyOnWriteArrayList<>());
-                String raw = structured ? "{\"attack\":\"" + value + "\",\"n\":123,\"tail\":\"done\"}" : value;
-                ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
+                inspectedOutputSegments.clear();
+                httpInspectionTexts.clear();
+                PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+                String rawOutputText = jsonOutput ? "{\"attack\":\"" + value + "\",\"n\":123,\"tail\":\"done\"}" : value;
+                ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                         .outputProtection(action, "blocked").build()
-                        .configure(ChatClient.builder(model(raw))).defaultAdvisors(output).build();
-                String delivered = invoke(client, streaming);
-                assertThat(delivered).doesNotContain("Alice");
+                        .configure(ChatClient.builder(model(rawOutputText))).defaultAdvisors(inspectionOutputAdvisor).build();
+                String deliveredOutputText = invoke(client, streaming);
+                assertThat(deliveredOutputText).doesNotContain("Alice");
                 if (value.equals("clear")) {
-                    assertThat(delivered).isEqualTo(raw);
+                    assertThat(deliveredOutputText).isEqualTo(rawOutputText);
                 }
-                assertThat(sentTexts).containsExactly(delivered);
-                assertThat(inspected).extracting(ContentSegment::text).containsExactlyElementsOf(sentTexts);
-                assertThat(inspected).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
+                assertThat(httpInspectionTexts).containsExactly(deliveredOutputText);
+                assertThat(inspectedOutputSegments).extracting(ContentSegment::text).containsExactlyElementsOf(httpInspectionTexts);
+                assertThat(inspectedOutputSegments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                         .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
-                assertThat(privacy.activeSessionCount()).isZero();
+                assertThat(privacyService.activeSessionCount()).isZero();
             }
         }
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void absentOrInputOnlyPrivacyCannotAuthorizeOutputDisclosure(boolean streaming) {
-        for (boolean inputPrivacy : List.of(false, true)) {
-            PrivacyService privacy = privacyService(new CopyOnWriteArrayList<>());
+    void httpInspectionRejectsOutputWithoutPrivacyProcessing(boolean streaming) {
+        for (boolean inputPrivacyEnabled : List.of(false, true)) {
+            PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
             ChatClient.Builder builder = ChatClient.builder(model("Alice"));
-            if (inputPrivacy) {
-                new PrivacyChatClientConfigurer(privacy).configure(builder);
+            if (inputPrivacyEnabled) {
+                new PrivacyChatClientConfigurer(privacyService).configure(builder);
             }
-            ChatClient client = builder.defaultAdvisors(output).build();
-            assertDisclosureDenied(client, streaming);
-            assertThat(privacy.activeSessionCount()).isZero();
+            ChatClient client = builder.defaultAdvisors(inspectionOutputAdvisor).build();
+            assertPrivacyProcessingRequired(client, streaming);
+            assertThat(privacyService.activeSessionCount()).isZero();
         }
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"isThought", "thinking"})
     void thoughtAndAnswerAreSeparateCompletedTextUnits(String thoughtMarker) {
-        List<String> analyzed = new CopyOnWriteArrayList<>();
-        PrivacyService privacy = privacyService(analyzed);
-        ChatResponse thought = new ChatResponse(List.of(new Generation(AssistantMessage.builder()
+        List<String> privacyAnalyzedTexts = new CopyOnWriteArrayList<>();
+        PrivacyService privacyService = privacyService(privacyAnalyzedTexts);
+        ChatResponse thoughtResponse = new ChatResponse(List.of(new Generation(AssistantMessage.builder()
                 .content("Ali").properties(Map.of(thoughtMarker, true)).build())));
-        ChatResponse answer = response("ce");
+        ChatResponse answerResponse = response("ce");
         ChatModel model = new ChatModel() {
             public ChatResponse call(Prompt prompt) {
-                return answer;
+                return answerResponse;
             }
 
             public Flux<ChatResponse> stream(Prompt prompt) {
-                return Flux.just(thought, answer);
+                return Flux.just(thoughtResponse, answerResponse);
             }
         };
-        ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                 .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked").build()
-                .configure(ChatClient.builder(model)).defaultAdvisors(output).build();
-        List<ChatClientResponse> frames = client.prompt().user("hello").stream()
+                .configure(ChatClient.builder(model)).defaultAdvisors(inspectionOutputAdvisor).build();
+        List<ChatClientResponse> responseFrames = client.prompt().user("hello").stream()
                 .chatClientResponse().collectList().block(WAIT);
-        assertThat(frames).hasSize(2).allSatisfy(frame -> assertThat(frame.context()).isEmpty());
-        assertThat(frames.get(0).chatResponse().getResult().getOutput().getMetadata())
+        assertThat(responseFrames).hasSize(2).allSatisfy(frame -> assertThat(frame.context()).isEmpty());
+        assertThat(responseFrames.get(0).chatResponse().getResult().getOutput().getMetadata())
                 .containsEntry(thoughtMarker, true);
-        assertThat(sentTexts).containsExactly("Ali", "ce");
-        assertThat(inspected).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
+        assertThat(httpInspectionTexts).containsExactly("Ali", "ce");
+        assertThat(inspectedOutputSegments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
-        assertThat(analyzed).contains("Ali", "ce").doesNotContain("Alice");
-        assertThat(privacy.activeSessionCount()).isZero();
+        assertThat(privacyAnalyzedTexts).contains("Ali", "ce").doesNotContain("Alice");
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @Test
     void reorderedChoicesRetainTheirOwnCompletedText() {
-        PrivacyService privacy = privacyService(new CopyOnWriteArrayList<>());
-        ChatResponse first = new ChatResponse(List.of(indexed(0, "Ali"), indexed(1, "cl")));
-        ChatResponse last = new ChatResponse(List.of(indexed(1, "ear"), indexed(0, "ce")));
+        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+        ChatResponse firstFrame = new ChatResponse(List.of(indexedGeneration(0, "Ali"), indexedGeneration(1, "cl")));
+        ChatResponse lastFrame = new ChatResponse(List.of(indexedGeneration(1, "ear"), indexedGeneration(0, "ce")));
         ChatModel model = new ChatModel() {
             public ChatResponse call(Prompt prompt) {
-                return first;
+                return firstFrame;
             }
 
             public Flux<ChatResponse> stream(Prompt prompt) {
-                return Flux.just(first, last);
+                return Flux.just(firstFrame, lastFrame);
             }
         };
-        ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                 .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
-                .configure(ChatClient.builder(model)).defaultAdvisors(output).build();
+                .configure(ChatClient.builder(model)).defaultAdvisors(inspectionOutputAdvisor).build();
         client.prompt().user("hello").stream().chatResponse().collectList().block(WAIT);
-        assertThat(sentTexts).hasSize(2).contains("clear").doesNotContain("Alice");
-        assertThat(inspected).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
+        assertThat(httpInspectionTexts).hasSize(2).contains("clear").doesNotContain("Alice");
+        assertThat(inspectedOutputSegments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
-        assertThat(privacy.activeSessionCount()).isZero();
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @ParameterizedTest
     @CsvSource({"false,1", "true,1", "false,2", "true,2"})
-    void returnDirectProtectionCompletesBeforeHttpInspection(boolean streaming, int resultCount) {
-        PrivacyService privacy = privacyService(new CopyOnWriteArrayList<>());
-        ToolCallback tool = new ToolCallback() {
+    void returnDirectProtectionCompletesBeforeHttpInspection(boolean streaming, int toolResultCount) {
+        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+        ToolCallback lookupToolCallback = new ToolCallback() {
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder().name("lookup").description("fixture").inputSchema("{}").build();
             }
@@ -232,9 +232,10 @@ class InspectionOutputPrivacyIntegrationTest {
                 return "Hello Alice";
             }
         };
-        ToolCallback wrapped = new PrivacyToolCallbackFactory(privacy, ToolDisclosurePolicy.denyAll()).wrap(tool);
+        ToolCallback privacyProtectedToolCallback =
+                new PrivacyToolCallbackFactory(privacyService, ToolDisclosurePolicy.denyAll()).wrap(lookupToolCallback);
         List<AssistantMessage.ToolCall> toolCalls = new ArrayList<>();
-        for (int index = 0; index < resultCount; index++) {
+        for (int index = 0; index < toolResultCount; index++) {
             toolCalls.add(new AssistantMessage.ToolCall("id-" + index, "function", "lookup", "{}"));
         }
         ChatModel model = new ChatModel() {
@@ -248,34 +249,34 @@ class InspectionOutputPrivacyIntegrationTest {
             }
 
             public Flux<ChatResponse> stream(Prompt prompt) {
-                return Flux.just(new ChatResponse(List.of(indexed(7, "Checking Alice. "))), call(prompt));
+                return Flux.just(new ChatResponse(List.of(indexedGeneration(7, "Checking Alice. "))), call(prompt));
             }
         };
-        ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                 .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
-                .configure(ChatClient.builder(model)).defaultAdvisors(output).defaultTools(wrapped).build();
-        String delivered = invoke(client, streaming);
-        assertThat(delivered).contains("Hello ").doesNotContain("Alice");
+                .configure(ChatClient.builder(model)).defaultAdvisors(inspectionOutputAdvisor).defaultTools(privacyProtectedToolCallback).build();
+        String deliveredOutputText = invoke(client, streaming);
+        assertThat(deliveredOutputText).contains("Hello ").doesNotContain("Alice");
         if (streaming) {
-            assertThat(sentTexts).hasSize(resultCount + 1);
-            assertThat(sentTexts.get(0)).startsWith("Checking ").endsWith(". ");
-            assertThat(delivered).isEqualTo(sentTexts.get(0) + sentTexts.get(1));
+            assertThat(httpInspectionTexts).hasSize(toolResultCount + 1);
+            assertThat(httpInspectionTexts.get(0)).startsWith("Checking ").endsWith(". ");
+            assertThat(deliveredOutputText).isEqualTo(httpInspectionTexts.get(0) + httpInspectionTexts.get(1));
         } else {
-            assertThat(sentTexts).hasSize(resultCount);
-            assertThat(delivered).isEqualTo(sentTexts.get(0));
+            assertThat(httpInspectionTexts).hasSize(toolResultCount);
+            assertThat(deliveredOutputText).isEqualTo(httpInspectionTexts.get(0));
         }
-        assertThat(sentTexts).allSatisfy(text -> assertThat(text).doesNotContain("Alice", "[[PII_"));
-        assertThat(inspected).extracting(ContentSegment::text).containsExactlyElementsOf(sentTexts);
-        assertThat(inspected).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
+        assertThat(httpInspectionTexts).allSatisfy(text -> assertThat(text).doesNotContain("Alice", "[[PII_"));
+        assertThat(inspectedOutputSegments).extracting(ContentSegment::text).containsExactlyElementsOf(httpInspectionTexts);
+        assertThat(inspectedOutputSegments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
-        assertThat(inspectionCalls).hasValue(1);
-        assertThat(privacy.activeSessionCount()).isZero();
+        assertThat(inspectionCount).hasValue(1);
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @Test
     void toolLoopTextIsProtectedTogetherBeforeHttpInspection() {
-        PrivacyService privacy = privacyService(new CopyOnWriteArrayList<>());
-        ToolCallback callback = new ToolCallback() {
+        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+        ToolCallback lookupToolCallback = new ToolCallback() {
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder().name("lookup").description("fixture").inputSchema("{}").build();
             }
@@ -284,7 +285,8 @@ class InspectionOutputPrivacyIntegrationTest {
                 return "found";
             }
         };
-        ToolCallback wrapped = new PrivacyToolCallbackFactory(privacy, ToolDisclosurePolicy.denyAll()).wrap(callback);
+        ToolCallback privacyProtectedToolCallback =
+                new PrivacyToolCallbackFactory(privacyService, ToolDisclosurePolicy.denyAll()).wrap(lookupToolCallback);
         ChatModel model = new ChatModel() {
             public ChatOptions getOptions() {
                 return ToolCallingChatOptions.builder().build();
@@ -295,51 +297,51 @@ class InspectionOutputPrivacyIntegrationTest {
             }
 
             public Flux<ChatResponse> stream(Prompt prompt) {
-                boolean followup = prompt.getInstructions().stream().anyMatch(ToolResponseMessage.class::isInstance);
-                if (followup) {
-                    return Flux.just(new ChatResponse(List.of(indexed(7, "Found the result."))));
+                boolean hasToolResponse = prompt.getInstructions().stream().anyMatch(ToolResponseMessage.class::isInstance);
+                if (hasToolResponse) {
+                    return Flux.just(new ChatResponse(List.of(indexedGeneration(7, "Found the result."))));
                 }
-                ChatResponse toolCall = new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("")
+                ChatResponse toolCallResponse = new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("")
                         .toolCalls(List.of(new AssistantMessage.ToolCall("id", "function", "lookup", "{}"))).build())));
-                return Flux.just(new ChatResponse(List.of(indexed(7, "Checking Ali"))),
-                        new ChatResponse(List.of(indexed(7, "ce. "))), toolCall);
+                return Flux.just(new ChatResponse(List.of(indexedGeneration(7, "Checking Ali"))),
+                        new ChatResponse(List.of(indexedGeneration(7, "ce. "))), toolCallResponse);
             }
         };
-        ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                 .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
-                .configure(ChatClient.builder(model)).defaultAdvisors(output).defaultTools(wrapped).build();
-        String delivered = invoke(client, true);
-        assertThat(delivered).startsWith("Checking ").endsWith(". Found the result.").doesNotContain("Alice");
-        assertThat(sentTexts).containsExactly(delivered);
-        assertThat(inspected).singleElement().satisfies(segment -> assertThat(segment.privacyProcessingStatus())
+                .configure(ChatClient.builder(model)).defaultAdvisors(inspectionOutputAdvisor).defaultTools(privacyProtectedToolCallback).build();
+        String deliveredOutputText = invoke(client, true);
+        assertThat(deliveredOutputText).startsWith("Checking ").endsWith(". Found the result.").doesNotContain("Alice");
+        assertThat(httpInspectionTexts).containsExactly(deliveredOutputText);
+        assertThat(inspectedOutputSegments).singleElement().satisfies(segment -> assertThat(segment.privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
-        assertThat(inspectionCalls).hasValue(1);
-        assertThat(privacy.activeSessionCount()).isZero();
+        assertThat(inspectionCount).hasValue(1);
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @ParameterizedTest
     @CsvSource({"false,false", "true,false", "true,true"})
-    void replacedOrConcatenatedCompletedOutputCannotReuseItsStatus(boolean streaming, boolean duplicateFrames) {
-        PrivacyService privacy = privacyService(new CopyOnWriteArrayList<>());
-        ChatClient client = PrivacyChatClientConfigurer.builder(privacy)
+    void changedOutputCannotReusePrivacyProcessingStatus(boolean streaming, boolean duplicateFrames) {
+        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                 .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked").build()
                 .configure(ChatClient.builder(model("clear")))
-                .defaultAdvisors(output, new ResponseMutation(duplicateFrames)).build();
-        assertDisclosureDenied(client, streaming);
-        assertThat(privacy.activeSessionCount()).isZero();
+                .defaultAdvisors(inspectionOutputAdvisor, new OutputMutationAdvisor(duplicateFrames)).build();
+        assertPrivacyProcessingRequired(client, streaming);
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
-    private void assertDisclosureDenied(ChatClient client, boolean streaming) {
+    private void assertPrivacyProcessingRequired(ChatClient client, boolean streaming) {
         assertThatThrownBy(() -> invoke(client, streaming)).isInstanceOf(InspectionException.class)
                 .satisfies(error -> assertThat(((InspectionException) error).failureCode())
                         .isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED));
-        assertThat(sentTexts).isEmpty();
-        assertThat(inspected).isEmpty();
+        assertThat(httpInspectionTexts).isEmpty();
+        assertThat(inspectedOutputSegments).isEmpty();
     }
 
-    private PrivacyService privacyService(List<String> analyzed) {
+    private PrivacyService privacyService(List<String> privacyAnalyzedTexts) {
         PiiAnalyzer analyzer = (text, options, limits) -> {
-            analyzed.add(text);
+            privacyAnalyzedTexts.add(text);
             int at = text.indexOf("Alice");
             return at < 0 ? List.of() : List.of(new PiiSpan("PERSON", at, at + 5, 1.0));
         };
@@ -347,15 +349,15 @@ class InspectionOutputPrivacyIntegrationTest {
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
-    private ChatModel model(String raw) {
+    private ChatModel model(String rawOutputText) {
         return new ChatModel() {
             public ChatResponse call(Prompt prompt) {
-                return response(raw);
+                return response(rawOutputText);
             }
 
             public Flux<ChatResponse> stream(Prompt prompt) {
-                int middle = raw.length() / 2;
-                return Flux.just(response(raw.substring(0, middle)), response(raw.substring(middle)));
+                int middle = rawOutputText.length() / 2;
+                return Flux.just(response(rawOutputText.substring(0, middle)), response(rawOutputText.substring(middle)));
             }
         };
     }
@@ -364,16 +366,16 @@ class InspectionOutputPrivacyIntegrationTest {
         return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
     }
 
-    private Generation indexed(int index, String text) {
-        return new Generation(new AssistantMessage(text), ChatGenerationMetadata.builder().metadata("index", index).build());
+    private Generation indexedGeneration(int choiceIndex, String text) {
+        return new Generation(new AssistantMessage(text), ChatGenerationMetadata.builder().metadata("index", choiceIndex).build());
     }
 
     private String invoke(ChatClient client, boolean streaming) {
         if (streaming) {
-            List<ChatClientResponse> frames = client.prompt().user("hello").stream()
+            List<ChatClientResponse> responseFrames = client.prompt().user("hello").stream()
                     .chatClientResponse().collectList().block(WAIT);
-            assertThat(frames).allSatisfy(frame -> assertThat(frame.context()).isEmpty());
-            return frames.stream().map(frame -> frame.chatResponse().getResult().getOutput().getText())
+            assertThat(responseFrames).allSatisfy(frame -> assertThat(frame.context()).isEmpty());
+            return responseFrames.stream().map(frame -> frame.chatResponse().getResult().getOutput().getText())
                     .filter(text -> text != null).collect(Collectors.joining());
         }
         ChatClientResponse response = client.prompt().user("hello").call().chatClientResponse();
@@ -382,15 +384,15 @@ class InspectionOutputPrivacyIntegrationTest {
     }
 
     /** Runs between the Privacy lifecycle and output inspection. */
-    private final class ResponseMutation implements CallAdvisor, StreamAdvisor, PriorityOrdered {
+    private final class OutputMutationAdvisor implements CallAdvisor, StreamAdvisor, PriorityOrdered {
         private final boolean duplicateFrames;
 
-        private ResponseMutation(boolean duplicateFrames) {
+        private OutputMutationAdvisor(boolean duplicateFrames) {
             this.duplicateFrames = duplicateFrames;
         }
 
         public String getName() {
-            return "ResponseMutation";
+            return "OutputMutationAdvisor";
         }
 
         public int getOrder() {
@@ -402,15 +404,15 @@ class InspectionOutputPrivacyIntegrationTest {
         }
 
         public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-            Flux<ChatClientResponse> responses = chain.nextStream(request);
+            Flux<ChatClientResponse> responseStream = chain.nextStream(request);
             if (duplicateFrames) {
-                return responses.concatMap(response -> Flux.just(response, response));
+                return responseStream.concatMap(response -> Flux.just(response, response));
             }
-            return responses.map(this::replace);
+            return responseStream.map(this::replace);
         }
 
-        private ChatClientResponse replace(ChatClientResponse original) {
-            return original.mutate().chatResponse(response("new unprocessed text")).build();
+        private ChatClientResponse replace(ChatClientResponse originalResponse) {
+            return originalResponse.mutate().chatResponse(response("new unprocessed text")).build();
         }
     }
 }

@@ -73,32 +73,32 @@ class InspectionRuntimeScopeTest {
         for (AssistantMessage message : messages) {
             assertThatThrownBy(() -> invoke(client, message, streaming)).isInstanceOf(InspectionBlockedException.class);
         }
-        assertThat(model.calls).hasValue(0);
-        AssistantMessage allowed = DeepSeekAssistantMessage.builder().content("safe").reasoningContent("ordinary")
+        assertThat(model.modelCallCount).hasValue(0);
+        AssistantMessage allowedAssistantMessage = DeepSeekAssistantMessage.builder().content("safe").reasoningContent("ordinary")
                 .prefix(true).properties(Map.of("opaque", "attack", "thinking", Map.of("value", "attack")))
                 .toolCalls(List.of(new AssistantMessage.ToolCall("attack", "attack", "attack", "{\"q\":\"safe\"}")))
                 .build();
-        assertThat(invoke(client, allowed, streaming)).isEqualTo("done");
+        assertThat(invoke(client, allowedAssistantMessage, streaming)).isEqualTo("done");
         // Compare delivered messages against an ordinary client, including the supported Spring AI 2.0.0 baseline.
         // That version already loses DeepSeek-specific fields while copying the prompt.
         InspectionChatClientIntegrationTest.RecordingModel plainModel = new InspectionChatClientIntegrationTest.RecordingModel();
-        invoke(ChatClient.builder(plainModel).build(), allowed, streaming);
+        invoke(ChatClient.builder(plainModel).build(), allowedAssistantMessage, streaming);
         assertThat(model.receivedPrompt.get().getInstructions())
                 .containsExactlyElementsOf(plainModel.receivedPrompt.get().getInstructions());
     }
 
     @Test
     void inputPayloadsPreserveJsonStructureEscapesAndNumericLexemes() {
-        InspectionTextExtractor extractor = new InspectionTextExtractor(InspectionLimits.defaults(),
+        InspectionTextExtractor inputTextExtractor = new InspectionTextExtractor(InspectionLimits.defaults(),
                 ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
-        String json = "{\"attack\":\"safe\",\"dup\":\"at\\u0074ack\",\"dup\":42,\"n\":1e999999,\"b\":true,\"z\":null}";
-        extractor.addMessage(new UserMessage(json));
-        extractor.addMessage(ToolResponseMessage.builder().responses(List.of(
+        String jsonPayload = "{\"attack\":\"safe\",\"dup\":\"at\\u0074ack\",\"dup\":42,\"n\":1e999999,\"b\":true,\"z\":null}";
+        inputTextExtractor.addMessage(new UserMessage(jsonPayload));
+        inputTextExtractor.addMessage(ToolResponseMessage.builder().responses(List.of(
                 new ToolResponseMessage.ToolResponse("attack", "attack", "[\"one\",{\"attack\":\"two\"}]"))).build());
-        extractor.addMessage(new UserMessage("{malformed attack"));
-        extractor.addMessage(new UserMessage("\"first\" \"attack\""));
-        assertThat(extractor.buildSegments()).extracting(ContentSegment::text).containsExactly(
-                json, "[\"one\",{\"attack\":\"two\"}]", "{malformed attack", "\"first\" \"attack\"");
+        inputTextExtractor.addMessage(new UserMessage("{malformed attack"));
+        inputTextExtractor.addMessage(new UserMessage("\"first\" \"attack\""));
+        assertThat(inputTextExtractor.buildSegments()).extracting(ContentSegment::text).containsExactly(
+                jsonPayload, "[\"one\",{\"attack\":\"two\"}]", "{malformed attack", "\"first\" \"attack\"");
     }
 
     @ParameterizedTest
@@ -106,52 +106,52 @@ class InspectionRuntimeScopeTest {
     void inputRegexCanMatchJsonKeysAndStructure(boolean streaming) {
         InspectionRule rule = InspectionRule.regex("action", InspectionFinding.Category.PROMPT_ATTACK,
                 "^\\{\\s*\"action\"\\s*:\\s*\"attack\"\\s*\\}$");
-        InspectionService inspection = new InspectionService(List.of(
+        InspectionService inspectionService = new InspectionService(List.of(
                 new RuleBasedContentInspector("rules", List.of(rule))));
         InspectionChatClientIntegrationTest.RecordingModel model =
                 new InspectionChatClientIntegrationTest.RecordingModel();
-        ChatClient client = new InspectionChatClientConfigurer(inspection).configure(ChatClient.builder(model)).build();
+        ChatClient client = new InspectionChatClientConfigurer(inspectionService).configure(ChatClient.builder(model)).build();
 
         assertThat(invoke(client, new UserMessage("{\"note\":\"attack\"}"), streaming)).isEqualTo("done");
         assertThatThrownBy(() -> invoke(client, new UserMessage("{\n  \"action\": \"attack\"\n}"), streaming))
                 .isInstanceOf(InspectionBlockedException.class);
-        assertThat(model.calls).hasValue(1);
+        assertThat(model.modelCallCount).hasValue(1);
     }
 
     @Test
     void extractionBudgetsIncludeSerializedPayloadsAndEmptyFields() {
         InspectionLimits limits = new InspectionLimits(2, 20, Duration.ofSeconds(2));
-        InspectionTextExtractor extractor = new InspectionTextExtractor(limits, ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
-        assertThatThrownBy(() -> extractor.addMessage(new UserMessage("{\"" + "key".repeat(10) + "\":0}")))
+        InspectionTextExtractor inputTextExtractor = new InspectionTextExtractor(limits, ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
+        assertThatThrownBy(() -> inputTextExtractor.addMessage(new UserMessage("{\"" + "key".repeat(10) + "\":0}")))
                 .hasMessageContaining("LIMIT_EXCEEDED");
-        InspectionTextExtractor empty = new InspectionTextExtractor(limits, ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
-        empty.addMessage(AssistantMessage.builder().content("").properties(Map.of("thinking", "")).build());
-        assertThatThrownBy(() -> empty.addMessage(new UserMessage(""))).hasMessageContaining("LIMIT_EXCEEDED");
+        InspectionTextExtractor emptyPayloadExtractor = new InspectionTextExtractor(limits, ContentSegment.PrivacyProcessingStatus.UNKNOWN, "test-");
+        emptyPayloadExtractor.addMessage(AssistantMessage.builder().content("").properties(Map.of("thinking", "")).build());
+        assertThatThrownBy(() -> emptyPayloadExtractor.addMessage(new UserMessage(""))).hasMessageContaining("LIMIT_EXCEEDED");
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void deepSeekToolLoopWorksWithPrivacyAndReinspectsArguments(boolean streaming) {
-        for (boolean attack : List.of(false, true)) {
-            AtomicInteger calls = new AtomicInteger();
+    void inspectsDeepSeekToolArgumentsBeforeNextModelCall(boolean streaming) {
+        for (boolean attackInToolArguments : List.of(false, true)) {
+            AtomicInteger modelCallCount = new AtomicInteger();
             AtomicInteger toolCallCount = new AtomicInteger();
-            String argument = "safe";
-            if (attack) {
-                argument = "attack";
+            String toolArgumentValue = "safe";
+            if (attackInToolArguments) {
+                toolArgumentValue = "attack";
             }
             DeepSeekAssistantMessage toolCallMessage = DeepSeekAssistantMessage.builder()
                     .content("").reasoningContent("planning").toolCalls(List.of(new AssistantMessage.ToolCall(
-                            "id", "function", "lookup", "{\"q\":\"" + argument + "\"}"))).build();
+                            "id", "function", "lookup", "{\"q\":\"" + toolArgumentValue + "\"}"))).build();
             // Spring AI 2.0.0 Prompt.copy() loses provider fields. Match the upstream history representation.
             Message expectedHistoryMessage = new Prompt(toolCallMessage).copy().getInstructions().get(0);
-            PrivacyService privacy = new PrivacyService(List.of((text, options, limits) -> List.of()), PiiAnalysisOptions.defaults());
+            PrivacyService privacyService = new PrivacyService(List.of((text, options, limits) -> List.of()), PiiAnalysisOptions.defaults());
             ChatModel model = new ChatModel() {
                 public ChatOptions getOptions() {
                     return ToolCallingChatOptions.builder().build();
                 }
 
                 public ChatResponse call(Prompt prompt) {
-                    if (calls.incrementAndGet() == 1) {
+                    if (modelCallCount.incrementAndGet() == 1) {
                         return new ChatResponse(List.of(new Generation(toolCallMessage)));
                     }
                     if (!streaming) {
@@ -166,7 +166,7 @@ class InspectionRuntimeScopeTest {
                     return Flux.defer(() -> Flux.just(call(prompt)));
                 }
             };
-            ToolCallback callback = new ToolCallback() {
+            ToolCallback lookupToolCallback = new ToolCallback() {
                 public ToolDefinition getToolDefinition() {
                     return ToolDefinition.builder().name("lookup").description("attack")
                             .inputSchema("{\"type\":\"object\",\"description\":\"attack\"}").build();
@@ -177,20 +177,20 @@ class InspectionRuntimeScopeTest {
                     return "safe";
                 }
             };
-            ChatClient client = ModelRequestBoundaryConfigurer.compose(new PrivacyChatClientConfigurer(privacy),
+            ChatClient client = ModelRequestBoundaryConfigurer.compose(new PrivacyChatClientConfigurer(privacyService),
                     new InspectionChatClientConfigurer(attackBlockingService())).configure(ChatClient.builder(model))
-                    .defaultTools(new PrivacyToolCallbackFactory(privacy, ToolDisclosurePolicy.denyAll()).wrap(callback)).build();
-            if (attack) {
+                    .defaultTools(new PrivacyToolCallbackFactory(privacyService, ToolDisclosurePolicy.denyAll()).wrap(lookupToolCallback)).build();
+            if (attackInToolArguments) {
                 assertThatThrownBy(() -> invoke(client, new UserMessage("hello"), streaming))
                         .isInstanceOf(InspectionBlockedException.class);
-                assertThat(calls).hasValue(1);
+                assertThat(modelCallCount).hasValue(1);
             } else {
                 assertThat(invoke(client, new UserMessage("hello"), streaming)).isEqualTo("done");
-                assertThat(calls).hasValue(2);
+                assertThat(modelCallCount).hasValue(2);
             }
             // Input inspection acts before the next model call. Output inspection is a separate opt-in.
             assertThat(toolCallCount).hasValue(1);
-            assertThat(privacy.activeSessionCount()).isZero();
+            assertThat(privacyService.activeSessionCount()).isZero();
         }
     }
 }

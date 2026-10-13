@@ -26,13 +26,13 @@ class InspectionEnforcementTest {
 
     @ParameterizedTest
     @EnumSource(InspectionResult.Status.class)
-    void interruptionDuringObserverPreservesResultsAndNotifiesFailure(InspectionResult.Status status) {
+    void interruptionDuringObserverPreservesResultsAndNotifiesFailure(InspectionResult.Status resultStatus) {
         ContentSegment segment = new ContentSegment("segment", ContentSegment.Role.USER,
                 ContentSegment.PrivacyProcessingStatus.UNKNOWN, "synthetic-private-text");
         List<InspectionFinding> findings = List.of(new InspectionFinding(
                 segment.id(), InspectionFinding.Category.PROMPT_INJECTION, "test.detected", 0.9));
         InspectionResult inspectorResult;
-        if (status == InspectionResult.Status.COMPLETED) {
+        if (resultStatus == InspectionResult.Status.COMPLETED) {
             inspectorResult = InspectionResult.completed(Set.of(segment.id()), findings);
         } else {
             inspectorResult = InspectionResult.failed(
@@ -68,9 +68,9 @@ class InspectionEnforcementTest {
                 observedFailures.add(failure);
             }
         };
-        InspectionService service = new InspectionService(List.of(inspector),
+        InspectionService inspectionService = new InspectionService(List.of(inspector),
                 (inspectorId, inspectedFindings) -> InspectionDecision.ALLOW, InspectionFailurePolicy.FAIL_OPEN);
-        InspectionEnforcement enforcement = new InspectionEnforcement(service, InspectionLimits.defaults(), observer);
+        InspectionEnforcement enforcement = new InspectionEnforcement(inspectionService, InspectionLimits.defaults(), observer);
         List<InspectionReport.Outcome> expectedOutcomes =
                 List.of(new InspectionReport.Outcome(inspector.inspectorId(), true, inspectorResult));
 

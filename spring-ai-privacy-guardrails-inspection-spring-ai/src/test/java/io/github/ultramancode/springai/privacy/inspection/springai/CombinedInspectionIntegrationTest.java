@@ -111,8 +111,8 @@ class CombinedInspectionIntegrationTest {
                         .allSatisfy(segment -> assertThat(segment.text()).doesNotContain("Alice"));
                 inspectionRequests.add(request);
                 List<InspectionFinding> findings = request.segments().stream()
-                        .filter(s -> s.text().contains("attack"))
-                        .map(s -> new InspectionFinding(s.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
+                        .filter(segment -> segment.text().contains("attack"))
+                        .map(segment -> new InspectionFinding(segment.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
                         .toList();
                 return InspectionResult.completed(
                         request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()), findings);
@@ -127,10 +127,10 @@ class CombinedInspectionIntegrationTest {
                 ignored -> {});
     }
 
-    private static ChatResponse toolCallResponse(String name, String arguments) {
+    private static ChatResponse toolCallResponse(String toolName, String toolArgumentsJson) {
         return new ChatResponse(List.of(new Generation(AssistantMessage.builder()
                 .content("")
-                .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + name, "function", name, arguments)))
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + toolName, "function", toolName, toolArgumentsJson)))
                 .build())));
     }
 
@@ -140,7 +140,7 @@ class CombinedInspectionIntegrationTest {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
             List<InspectionRequest> inspectionRequests = new CopyOnWriteArrayList<>();
-            AtomicInteger modelCalls = new AtomicInteger();
+            AtomicInteger modelCallCount = new AtomicInteger();
             ChatModel model = new ChatModel() {
                 @Override
                 public ChatOptions getOptions() {
@@ -149,7 +149,7 @@ class CombinedInspectionIntegrationTest {
 
                 @Override
                 public ChatResponse call(Prompt prompt) {
-                    int round = modelCalls.incrementAndGet();
+                    int round = modelCallCount.incrementAndGet();
                     if (toolSearchEnabled && round == 1) {
                         return toolCallResponse("toolSearchTool", "{\"query\":\"lookup\"}");
                     }
@@ -203,13 +203,13 @@ class CombinedInspectionIntegrationTest {
                             .isInstanceOf(InspectionBlockedException.class);
                 }
                 int expectedModelCalls = toolSearchEnabled ? 2 : 1;
-                assertThat(modelCalls).hasValue(expectedModelCalls);
-                // The blocked request is recorded by the inspector but never increments modelCalls.
+                assertThat(modelCallCount).hasValue(expectedModelCalls);
+                // The blocked request is recorded by the inspector but never increments modelCallCount.
                 assertThat(inspectionRequests).hasSize(expectedModelCalls + 1);
                 InspectionRequest lastInspectionRequest =
                         inspectionRequests.get(inspectionRequests.size() - 1);
                 assertThat(lastInspectionRequest.segments())
-                        .anyMatch(s -> s.role() == ContentSegment.Role.TOOL && s.text().contains("attack"));
+                        .anyMatch(segment -> segment.role() == ContentSegment.Role.TOOL && segment.text().contains("attack"));
             } finally {
                 SecurityContextHolder.clearContext();
             }
@@ -221,11 +221,11 @@ class CombinedInspectionIntegrationTest {
     void clonedBoundaryBuilderStillBlocksBeforeModelCall(boolean streaming, boolean privacyEnabled) {
         runner().run(context -> {
             assertThat(context).hasNotFailed();
-            AtomicInteger modelCalls = new AtomicInteger();
+            AtomicInteger modelCallCount = new AtomicInteger();
             ChatModel model = new ChatModel() {
                 @Override
                 public ChatResponse call(Prompt prompt) {
-                    modelCalls.incrementAndGet();
+                    modelCallCount.incrementAndGet();
                     return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
                 }
 
@@ -236,12 +236,12 @@ class CombinedInspectionIntegrationTest {
             };
             InspectionRule rule = InspectionRule.literal("attack-rule", InspectionFinding.Category.PROMPT_INJECTION, "attack");
             ContentInspector inspector = new RuleBasedContentInspector("application-rules", List.of(rule));
-            InspectionChatClientConfigurer inspection = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)));
+            InspectionChatClientConfigurer inspectionChatClientConfigurer = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)));
             ChatClient.Builder builder;
             if (privacyEnabled) {
-                builder = context.getBean(PrivacySecurityChatClientFactory.class).builderWithBoundary(model, inspection);
+                builder = context.getBean(PrivacySecurityChatClientFactory.class).builderWithBoundary(model, inspectionChatClientConfigurer);
             } else {
-                builder = context.getBean(ToolAuthorizationChatClientFactory.class).builderWithBoundary(model, inspection);
+                builder = context.getBean(ToolAuthorizationChatClientFactory.class).builderWithBoundary(model, inspectionChatClientConfigurer);
             }
             ChatClient.ChatClientRequestSpec request = builder.clone().build().prompt().user("Alice attack");
 
@@ -252,13 +252,13 @@ class CombinedInspectionIntegrationTest {
                 assertThatThrownBy(() -> request.call().content())
                         .isInstanceOf(InspectionBlockedException.class);
             }
-            assertThat(modelCalls).hasValue(0);
+            assertThat(modelCallCount).hasValue(0);
         });
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void privacyAndInspectionComposeWithoutBootOrSecurityAndLeaveOrdinaryClientsAlone(boolean streaming) {
+    void privacyAndInspectionAffectOnlyConfiguredClients(boolean streaming) {
         PiiAnalyzer analyzer = (text, options, limits) -> {
             int start = text.indexOf("Alice");
             return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));

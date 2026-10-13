@@ -191,17 +191,14 @@ class InspectionAutoConfigurationTest {
 
     @Test
     void runsWithoutPrivacyOrModelBackendDependencies() {
-        runner.withClassLoader(
-                        new FilteredClassLoader(
-                                "io.github.ultramancode.springai.privacy.springai",
-                                "io.github.ultramancode.springai.privacy.inspection.openaicompatible"))
+        runner.withClassLoader(new FilteredClassLoader(
+                        "io.github.ultramancode.springai.privacy.springai",
+                        "io.github.ultramancode.springai.privacy.inspection.openaicompatible"))
                 .withPropertyValues("spring.ai.inspection.enabled=true")
                 .withBean(ContentInspector.class, this::rules)
-                .run(
-                        context ->
-                                assertThat(context)
-                                        .hasNotFailed()
-                                        .hasSingleBean(InspectionChatClientConfigurer.class));
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .hasSingleBean(InspectionChatClientConfigurer.class));
     }
 
     @ParameterizedTest
@@ -254,37 +251,36 @@ class InspectionAutoConfigurationTest {
                     });
                     inspections.incrementAndGet();
                     return InspectionResult.completed(
-                            request.segments().stream()
-                                    .map(ContentSegment::id)
-                                    .collect(Collectors.toSet()),
+                            request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()),
                             List.of());
                 }
             };
-            runner.withConfiguration(
-                            AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
+            runner.withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
                     .withPropertyValues("spring.ai.inspection.enabled=true",
                             "spring.ai.inspection.output.enabled=true", "spring.ai.privacy.output.enabled=true")
                     .withBean(ContentInspector.class, () -> protectedInspector)
                     .withBean(PiiAnalyzer.class, () -> analyzer)
-                    .run(
-                            context -> {
-                                assertThat(context).hasNotFailed();
-                                ChatClient client = ModelRequestBoundaryConfigurer.compose(
-                                                context.getBean(PrivacyChatClientConfigurer.class)
-                                                        .forToolAdvisorOrder(ToolCallingAdvisor.DEFAULT_ORDER),
-                                                context.getBean(InspectionChatClientConfigurer.class))
-                                        .configure(ChatClient.builder(model))
-                                        .build();
-                                ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello Alice");
-                                String result;
-                                if (streaming) {
-                                    result = request.stream().content().collectList().block(Duration.ofSeconds(5)).get(0);
-                                } else {
-                                    result = request.call().content();
-                                }
-                                assertThat(result).isEqualTo("done");
-                                assertThat(inspections).hasValue(2);
-                            });
+                    .run(context -> {
+                        assertThat(context).hasNotFailed();
+                        ModelRequestBoundaryConfigurer privacyConfigurer = context
+                                .getBean(PrivacyChatClientConfigurer.class)
+                                .forToolAdvisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
+                        InspectionChatClientConfigurer inspectionConfigurer =
+                                context.getBean(InspectionChatClientConfigurer.class);
+                        ChatClient client = ModelRequestBoundaryConfigurer.compose(
+                                privacyConfigurer, inspectionConfigurer)
+                                .configure(ChatClient.builder(model))
+                                .build();
+                        ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello Alice");
+                        String result;
+                        if (streaming) {
+                            result = request.stream().content().collectList().block(Duration.ofSeconds(5)).get(0);
+                        } else {
+                            result = request.call().content();
+                        }
+                        assertThat(result).isEqualTo("done");
+                        assertThat(inspections).hasValue(2);
+                    });
         }
     }
 

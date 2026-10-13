@@ -31,6 +31,12 @@ final class InspectionTextExtractor {
         this.idPrefix = idPrefix;
     }
 
+    /**
+     * Appends input text without changing the source message.
+     * System, user and assistant bodies are read through {@link Message#getText()}.
+     * Each tool response body is read through {@link ToolResponseMessage.ToolResponse#responseData()}
+     * and becomes a separate TOOL segment.
+     */
     void addMessage(Message message) {
         InspectionRequest.checkInterrupted();
         if (message.getClass() == ToolResponseMessage.class) {

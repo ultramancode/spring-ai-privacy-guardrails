@@ -6,7 +6,9 @@ import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailurePolicy;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
@@ -45,6 +47,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -190,7 +193,7 @@ class InspectionChatClientIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void preservesMessageOrderAndSeparatesEachToolResponseWithoutGroupingByRole(boolean streaming) {
-        AtomicReference<InspectionRequest> inspected = new AtomicReference<>();
+        AtomicReference<InspectionRequest> recordedRequest = new AtomicReference<>();
         ContentInspector inspector = new ContentInspector() {
             @Override
             public String inspectorId() {
@@ -202,7 +205,7 @@ class InspectionChatClientIntegrationTest {
             }
 
             public InspectionResult inspect(InspectionRequest request) {
-                inspected.set(request);
+                recordedRequest.set(request);
                 return InspectionResult.completed(
                         request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()),
                         List.of());
@@ -214,8 +217,8 @@ class InspectionChatClientIntegrationTest {
         Prompt prompt = new Prompt(List.of(
                 new SystemMessage("instructions"),
                 new UserMessage("first user text"),
-                new UserMessage("second user text"),
                 new AssistantMessage("assistant text"),
+                new UserMessage("second user text"),
                 ToolResponseMessage.builder().responses(List.of(
                         new ToolResponseMessage.ToolResponse("call-1", "firstTool", "first tool result"),
                         new ToolResponseMessage.ToolResponse("call-2", "secondTool", "second tool result")))
@@ -223,17 +226,19 @@ class InspectionChatClientIntegrationTest {
 
         if (streaming) {
             StepVerifier.create(client.prompt(prompt).stream().content())
-                    .expectNext("done").verifyComplete();
+                    .expectNext("done")
+                    .expectComplete()
+                    .verify(Duration.ofSeconds(5));
         } else {
             assertThat(client.prompt(prompt).call().content()).isEqualTo("done");
         }
 
-        List<ContentSegment> segments = inspected.get().segments();
+        List<ContentSegment> segments = recordedRequest.get().segments();
         assertThat(segments).extracting(ContentSegment::role).containsExactly(
-                ContentSegment.Role.SYSTEM, ContentSegment.Role.USER, ContentSegment.Role.USER,
-                ContentSegment.Role.ASSISTANT, ContentSegment.Role.TOOL, ContentSegment.Role.TOOL);
+                ContentSegment.Role.SYSTEM, ContentSegment.Role.USER, ContentSegment.Role.ASSISTANT,
+                ContentSegment.Role.USER, ContentSegment.Role.TOOL, ContentSegment.Role.TOOL);
         assertThat(segments).extracting(ContentSegment::text).containsExactly(
-                "instructions", "first user text", "second user text", "assistant text",
+                "instructions", "first user text", "assistant text", "second user text",
                 "first tool result", "second tool result");
         assertThat(segments).extracting(ContentSegment::id).doesNotHaveDuplicates();
         assertThat(segments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
@@ -243,10 +248,10 @@ class InspectionChatClientIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void rejectsUnsupportedContentBeforeBusinessModel(boolean streaming) {
+    void rejectsUnsupportedMessageSubclassesAndMediaBeforeModelCall(boolean streaming) {
         Media media = Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG).data(new byte[] {1}).build();
         Map<String, Message> unsupportedMessages = new LinkedHashMap<>();
-        unsupportedMessages.put("custom user message", new UserMessage("hello") {});
+        unsupportedMessages.put("user message subclass", new UserMessage("hello") {});
         unsupportedMessages.put("user media", UserMessage.builder().text("hello").media(List.of(media)).build());
         unsupportedMessages.put("assistant media", AssistantMessage.builder().content("hello").media(List.of(media)).build());
 
@@ -271,33 +276,27 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void ragContentAddedEarlierInTheChainIsInspected() {
+    void blocksAttackInRetrievedContentBeforeModelCall() {
         RecordingModel model = new RecordingModel();
-        CallAdvisor rag =
-                new CallAdvisor() {
-                    public ChatClientResponse adviseCall(
-                            ChatClientRequest request, CallAdvisorChain chain) {
-                        return chain.nextCall(
-                                request.mutate()
-                                        .prompt(
-                                                new Prompt(
-                                                        List.of(
-                                                                new SystemMessage(
-                                                                        "retrieved attack"),
-                                                                new UserMessage("hello"))))
-                                        .build());
-                    }
+        CallAdvisor retrievalAdvisor = new CallAdvisor() {
+            public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
+                Prompt promptWithRetrievedContent = new Prompt(List.of(
+                        new SystemMessage("retrieved attack"),
+                        new UserMessage("hello")));
+                return chain.nextCall(request.mutate().prompt(promptWithRetrievedContent).build());
+            }
 
-                    public int getOrder() {
-                        return 100;
-                    }
+            public int getOrder() {
+                // Run retrieval before the inspection boundary.
+                return 100;
+            }
 
-                    public String getName() {
-                        return "fixture-rag";
-                    }
-                };
-        assertThatThrownBy(
-                        () -> createInspectionClient(model).prompt().user("hello").advisors(rag).call().content())
+            public String getName() {
+                return "fixture-rag";
+            }
+        };
+        ChatClient client = createInspectionClient(model);
+        assertThatThrownBy(() -> client.prompt().user("hello").advisors(retrievalAdvisor).call().content())
                 .isInstanceOf(InspectionBlockedException.class);
         assertThat(model.calls).hasValue(0);
     }
@@ -315,27 +314,26 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void rejectsRequestAddedLateAdvisorsBeforeAnyModelCall() {
+    void rejectsRequestAdvisorAfterModelAdvisorBeforeModelCall() {
         RecordingModel model = new RecordingModel();
-        CallAdvisor late =
-                new CallAdvisor() {
-                    public ChatClientResponse adviseCall(
-                            ChatClientRequest request, CallAdvisorChain chain) {
-                        return chain.nextCall(request);
-                    }
+        CallAdvisor lateAdvisor = new CallAdvisor() {
+            public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
+                return chain.nextCall(request);
+            }
 
-                    public int getOrder() {
-                        return Integer.MAX_VALUE;
-                    }
+            public int getOrder() {
+                // ChatModelCallAdvisor also uses Integer.MAX_VALUE.
+                // In this test, Spring AI's default chain places lateAdvisor after ChatModelCallAdvisor.
+                return Integer.MAX_VALUE;
+            }
 
-                    public String getName() {
-                        return "late";
-                    }
-                };
-        assertThatThrownBy(
-                        () -> createInspectionClient(model).prompt().user("hello").advisors(late).call().content())
+            public String getName() {
+                return "late";
+            }
+        };
+        assertThatThrownBy(() -> createInspectionClient(model).prompt().user("hello").advisors(lateAdvisor).call().content())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("terminal model advisor");
+                .hasMessageContaining("that advisor must be last");
         assertThat(model.calls).hasValue(0);
     }
 
@@ -343,23 +341,21 @@ class InspectionChatClientIntegrationTest {
     void allowsEarlierAdvisorToWrapInspectedCall() {
         RecordingModel model = new RecordingModel();
         AtomicInteger wrappedCalls = new AtomicInteger();
-        CallAdvisor wrappingAdvisor =
-                new CallAdvisor() {
-                    public ChatClientResponse adviseCall(
-                            ChatClientRequest request, CallAdvisorChain chain) {
-                        ChatClientResponse result = chain.nextCall(request);
-                        wrappedCalls.incrementAndGet();
-                        return result;
-                    }
+        CallAdvisor wrappingAdvisor = new CallAdvisor() {
+            public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
+                ChatClientResponse result = chain.nextCall(request);
+                wrappedCalls.incrementAndGet();
+                return result;
+            }
 
-                    public int getOrder() {
-                        return 0;
-                    }
+            public int getOrder() {
+                return 0;
+            }
 
-                    public String getName() {
-                        return "wrapping-advisor";
-                    }
-                };
+            public String getName() {
+                return "wrapping-advisor";
+            }
+        };
         InspectionChatClientConfigurer inspectionConfigurer = attackBlockingInspectionConfigurer();
         ChatClient.Builder builder = inspectionConfigurer.configure(ChatClient.builder(model)).defaultAdvisors(wrappingAdvisor);
         assertThat(builder.build().prompt().user("hello").call().content()).isEqualTo("done");
@@ -367,46 +363,60 @@ class InspectionChatClientIntegrationTest {
     }
 
     @Test
-    void cancellationDuringInspectionNeverStartsBusinessModel() throws Exception {
-        CountDownLatch started = new CountDownLatch(1);
-        CountDownLatch interrupted = new CountDownLatch(1);
-        ContentInspector blockingInspector =
-                new ContentInspector() {
-                    @Override
-                    public String inspectorId() {
-                        return "blocking-inspector";
-                    }
+    void cancellationDuringInspectionPreventsModelCallEvenWithFailOpen() throws Exception {
+        CountDownLatch inspectionStarted = new CountDownLatch(1);
+        CountDownLatch inspectionInterrupted = new CountDownLatch(1);
+        CompletableFuture<InspectionException> inspectionFailure = new CompletableFuture<>();
+        ContentInspector blockingInspector = new ContentInspector() {
+            @Override
+            public String inspectorId() {
+                return "blocking-inspector";
+            }
 
-                    public boolean requiresPrivacyProcessedContent() {
-                        return false;
-                    }
+            public boolean requiresPrivacyProcessedContent() {
+                return false;
+            }
 
-                    public InspectionResult inspect(InspectionRequest request) {
-                        started.countDown();
-                        try {
-                            new CountDownLatch(1).await(10, TimeUnit.SECONDS);
-                        } catch (InterruptedException ex) {
-                            Thread.currentThread().interrupt();
-                            interrupted.countDown();
-                        }
-                        InspectionRequest.checkInterrupted();
-                        return InspectionResult.failed(InspectionFailureCode.TIMEOUT);
-                    }
-                };
+            public InspectionResult inspect(InspectionRequest request) {
+                inspectionStarted.countDown();
+                try {
+                    // Wait for cancellation to interrupt this inspector.
+                    new CountDownLatch(1).await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException ex) {
+                    // Restore the interrupt flag cleared by await() so cancellation checks can detect it.
+                    Thread.currentThread().interrupt();
+                    inspectionInterrupted.countDown();
+                }
+                InspectionRequest.checkInterrupted();
+                return InspectionResult.failed(InspectionFailureCode.TIMEOUT);
+            }
+        };
+        InspectionObserver inspectionObserver = new InspectionObserver() {
+            @Override
+            public void onInspection(InspectionReport report) {}
+
+            @Override
+            public void onFailure(InspectionException failure) {
+                inspectionFailure.complete(failure);
+            }
+        };
         RecordingModel model = new RecordingModel();
-        InspectionChatClientConfigurer config =
-                new InspectionChatClientConfigurer(
-                        new InspectionService(
-                                List.of(blockingInspector),
-                                InspectionPolicy.blockFindings(),
-                                InspectionFailurePolicy.FAIL_OPEN));
-        Disposable subscription =
-                config.configure(ChatClient.builder(model)).build().prompt().user("hello").stream()
-                        .content()
-                        .subscribe();
-        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
-        subscription.dispose();
-        assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
-        assertThat(model.calls).hasValue(0);
+        InspectionService inspectionService = new InspectionService(List.of(blockingInspector),
+                InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);
+        InspectionChatClientConfigurer inspectionConfigurer = new InspectionChatClientConfigurer(
+                inspectionService, InspectionLimits.defaults(),
+                PrivacyProcessingStatusResolver.unknown(), inspectionObserver);
+        ChatClient client = inspectionConfigurer.configure(ChatClient.builder(model)).build();
+        Disposable subscription = client.prompt().user("hello").stream().content().subscribe();
+        try {
+            assertThat(inspectionStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            subscription.dispose();
+            assertThat(inspectionInterrupted.await(5, TimeUnit.SECONDS)).isTrue();
+            InspectionException cancellation = inspectionFailure.get(5, TimeUnit.SECONDS);
+            assertThat(cancellation.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+            assertThat(model.calls).hasValue(0);
+        } finally {
+            subscription.dispose();
+        }
     }
 }

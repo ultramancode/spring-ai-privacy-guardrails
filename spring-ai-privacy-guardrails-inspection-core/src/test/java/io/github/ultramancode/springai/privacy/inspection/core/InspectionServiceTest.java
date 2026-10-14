@@ -333,6 +333,8 @@ class InspectionServiceTest {
             inspectorCalls.incrementAndGet();
             return completedWithoutFindings();
         });
+        // Check the later inspector's Privacy requirement before running the first inspector.
+        // FAIL_OPEN must not bypass this prerequisite.
         InspectionService service = new InspectionService(
                 List.of(firstInspector, remoteInspector),
                 InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);

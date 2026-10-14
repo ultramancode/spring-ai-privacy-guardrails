@@ -210,78 +210,80 @@ class InspectionAutoConfigurationTest {
                 .run(context -> assertThat(context).hasFailed());
     }
 
-    @Test
-    void privacyProtectionPrecedesRequiredProtectedInspectionForCallAndStream() {
-        for (boolean streaming : List.of(false, true)) {
-            AtomicInteger inspections = new AtomicInteger();
-            PiiAnalyzer analyzer = (text, options, limits) -> {
-                int start = text.indexOf("Alice");
-                return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
-            };
-            ChatModel model = new ChatModel() {
-                @Override
-                public ChatResponse call(Prompt prompt) {
-                    assertThat(prompt.getContents()).doesNotContain("Alice");
-                    return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
-                }
+    @ParameterizedTest(name = "streaming={0}")
+    @ValueSource(booleans = {false, true})
+    void privacyProtectionPrecedesRequiredProtectedInspectionForCallAndStream(boolean streaming) {
+        AtomicInteger inspections = new AtomicInteger();
+        PiiAnalyzer analyzer = (text, options, limits) -> {
+            int start = text.indexOf("Alice");
+            return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
+        };
+        ChatModel model = new ChatModel() {
+            @Override
+            public ChatResponse call(Prompt prompt) {
+                assertThat(prompt.getContents()).doesNotContain("Alice");
+                return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
+            }
 
-                @Override
-                public Flux<ChatResponse> stream(Prompt prompt) {
-                    return Flux.defer(() -> Flux.just(call(prompt)));
-                }
-            };
-            ContentInspector protectedInspector = new ContentInspector() {
-                @Override
-                public String inspectorId() {
-                    return "protected-content";
-                }
+            @Override
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.defer(() -> Flux.just(call(prompt)));
+            }
+        };
+        // The same inspector requires completed Privacy processing for both input and output.
+        ContentInspector protectedInspector = new ContentInspector() {
+            @Override
+            public String inspectorId() {
+                return "protected-content";
+            }
 
-                @Override
-                public boolean requiresPrivacyProcessedContent() {
-                    return true;
-                }
+            @Override
+            public boolean requiresPrivacyProcessedContent() {
+                return true;
+            }
 
-                @Override
-                public InspectionResult inspect(InspectionRequest request) {
-                    request.requirePrivacyProcessed();
-                    assertThat(request.segments()).allSatisfy(segment -> {
-                        assertThat(segment.privacyProcessingStatus())
-                                .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED);
-                        assertThat(segment.text()).doesNotContain("Alice");
-                    });
-                    inspections.incrementAndGet();
-                    return InspectionResult.completed(
-                            request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()),
-                            List.of());
-                }
-            };
-            runner.withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
-                    .withPropertyValues("spring.ai.inspection.enabled=true",
-                            "spring.ai.inspection.output.enabled=true", "spring.ai.privacy.output.enabled=true")
-                    .withBean(ContentInspector.class, () -> protectedInspector)
-                    .withBean(PiiAnalyzer.class, () -> analyzer)
-                    .run(context -> {
-                        assertThat(context).hasNotFailed();
-                        ModelRequestBoundaryConfigurer privacyConfigurer = context
-                                .getBean(PrivacyChatClientConfigurer.class)
-                                .forToolAdvisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
-                        InspectionChatClientConfigurer inspectionConfigurer =
-                                context.getBean(InspectionChatClientConfigurer.class);
-                        ChatClient client = ModelRequestBoundaryConfigurer.compose(
-                                privacyConfigurer, inspectionConfigurer)
-                                .configure(ChatClient.builder(model))
-                                .build();
-                        ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello Alice");
-                        String result;
-                        if (streaming) {
-                            result = request.stream().content().collectList().block(Duration.ofSeconds(5)).get(0);
-                        } else {
-                            result = request.call().content();
-                        }
-                        assertThat(result).isEqualTo("done");
-                        assertThat(inspections).hasValue(2);
-                    });
-        }
+            @Override
+            public InspectionResult inspect(InspectionRequest request) {
+                request.requirePrivacyProcessed();
+                assertThat(request.segments()).allSatisfy(segment -> {
+                    assertThat(segment.privacyProcessingStatus())
+                            .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED);
+                    assertThat(segment.text()).doesNotContain("Alice");
+                });
+                inspections.incrementAndGet();
+                return InspectionResult.completed(
+                        request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()),
+                        List.of());
+            }
+        };
+        // Enable output inspection and Privacy output protection separately.
+        runner.withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
+                .withPropertyValues("spring.ai.inspection.enabled=true",
+                        "spring.ai.inspection.output.enabled=true", "spring.ai.privacy.output.enabled=true")
+                .withBean(ContentInspector.class, () -> protectedInspector)
+                .withBean(PiiAnalyzer.class, () -> analyzer)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    ModelRequestBoundaryConfigurer privacyConfigurer = context
+                            .getBean(PrivacyChatClientConfigurer.class)
+                            .forToolAdvisorOrder(ToolCallingAdvisor.DEFAULT_ORDER);
+                    InspectionChatClientConfigurer inspectionConfigurer =
+                            context.getBean(InspectionChatClientConfigurer.class);
+                    ChatClient client = ModelRequestBoundaryConfigurer.compose(
+                            privacyConfigurer, inspectionConfigurer)
+                            .configure(ChatClient.builder(model))
+                            .build();
+                    ChatClient.ChatClientRequestSpec request = client.prompt().user("Hello Alice");
+                    String result;
+                    if (streaming) {
+                        result = request.stream().content().collectList().block(Duration.ofSeconds(5)).get(0);
+                    } else {
+                        result = request.call().content();
+                    }
+                    assertThat(result).isEqualTo("done");
+                    // Inspect once before the model call and once before delivering its output.
+                    assertThat(inspections).hasValue(2);
+                });
     }
 
     @ParameterizedTest(name = "streaming={0}, failure={1}, finding={2}")

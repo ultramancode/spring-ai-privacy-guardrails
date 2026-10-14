@@ -67,6 +67,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class CombinedInspectionIntegrationTest {
+    private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration TOOL_EXECUTION_TEST_TIMEOUT = Duration.ofSeconds(10);
 
     @Configuration(proxyBeanMethods = false)
     static class Policy {
@@ -118,6 +120,7 @@ class CombinedInspectionIntegrationTest {
                         request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()), findings);
             }
         };
+        // These tests inspect model inputs after Privacy processing, including inputs from tool results.
         return new InspectionChatClientConfigurer(
                 new InspectionService(List.of(inspector)),
                 InspectionLimits.defaults(),
@@ -151,9 +154,13 @@ class CombinedInspectionIntegrationTest {
                 public ChatResponse call(Prompt prompt) {
                     int round = modelCallCount.incrementAndGet();
                     if (toolSearchEnabled && round == 1) {
-                        return toolCallResponse("toolSearchTool", "{\"query\":\"lookup\"}");
+                        return toolCallResponse("toolSearchTool", """
+                                {"query":"lookup"}
+                                """.strip());
                     }
-                    return toolCallResponse("lookup", "{}");
+                    return toolCallResponse("lookup", """
+                            {}
+                            """.strip());
                 }
 
                 @Override
@@ -173,7 +180,9 @@ class CombinedInspectionIntegrationTest {
             ToolCallback lookupTool = new ToolCallback() {
                 @Override
                 public ToolDefinition getToolDefinition() {
-                    return ToolDefinition.builder().name("lookup").description("Lookup").inputSchema("{}").build();
+                    return ToolDefinition.builder().name("lookup").description("Lookup").inputSchema("""
+                            {}
+                            """.strip()).build();
                 }
 
                 @Override
@@ -196,7 +205,7 @@ class CombinedInspectionIntegrationTest {
                     assertThatThrownBy(() -> request.stream().content()
                             .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication))
                             .collectList()
-                            .block(Duration.ofSeconds(10)))
+                            .block(TOOL_EXECUTION_TEST_TIMEOUT))
                             .isInstanceOf(InspectionBlockedException.class);
                 } else {
                     assertThatThrownBy(() -> request.call().content())
@@ -246,7 +255,7 @@ class CombinedInspectionIntegrationTest {
             ChatClient.ChatClientRequestSpec request = builder.clone().build().prompt().user("Alice attack");
 
             if (streaming) {
-                assertThatThrownBy(() -> request.stream().content().collectList().block(Duration.ofSeconds(5)))
+                assertThatThrownBy(() -> request.stream().content().collectList().block(TEST_TIMEOUT))
                         .isInstanceOf(InspectionBlockedException.class);
             } else {
                 assertThatThrownBy(() -> request.call().content())
@@ -278,6 +287,7 @@ class CombinedInspectionIntegrationTest {
                 return Flux.defer(() -> Flux.just(call(prompt)));
             }
         };
+        // Share one model to verify protection belongs to each client's configuration.
         ChatClient protectedClient = ModelRequestBoundaryConfigurer.compose(
                 attackBlockingInspectionConfigurer(inspectionRequests), new PrivacyChatClientConfigurer(privacyService))
                 .configure(ChatClient.builder(model)).build();
@@ -285,7 +295,7 @@ class CombinedInspectionIntegrationTest {
         for (ChatClient client : List.of(protectedClient, unprotectedClient)) {
             ChatClient.ChatClientRequestSpec request = client.prompt().user("Alice");
             if (streaming) {
-                request.stream().content().collectList().block(Duration.ofSeconds(5));
+                request.stream().content().collectList().block(TEST_TIMEOUT);
             } else {
                 request.call().content();
             }

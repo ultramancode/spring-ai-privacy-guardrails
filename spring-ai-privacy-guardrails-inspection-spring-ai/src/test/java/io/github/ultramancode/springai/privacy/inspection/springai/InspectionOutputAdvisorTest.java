@@ -65,7 +65,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static io.github.ultramancode.springai.privacy.inspection.springai.InspectionRuntimeScopeTest.attackBlockingService;
+import static io.github.ultramancode.springai.privacy.inspection.springai.InspectionTestSupport.attackBlockingService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
@@ -90,10 +90,12 @@ class InspectionOutputAdvisorTest {
     }
 
     private InspectionOutputAdvisor inspectionOutputAdvisor() {
+        // Local rule inspection accepts output without a Privacy processing marker.
         return new InspectionOutputAdvisor(attackBlockingService());
     }
 
     private ChatClient createInspectionClient(ChatModel model, InspectionOutputAdvisor inspectionOutputAdvisor) {
+        // Configure input inspection and output inspection for this client.
         return new InspectionChatClientConfigurer(attackBlockingService()).withOutputInspection(inspectionOutputAdvisor)
                 .configure(ChatClient.builder(model)).build();
     }
@@ -153,7 +155,9 @@ class InspectionOutputAdvisorTest {
     private ChatResponse toolCallResponse(String text) {
         return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content(text)
                 .toolCalls(List.of(new AssistantMessage.ToolCall("id", "function", "lookup",
-                        "{\"q\":\"attack argument\"}"))).build())));
+                        """
+                                {"q":"attack argument"}
+                                """.strip()))).build())));
     }
 
     private ToolCallback toolCallback(boolean returnDirect, String toolResultText, AtomicInteger toolCallCount) {
@@ -164,7 +168,9 @@ class InspectionOutputAdvisorTest {
             AtomicInteger toolCallCount) {
         return new ToolCallback() {
             public ToolDefinition getToolDefinition() {
-                return ToolDefinition.builder().name(toolName).description("fixture").inputSchema("{}").build();
+                return ToolDefinition.builder().name(toolName).description("fixture").inputSchema("""
+                        {}
+                        """.strip()).build();
             }
 
             public ToolMetadata getToolMetadata() {
@@ -279,7 +285,9 @@ class InspectionOutputAdvisorTest {
                 new Generation(AssistantMessage.builder().content("safe").properties(Map.of("thinking", "attack")).build()),
                 new Generation(new AssistantMessage("safe"), ChatGenerationMetadata.builder().metadata("reasoningContent", "attack").build()),
                 new Generation(AssistantMessage.builder().content("safe").toolCalls(List.of(
-                        new AssistantMessage.ToolCall("id", "function", "tool", "{\"q\":\"attack\"}"))).build()));
+                        new AssistantMessage.ToolCall("id", "function", "tool", """
+                                {"q":"attack"}
+                                """.strip()))).build()));
         for (Generation generation : generationsWithExcludedContent) {
             ChatResponse response = new ChatResponse(List.of(generation));
             ChatClient client = createInspectionClient(model(response, Flux.just(response)), inspectionOutputAdvisor());
@@ -297,14 +305,20 @@ class InspectionOutputAdvisorTest {
 
     @Test
     void streamingCombinesTextByChoiceIndex() {
-        ChatResponse firstFrame = new ChatResponse(List.of(indexedGeneration(0, "safe"), indexedGeneration(1, "{\"text\":\"at\\u0074")));
-        ChatResponse secondFrame = new ChatResponse(List.of(indexedGeneration(1, "ack\"}"), indexedGeneration(0, " value")));
+        ChatResponse firstFrame = new ChatResponse(List.of(indexedGeneration(0, "safe"), indexedGeneration(1, """
+                {"text":"at\\u0074
+                """.strip())));
+        ChatResponse secondFrame = new ChatResponse(List.of(indexedGeneration(1, """
+                ack"}
+                """.strip()), indexedGeneration(0, " value")));
         List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
         ChatClient client = createInspectionClient(model(firstFrame, Flux.just(firstFrame, secondFrame)), recordingOutputAdvisor(inspectedOutputTexts));
         StepVerifier.create(client.prompt().user("hello").stream().chatResponse())
                 .assertNext(actual -> assertThat(actual).isSameAs(firstFrame))
                 .assertNext(actual -> assertThat(actual).isSameAs(secondFrame)).verifyComplete();
-        assertThat(inspectedOutputTexts).containsExactly("safe value", "{\"text\":\"at\\u0074ack\"}");
+        assertThat(inspectedOutputTexts).containsExactly("safe value", """
+                {"text":"at\\u0074ack"}
+                """.strip());
 
         ChatResponse responseWithoutChoiceIndex = response("tail");
         // The next frame has no choice index, so it cannot be matched to the preceding indexed choices.
@@ -328,7 +342,9 @@ class InspectionOutputAdvisorTest {
         ChatResponse secondReasoningFrame = new ChatResponse(List.of(new Generation(DeepSeekAssistantMessage.builder().content("").reasoningContent("tack").build())));
         StepVerifier.create(createInspectionClient(model(firstReasoningFrame, Flux.just(firstReasoningFrame, secondReasoningFrame)), inspectionOutputAdvisor()).prompt().user("hello").stream().chatResponse())
                 .expectNextCount(2).verifyComplete();
-        ChatResponse safeResponse = new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("{\"answer\":\"safe\"}")
+        ChatResponse safeResponse = new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("""
+                {"answer":"safe"}
+                """.strip())
                 .properties(Map.of("signature", "attack", "thinking", Map.of("opaque", "attack"))).build())));
         ChatClient safeOutputClient = createInspectionClient(
                 model(safeResponse, Flux.just(safeResponse)), inspectionOutputAdvisor());
@@ -342,18 +358,25 @@ class InspectionOutputAdvisorTest {
                 "^\\{\\s*\"action\"\\s*:\\s*\"attack\"\\s*\\}$");
         InspectionService inspectionService = new InspectionService(List.of(new RuleBasedContentInspector("rules", List.of(rule))));
         InspectionOutputAdvisor inspectionOutputAdvisor = new InspectionOutputAdvisor(inspectionService);
-        String allowedJson = "{\"note\":\"attack\"}";
+        String allowedJson = """
+                {"note":"attack"}
+                """.strip();
         ChatResponse allowedResponse = response(allowedJson);
         assertThat(invoke(createInspectionClient(model(allowedResponse, Flux.just(allowedResponse)), inspectionOutputAdvisor), streaming)).isEqualTo(allowedJson);
 
-        ChatResponse blockedResponse = response("{\n  \"action\": \"attack\"\n}");
+        ChatResponse blockedResponse = response("""
+                {
+                  "action": "attack"
+                }
+                """.strip());
         assertOutputBlocked(createInspectionClient(model(blockedResponse, Flux.just(blockedResponse)), inspectionOutputAdvisor), streaming);
     }
 
     @Test
     void streamBufferingStopsWhenLimitsAreExceeded() {
+        String firstOutputText = "safe";
         List<InspectionLimits> restrictiveLimits = List.of(
-                new InspectionLimits(2, 3, TEST_TIMEOUT), // "safe" exceeds the three-character limit.
+                new InspectionLimits(2, firstOutputText.length() - 1, TEST_TIMEOUT),
                 new InspectionLimits(1, 100, TEST_TIMEOUT)); // Two output bodies exceed the one-segment limit.
 
         for (InspectionLimits limits : restrictiveLimits) {
@@ -369,7 +392,7 @@ class InspectionOutputAdvisorTest {
             };
             InspectionOutputAdvisor inspectionOutputAdvisor = new InspectionOutputAdvisor(
                     attackBlockingService(), limits, observer, 10, TEST_TIMEOUT);
-            ChatResponse responseExceedingLimits = new ChatResponse(List.of(indexedGeneration(0, "safe"), indexedGeneration(1, "x")));
+            ChatResponse responseExceedingLimits = new ChatResponse(List.of(indexedGeneration(0, firstOutputText), indexedGeneration(1, "x")));
             StepVerifier.create(createInspectionClient(
                             model(responseExceedingLimits, Flux.just(responseExceedingLimits)), inspectionOutputAdvisor)
                     .prompt().user("hello").stream().content())
@@ -426,7 +449,14 @@ class InspectionOutputAdvisorTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void countsEachOutputBodyAsOneSegment(boolean streaming) {
-        String jsonBody = "{\"first\":\"safe\",\"second\":\"safe\",\"enabled\":true,\"missing\":null}";
+        String jsonBody = """
+                {
+                  "first": "safe",
+                  "second": "safe",
+                  "enabled": true,
+                  "missing": null
+                }
+                """;
         InspectionLimits inspectionLimits = new InspectionLimits(1, jsonBody.length(), TEST_TIMEOUT);
         InspectionOutputAdvisor inspectionOutputAdvisor = new InspectionOutputAdvisor(
                 attackBlockingService(), inspectionLimits, InspectionObserver.noop(), 10, TEST_TIMEOUT);
@@ -465,6 +495,7 @@ class InspectionOutputAdvisorTest {
                 return "output-status";
             }
 
+            // Skip the service precheck so inspect() can capture the output status before rejecting it.
             public boolean requiresPrivacyProcessedContent() {
                 return false;
             }
@@ -479,6 +510,7 @@ class InspectionOutputAdvisorTest {
         PrivacyService privacyService = new PrivacyService(List.of((text, options, limits) -> List.of()), PiiAnalysisOptions.defaults());
         InspectionChatClientConfigurer inspectionChatClientConfigurer = new InspectionChatClientConfigurer(attackBlockingService())
                 .withOutputInspection(new InspectionOutputAdvisor(new InspectionService(List.of(inspector))));
+        // Enable input Privacy only. Its processing marker must not carry over to the model's output.
         ChatClient client = ModelRequestBoundaryConfigurer.compose(new PrivacyChatClientConfigurer(privacyService), inspectionChatClientConfigurer)
                 .configure(ChatClient.builder(model(response("fresh"), Flux.just(response("fresh"))))).build();
         assertThatThrownBy(() -> invoke(client, streaming)).hasMessageContaining("PRIVACY_PROCESSING_REQUIRED");
@@ -487,150 +519,175 @@ class InspectionOutputAdvisorTest {
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void inspectsAllDeliveredTextAfterToolExecution(boolean streaming) {
-        for (String finalText : List.of("safe final", "attack")) {
-            AtomicInteger toolCallCount = new AtomicInteger();
-            AtomicInteger modelCallCount = new AtomicInteger();
-            List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
-            InspectionOutputAdvisor inspectionOutputAdvisor = recordingOutputAdvisor(inspectedOutputTexts);
-            ChatClient client = ChatClient.builder(toolCallingModel(modelCallCount, "checking ", finalText, 2))
-                    .defaultAdvisors(inspectionOutputAdvisor).defaultTools(toolCallback(false, "safe tool", toolCallCount)).build();
-            String expectedText = finalText;
-            if (streaming) {
-                expectedText = "checking checking " + finalText;
-            }
-            if (finalText.equals("attack")) {
-                assertOutputBlocked(client, streaming);
-            } else {
-                assertThat(invoke(client, streaming)).isEqualTo(expectedText);
-            }
-            assertThat(toolCallCount).hasValue(2);
-            assertThat(inspectedOutputTexts).containsExactly(expectedText);
+    @ParameterizedTest(name = "streaming={0}, finalText={1}")
+    @CsvSource(textBlock = """
+            # streaming, finalText
+            false, safe final
+            false, attack
+            true,  safe final
+            true,  attack
+            """)
+    void inspectsAllDeliveredTextAfterToolExecution(boolean streaming, String finalText) {
+        AtomicInteger toolCallCount = new AtomicInteger();
+        AtomicInteger modelCallCount = new AtomicInteger();
+        List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
+        InspectionOutputAdvisor inspectionOutputAdvisor = recordingOutputAdvisor(inspectedOutputTexts);
+        ChatClient client = ChatClient.builder(toolCallingModel(modelCallCount, "checking ", finalText, 2))
+                .defaultAdvisors(inspectionOutputAdvisor).defaultTools(toolCallback(false, "safe tool", toolCallCount)).build();
+        String expectedText = finalText;
+        if (streaming) {
+            expectedText = "checking checking " + finalText;
         }
+        if (finalText.equals("attack")) {
+            assertOutputBlocked(client, streaming);
+        } else {
+            assertThat(invoke(client, streaming)).isEqualTo(expectedText);
+        }
+        assertThat(toolCallCount).hasValue(2);
+        assertThat(inspectedOutputTexts).containsExactly(expectedText);
     }
 
-    @Test
-    void streamingInspectsModelTextBeforeAndAfterToolCall() {
-        for (String textBeforeToolCall : List.of("attack ", "at")) {
-            List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
-            AtomicInteger toolCallCount = new AtomicInteger();
-            String textAfterToolCall = "safe final";
-            if (textBeforeToolCall.equals("at")) {
-                textAfterToolCall = "tack";
-            }
-            ChatModel model = toolCallingModel(
-                    new AtomicInteger(), textBeforeToolCall, textAfterToolCall, 1);
-            ToolCallback lookupTool = toolCallback(false, "safe tool", toolCallCount);
-            InspectionOutputAdvisor inspectionOutputAdvisor = recordingOutputAdvisor(inspectedOutputTexts);
+    @ParameterizedTest(name = "before={0}, after={1}")
+    @CsvSource(textBlock = """
+            # textBeforeToolCall, textAfterToolCall
+            'attack ', safe final
+            at,        tack
+            """)
+    void streamingInspectsModelTextBeforeAndAfterToolCall(String textBeforeToolCall, String textAfterToolCall) {
+        List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
+        AtomicInteger toolCallCount = new AtomicInteger();
+        ChatModel model = toolCallingModel(
+                new AtomicInteger(), textBeforeToolCall, textAfterToolCall, 1);
+        ToolCallback lookupTool = toolCallback(false, "safe tool", toolCallCount);
+        InspectionOutputAdvisor inspectionOutputAdvisor = recordingOutputAdvisor(inspectedOutputTexts);
 
-            ChatClient client = ChatClient.builder(model)
-                    .defaultAdvisors(inspectionOutputAdvisor)
-                    .defaultTools(lookupTool)
-                    .build();
+        ChatClient client = ChatClient.builder(model)
+                .defaultAdvisors(inspectionOutputAdvisor)
+                .defaultTools(lookupTool)
+                .build();
 
-            StepVerifier.create(client.prompt().user("hello").stream().content())
-                    .expectError(InspectionBlockedException.class).verify(TEST_TIMEOUT);
-            // Inspect model-generated text before and after the tool call.
-            // The tool result ("safe tool") is not included.
-            assertThat(inspectedOutputTexts).containsExactly(textBeforeToolCall + textAfterToolCall);
-            assertThat(toolCallCount).hasValue(1);
-        }
+        StepVerifier.create(client.prompt().user("hello").stream().content())
+                .expectError(InspectionBlockedException.class).verify(TEST_TIMEOUT);
+        // Inspect model-generated text before and after the tool call.
+        // The tool result ("safe tool") is not included.
+        assertThat(inspectedOutputTexts).containsExactly(textBeforeToolCall + textAfterToolCall);
+        assertThat(toolCallCount).hasValue(1);
     }
 
-    @ParameterizedTest
-    @CsvSource({"false,1", "true,1", "false,2", "true,2"})
-    void inspectsAllDirectToolResultsAndPreservesStreamingText(boolean streaming, int toolResultCount) {
+    @ParameterizedTest(name = "streaming={0}, toolResultCount={1}, directToolResultText={2}")
+    @CsvSource(textBlock = """
+            # streaming, toolResultCount, directToolResultText
+            false, 1, safe direct
+            false, 1, attack
+            false, 2, safe direct
+            false, 2, attack
+            true,  1, safe direct
+            true,  1, attack
+            true,  2, safe direct
+            true,  2, attack
+            """)
+    void inspectsAllDirectToolResultsAndPreservesStreamingText(
+            boolean streaming, int toolResultCount, String directToolResultText) {
         String intermediateModelText = "checking ";
-        for (String directToolResultText : List.of("safe direct", "attack")) {
-            AtomicInteger toolCallCount = new AtomicInteger();
-            List<AssistantMessage.ToolCall> toolCalls;
-            List<String> expectedToolResultTexts;
-            if (toolResultCount == 1) {
-                toolCalls = List.of(new AssistantMessage.ToolCall("last", "function", "lastLookup", "{}"));
-                expectedToolResultTexts = List.of(directToolResultText);
-            } else {
-                toolCalls = List.of(
-                        new AssistantMessage.ToolCall("first", "function", "firstLookup", "{}"),
-                        new AssistantMessage.ToolCall("last", "function", "lastLookup", "{}"));
-                expectedToolResultTexts = List.of("safe first", directToolResultText);
-            }
-
-            List<String> expectedInspectedOutputTexts = new ArrayList<>();
-            if (streaming) {
-                expectedInspectedOutputTexts.add(intermediateModelText);
-            }
-            expectedInspectedOutputTexts.addAll(expectedToolResultTexts);
-
-            // invoke() reads content(), so the expected text includes only the first tool result.
-            String expectedDeliveredOutputText = expectedToolResultTexts.get(0);
-            if (streaming) {
-                expectedDeliveredOutputText = intermediateModelText + expectedDeliveredOutputText;
-            }
-
-            AssistantMessage toolCallMessage = AssistantMessage.builder().content("").toolCalls(toolCalls).build();
-            ChatResponse toolCallResponse = new ChatResponse(List.of(new Generation(toolCallMessage)));
-            ChatModel model = new ChatModel() {
-                public ChatOptions getOptions() {
-                    return ToolCallingChatOptions.builder().build();
-                }
-
-                public ChatResponse call(Prompt prompt) {
-                    return toolCallResponse;
-                }
-
-                public Flux<ChatResponse> stream(Prompt prompt) {
-                    return Flux.just(response(intermediateModelText), toolCallResponse);
-                }
-            };
-            List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
-            ChatClient client = ChatClient.builder(model)
-                    .defaultAdvisors(recordingOutputAdvisor(inspectedOutputTexts))
-                    .defaultTools(toolCallback("firstLookup", true, "safe first", toolCallCount),
-                            toolCallback("lastLookup", true, directToolResultText, toolCallCount))
-                    .build();
-            if (directToolResultText.equals("attack")) {
-                assertOutputBlocked(client, streaming);
-            } else {
-                assertThat(invoke(client, streaming)).isEqualTo(expectedDeliveredOutputText);
-            }
-            assertThat(toolCallCount).hasValue(toolResultCount);
-            assertThat(inspectedOutputTexts).containsExactlyElementsOf(expectedInspectedOutputTexts);
+        AtomicInteger toolCallCount = new AtomicInteger();
+        List<AssistantMessage.ToolCall> toolCalls;
+        List<String> expectedToolResultTexts;
+        if (toolResultCount == 1) {
+            toolCalls = List.of(new AssistantMessage.ToolCall("last", "function", "lastLookup", """
+                    {}
+                    """.strip()));
+            expectedToolResultTexts = List.of(directToolResultText);
+        } else {
+            toolCalls = List.of(
+                    new AssistantMessage.ToolCall("first", "function", "firstLookup", """
+                            {}
+                            """.strip()),
+                    new AssistantMessage.ToolCall("last", "function", "lastLookup", """
+                            {}
+                            """.strip()));
+            expectedToolResultTexts = List.of("safe first", directToolResultText);
         }
+
+        List<String> expectedInspectedOutputTexts = new ArrayList<>();
+        if (streaming) {
+            expectedInspectedOutputTexts.add(intermediateModelText);
+        }
+        expectedInspectedOutputTexts.addAll(expectedToolResultTexts);
+
+        // invoke() reads content(), so the expected text includes only the first tool result.
+        String expectedDeliveredOutputText = expectedToolResultTexts.get(0);
+        if (streaming) {
+            expectedDeliveredOutputText = intermediateModelText + expectedDeliveredOutputText;
+        }
+
+        AssistantMessage toolCallMessage = AssistantMessage.builder().content("").toolCalls(toolCalls).build();
+        ChatResponse toolCallResponse = new ChatResponse(List.of(new Generation(toolCallMessage)));
+        ChatModel model = new ChatModel() {
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
+            public ChatResponse call(Prompt prompt) {
+                return toolCallResponse;
+            }
+
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.just(response(intermediateModelText), toolCallResponse);
+            }
+        };
+        List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
+        ChatClient client = ChatClient.builder(model)
+                .defaultAdvisors(recordingOutputAdvisor(inspectedOutputTexts))
+                .defaultTools(toolCallback("firstLookup", true, "safe first", toolCallCount),
+                        toolCallback("lastLookup", true, directToolResultText, toolCallCount))
+                .build();
+        if (directToolResultText.equals("attack")) {
+            assertOutputBlocked(client, streaming);
+        } else {
+            assertThat(invoke(client, streaming)).isEqualTo(expectedDeliveredOutputText);
+        }
+        assertThat(toolCallCount).hasValue(toolResultCount);
+        assertThat(inspectedOutputTexts).containsExactlyElementsOf(expectedInspectedOutputTexts);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void inspectsTextAfterPrivacyOutputTransformationInEitherRegistrationOrder(boolean streaming) {
-        for (boolean inspectionOutputAdvisorFirst : List.of(false, true)) {
-            for (PrivacyOutputAction action : List.of(PrivacyOutputAction.REDACT,
-                    PrivacyOutputAction.TOKENIZE)) {
-                PiiAnalyzer analyzer = (text, options, limits) -> {
-                    int attackStartIndex = text.indexOf("attack");
-                    return attackStartIndex < 0 ? List.of() : List.of(new PiiSpan(
-                            "PERSON", attackStartIndex, attackStartIndex + "attack".length(), 0.95));
-                };
+    @ParameterizedTest(name = "streaming={0}, inspectionOutputAdvisorFirst={1}, action={2}")
+    @CsvSource(textBlock = """
+            # streaming, inspectionOutputAdvisorFirst, action
+            false, false, REDACT
+            false, false, TOKENIZE
+            false, true,  REDACT
+            false, true,  TOKENIZE
+            true,  false, REDACT
+            true,  false, TOKENIZE
+            true,  true,  REDACT
+            true,  true,  TOKENIZE
+            """)
+    void inspectsTextAfterPrivacyOutputTransformationInEitherRegistrationOrder(
+            boolean streaming, boolean inspectionOutputAdvisorFirst, PrivacyOutputAction action) {
+        PiiAnalyzer analyzer = (text, options, limits) -> {
+            int attackStartIndex = text.indexOf("attack");
+            return attackStartIndex < 0 ? List.of() : List.of(new PiiSpan(
+                    "PERSON", attackStartIndex, attackStartIndex + "attack".length(), 0.95));
+        };
 
-                PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
-                PrivacyChatClientConfigurer privacyChatClientConfigurer = PrivacyChatClientConfigurer.builder(privacyService)
-                        .outputProtection(action, "blocked").build();
-                List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
-                InspectionOutputAdvisor inspectionOutputAdvisor = recordingOutputAdvisor(inspectedOutputTexts);
-                ChatClient.Builder builder = ChatClient.builder(model(response("attack"), Flux.just(response("at"), response("tack"))));
-                if (inspectionOutputAdvisorFirst) {
-                    builder.defaultAdvisors(inspectionOutputAdvisor);
-                }
-                privacyChatClientConfigurer.configure(builder);
-                if (!inspectionOutputAdvisorFirst) {
-                    builder.defaultAdvisors(inspectionOutputAdvisor);
-                }
-                String deliveredOutputText = invoke(builder.build(), streaming);
-                assertThat(deliveredOutputText).doesNotContain("attack");
-                assertThat(inspectedOutputTexts).containsExactly(deliveredOutputText);
-                assertThat(privacyService.activeSessionCount()).isZero();
-            }
+        PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+        PrivacyChatClientConfigurer privacyChatClientConfigurer = PrivacyChatClientConfigurer.builder(privacyService)
+                .outputProtection(action, "blocked").build();
+        List<String> inspectedOutputTexts = new CopyOnWriteArrayList<>();
+        InspectionOutputAdvisor inspectionOutputAdvisor = recordingOutputAdvisor(inspectedOutputTexts);
+        ChatClient.Builder builder = ChatClient.builder(model(response("attack"), Flux.just(response("at"), response("tack"))));
+        // Advisor order must put Privacy output protection before inspection in either registration order.
+        if (inspectionOutputAdvisorFirst) {
+            builder.defaultAdvisors(inspectionOutputAdvisor);
         }
+        privacyChatClientConfigurer.configure(builder);
+        if (!inspectionOutputAdvisorFirst) {
+            builder.defaultAdvisors(inspectionOutputAdvisor);
+        }
+        String deliveredOutputText = invoke(builder.build(), streaming);
+        assertThat(deliveredOutputText).doesNotContain("attack");
+        assertThat(inspectedOutputTexts).containsExactly(deliveredOutputText);
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @Test

@@ -14,6 +14,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import io.github.ultramancode.springai.privacy.inspection.rules.InspectionRule;
 import io.github.ultramancode.springai.privacy.inspection.rules.RuleBasedContentInspector;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionTestSupport.RecordingChatModel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -28,13 +29,8 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.util.MimeTypeUtils;
@@ -58,6 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InspectionChatClientIntegrationTest {
+    private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
 
     private InspectionChatClientConfigurer attackBlockingInspectionConfigurer() {
         InspectionRule rule = InspectionRule.literal("attack-rule", InspectionFinding.Category.PROMPT_INJECTION, "attack");
@@ -65,42 +62,8 @@ class InspectionChatClientIntegrationTest {
         return new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)));
     }
 
-    private ChatClient createInspectionClient(RecordingModel model) {
+    private ChatClient createInspectionClient(RecordingChatModel model) {
         return attackBlockingInspectionConfigurer().configure(ChatClient.builder(model)).build();
-    }
-
-    static final class RecordingModel implements ChatModel {
-        final AtomicInteger modelCallCount = new AtomicInteger();
-        final AtomicReference<Prompt> receivedPrompt = new AtomicReference<>();
-        boolean lookupToolCallEnabled;
-
-        @Override
-        public ChatOptions getOptions() {
-            return ToolCallingChatOptions.builder().build();
-        }
-
-        @Override
-        public ChatResponse call(Prompt prompt) {
-            receivedPrompt.set(prompt);
-            modelCallCount.incrementAndGet();
-            if (lookupToolCallEnabled
-                    && prompt.getInstructions().stream()
-                            .noneMatch(ToolResponseMessage.class::isInstance)) {
-                AssistantMessage.ToolCall toolCall =
-                        new AssistantMessage.ToolCall("call-1", "function", "lookup", "{}");
-                AssistantMessage assistantMessage = AssistantMessage.builder()
-                        .content("")
-                        .toolCalls(List.of(toolCall))
-                        .build();
-                return new ChatResponse(List.of(new Generation(assistantMessage)));
-            }
-            return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
-        }
-
-        @Override
-        public Flux<ChatResponse> stream(Prompt prompt) {
-            return Flux.defer(() -> Flux.just(call(prompt)));
-        }
     }
 
     private ToolCallback lookupToolReturning(String toolResult) {
@@ -109,7 +72,9 @@ class InspectionChatClientIntegrationTest {
                 return ToolDefinition.builder()
                         .name("lookup")
                         .description("Lookup a fixture")
-                        .inputSchema("{}")
+                        .inputSchema("""
+                                {}
+                                """.strip())
                         .build();
             }
 
@@ -121,7 +86,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void allowsSafeInputAndBlocksAttackBeforeModelCall() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         ChatClient client = createInspectionClient(model);
         assertThat(client.prompt().user("hello").call().content()).isEqualTo("done");
         assertThatThrownBy(() -> client.prompt().user("attack").call().content())
@@ -131,45 +96,44 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void allowsSafeInputAndBlocksAttackBeforeModelCallWhenStreaming() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         Flux<String> publisher = createInspectionClient(model).prompt().user("attack").stream().content();
         assertThat(model.modelCallCount).hasValue(0);
         StepVerifier.create(publisher)
                 .expectError(InspectionBlockedException.class)
-                .verify(Duration.ofSeconds(5));
+                .verify(TEST_TIMEOUT);
         assertThat(model.modelCallCount).hasValue(0);
         StepVerifier.create(createInspectionClient(model).prompt().user("hello").stream().content())
                 .expectNext("done")
                 .expectComplete()
-                .verify(Duration.ofSeconds(5));
+                .verify(TEST_TIMEOUT);
+        assertThat(model.modelCallCount).hasValue(1);
+    }
+
+    @ParameterizedTest(name = "streaming={0}")
+    @ValueSource(booleans = {false, true})
+    void blocksAttackToolResultBeforeSecondModelCall(boolean streaming) {
+        RecordingChatModel model = new RecordingChatModel();
+        model.lookupToolCallEnabled = true;
+        ChatClient client =
+                attackBlockingInspectionConfigurer()
+                        .configure(ChatClient.builder(model))
+                        .defaultTools(lookupToolReturning("attack"))
+                        .build();
+        if (streaming) {
+            StepVerifier.create(client.prompt().user("lookup").stream().content())
+                    .expectError(InspectionBlockedException.class)
+                    .verify(TEST_TIMEOUT);
+        } else {
+            assertThatThrownBy(() -> client.prompt().user("lookup").call().content())
+                    .isInstanceOf(InspectionBlockedException.class);
+        }
         assertThat(model.modelCallCount).hasValue(1);
     }
 
     @Test
-    void blocksAttackToolResultBeforeSecondModelCall() {
-        for (boolean streaming : List.of(false, true)) {
-            RecordingModel model = new RecordingModel();
-            model.lookupToolCallEnabled = true;
-            ChatClient client =
-                    attackBlockingInspectionConfigurer()
-                            .configure(ChatClient.builder(model))
-                            .defaultTools(lookupToolReturning("attack"))
-                            .build();
-            if (streaming) {
-                StepVerifier.create(client.prompt().user("lookup").stream().content())
-                        .expectError(InspectionBlockedException.class)
-                        .verify(Duration.ofSeconds(5));
-            } else {
-                assertThatThrownBy(() -> client.prompt().user("lookup").call().content())
-                        .isInstanceOf(InspectionBlockedException.class);
-            }
-            assertThat(model.modelCallCount).hasValue(1);
-        }
-    }
-
-    @Test
     void allowsSafeToolResultBeforeSecondModelCall() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         model.lookupToolCallEnabled = true;
         ChatClient client =
                 attackBlockingInspectionConfigurer()
@@ -182,7 +146,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void blocksAttackInSystemMessageBeforeModelCall() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         ChatClient client = createInspectionClient(model);
         Prompt prompt = new Prompt(List.of(new SystemMessage("attack"), new UserMessage("hello")));
         assertThatThrownBy(() -> client.prompt(prompt).call().content())
@@ -211,7 +175,7 @@ class InspectionChatClientIntegrationTest {
                         List.of());
             }
         };
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         ChatClient client = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)))
                 .configure(ChatClient.builder(model)).build();
         Prompt prompt = new Prompt(List.of(
@@ -228,7 +192,7 @@ class InspectionChatClientIntegrationTest {
             StepVerifier.create(client.prompt(prompt).stream().content())
                     .expectNext("done")
                     .expectComplete()
-                    .verify(Duration.ofSeconds(5));
+                    .verify(TEST_TIMEOUT);
         } else {
             assertThat(client.prompt(prompt).call().content()).isEqualTo("done");
         }
@@ -257,14 +221,14 @@ class InspectionChatClientIntegrationTest {
 
         for (Map.Entry<String, Message> entry : unsupportedMessages.entrySet()) {
             String description = entry.getKey();
-            RecordingModel model = new RecordingModel();
+            RecordingChatModel model = new RecordingChatModel();
             ChatClient.ChatClientRequestSpec request = createInspectionClient(model).prompt(new Prompt(List.of(entry.getValue())));
             if (streaming) {
                 StepVerifierOptions verifierOptions = StepVerifierOptions.create().scenarioName(description);
                 StepVerifier.create(request.stream().content(), verifierOptions)
                         .expectErrorMatches(error -> error instanceof InspectionException failure
                                 && failure.failureCode() == InspectionFailureCode.UNSUPPORTED_CONTENT)
-                        .verify(Duration.ofSeconds(5));
+                        .verify(TEST_TIMEOUT);
             } else {
                 assertThatThrownBy(() -> request.call().content())
                         .as(description)
@@ -277,7 +241,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void blocksAttackInRetrievedContentBeforeModelCall() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         CallAdvisor retrievalAdvisor = new CallAdvisor() {
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
                 Prompt promptWithRetrievedContent = new Prompt(List.of(
@@ -303,7 +267,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void permitsApplicationOwnedFormattingWithoutInspectingIt() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         ChatClient client = createInspectionClient(model);
         String key = ChatClientAttributes.OUTPUT_FORMAT.getKey();
         assertThat(client.prompt().user("hello").advisors(a -> a.param(key, "attack"))
@@ -315,7 +279,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void rejectsRequestAdvisorAfterModelAdvisorBeforeModelCall() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         CallAdvisor lateRequestAdvisor = new CallAdvisor() {
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
                 return chain.nextCall(request);
@@ -339,7 +303,7 @@ class InspectionChatClientIntegrationTest {
 
     @Test
     void allowsEarlierAdvisorToWrapInspectedCall() {
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         AtomicInteger wrappedCallCount = new AtomicInteger();
         CallAdvisor wrappingAdvisor = new CallAdvisor() {
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
@@ -400,7 +364,7 @@ class InspectionChatClientIntegrationTest {
                 inspectionFailure.complete(failure);
             }
         };
-        RecordingModel model = new RecordingModel();
+        RecordingChatModel model = new RecordingChatModel();
         InspectionService inspectionService = new InspectionService(List.of(blockingInspector),
                 InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);
         InspectionChatClientConfigurer inspectionConfigurer = new InspectionChatClientConfigurer(

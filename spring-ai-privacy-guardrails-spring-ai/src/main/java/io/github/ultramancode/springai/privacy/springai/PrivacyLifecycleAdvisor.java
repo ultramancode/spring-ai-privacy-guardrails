@@ -24,8 +24,7 @@ import java.util.Objects;
  * Owns the privacy session around the advisors that execute inside its configured position
  * and applies the optional output policy when control returns to that position.
  * The default order wraps the standard privacy bundle. Applications remain responsible for
- * mutations performed by advisors placed outside it. Unrelated advisor classes and numeric
- * orders are application-owned and are not admission rules for this boundary.
+ * mutations performed by advisors placed outside it.
  */
 public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -67,12 +66,9 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
             if (outputAdvisor != null) {
                 response = outputAdvisor.protectAtApplicationBoundary(session.handle(), response);
             }
-            response = OutputResponseContext.clearInternalMarkers(
-                    PrivacyRequestContextSupport.stripInternalPrivacyEntries(response));
-            if (outputAdvisor != null && OutputResponseContext.isPrivacyTrackingRequested(request)) {
-                return OutputResponseContext.markPrivacyProcessed(response);
-            }
-            return response;
+            boolean shouldMarkPrivacyProcessed = outputAdvisor != null
+                    && OutputResponseContext.isPrivacyTrackingRequested(request);
+            return prepareResponseContext(response, shouldMarkPrivacyProcessed);
         }
     }
 
@@ -90,14 +86,9 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
                     if (outputAdvisor != null) {
                         responses = outputAdvisor.protectAtApplicationBoundary(session.handle(), responses);
                     }
-                    return responses.map(response -> {
-                        ChatClientResponse cleaned = OutputResponseContext.clearPrivacyTracking(
-                                PrivacyRequestContextSupport.stripInternalPrivacyEntries(response));
-                        if (outputAdvisor != null && OutputResponseContext.isPrivacyTrackingRequested(request)) {
-                            return OutputResponseContext.markPrivacyProcessed(cleaned);
-                        }
-                        return cleaned;
-                    });
+                    boolean shouldMarkPrivacyProcessed = outputAdvisor != null
+                            && OutputResponseContext.isPrivacyTrackingRequested(request);
+                    return responses.map(response -> prepareResponseContext(response, shouldMarkPrivacyProcessed));
                 },
                 PrivacySession::close
         );
@@ -111,6 +102,18 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
     @Override
     public int getOrder() {
         return this.order;
+    }
+
+    private ChatClientResponse prepareResponseContext(
+            ChatClientResponse response,
+            boolean shouldMarkPrivacyProcessed
+    ) {
+        ChatClientResponse cleanedResponse = PrivacyRequestContextSupport.withoutInternalPrivacyContext(response);
+        cleanedResponse = OutputResponseContext.clearPrivacyTracking(cleanedResponse);
+        if (shouldMarkPrivacyProcessed) {
+            return OutputResponseContext.markPrivacyProcessed(cleanedResponse);
+        }
+        return cleanedResponse;
     }
 
     private PrivacyOutputAdvisor validateBundleAndFindOutputAdvisor(List<? extends Advisor> advisors) {

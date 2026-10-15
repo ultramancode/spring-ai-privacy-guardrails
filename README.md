@@ -176,7 +176,7 @@ spring:
             score: 0.90
 ```
 
-The `output` section is optional. When omitted, final-response inspection is
+The `output` section is optional. When omitted, privacy output protection is
 disabled.
 
 This example rule is application-specific and detects only values in the

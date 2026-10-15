@@ -22,8 +22,11 @@ import java.util.Objects;
  *
  * <p>Inspection covers system, user and assistant text, tool response bodies,
  * assistant tool-call arguments and supported reasoning text. Tool definitions,
- * tool-call identifiers and other metadata are excluded. Media and unsupported
- * message implementations stop the request before the model call.</p>
+ * tool-call identifiers and other metadata are excluded.</p>
+ *
+ * <p>Input messages must use the exact {@code SystemMessage}, {@code UserMessage},
+ * {@code AssistantMessage}, {@code ToolResponseMessage} or {@code DeepSeekAssistantMessage} type.
+ * Media and other message implementations or subclasses stop the request before the model call.</p>
  *
  * <p>A BLOCK decision raises {@link InspectionBlockedException}. Failures that prevent
  * a decision, including unsupported input extraction, raise {@link InspectionException}.

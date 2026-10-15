@@ -68,9 +68,9 @@ final class PrivacyBufferedStreamTransformer {
         }
 
         List<ChatClientResponse> transformed = new ArrayList<>(sourceResponses.size());
-        for (int responseIndex = 0; responseIndex < sourceResponses.size(); responseIndex++) {
-            ChatClientResponse response = sourceResponses.get(responseIndex);
-            Map<Integer, Generation> responseReplacements = replacements.get(responseIndex);
+        for (int responsePosition = 0; responsePosition < sourceResponses.size(); responsePosition++) {
+            ChatClientResponse response = sourceResponses.get(responsePosition);
+            Map<Integer, Generation> responseReplacements = replacements.get(responsePosition);
             if (responseReplacements == null || responseReplacements.isEmpty()) {
                 transformed.add(response);
                 continue;
@@ -95,8 +95,8 @@ final class PrivacyBufferedStreamTransformer {
         Boolean usesExplicitChoiceIndexes = null;
         int expectedPositionalChoiceCount = -1;
 
-        for (int responseIndex = 0; responseIndex < responses.size(); responseIndex++) {
-            ChatResponse response = responses.get(responseIndex).chatResponse();
+        for (int responsePosition = 0; responsePosition < responses.size(); responsePosition++) {
+            ChatResponse response = responses.get(responsePosition).chatResponse();
             if (response == null || response.getResults().isEmpty()) {
                 continue;
             }
@@ -104,9 +104,9 @@ final class PrivacyBufferedStreamTransformer {
             Set<ChoiceKey> frameKeys = new LinkedHashSet<>();
             for (int generationPosition = 0; generationPosition < generations.size(); generationPosition++) {
                 Generation generation = generations.get(generationPosition);
-                if (OutputResponseContext.isCompleteToolResponse(responses.get(responseIndex))) {
-                    ChoiceKey key = new ChoiceKey("tool-response:" + responseIndex + ":" + generationPosition);
-                    choices.put(key, List.of(new GenerationOccurrence(responseIndex, generationPosition, generation)));
+                if (OutputResponseContext.isCompleteToolResponse(generation)) {
+                    ChoiceKey key = new ChoiceKey("tool-response:" + responsePosition + ":" + generationPosition);
+                    choices.put(key, List.of(new GenerationOccurrence(responsePosition, generationPosition, generation)));
                     continue;
                 }
                 String explicitIndex = choiceIndex(generation);
@@ -129,7 +129,7 @@ final class PrivacyBufferedStreamTransformer {
                     throw streamCorrelationFailure();
                 }
                 choices.computeIfAbsent(key, ignored -> new ArrayList<>())
-                        .add(new GenerationOccurrence(responseIndex, generationPosition, generation));
+                        .add(new GenerationOccurrence(responsePosition, generationPosition, generation));
             }
         }
         return choices;
@@ -177,7 +177,7 @@ final class PrivacyBufferedStreamTransformer {
             if (replacementMessage == original && replacementMetadata == originalMetadata) {
                 continue;
             }
-            replacements.computeIfAbsent(occurrence.responseIndex(), ignored -> new HashMap<>())
+            replacements.computeIfAbsent(occurrence.responsePosition(), ignored -> new HashMap<>())
                     .put(
                             occurrence.generationPosition(),
                             new Generation(replacementMessage, replacementMetadata)
@@ -382,7 +382,7 @@ final class PrivacyBufferedStreamTransformer {
     private record ChoiceKey(String value) {
     }
 
-    private record GenerationOccurrence(int responseIndex, int generationPosition, Generation generation) {
+    private record GenerationOccurrence(int responsePosition, int generationPosition, Generation generation) {
     }
 
     private enum ContentChannel {

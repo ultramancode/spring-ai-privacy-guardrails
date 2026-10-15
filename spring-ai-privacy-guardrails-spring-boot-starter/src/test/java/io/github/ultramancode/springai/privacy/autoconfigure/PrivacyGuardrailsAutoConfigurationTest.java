@@ -145,10 +145,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     @SuppressWarnings("unchecked")
-                    Predicate<ChatClientRequest> contentProtection =
-                            context.getBean("privacyModelContentProtection", Predicate.class);
+                    Predicate<ChatClientRequest> contentProtectionCheck =
+                            context.getBean("privacyModelContentProtectionCheck", Predicate.class);
                     ChatClientRequest unprocessedRequest = new ChatClientRequest(new Prompt("hello"), Map.of());
-                    assertThat(contentProtection.test(unprocessedRequest)).isFalse();
+                    assertThat(contentProtectionCheck.test(unprocessedRequest)).isFalse();
 
                     PrivacyChatClientConfigurer privacyConfigurer = context.getBean(PrivacyChatClientConfigurer.class);
                     ModelRequestBoundaryConfigurer combinedConfigurer = ModelRequestBoundaryConfigurer.compose(
@@ -160,23 +160,23 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     ChatClientRequest processedRequest = inspectedRequest.get();
                     assertThat(processedRequest).isNotNull();
                     assertThat(processedRequest.prompt().getContents()).isEqualTo("hello");
-                    assertThat(contentProtection.test(processedRequest)).isTrue();
+                    assertThat(contentProtectionCheck.test(processedRequest)).isTrue();
 
                     ChatClientRequest changedRequest = processedRequest.mutate()
                             .prompt(new Prompt("changed after privacy processing"))
                             .build();
-                    assertThat(contentProtection.test(changedRequest)).isFalse();
+                    assertThat(contentProtectionCheck.test(changedRequest)).isFalse();
                 });
     }
 
     @Test
-    void autoConfigurationBacksOffForUserProvidedPrivacyModelContentProtection() {
+    void autoConfigurationBacksOffForUserProvidedPrivacyModelContentProtectionCheck() {
         Predicate<ChatClientRequest> applicationPredicate = request -> false;
         this.contextRunner
-                .withBean("privacyModelContentProtection", Predicate.class, () -> applicationPredicate)
+                .withBean("privacyModelContentProtectionCheck", Predicate.class, () -> applicationPredicate)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context.getBean("privacyModelContentProtection"))
+                    assertThat(context.getBean("privacyModelContentProtectionCheck"))
                             .isSameAs(applicationPredicate);
                 });
     }

@@ -2,6 +2,7 @@ package io.github.ultramancode.springai.privacy.inspection.autoconfigure;
 
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailurePolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
@@ -15,7 +16,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,21 +23,23 @@ import org.springframework.context.annotation.Configuration;
 import java.util.function.Predicate;
 
 /**
- * Provides inspection services when {@code spring.ai.inspection.enabled=true}.
- * Applications supply {@link ContentInspector} beans or a custom {@link InspectionService}
- * and explicitly apply the {@link InspectionChatClientConfigurer} to each selected client builder.
- * Enabling this configuration does not modify other clients or create a model backend.
+ * Configures content inspection for selected clients.
  *
- * <p>Inspectors run in Spring order. The default policy blocks findings and eligible
- * operational failures. Output inspection requires the separate
- * {@code spring.ai.inspection.output.enabled=true} setting.
- * Custom service, policy, resolver and observer beans can replace the defaults.
+ * <p>Creates a default {@link InspectionService} from {@link ContentInspector} beans
+ * unless the application provides a service. Apply the {@link InspectionChatClientConfigurer}
+ * to each client builder that should use inspection.
+ *
+ * <p>The default service runs inspectors in Spring order. The default content policy
+ * blocks findings. The default failure policy is
+ * {@link InspectionFailurePolicy#FAIL_CLOSED}.
+ * Output inspection is disabled by default. Enable it on the auto-configured
+ * configurer with {@code spring.ai.inspection.output.enabled=true}.
+ * Applications can provide policy, resolver and observer beans to customize inspection.
  */
 @AutoConfiguration(
         afterName =
                 "io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration")
 @EnableConfigurationProperties(InspectionProperties.class)
-@ConditionalOnProperty(prefix = "spring.ai.inspection", name = "enabled", havingValue = "true")
 public class InspectionAutoConfiguration {
 
     @Bean
@@ -47,6 +49,7 @@ public class InspectionAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(ContentInspector.class)
     @ConditionalOnMissingBean
     InspectionService inspectionService(
             ObjectProvider<ContentInspector> inspectors,
@@ -58,6 +61,7 @@ public class InspectionAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(InspectionService.class)
     @ConditionalOnMissingBean
     InspectionChatClientConfigurer inspectionChatClientConfigurer(
             InspectionService service,
@@ -81,12 +85,12 @@ public class InspectionAutoConfiguration {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnBean(name = "privacyModelContentProtection")
+    @ConditionalOnBean(name = "privacyModelContentProtectionCheck")
     static class PrivacyIntegration {
         @Bean
         @ConditionalOnMissingBean(PrivacyProcessingStatusResolver.class)
-        PrivacyProcessingStatusResolver privacyInspectionProcessingStatusResolver(
-                @Qualifier("privacyModelContentProtection")
+        PrivacyProcessingStatusResolver privacyProcessingStatusResolver(
+                @Qualifier("privacyModelContentProtectionCheck")
                         Predicate<ChatClientRequest> privacyProcessingCheck) {
             return request ->
                     privacyProcessingCheck.test(request)

@@ -11,6 +11,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionTestSupport.RecordingChatModel;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -18,6 +19,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,15 +30,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyProcessingStatusResolverIntegrationTest {
+    private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
 
-    enum Failure { NULL, RUNTIME, DECLARED, INTERRUPTED_RUNTIME, INTERRUPTED_NULL, INTERRUPTED_RETURN }
-
-    static Stream<Arguments> failures() {
-        return Stream.of(false, true).flatMap(streaming -> Stream.of(false, true).flatMap(observerThrows ->
-                Stream.of(Failure.values()).map(failure -> Arguments.of(streaming, observerThrows, failure))));
+    enum ResolverFailureMode {
+        NULL,
+        RUNTIME,
+        INSPECTION_EXCEPTION,
+        INTERRUPTED_RUNTIME,
+        INTERRUPTED_NULL,
+        INTERRUPTED_PROCESSED_RETURN
     }
 
-    private InspectionService service(AtomicInteger inspections) {
+    private InspectionService invalidResultInspectionService(AtomicInteger inspectorInvocationCount) {
         ContentInspector inspector = new ContentInspector() {
             public String inspectorId() {
                 return "test";
@@ -47,7 +52,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
             }
 
             public InspectionResult inspect(InspectionRequest request) {
-                inspections.incrementAndGet();
+                inspectorInvocationCount.incrementAndGet();
                 return InspectionResult.failed(InspectionFailureCode.INVALID_RESULT);
             }
         };
@@ -55,72 +60,99 @@ class PrivacyProcessingStatusResolverIntegrationTest {
     }
 
     private void invoke(ChatClient client, boolean streaming) {
-        var request = client.prompt().user("synthetic-private-text");
+        ChatClient.ChatClientRequestSpec request = client.prompt().user("synthetic-private-text");
         if (streaming) {
-            request.stream().content().collectList().block(Duration.ofSeconds(5));
+            request.stream().content().collectList().block(TEST_TIMEOUT);
         } else {
             request.call().content();
         }
     }
 
+    static Stream<Arguments> resolverFailureCases() {
+        List<Arguments> cases = new ArrayList<>();
+        for (ResolverFailureMode failureMode : ResolverFailureMode.values()) {
+            cases.add(Arguments.of(false, false, failureMode));
+            cases.add(Arguments.of(false, true, failureMode));
+            cases.add(Arguments.of(true, false, failureMode));
+            cases.add(Arguments.of(true, true, failureMode));
+        }
+        return cases.stream();
+    }
+
     @ParameterizedTest(name = "streaming={0}, observerThrows={1}, resolver={2}")
-    @MethodSource("failures")
+    @MethodSource("resolverFailureCases")
     void resolverFailuresAreSanitizedObservedOnceAndCannotFailOpen(
-            boolean streaming, boolean observerThrows, Failure mode) {
-        AtomicInteger inspections = new AtomicInteger();
-        AtomicInteger reports = new AtomicInteger();
+            boolean streaming, boolean observerThrows, ResolverFailureMode failureMode) {
+        AtomicInteger inspectorInvocationCount = new AtomicInteger();
+        AtomicInteger inspectionReportNotificationCount = new AtomicInteger();
         AtomicBoolean interruptObserved = new AtomicBoolean();
-        List<InspectionException> failures = new CopyOnWriteArrayList<>();
+        List<InspectionException> observedInspectionFailures = new CopyOnWriteArrayList<>();
         InspectionObserver observer = new InspectionObserver() {
             public void onInspection(InspectionReport report) {
-                reports.incrementAndGet();
+                inspectionReportNotificationCount.incrementAndGet();
             }
 
             public void onFailure(InspectionException failure) {
-                failures.add(failure);
+                observedInspectionFailures.add(failure);
                 interruptObserved.set(Thread.currentThread().isInterrupted());
                 if (observerThrows) {
                     throw new IllegalStateException("observer must not replace the inspection failure");
                 }
             }
         };
-        boolean interrupted = mode.name().startsWith("INTERRUPTED_");
-        PrivacyProcessingStatusResolver resolver = request -> {
+        boolean interrupted = failureMode.name().startsWith("INTERRUPTED_");
+        PrivacyProcessingStatusResolver privacyProcessingStatusResolver = request -> {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
-            if (mode == Failure.NULL || mode == Failure.INTERRUPTED_NULL) {
+            if (failureMode == ResolverFailureMode.NULL || failureMode == ResolverFailureMode.INTERRUPTED_NULL) {
                 return null;
             }
-            if (mode == Failure.INTERRUPTED_RETURN) {
+            // Interruption must stop the request even when the resolver returns PROCESSED.
+            if (failureMode == ResolverFailureMode.INTERRUPTED_PROCESSED_RETURN) {
                 return ContentSegment.PrivacyProcessingStatus.PROCESSED;
             }
-            RuntimeException failure = mode == Failure.DECLARED
-                    ? new InspectionException(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED)
-                    : new IllegalStateException(request.prompt().getContents());
-            failure.initCause(new IllegalArgumentException(request.prompt().getContents()));
-            failure.addSuppressed(new IllegalStateException(request.prompt().getContents()));
-            throw failure;
+            // Include private input in exception details to test sanitization.
+            // Neither the observer nor the caller should receive that input.
+            RuntimeException resolverException;
+            if (failureMode == ResolverFailureMode.INSPECTION_EXCEPTION) {
+                resolverException = new InspectionException(
+                        InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED);
+            } else {
+                resolverException = new IllegalStateException(request.prompt().getContents());
+            }
+            resolverException.initCause(new IllegalArgumentException(request.prompt().getContents()));
+            resolverException.addSuppressed(new IllegalStateException(request.prompt().getContents()));
+            throw resolverException;
         };
-        var model = new InspectionChatClientIntegrationTest.RecordingModel();
-        ChatClient client = new InspectionChatClientConfigurer(service(inspections), InspectionLimits.defaults(),
-                resolver, observer).configure(ChatClient.builder(model)).build();
-        InspectionFailureCode expected = interrupted ? InspectionFailureCode.CANCELLED
-                : mode == Failure.DECLARED ? InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED : InspectionFailureCode.INVALID_RESULT;
+        RecordingChatModel model = new RecordingChatModel();
+        ChatClient client = new InspectionChatClientConfigurer(
+                invalidResultInspectionService(inspectorInvocationCount), InspectionLimits.defaults(),
+                privacyProcessingStatusResolver, observer).configure(ChatClient.builder(model)).build();
+        InspectionFailureCode expectedFailureCode;
+        if (interrupted) {
+            expectedFailureCode = InspectionFailureCode.CANCELLED;
+        } else if (failureMode == ResolverFailureMode.INSPECTION_EXCEPTION) {
+            expectedFailureCode = InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED;
+        } else {
+            expectedFailureCode = InspectionFailureCode.INVALID_RESULT;
+        }
         try {
             assertThatThrownBy(() -> invoke(client, streaming))
                     .isInstanceOfSatisfying(InspectionException.class, failure -> {
-                        assertThat(failure.failureCode()).isEqualTo(expected);
-                        assertThat(failure).hasMessage("Content inspection failed: " + expected).hasNoCause();
+                        assertThat(failure.failureCode()).isEqualTo(expectedFailureCode);
+                        assertThat(failure).hasMessage("Content inspection failed: " + expectedFailureCode).hasNoCause();
                         assertThat(failure.getSuppressed())
                                 .noneMatch(ex -> ex.getMessage().contains("synthetic-private-text"));
                         assertThat(failure.report()).isEmpty();
-                        assertThat(failures).containsExactly(failure);
+                        assertThat(observedInspectionFailures).containsExactly(failure);
                     });
             assertThat(interruptObserved.get()).isEqualTo(interrupted);
-            assertThat(reports).hasValue(0);
-            assertThat(inspections).hasValue(0);
-            assertThat(model.calls).hasValue(0);
+            assertThat(inspectionReportNotificationCount).hasValue(0);
+            assertThat(inspectorInvocationCount).hasValue(0);
+            assertThat(model.modelCallCount).hasValue(0);
+            // Streaming inspection runs on a boundedElastic worker,
+            // so only synchronous calls check the test thread's interrupt flag.
             if (!streaming) {
                 assertThat(Thread.currentThread().isInterrupted()).isEqualTo(interrupted);
             }
@@ -132,25 +164,25 @@ class PrivacyProcessingStatusResolverIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void serviceFailureRetainsTheCollectedReportAtTheObserverAndCaller(boolean streaming) {
-        AtomicInteger inspections = new AtomicInteger();
-        List<InspectionException> failures = new CopyOnWriteArrayList<>();
+        AtomicInteger inspectorInvocationCount = new AtomicInteger();
+        List<InspectionException> observedInspectionFailures = new CopyOnWriteArrayList<>();
         InspectionObserver observer = new InspectionObserver() {
             public void onInspection(InspectionReport report) {
                 throw new AssertionError("A hard failure must use onFailure");
             }
 
             public void onFailure(InspectionException failure) {
-                failures.add(failure);
+                observedInspectionFailures.add(failure);
             }
         };
-        var model = new InspectionChatClientIntegrationTest.RecordingModel();
-        ChatClient client = new InspectionChatClientConfigurer(service(inspections), InspectionLimits.defaults(),
+        RecordingChatModel model = new RecordingChatModel();
+        ChatClient client = new InspectionChatClientConfigurer(invalidResultInspectionService(inspectorInvocationCount), InspectionLimits.defaults(),
                 PrivacyProcessingStatusResolver.unknown(), observer).configure(ChatClient.builder(model)).build();
         assertThatThrownBy(() -> invoke(client, streaming))
                 .isInstanceOfSatisfying(InspectionException.class, failure -> {
                     assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
                     assertThat(failure).hasNoCause();
-                    assertThat(failures).containsExactly(failure);
+                    assertThat(observedInspectionFailures).containsExactly(failure);
 
                     InspectionReport report = failure.report().orElseThrow();
                     assertThat(report.outcomes()).hasSize(1);
@@ -158,7 +190,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
                     assertThat(outcome.inspectorId()).isEqualTo("test");
                     assertThat(outcome.result().failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
                 });
-        assertThat(inspections).hasValue(1);
-        assertThat(model.calls).hasValue(0);
+        assertThat(inspectorInvocationCount).hasValue(1);
+        assertThat(model.modelCallCount).hasValue(0);
     }
 }

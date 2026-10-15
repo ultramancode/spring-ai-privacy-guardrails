@@ -78,7 +78,8 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
         Advisor lastAdvisor = advisors.get(advisors.size() - 1);
         if (plan.hasInspection()
                 && (modelAdvisorCount != 1 || !isModelAdvisor(lastAdvisor))) {
-            throw new IllegalStateException("The model request boundary requires one terminal model advisor");
+            throw new IllegalStateException(
+                    "The advisor chain must contain exactly one model advisor, and that advisor must be last.");
         }
         validateAdvisorsAfterBoundary(advisors, boundaryIndex, warnAboutAdvisorsAfterBoundary);
     }

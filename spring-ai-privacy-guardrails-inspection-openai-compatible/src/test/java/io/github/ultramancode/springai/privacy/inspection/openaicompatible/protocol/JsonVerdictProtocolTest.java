@@ -73,26 +73,46 @@ class JsonVerdictProtocolTest {
 
     @Test
     void safeVerdictHasNoFinding() {
-        assertThat(protocol.parse("s1", "{\"verdict\":\"SAFE\"}")).isEmpty();
+        assertThat(protocol.parse("s1", """
+                {"verdict":"SAFE"}
+                """.strip())).isEmpty();
     }
 
     @Test
     void unsafeVerdictMapsToPromptAttack() {
-        assertThat(protocol.parse("s1", "{\"verdict\":\"UNSAFE\"}"))
+        assertThat(protocol.parse("s1", """
+                {"verdict":"UNSAFE"}
+                """.strip()))
                 .contains(new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "UNSAFE", null));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {
             "",
-            "{\"verdict\":\"UN",
-            "{\"verdict\":\"SAFE\"",
-            "{\"verdict\":\"SAFE\",\"reason\":\"extra\"}",
+            """
+            {"verdict":"UN\
+            """,
+            """
+            {"verdict":"SAFE"\
+            """,
+            """
+            {"verdict":"SAFE","reason":"extra"}\
+            """,
             "SAFE",
-            "{\"verdict\":\"MAYBE\"}",
-            "```json\n{\"verdict\":\"SAFE\"}\n```",
-            "{\"verdict\":\"SAFE\"} {}",
-            "{\"verdict\":\"UNSAFE\",\"verdict\":\"SAFE\"}"
+            """
+            {"verdict":"MAYBE"}\
+            """,
+            """
+            ```json
+            {"verdict":"SAFE"}
+            ```\
+            """,
+            """
+            {"verdict":"SAFE"} {}\
+            """,
+            """
+            {"verdict":"UNSAFE","verdict":"SAFE"}\
+            """
     })
     void rejectsInvalidVerdicts(String output) {
         assertThatThrownBy(() -> protocol.parse("s1", output))

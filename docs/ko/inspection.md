@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: b7b0ce87ff9096a0a5da0c6295d8e9698aa399d42afaeb97f7e769d001fec8e9 -->
+<!-- i18n-source-sha256: 55f8dc3d32740000234fd558b95fb84ffcd1808a1bbd843ff105beda41b401fb -->
 
 콘텐츠 검사는 규칙이나 검사 모델을 사용해 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -24,15 +24,6 @@ description: >-
 - `spring-ai-privacy-guardrails-inspection-rules`
 
 검사 스타터에는 규칙 검사기나 모델 백엔드가 포함되어 있지 않습니다.
-
-`application.yml`에서 검사를 활성화합니다.
-
-```yaml
-spring:
-  ai:
-    inspection:
-      enabled: true
-```
 
 Spring 설정에 규칙을 등록하고 클라이언트에 적용합니다.
 
@@ -52,8 +43,9 @@ ChatClient inspectedChatClient(ChatModel chatModel, InspectionChatClientConfigur
 
 이 예제에서는 입력에 `ignore previous instructions`가 포함되어 있으면 모델을 호출하지
 않고 `InspectionBlockedException`을 던집니다. 검사는 위와 같이 구성한 클라이언트에만
-적용됩니다. 기본 서비스에는 `ContentInspector` 빈이 하나 이상 필요합니다.
+적용됩니다. 스타터는 `ContentInspector` 빈이 하나 이상 있으면 기본 서비스를 생성합니다.
 직접 구성한 검사기와 정책을 사용하는 `InspectionService` 빈을 제공할 수도 있습니다.
+검사기나 사용자 정의 서비스가 없으면 스타터는 서비스와 configurer를 생성하지 않습니다.
 
 문자열 규칙은 대소문자를 구분합니다. 정규식이 필요하면 RE2/J 패턴을 사용하는
 `InspectionRule.regex(...)`를 사용하세요. 애플리케이션에 맞는 규칙을 설정해야 하며,
@@ -85,7 +77,6 @@ ChatClient client = ModelRequestBoundaryConfigurer.compose(
 spring:
   ai:
     inspection:
-      enabled: true
       output:
         enabled: true
 ```
@@ -345,18 +336,17 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 
 | 설정 | 기본값 | 적용 범위 |
 | --- | --- | --- |
-| `enabled` | `false` | 검사 서비스와 configurer 생성. 선택한 클라이언트마다 configurer를 적용해야 함 |
-| `output.enabled` | `false` | 검사 활성화 시 configurer에 출력 검사 추가 |
+| `output.enabled` | `false` | 자동 설정으로 생성한 configurer에 출력 검사 추가 |
 | `failure-policy` | `FAIL_CLOSED` | 위 실패 정책 표에 해당하는 오류가 발생했을 때 적용할 기본 정책 |
 | `failure-policy-overrides` | 빈 맵 | 검사기 ID별 실패 정책 |
 | `max-segments` | 64 | 빈 본문을 포함한 최대 텍스트 구간 수 |
 | `max-characters` | 131072 | 한 번의 검사에서 처리하는 텍스트의 최대 합산 길이 |
 | `timeout` | 10s | 정책 평가를 포함해 한 요청의 모든 검사기가 함께 사용하는 제한 시간 |
-| `output.max-frames` | 4096 | 빈 프레임을 포함한 스트리밍 도구 루프 전체의 프레임 수 |
+| `output.max-frames` | 4096 | 출력 검사에서 수집하는 최대 응답 프레임 수. 빈 프레임 포함 |
 | `output.stream-timeout` | 60s | 모델 호출과 도구 실행을 포함한 전체 스트림 수집 시간 |
 
-입력 한도는 매 모델 호출에 각각 적용합니다. 출력 한도는 도구 루프의 중간 텍스트를 포함한
-전체 출력에 적용합니다.
+입력 한도는 매 모델 호출에 각각 적용합니다. 출력 한도는 도구 루프에서 반환된 중간 텍스트를
+포함해 애플리케이션에 전달할 전체 응답에 적용합니다.
 `spring.ai.privacy.processing`, `spring.ai.privacy.response-inspection` 설정과는
 독립적입니다. 직접 API를 사용할 때는 `InspectionLimits`를 전달합니다.
 

@@ -42,8 +42,8 @@ public class PrivacyGuardrailsAutoConfiguration {
 
     /** Optional integrations consume a JDK contract without depending on this starter. */
     @Bean
-    @ConditionalOnMissingBean(name = "privacyModelContentProtection")
-    Predicate<ChatClientRequest> privacyModelContentProtection() {
+    @ConditionalOnMissingBean(name = "privacyModelContentProtectionCheck")
+    Predicate<ChatClientRequest> privacyModelContentProtectionCheck() {
         return PrivacyChatClientConfigurer::hasPrivacyProcessedMessages;
     }
 

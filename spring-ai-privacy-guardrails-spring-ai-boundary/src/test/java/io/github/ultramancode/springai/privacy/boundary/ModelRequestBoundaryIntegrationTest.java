@@ -2,6 +2,7 @@ package io.github.ultramancode.springai.privacy.boundary;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -227,14 +228,17 @@ class ModelRequestBoundaryIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void duplicateBoundariesAreRejectedEvenWithOptIn(boolean streaming) {
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    void duplicateBoundariesAreRejectedEvenWithOptIn(boolean streaming, boolean clonedBuilder) {
         RecordingModel model = new RecordingModel();
         ModelRequestBoundaryConfigurer inspectionConfigurer = (clientBuilder, boundarySpec) -> {
             boundarySpec.inspection(request -> { });
         };
         ModelRequestBoundaryConfigurer optedInConfigurer = inspectionConfigurer.allowAdvisorsAfterBoundary(true);
         ChatClient.Builder clientBuilder = optedInConfigurer.configure(ChatClient.builder(model));
+        if (clonedBuilder) {
+            clientBuilder = clientBuilder.clone();
+        }
         optedInConfigurer.configure(clientBuilder);
         ChatClient client = clientBuilder.build();
 

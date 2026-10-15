@@ -122,6 +122,7 @@ class OpenAiCompatibleContentInspectorTest {
     }
 
     private InspectionRequest privacyProcessedRequest() {
+        // Supply a processed fixture directly. These tests exercise HTTP inspection without a PrivacyService.
         return request(ContentSegment.PrivacyProcessingStatus.PROCESSED, "customer [PII:1]");
     }
 
@@ -371,20 +372,55 @@ class OpenAiCompatibleContentInspectorTest {
         OpenAiCompatibleContentInspector inspector = kananaInspector();
         List<String> invalidResponses = List.of(
                 envelope(""),
-                "{bad json",
-                "{}",
-                "null",
-                "{\"choices\":[null]}",
-                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":false}}]}",
-                "{\"choices\":[],\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"<SAFE>\"}}]}",
-                "{\"choices\":[]}",
+                """
+                        {bad json
+                        """.strip(),
+                """
+                        {}
+                        """.strip(),
+                """
+                        null
+                        """.strip(),
+                """
+                        {"choices":[null]}
+                        """.strip(),
+                """
+                {
+                  "choices": [
+                    {
+                      "message": {
+                        "role": "assistant",
+                        "content": false
+                      }
+                    }
+                  ]
+                }
+                """,
+                """
+                {
+                  "choices": [],
+                  "choices": [
+                    {
+                      "message": {
+                        "role": "assistant",
+                        "content": "<SAFE>"
+                      }
+                    }
+                  ]
+                }
+                """,
+                """
+                        {"choices":[]}
+                        """.strip(),
                 """
                 {"choices":[
                     {"message":{"role":"assistant","content":"<SAFE>"}},
                     {"message":{"role":"assistant","content":"<UNSAFE-A1>"}}
                 ]}
                 """,
-                envelope("<SAFE>") + "{}",
+                envelope("<SAFE>") + """
+                        {}
+                        """.strip(),
                 """
                 {"choices":[{"message":{"role":"assistant","content":"<SAFE>","tool_calls":[{}]}}]}
                 """,
@@ -711,7 +747,9 @@ class OpenAiCompatibleContentInspectorTest {
 
     @Test
     void mapsJsonVerdictsAndParsingFailuresFromHttpResponses() throws Exception {
-        startServer("{\"verdict\":\"SAFE\"}");
+        startServer("""
+                {"verdict":"SAFE"}
+                """.strip());
         OpenAiCompatibleContentInspector inspector = new OpenAiCompatibleContentInspector(
                 "guard", config(true, Duration.ofSeconds(2), 4096), new JsonVerdictProtocol());
 
@@ -720,13 +758,17 @@ class OpenAiCompatibleContentInspectorTest {
         assertThat(safe.status()).isEqualTo(InspectionResult.Status.COMPLETED);
         assertThat(safe.completedSegmentIds()).containsExactly("s1");
         assertThat(safe.findings()).isEmpty();
-        responseBody.set(envelope("{\"verdict\":\"UNSAFE\"}"));
+        responseBody.set(envelope("""
+                {"verdict":"UNSAFE"}
+                """.strip()));
         InspectionResult unsafe = inspector.inspect(privacyProcessedRequest());
         assertThat(unsafe.status()).isEqualTo(InspectionResult.Status.COMPLETED);
         assertThat(unsafe.findings()).singleElement()
                 .extracting(InspectionFinding::category)
                 .isEqualTo(InspectionFinding.Category.PROMPT_ATTACK);
-        responseBody.set(envelope("{\"verdict\":\"MAYBE\"}"));
+        responseBody.set(envelope("""
+                {"verdict":"MAYBE"}
+                """.strip()));
         InspectionResult invalid = inspector.inspect(privacyProcessedRequest());
         assertThat(invalid.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESPONSE);
         assertThat(invalid.completedSegmentIds()).isEmpty();
@@ -765,7 +807,9 @@ class OpenAiCompatibleContentInspectorTest {
             try {
                 String body = envelope("<UNSAFE-A1>");
                 if (calls.get() != 1) {
-                    body = "{bad json";
+                    body = """
+                            {bad json
+                            """.strip();
                 }
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(200, bytes.length);

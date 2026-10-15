@@ -28,8 +28,9 @@ import java.util.List;
  * Inspects assistant text before returning it to the application, including {@code returnDirect} tool results.
  * Provider-specific reasoning fields, tool-call arguments and metadata are excluded from inspection.
  *
- * <p>Inspection runs after any configured privacy output processing. The output status is
- * {@code PROCESSED} when privacy processing completed for that text, and {@code UNKNOWN} otherwise.
+ * <p>Inspection uses the response after any configured privacy output processing.
+ * Text and frame limits apply to this response. The output status is {@code PROCESSED}
+ * when privacy processing completed for that text, and {@code UNKNOWN} otherwise.
  *
  * <p>Each output body is inspected as a complete text segment, including JSON keys, values,
  * structure and escape sequences. Rules match the text without JSON unescaping.
@@ -39,17 +40,14 @@ import java.util.List;
  * <p>Streaming responses are collected before inspection, including intermediate text from the tool loop.
  * Collected response chunks are delivered in their original order only after inspection allows the complete output.
  * If inspection blocks the response, or stream collection fails or is cancelled, no buffered
- * content is delivered.
- *
- * <p>Frame limits apply across the entire stream. The collection timeout includes model calls
- * and tool execution.
+ * content is delivered. The stream collection timeout includes model calls and tool execution.
  */
 public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor, PriorityOrdered {
-    /** Default maximum number of frames across a streamed invocation. */
+    /** Default maximum number of output frames collected per streamed invocation. */
     public static final int DEFAULT_MAX_FRAMES = 4096;
     /** Default total duration allowed for stream collection. */
     public static final Duration DEFAULT_STREAM_TIMEOUT = Duration.ofSeconds(60);
-    /** Runs outside the privacy lifecycle so output inspection sees completed privacy processing. */
+    /** Orders output inspection after privacy output protection. */
     public static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE + 1;
 
     private final InspectionEnforcement enforcement;
@@ -71,9 +69,9 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
      * Sets limits for output inspection and stream collection. Input inspection has separate limits.
      *
      * @param service inspectors and policies applied to the application output
-     * @param limits text extraction and inspection limits across the complete output
+     * @param limits text extraction and inspection limits
      * @param observer receives inspection reports and failures
-     * @param maxFrames maximum model and buffered frames across the streamed invocation
+     * @param maxFrames maximum response frames collected for inspection, including empty frames
      * @param streamTimeout total stream collection budget, including model calls and tool execution
      * @throws IllegalArgumentException if a stream budget is not positive or the timeout cannot fit in nanoseconds
      */
@@ -107,12 +105,12 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
             if (response.chatResponse() != null) {
                 for (Generation generation : response.chatResponse().getResults()) {
                     InspectionTextExtractor.requireSupportedAssistant(generation.getOutput());
-                    extractor.outputPayload(generation.getOutput().getText(), status);
+                    extractor.addOutputPayload(generation.getOutput().getText(), status);
                 }
             }
-            return extractor.segments();
+            return extractor.buildSegments();
         });
-        return OutputResponseContext.clearInternalMarkers(response);
+        return OutputResponseContext.clearPrivacyTracking(response);
     }
 
     @Override
@@ -120,9 +118,8 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         return Flux.defer(() -> {
             validateChain(chain.getStreamAdvisors());
             InspectionOutputBuffer buffer = new InspectionOutputBuffer(limits, maxFrames);
-            StreamAdvisorChain preparedChain = InspectionOutputStreamGuard.prepare(chain, this, limits, maxFrames,
-                    enforcement);
-            return preparedChain.nextStream(OutputResponseContext.requestPrivacyTracking(request))
+            Mono<InspectionOutputBuffer> collectedOutput = chain
+                    .nextStream(OutputResponseContext.requestPrivacyTracking(request))
                     .doOnNext(response -> {
                         try {
                             buffer.accept(response);
@@ -130,15 +127,26 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
                             throw enforcement.failure(ex);
                         }
                     })
-                    .then(Mono.just(buffer))
-                    // Mono timeout bounds total assembly time, not merely the gap between frames.
-                    .timeout(streamTimeout, Mono.defer(() -> Mono.error(enforcement.failure(
-                            new InspectionException(InspectionFailureCode.TIMEOUT)))))
-                    .flatMapMany(completed -> Mono.fromCallable(() -> {
-                        enforcement.inspect(completed::segments);
-                        return completed.frames();
-                    }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(Flux::fromIterable));
+                    .then(Mono.just(buffer));
+            Mono<InspectionOutputBuffer> timeoutFailure = Mono.defer(() -> {
+                InspectionException timeout = new InspectionException(InspectionFailureCode.TIMEOUT);
+                return Mono.error(enforcement.failure(timeout));
+            });
+            // Mono timeout bounds total assembly time, not merely the gap between frames.
+            return collectedOutput
+                    .timeout(streamTimeout, timeoutFailure)
+                    .flatMapMany(this::inspectAndEmit);
         });
+    }
+
+    private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer buffer) {
+        Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
+            enforcement.inspect(buffer::buildSegments);
+            return buffer.framesWithoutPrivacyTracking();
+        });
+        return inspectedFrames
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMapMany(Flux::fromIterable);
     }
 
     private void validateChain(List<? extends Advisor> advisors) {

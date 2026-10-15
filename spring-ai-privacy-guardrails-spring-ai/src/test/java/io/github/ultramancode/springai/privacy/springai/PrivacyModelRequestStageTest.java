@@ -78,11 +78,11 @@ class PrivacyModelRequestStageTest {
             assertThat(protectedRequest.context())
                     .containsKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
 
-            assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(protectedRequest.context()))
+            assertThat(PrivacyRequestContextSupport.withoutInternalPrivacyContext(protectedRequest.context()))
                     .doesNotContainKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
             ChatClientResponse markedResponse = new ChatClientResponse(
                     TestPrivacyServices.response("ok").chatResponse(), protectedRequest.context());
-            assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(markedResponse).context())
+            assertThat(PrivacyRequestContextSupport.withoutInternalPrivacyContext(markedResponse).context())
                     .doesNotContainKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
         }
     }

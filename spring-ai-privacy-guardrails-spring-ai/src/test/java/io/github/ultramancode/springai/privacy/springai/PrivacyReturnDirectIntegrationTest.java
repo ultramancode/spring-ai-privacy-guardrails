@@ -3,10 +3,13 @@ package io.github.ultramancode.springai.privacy.springai;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -95,6 +98,52 @@ class PrivacyReturnDirectIntegrationTest {
         assertThatThrownBy(() -> streamContent(chatClient))
                 .isInstanceOf(PrivacyOutputBlockedException.class)
                 .hasMessage("blocked");
+        assertThat(service.activeSessionCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void streamingReturnDirectResultIsProtectedSeparatelyFromModelText(boolean modelHasChoiceIndex) {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        ChatGenerationMetadata.Builder metadata = ChatGenerationMetadata.builder();
+        if (modelHasChoiceIndex) {
+            metadata.metadata("index", 7);
+        }
+        Generation intermediate = new Generation(new AssistantMessage("Checking Alice. "), metadata.build());
+        AssistantMessage toolCall = AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-1", "function", "lookup", "{}")))
+                .build();
+        ChatResponse toolCallResponse = new ChatResponse(List.of(new Generation(toolCall)));
+        ChatModel model = new ChatModel() {
+            @Override
+            public ChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
+            @Override
+            public ChatResponse call(Prompt prompt) {
+                return toolCallResponse;
+            }
+
+            @Override
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.just(new ChatResponse(List.of(intermediate)), toolCallResponse);
+            }
+        };
+        PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(service, ToolDisclosurePolicy.denyAll());
+        ToolCallback wrappedTool = factory.wrap(tool("lookup", true, "Hello Alice"));
+        ChatClient client = PrivacyChatClientConfigurer.builder(service)
+                .outputProtection(PrivacyOutputAction.REDACT, "blocked")
+                .build()
+                .configure(ChatClient.builder(model))
+                .defaultTools(wrappedTool)
+                .build();
+
+        List<ChatResponse> responses = client.prompt().user("hello").stream().chatResponse().collectList().block();
+
+        assertThat(responses).extracting(response -> response.getResult().getOutput().getText())
+                .containsExactly("Checking [REDACTED_PERSON]. ", "Hello [REDACTED_PERSON]");
         assertThat(service.activeSessionCount()).isZero();
     }
 

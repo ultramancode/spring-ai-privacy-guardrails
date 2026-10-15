@@ -40,17 +40,17 @@ class PrivacyRequestContextSupportTest {
             );
 
             assertThat(request.context()).hasSize(6);
-            assertThat(PrivacyRequestContextSupport.stripInternalPrivacyEntries(request.context()))
+            assertThat(PrivacyRequestContextSupport.withoutInternalPrivacyContext(request.context()))
                     .containsExactly(Map.entry("application", "kept"));
 
             ChatClientResponse response = new ChatClientResponse(
                     TestPrivacyServices.response("ok").chatResponse(),
                     request.context()
             );
-            ChatClientResponse cleaned = PrivacyRequestContextSupport.stripInternalPrivacyEntries(response);
+            ChatClientResponse cleanedResponse = PrivacyRequestContextSupport.withoutInternalPrivacyContext(response);
 
-            assertThat(cleaned.context()).containsExactly(Map.entry("application", "kept"));
-            assertThat(cleaned.chatResponse()).isSameAs(response.chatResponse());
+            assertThat(cleanedResponse.context()).containsExactly(Map.entry("application", "kept"));
+            assertThat(cleanedResponse.chatResponse()).isSameAs(response.chatResponse());
         }
     }
 }

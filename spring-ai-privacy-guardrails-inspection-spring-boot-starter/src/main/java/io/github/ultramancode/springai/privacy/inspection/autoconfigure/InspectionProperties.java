@@ -11,15 +11,10 @@ import java.util.Map;
 
 /**
  * Inspection policies and execution limits under {@code spring.ai.inspection}.
- * Input and output inspection are disabled by default.
- * Enabled inspection requires application-supplied inspectors and explicit client configuration.
  * Input and output receive separate execution budgets with the same configured values.
  */
 @ConfigurationProperties("spring.ai.inspection")
 public class InspectionProperties {
-
-    /** Enables the inspection service and configurer. Apply the configurer to each client to inspect. */
-    private boolean enabled;
 
     /** Maximum number of text segments in one input or output inspection. */
     private int maxSegments = InspectionLimits.DEFAULT_MAX_SEGMENTS;
@@ -42,7 +37,7 @@ public class InspectionProperties {
     public static class Output {
         /** Enables inspection of application output, including returnDirect tool results. Disabled by default. */
         private boolean enabled;
-        /** Maximum buffered frames and model frames across a streamed tool loop, including empty frames. */
+        /** Maximum response frames collected for output inspection, including empty frames. */
         private int maxFrames = InspectionOutputAdvisor.DEFAULT_MAX_FRAMES;
         /** Maximum total stream assembly duration, including model rounds and tool execution. */
         private Duration streamTimeout = InspectionOutputAdvisor.DEFAULT_STREAM_TIMEOUT;
@@ -84,14 +79,6 @@ public class InspectionProperties {
      */
     public InspectionLimits limits() {
         return new InspectionLimits(maxSegments, maxCharacters, timeout);
-    }
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean value) {
-        enabled = value;
     }
 
     public int getMaxSegments() {

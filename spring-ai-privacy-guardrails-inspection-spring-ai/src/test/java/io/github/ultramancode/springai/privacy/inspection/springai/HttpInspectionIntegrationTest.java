@@ -37,22 +37,35 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class HttpInspectionIntegrationTest {
+    private static final Duration TEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration HTTP_REQUEST_TIMEOUT = Duration.ofSeconds(5);
 
     @ParameterizedTest
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
-    void privacyProcessesContentBeforeHttpAndHttpBlockPreventsBusinessCall(boolean streaming, boolean structuredJson) throws Exception {
+    void httpInspectionReceivesPrivacyProcessedInputAndBlocksOnUnsafeVerdict(boolean streaming, boolean jsonInput) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        List<String> sentBodies = new CopyOnWriteArrayList<>();
+        List<String> inspectionRequestBodies = new CopyOnWriteArrayList<>();
         JsonMapper jsonMapper = JsonMapper.builder().build();
-        AtomicReference<String> label = new AtomicReference<>("<SAFE>");
+        AtomicReference<String> inspectionVerdict = new AtomicReference<>("<SAFE>");
         server.createContext("/v1/chat/completions", exchange -> {
             try {
-                sentBodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-                String json = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\""
-                        + label.get() + "\"}}]}";
-                byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-                exchange.sendResponseHeaders(200, bytes.length);
-                exchange.getResponseBody().write(bytes);
+                inspectionRequestBodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                String inspectionResponseJson = """
+                        {
+                          "choices": [
+                            {
+                              "finish_reason": "stop",
+                              "message": {
+                                "role": "assistant",
+                                "content": "%s"
+                              }
+                            }
+                          ]
+                        }
+                        """.formatted(inspectionVerdict.get());
+                byte[] inspectionResponseBytes = inspectionResponseJson.getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, inspectionResponseBytes.length);
+                exchange.getResponseBody().write(inspectionResponseBytes);
             } finally {
                 exchange.close();
             }
@@ -63,54 +76,67 @@ class HttpInspectionIntegrationTest {
                 int start = text.indexOf("Alice");
                 return start < 0 ? List.of() : List.of(new PiiSpan("PERSON", start, start + 5, 1.0));
             };
-            PrivacyService privacy = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
+            PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
             URI baseUrl = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+            // Require Privacy-processed model inputs before sending them to the HTTP inspector.
             OpenAiCompatibleContentInspector inspector = new OpenAiCompatibleContentInspector("guard", new OpenAiCompatibleInspectionConfig(
-                    baseUrl, "fixture", null, Duration.ofSeconds(5), 4096, true), new KananaSafeguardPromptProtocol());
-            InspectionChatClientConfigurer inspection = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)),
+                    baseUrl, "fixture", null, HTTP_REQUEST_TIMEOUT, 4096, true), new KananaSafeguardPromptProtocol());
+            // Read the marker for the current model request rather than assuming Privacy ran.
+            InspectionChatClientConfigurer inspectionConfigurer = new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)),
                     InspectionLimits.defaults(),
                     request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
                             ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
                     InspectionObserver.noop());
-            AtomicInteger businessCalls = new AtomicInteger();
+            AtomicInteger modelCallCount = new AtomicInteger();
             ChatModel model = new ChatModel() {
                 public ChatResponse call(Prompt prompt) {
-                    businessCalls.incrementAndGet();
+                    modelCallCount.incrementAndGet();
                     assertThat(prompt.getContents()).doesNotContain("Alice");
-                    String inspectedContent = jsonMapper.readTree(sentBodies.get(sentBodies.size() - 1))
+                    String lastInspectionRequestBody =
+                            inspectionRequestBodies.get(inspectionRequestBodies.size() - 1);
+                    String inspectedText = jsonMapper.readTree(lastInspectionRequestBody)
                             .path("messages").get(0).path("content").asString();
-                    assertThat(inspectedContent).isEqualTo(prompt.getUserMessage().getText());
+                    assertThat(inspectedText).isEqualTo(prompt.getUserMessage().getText());
                     return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
                 }
                 public Flux<ChatResponse> stream(Prompt prompt) {
                     return Flux.defer(() -> Flux.just(call(prompt)));
                 }
             };
-            ChatClient client = ModelRequestBoundaryConfigurer.compose(inspection, new PrivacyChatClientConfigurer(privacy))
+            ChatClient client = ModelRequestBoundaryConfigurer.compose(inspectionConfigurer, new PrivacyChatClientConfigurer(privacyService))
                     .configure(ChatClient.builder(model)).build();
-            String content = structuredJson ? "{\"key@example.com\":\"Alice\",\"repeat\":\"Alice\",\"repeat\":\"Alice\"}" : "Hello Alice";
-            Runnable invoke = () -> {
+            String userInput = jsonInput ? """
+                    {"key@example.com":"Alice",\
+                    "repeat":"Alice",\
+                    "repeat":"Alice"}
+                    """.strip() : "Hello Alice";
+            Runnable invokeChatClient = () -> {
                 if (streaming) {
-                    client.prompt().user(content).stream().content().collectList().block(Duration.ofSeconds(10));
+                    client.prompt().user(userInput).stream().content().collectList().block(TEST_TIMEOUT);
                 } else {
-                    client.prompt().user(content).call().content();
+                    client.prompt().user(userInput).call().content();
                 }
             };
-            invoke.run();
-            assertThat(businessCalls).hasValue(1);
-            label.set("<UNSAFE-A1>");
-            assertThatThrownBy(invoke::run).isInstanceOf(InspectionBlockedException.class);
-            assertThat(businessCalls).hasValue(1);
-            assertThat(sentBodies).hasSize(2).allSatisfy(body -> {
-                String inspectedContent = jsonMapper.readTree(body).path("messages").get(0).path("content").asString();
-                assertThat(inspectedContent).doesNotContain("Alice");
-                if (structuredJson) {
-                    assertThat(inspectedContent).startsWith("{\"key@example.com\":\"").endsWith("\"}");
+            invokeChatClient.run();
+            assertThat(modelCallCount).hasValue(1);
+            // Reuse the client with an unsafe verdict. Input inspection must stop the next model call.
+            inspectionVerdict.set("<UNSAFE-A1>");
+            assertThatThrownBy(invokeChatClient::run).isInstanceOf(InspectionBlockedException.class);
+            assertThat(modelCallCount).hasValue(1);
+            assertThat(inspectionRequestBodies).hasSize(2).allSatisfy(body -> {
+                String inspectedText = jsonMapper.readTree(body).path("messages").get(0).path("content").asString();
+                assertThat(inspectedText).doesNotContain("Alice");
+                if (jsonInput) {
+                    assertThat(inspectedText).startsWith("""
+                            {"key@example.com":"
+                            """.strip()).endsWith("""
+                            "}
+                            """.strip());
                 } else {
-                    assertThat(inspectedContent).startsWith("Hello ");
+                    assertThat(inspectedText).startsWith("Hello ");
                 }
             });
-            assertThat(privacy.activeSessionCount()).isZero();
+            assertThat(privacyService.activeSessionCount()).isZero();
         } finally {
             server.stop(0);
         }

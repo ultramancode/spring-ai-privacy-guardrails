@@ -1,4 +1,4 @@
-description = 'Opt-in Spring Boot configuration for content inspection.'
+description = 'Spring Boot configuration for content inspection on selected clients.'
 dependencies {
     api project(':spring-ai-privacy-guardrails-inspection-spring-ai')
     api platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")

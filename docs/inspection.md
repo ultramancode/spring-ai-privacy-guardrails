@@ -22,15 +22,6 @@ For a rules-based setup, add these modules to an application that provides a Spr
 
 The inspection starter does not include a rule or model backend.
 
-Enable inspection in `application.yml`:
-
-```yaml
-spring:
-  ai:
-    inspection:
-      enabled: true
-```
-
 Add a rule and configure the client in your Spring configuration:
 
 ```java
@@ -49,8 +40,10 @@ ChatClient inspectedChatClient(ChatModel chatModel, InspectionChatClientConfigur
 
 The example blocks input containing `ignore previous instructions` by throwing
 `InspectionBlockedException` before the model runs. Only clients configured this way
-are inspected. The default service requires at least one `ContentInspector` bean.
+are inspected. The starter creates a default service when at least one
+`ContentInspector` bean is available.
 You can instead provide an `InspectionService` bean with your own inspectors and policies.
+Without inspectors or a custom service, the starter creates neither a service nor a configurer.
 
 Literal rules are case-sensitive. Use `InspectionRule.regex(...)` for RE2/J patterns.
 Choose rules that fit your application. This example alone is not a general
@@ -81,7 +74,6 @@ Output inspection is disabled by default. Enable it on the configured client wit
 spring:
   ai:
     inspection:
-      enabled: true
       output:
         enabled: true
 ```
@@ -346,8 +338,7 @@ The following properties use the `spring.ai.inspection` prefix:
 
 | Setting | Default | Scope |
 | --- | --- | --- |
-| `enabled` | `false` | Creates the inspection service and configurer. Apply the configurer to each selected client |
-| `output.enabled` | `false` | Adds output inspection to the configurer when inspection is enabled |
+| `output.enabled` | `false` | Adds output inspection to the auto-configured configurer |
 | `failure-policy` | `FAIL_CLOSED` | Default handling of eligible operational inspection failures |
 | `failure-policy-overrides` | Empty map | Failure policies keyed by inspector ID |
 | `max-segments` | 64 | Extracted text segments, including empty bodies |

@@ -42,7 +42,6 @@ public class InspectionOnlyPublishedArtifactConsumer {
                 .properties(
                         "spring.main.banner-mode=off",
                         "logging.level.root=ERROR",
-                        "spring.ai.inspection.enabled=true",
                         "spring.ai.inspection.output.enabled=true")
                 .run(args)) {
             InspectionChatClientConfigurer configurer = context.getBean(InspectionChatClientConfigurer.class);

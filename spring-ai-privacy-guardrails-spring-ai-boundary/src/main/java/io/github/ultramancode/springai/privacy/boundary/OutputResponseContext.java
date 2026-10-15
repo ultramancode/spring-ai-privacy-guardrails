@@ -26,7 +26,7 @@ public final class OutputResponseContext {
     private OutputResponseContext() {
     }
 
-    /** Requests a marker when Privacy output processing completes. */
+    /** Requests tracking of Privacy output processing. */
     public static ChatClientRequest requestPrivacyTracking(ChatClientRequest request) {
         return request.mutate().context(PRIVACY_PROCESSING_KEY, PRIVACY_TRACKING_REQUESTED).build();
     }
@@ -74,7 +74,7 @@ public final class OutputResponseContext {
         return new ChatClientResponse(response.chatResponse(), context);
     }
 
-    /** Text-bearing thought frames form a separate logical unit from answer frames. */
+    /** Thought text is processed separately from answer text. */
     public static boolean isThought(AssistantMessage message) {
         return Boolean.TRUE.equals(message.getMetadata().get("isThought"))
                 || Boolean.TRUE.equals(message.getMetadata().get("thinking"));

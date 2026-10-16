@@ -15,14 +15,14 @@ import java.util.Optional;
 public interface GuardModelProtocol {
 
     /**
-     * Builds non-null chat-completion parameters for one text segment.
+     * Builds non-null chat-completion parameters for one text segment or window.
      * The inspector accepts one response choice containing a text verdict, so leave {@code n} unset or use 1.
      * It uses non-streaming calls and does not execute tool calls.
      */
     ChatCompletionCreateParams request(String model, String text);
 
     /**
-     * Parses the model output for one text segment.
+     * Parses the model output for one text segment or window. Findings must use the supplied segment ID.
      * Implementations must validate the complete verdict from the output alone.
      * An empty optional means a safe verdict.
      * Incomplete, malformed or unknown output must throw an {@link InspectionException} with

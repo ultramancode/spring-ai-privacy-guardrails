@@ -32,8 +32,10 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -47,22 +49,41 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Inspects text through an OpenAI-compatible API.
  * Guard requests do not pass through the application's ChatClient advisors.
+ * Optional character windows run in order within the request's shared deadline.
+ * Findings are collected per segment, category and code, keeping the highest available score.
+ * A segment is complete only after all its windows finish.
+ * If inspection fails, the returned result includes any findings already collected.
  */
 public final class OpenAiCompatibleContentInspector implements ContentInspector {
 
     private final OpenAiCompatibleInspectionConfig config;
     private final String inspectorId;
     private final GuardModelProtocol protocol;
+    private final TextWindowConfig windowConfig;
     private final ObjectReader responseReader;
     private final OpenAIClientAsync client;
 
-    /** Creates an inspector with an explicit instance ID, transport settings and model protocol. */
-    @SuppressWarnings("deprecation")
+    /** Creates an inspector that sends each complete text segment in one request. */
     public OpenAiCompatibleContentInspector(
             String inspectorId, OpenAiCompatibleInspectionConfig config, GuardModelProtocol protocol) {
+        this(inspectorId, config, protocol, null);
+    }
+
+    /**
+     * Creates an inspector with optional character windows.
+     *
+     * @param inspectorId stable inspector ID
+     * @param config transport settings and privacy requirements
+     * @param protocol request and verdict format for the deployed model
+     * @param windowConfig character window settings, or null to send each complete segment
+     */
+    @SuppressWarnings("deprecation")
+    public OpenAiCompatibleContentInspector(String inspectorId, OpenAiCompatibleInspectionConfig config,
+            GuardModelProtocol protocol, TextWindowConfig windowConfig) {
         this.inspectorId = InspectionIdentifiers.requireValid(inspectorId);
         this.config = Objects.requireNonNull(config, "config");
         this.protocol = Objects.requireNonNull(protocol, "protocol");
+        this.windowConfig = windowConfig;
         JsonMapper jsonMapper = ObjectMappers.jsonMapper().rebuild()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
                 .build();
@@ -104,12 +125,37 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
         Set<String> completedSegmentIds = new HashSet<>();
         List<InspectionFinding> findings = new ArrayList<>();
         try {
+            int windowCount = 0;
             for (ContentSegment segment : request.segments()) {
                 request.checkActive();
-                String output = requestModelOutput(request, segment.text());
-                Optional<InspectionFinding> finding = protocol.parse(segment.id(), output);
-                if (finding.isPresent()) {
-                    findings.add(finding.get());
+                String text = segment.text();
+                int remainingCharacters = text.codePointCount(0, text.length());
+                int start = 0;
+                Map<FindingKey, Integer> findingPositions = new HashMap<>();
+                while (true) {
+                    request.checkActive();
+                    if (windowConfig != null && windowCount == windowConfig.maxWindows()) {
+                        throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
+                    }
+                    int windowCharacters = windowConfig == null ? remainingCharacters
+                            : Math.min(windowConfig.maxCharacters(), remainingCharacters);
+                    int end = text.offsetByCodePoints(start, windowCharacters);
+                    String output = requestModelOutput(request, text.substring(start, end));
+                    windowCount++;
+                    Optional<InspectionFinding> parsed = protocol.parse(segment.id(), output);
+                    if (parsed.isPresent()) {
+                        InspectionFinding finding = parsed.get();
+                        if (!segment.id().equals(finding.segmentId())) {
+                            throw new InspectionException(InspectionFailureCode.INVALID_RESULT);
+                        }
+                        collectFinding(finding, findingPositions, findings);
+                    }
+                    InspectionRequest.checkInterrupted();
+                    if (end == text.length()) {
+                        break;
+                    }
+                    start = text.offsetByCodePoints(end, -windowConfig.overlapCharacters());
+                    remainingCharacters -= windowCharacters - windowConfig.overlapCharacters();
                 }
                 completedSegmentIds.add(segment.id());
             }
@@ -118,6 +164,21 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
             return InspectionResult.failed(ex.failureCode(), completedSegmentIds, findings);
         } catch (RuntimeException ex) {
             return InspectionResult.failed(InspectionFailureCode.INVALID_RESULT, completedSegmentIds, findings);
+        }
+    }
+
+    private record FindingKey(InspectionFinding.Category category, String code) {}
+
+    private static void collectFinding(InspectionFinding finding, Map<FindingKey, Integer> positions,
+            List<InspectionFinding> findings) {
+        FindingKey key = new FindingKey(finding.category(), finding.code());
+        Integer position = positions.get(key);
+        if (position == null) {
+            positions.put(key, findings.size());
+            findings.add(finding);
+        } else if (finding.score() != null
+                && (findings.get(position).score() == null || finding.score() > findings.get(position).score())) {
+            findings.set(position, finding);
         }
     }
 

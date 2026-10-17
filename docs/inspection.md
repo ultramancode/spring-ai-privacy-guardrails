@@ -236,28 +236,29 @@ use `PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)` to map
 
 Add `spring-ai-privacy-guardrails-inspection-onnx` to inspect content with an ONNX
 text classification model you provide. The model runs locally on the CPU through
-ONNX Runtime. DJL provides tokenization. Supply matching model and tokenizer files
-and register the inspector.
+ONNX Runtime. The selected model determines what can be detected.
 
-This example configures a model with outputs ordered as benign (0), injection (1)
-and leaking (2). Set `Label.index` to match your model's actual output order.
+Prepare `model.onnx` and its matching `tokenizer.json` and `tokenizer_config.json`
+in `models/guard`, relative to the application's working directory. If the model's
+weights are stored in separate files, provision those files as well.
+
+The registration example below assumes two outputs, `SAFE` at index 0 and
+`INJECTION` at index 1, with `SOFTMAX` scoring. Adjust the classification settings
+to match your model and choose a threshold for your application.
 
 ```java
 @Bean(destroyMethod = "close")
 OnnxContentInspector localGuard() {
-    Path directory = Path.of("/opt/models/local-classifier");
+    Path directory = Path.of("models/guard");
     OnnxClassificationConfig onnxClassificationConfig = OnnxClassificationConfig.builder()
         .tokenizer(directory.resolve("tokenizer.json"))
         .tokenizerConfig(directory.resolve("tokenizer_config.json"))
-        .maxTokens(256)
-        .overlapTokens(32)
-        .logitCount(3)
+        .windowSize(128)
+        .overlapSize(32)
+        .logitCount(2)
         .activation(OnnxClassificationConfig.Activation.SOFTMAX)
-        .labels(List.of(
-            new OnnxClassificationConfig.Label(1,
-                InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.9),
-            new OnnxClassificationConfig.Label(2,
-                InspectionFinding.Category.PROMPT_LEAKING, "LEAKING", 0.9)))
+        .labels(List.of(new OnnxClassificationConfig.Label(1,
+            InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.5)))
         .build();
     return new OnnxContentInspector("local-guard",
         OnnxInspectionConfig.defaults(directory.resolve("model.onnx")),
@@ -265,26 +266,21 @@ OnnxContentInspector localGuard() {
 }
 ```
 
-Provision `model.onnx`, `tokenizer.json` and `tokenizer_config.json` before startup.
-If the model weights are stored in separate files, provision those files as well.
-
-The inspector uses native resources for its tokenizer and ONNX session. In the
-example above, Spring calls `close()` when the application shuts down to release
-these resources.
+The inspector uses native resources for its tokenizer and ONNX session. Register
+it as a Spring bean with `destroyMethod = "close"`, or use try-with-resources when
+managing its lifetime directly.
 
 ### Model requirements
 
 | Component | Supported form |
 | --- | --- |
-| Inputs | `input_ids`, optional `attention_mask` and `token_type_ids`, shaped `[1, maxTokens]` |
+| Inputs | `input_ids`, optional `attention_mask` and `token_type_ids`, shaped `[1, windowSize]` |
 | Token type | INT64 or INT32, shared by all token inputs |
 | Output | FLOAT raw logits shaped `[1, logitCount]` |
 
-Initialization checks input names, types and fixed dimensions, along with the selected
-output. Model-loading failures and incompatible metadata raise `InspectionException`
-with `CONFIGURATION` before inspection. If the output dimensions cannot be determined
-from the model file, the actual output shape is checked after inference.
-Unexpected output shapes and nonfinite logits produce `MODEL_ERROR`.
+Model-loading failures and incompatible model metadata raise `InspectionException`
+with `CONFIGURATION`. Unexpected output shapes and nonfinite logits during inspection
+produce `MODEL_ERROR`.
 
 ### Classification settings
 
@@ -300,13 +296,13 @@ application. Supply these values through `OnnxClassificationConfig`.
 | `activation` | Choose `SOFTMAX` or `SIGMOID` to match the model. See [Choosing `activation`](#choosing-activation). |
 | `Label.index` | Use the position of the selected output, starting from zero. |
 | `tokenInputType` | Match the integer type of every token input in the ONNX model. Defaults to INT64. |
-| `maxTokens` | Choose a supported window length, including special tokens and padding. Fixed-length graphs require their exact length. |
-| `overlapTokens` | Choose the number of content tokens repeated between windows. It must be smaller than `maxTokens` minus the number of special tokens. Defaults to zero. |
+| `windowSize` | Tokens per window, including special tokens and padding. Use the model's fixed input length or stay within its supported maximum. |
+| `overlapSize` | Choose the number of content tokens repeated between windows. It must be smaller than `windowSize` minus the number of special tokens. Defaults to zero. |
 | `Label.category`, `Label.code` | Map each detected condition to a category and finding code. |
 | `Label.threshold` | Set the minimum score after activation that emits a finding, including equality. |
 
-`labels` maps selected outputs to findings. In the example, the benign output is
-unmapped. Labels may share an output index with distinct codes and independent
+`labels` maps selected outputs to findings. Outputs without a mapping do not produce
+findings. Labels may share an output index with distinct codes and independent
 thresholds. Each qualifying mapping produces a finding.
 
 ### Choosing `activation`
@@ -317,7 +313,7 @@ and compares the scores with `Label.threshold`. Select the value documented for 
 
 | `activation` | When to use it |
 | --- | --- |
-| `SOFTMAX` | A model that chooses one of mutually exclusive categories, such as benign, injection or leaking. Requires at least two logits. |
+| `SOFTMAX` | A model that chooses one of mutually exclusive categories. Requires at least two logits. |
 | `SIGMOID` | A model that evaluates labels independently, or a binary classifier that returns one logit. |
 
 A single-logit binary classifier uses `logitCount=1`. Model outputs must be raw logits

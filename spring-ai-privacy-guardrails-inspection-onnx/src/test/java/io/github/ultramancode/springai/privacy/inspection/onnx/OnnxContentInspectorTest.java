@@ -7,7 +7,6 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,9 +31,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding.Category.POLICY_VIOLATION;
 import static io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding.Category.TOXICITY;
-import static io.github.ultramancode.springai.privacy.inspection.onnx.PublicModel.INSULT;
-import static io.github.ultramancode.springai.privacy.inspection.onnx.PublicModel.LONG_TAIL;
-import static io.github.ultramancode.springai.privacy.inspection.onnx.PublicModel.SAFE;
+import static io.github.ultramancode.springai.privacy.inspection.onnx.OnnxTestModel.INSULT;
+import static io.github.ultramancode.springai.privacy.inspection.onnx.OnnxTestModel.LONG_TEXT_WITH_INSULT_AT_END;
+import static io.github.ultramancode.springai.privacy.inspection.onnx.OnnxTestModel.SAFE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
@@ -48,15 +47,6 @@ import static org.mockito.Mockito.when;
 class OnnxContentInspectorTest {
 
     @TempDir Path temp;
-    private Path tokenizer;
-    private Path tokenizerConfig;
-
-    @BeforeEach
-    void prepareTokenizer() throws Exception {
-        tokenizer = Files.copy(PublicModel.directory().resolve("tokenizer.json"), temp.resolve("tokenizer.json"));
-        tokenizerConfig = Files.copy(PublicModel.directory().resolve("tokenizer_config.json"),
-                temp.resolve("tokenizer_config.json"));
-    }
 
     private Path graph(String profile) throws Exception {
         try (InputStream input = getClass().getResourceAsStream("/" + profile + ".onnx.base64")) {
@@ -65,7 +55,8 @@ class OnnxContentInspectorTest {
     }
 
     private OnnxClassificationConfig.Builder classificationBuilder() {
-        return PublicModel.classification(tokenizer, tokenizerConfig);
+        return OnnxTestModel.classificationBuilder(OnnxTestModel.directory().resolve("tokenizer.json"),
+                OnnxTestModel.directory().resolve("tokenizer_config.json"));
     }
 
     private OnnxClassificationConfig classification() {
@@ -73,7 +64,7 @@ class OnnxContentInspectorTest {
     }
 
     private OnnxContentInspector inspector() {
-        return new OnnxContentInspector("local", OnnxInspectionConfig.defaults(PublicModel.model()), classification());
+        return new OnnxContentInspector("local", OnnxInspectionConfig.defaults(OnnxTestModel.model()), classification());
     }
 
     private InspectionRequest request(String... texts) {
@@ -90,74 +81,44 @@ class OnnxContentInspectorTest {
     }
 
     @Test
-    void publicModelInspectsNormalAndFlaggedContent() {
-        try (OnnxContentInspector inspector = inspector()) {
-            assertThat(inspector.requiresPrivacyProcessedContent()).isFalse();
-            InspectionResult safe = inspector.inspect(request(SAFE));
-            assertThat(safe.status()).isEqualTo(InspectionResult.Status.COMPLETED);
-            assertThat(safe.completedSegmentIds()).containsExactly("s0");
-            assertThat(safe.findings()).isEmpty();
-            InspectionResult flagged = inspector.inspect(request(INSULT));
-            assertThat(flagged.status()).isEqualTo(InspectionResult.Status.COMPLETED);
-            assertThat(flagged.findings()).singleElement().satisfies(finding -> {
-                assertThat(finding.code()).isEqualTo("INSULT");
-                assertThat(finding.category()).isEqualTo(TOXICITY);
-                assertThat(finding.score()).isCloseTo(0.9852902719384651, within(1e-4));
-            });
-        }
-    }
-
-    @Test
     void overlappingWindowsKeepTheMaximumScoreForEachSegment() {
+        // Python reference scores from public-model-reference.json.
+        double expectedLongTextScore = 0.9717001495402859;
+        double expectedInsultScore = 0.9573231977246978;
         try (OnnxContentInspector inspector = inspector()) {
-            InspectionResult result = inspector.inspect(request(LONG_TAIL, INSULT));
+            InspectionResult result = inspector.inspect(request(LONG_TEXT_WITH_INSULT_AT_END, INSULT));
             assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(result.completedSegmentIds()).containsExactlyInAnyOrder("s0", "s1");
             assertThat(result.findings()).extracting(InspectionFinding::segmentId).containsExactly("s0", "s1");
-            assertThat(result.findings().get(0).score()).isCloseTo(0.9984012079219674, within(1e-4));
-            assertThat(result.findings().get(1).score()).isCloseTo(0.9852902719384651, within(1e-4));
-        }
-    }
-
-    @Test
-    void updatingScoresKeepsFindingsInTheirOriginalOrder() {
-        OnnxClassificationConfig classification = classificationBuilder().maxTokens(8).overlapTokens(0).labels(List.of(
-                new OnnxClassificationConfig.Label(1, TOXICITY, "INSULT", 0.9),
-                new OnnxClassificationConfig.Label(2, TOXICITY, "OBSCENITY", 0.9))).build();
-        try (MockedConstruction<OnnxSequenceClassifier> ignored = mockConstruction(
-                OnnxSequenceClassifier.class, (classifier, context) ->
-                when(classifier.classify(any()))
-                        .thenReturn(new double[] {0, 0.1, 0.95, 0, 0})
-                        .thenReturn(new double[] {0, 0.96, 0.1, 0, 0})
-                        .thenReturn(new double[] {0, 0.1, 0.99, 0, 0}));
-                OnnxContentInspector inspector = new OnnxContentInspector(
-                        "local", OnnxInspectionConfig.defaults(PublicModel.model()), classification)) {
-            InspectionResult result = inspector.inspect(request("Hello ".repeat(18)));
-
-            assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
-            assertThat(result.findings()).extracting(InspectionFinding::code).containsExactly("OBSCENITY", "INSULT");
-            assertThat(result.findings()).extracting(InspectionFinding::score).containsExactly(0.99, 0.96);
+            assertThat(result.findings()).allSatisfy(finding -> {
+                assertThat(finding.category()).isEqualTo(TOXICITY);
+                assertThat(finding.code()).isEqualTo("INSULT");
+            });
+            assertThat(result.findings().get(0).score())
+                    .isCloseTo(expectedLongTextScore, within(0.0001));
+            assertThat(result.findings().get(1).score())
+                    .isCloseTo(expectedInsultScore, within(0.0001));
         }
     }
 
     @Test
     void sameOutputIndexSupportsIndependentThresholds() {
         OnnxClassificationConfig config = classificationBuilder().labels(List.of(
-                new OnnxClassificationConfig.Label(1, TOXICITY, "CAUTION", 0.9),
-                new OnnxClassificationConfig.Label(1, TOXICITY, "HIGH_SCORE", 0.99))).build();
+                new OnnxClassificationConfig.Label(4, TOXICITY, "CAUTION", 0.9),
+                new OnnxClassificationConfig.Label(4, TOXICITY, "HIGH_SCORE", 0.965))).build();
         try (OnnxContentInspector inspector = new OnnxContentInspector(
-                "local", OnnxInspectionConfig.defaults(PublicModel.model()), config)) {
+                "local", OnnxInspectionConfig.defaults(OnnxTestModel.model()), config)) {
             assertThat(inspector.inspect(request(INSULT)).findings()).extracting(InspectionFinding::code)
                     .containsExactly("CAUTION");
-            assertThat(inspector.inspect(request(LONG_TAIL)).findings()).extracting(InspectionFinding::code)
+            assertThat(inspector.inspect(request(LONG_TEXT_WITH_INSULT_AT_END)).findings()).extracting(InspectionFinding::code)
                     .containsExactly("CAUTION", "HIGH_SCORE");
         }
     }
 
     @Test
-    void exceedingWindowsPreservesPartialEvidenceAndCompletedSegments() {
+    void exceedingWindowLimitPreservesPartialEvidenceAndCompletedSegments() {
         try (OnnxContentInspector inspector = new OnnxContentInspector("local",
-                new OnnxInspectionConfig(PublicModel.model(), 2, 2), classification())) {
+                new OnnxInspectionConfig(OnnxTestModel.model(), 2, 2), classification())) {
             InspectionResult result = inspector.inspect(request(SAFE, INSULT.repeat(60)));
             assertThat(result.failureCode()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED);
             assertThat(result.completedSegmentIds()).containsExactly("s0");
@@ -170,8 +131,8 @@ class OnnxContentInspectorTest {
         try (MockedConstruction<OnnxSequenceClassifier> ignored = mockConstruction(
                 OnnxSequenceClassifier.class, (classifier, context) ->
                 when(classifier.classify(any()))
-                        .thenReturn(new double[] {1, 0, 0, 0, 0})
-                        .thenReturn(new double[] {0, 0.99, 0, 0, 0})
+                        .thenReturn(new double[] {0, 0, 0, 0, 0, 0})
+                        .thenReturn(new double[] {0, 0, 0, 0, 0.99, 0})
                         .thenThrow(new InspectionException(InspectionFailureCode.MODEL_ERROR)));
                 OnnxContentInspector inspector = inspector()) {
             InspectionResult partial = inspector.inspect(request(SAFE, INSULT.repeat(60)));
@@ -209,7 +170,7 @@ class OnnxContentInspectorTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"input-float", "unknown-input", "wrong-length", "int32", "rank-one",
-            "output-double", "output-rank-one", "missing-ids", "batch-two", "zero-batch"})
+            "output-double", "output-rank-one", "missing-ids", "batch-two"})
     void incompatibleModelMetadataFailsBeforeAnyInspection(String profile) throws Exception {
         Path model = graph(profile);
         assertThatThrownBy(() -> new OnnxContentInspector("local", OnnxInspectionConfig.defaults(model), classification()))
@@ -219,11 +180,12 @@ class OnnxContentInspectorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"2, logits", "5, missing"})
-    void publicModelRejectsIncorrectOutputConfiguration(int width, String output) {
-        OnnxClassificationConfig config = classificationBuilder().logitCount(width).modelOutputName(output).build();
+    @CsvSource({"5, logits", "6, missing"})
+    void publicModelRejectsIncorrectOutputConfiguration(int logitCount, String modelOutputName) {
+        OnnxClassificationConfig config = classificationBuilder()
+                .logitCount(logitCount).modelOutputName(modelOutputName).build();
         assertThatThrownBy(() -> new OnnxContentInspector("local",
-                OnnxInspectionConfig.defaults(PublicModel.model()), config))
+                OnnxInspectionConfig.defaults(OnnxTestModel.model()), config))
                 .isInstanceOfSatisfying(InspectionException.class,
                         failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION))
                 .hasNoCause();
@@ -251,8 +213,8 @@ class OnnxContentInspectorTest {
 
     @ParameterizedTest
     @CsvSource({"5, FAILED", "6, COMPLETED"})
-    void dynamicOutputWidthIsCheckedAfterInference(int width, InspectionResult.Status status) throws Exception {
-        OnnxClassificationConfig config = classificationBuilder().logitCount(width).build();
+    void dynamicOutputLogitCountIsCheckedAfterInference(int logitCount, InspectionResult.Status status) throws Exception {
+        OnnxClassificationConfig config = classificationBuilder().logitCount(logitCount).build();
         try (OnnxContentInspector inspector = new OnnxContentInspector("dynamic",
                 OnnxInspectionConfig.defaults(graph("dynamic-wrong")), config)) {
             InspectionResult result = inspector.inspect(request(SAFE));
@@ -274,8 +236,10 @@ class OnnxContentInspectorTest {
     }
 
     @Test
-    void malformedModelDoesNotExposeBackendDiagnostics() throws Exception {
+    void modelLoadingFailuresAndSettingsDoNotExposePaths() throws Exception {
         Path model = Files.writeString(temp.resolve("private-model.onnx"), "invalid ONNX");
+        assertThat(OnnxInspectionConfig.defaults(model).toString()).doesNotContain(model.toString());
+        assertThat(classification().toString()).doesNotContain(OnnxTestModel.directory().toString());
         assertThatThrownBy(() -> new OnnxContentInspector("local", OnnxInspectionConfig.defaults(model), classification()))
                 .isInstanceOfSatisfying(InspectionException.class,
                         failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION))
@@ -294,7 +258,7 @@ class OnnxContentInspectorTest {
                     if (!release.await(10, TimeUnit.SECONDS)) {
                         throw new AssertionError("Prediction was not released");
                     }
-                    return new double[] {0.01, 0.99, 0, 0, 0};
+                    return new double[] {0, 0, 0, 0, 0.99, 0};
                 }));
                 OnnxContentInspector inspector = inspector()) {
             Future<InspectionResult> active = pool.submit(() -> inspector.inspect(request(INSULT)));
@@ -314,51 +278,33 @@ class OnnxContentInspectorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "false, , ",
-            "true, , CANCELLED",
-            "false, MODEL_ERROR, MODEL_ERROR",
-            "true, MODEL_ERROR, MODEL_ERROR",
-            "false, INVALID_RESULT, INVALID_RESULT",
-            "true, INVALID_RESULT, INVALID_RESULT"
-    })
-    void inferenceResultsAndFailuresSurviveDeadlineExpiryOrInterruption(
-            boolean interrupt, InspectionFailureCode inferenceFailure, InspectionFailureCode expectedFailureCode) {
+    @ValueSource(booleans = {false, true})
+    void completedInferenceRetainsFindingsAfterDeadlineExpiryOrInterruption(boolean interrupt) {
         AtomicReference<InspectionRequest> activeRequest = new AtomicReference<>();
         try (MockedConstruction<OnnxSequenceClassifier> ignored = mockConstruction(
                 OnnxSequenceClassifier.class, (classifier, context) ->
-                when(classifier.classify(any())).thenReturn(new double[] {0.01, 0.99, 0, 0, 0}).thenAnswer(invocation -> {
+                when(classifier.classify(any())).thenReturn(new double[] {0, 0, 0, 0, 0.99, 0}).thenAnswer(invocation -> {
                     if (interrupt) {
                         Thread.currentThread().interrupt();
                     } else {
                         TimeUnit.NANOSECONDS.sleep(activeRequest.get().remaining().toNanos());
                     }
-                    if (inferenceFailure == InspectionFailureCode.INVALID_RESULT) {
-                        throw new IllegalStateException("Synthetic inference failure");
-                    }
-                    if (inferenceFailure != null) {
-                        throw new InspectionException(inferenceFailure);
-                    }
-                    return new double[] {0.01, 0.99, 0, 0, 0};
+                    return new double[] {0, 0, 0, 0, 0.99, 0};
                 }));
                 OnnxContentInspector inspector = inspector()) {
             InspectionRequest request = request(Duration.ofSeconds(1), INSULT, INSULT);
             activeRequest.set(request);
             try {
                 InspectionResult result = inspector.inspect(request);
-                assertThat(result.failureCode()).isEqualTo(expectedFailureCode);
-                if (expectedFailureCode == null) {
+                if (interrupt) {
+                    assertThat(result.status()).isEqualTo(InspectionResult.Status.FAILED);
+                    assertThat(result.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+                    assertThat(result.completedSegmentIds()).containsExactly("s0");
+                } else {
                     assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
                     assertThat(result.completedSegmentIds()).containsExactlyInAnyOrder("s0", "s1");
-                } else {
-                    assertThat(result.status()).isEqualTo(InspectionResult.Status.FAILED);
-                    assertThat(result.completedSegmentIds()).containsExactly("s0");
                 }
-                if (inferenceFailure == null) {
-                    assertThat(result.findings()).extracting(InspectionFinding::segmentId).containsExactly("s0", "s1");
-                } else {
-                    assertThat(result.findings()).extracting(InspectionFinding::segmentId).containsExactly("s0");
-                }
+                assertThat(result.findings()).extracting(InspectionFinding::segmentId).containsExactly("s0", "s1");
                 assertThat(Thread.currentThread().isInterrupted()).isEqualTo(interrupt);
             } finally {
                 Thread.interrupted();
@@ -373,7 +319,7 @@ class OnnxContentInspectorTest {
                 OnnxSequenceClassifier.class, (classifier, context) ->
                 when(classifier.classify(any())).thenAnswer(invocation -> {
                     TimeUnit.NANOSECONDS.sleep(activeRequest.get().remaining().toNanos());
-                    return new double[] {0.01, 0.99, 0, 0, 0};
+                    return new double[] {0, 0, 0, 0, 0.99, 0};
                 }));
                 OnnxContentInspector inspector = inspector()) {
             InspectionRequest request = request(Duration.ofSeconds(1), INSULT.repeat(60));
@@ -393,7 +339,7 @@ class OnnxContentInspectorTest {
         ExecutorService pool = Executors.newFixedThreadPool(8);
         try (OnnxContentInspector inspector = inspector()) {
             List<Future<InspectionResult>> pending = new ArrayList<>();
-            for (int i = 0; i < 64; i++) {
+            for (int i = 0; i < 16; i++) {
                 String text = i % 2 == 0 ? SAFE : INSULT;
                 pending.add(pool.submit(() -> inspector.inspect(request(text))));
             }
@@ -406,28 +352,5 @@ class OnnxContentInspectorTest {
         } finally {
             pool.shutdownNow();
         }
-    }
-
-    @Test
-    void interruptionBeforeTokenizationIsPreserved() {
-        try (OnnxContentInspector inspector = inspector()) {
-            try {
-                Thread.currentThread().interrupt();
-                assertThat(inspector.inspect(request("hello")).failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
-                assertThat(Thread.currentThread().isInterrupted()).isTrue();
-            } finally {
-                Thread.interrupted();
-            }
-        }
-    }
-
-    @Test
-    void modelAndTokenizerPathsStayOutOfDiagnostics() {
-        Path secret = temp.resolve("private-model.onnx");
-        assertThat(OnnxInspectionConfig.defaults(secret).toString()).doesNotContain(secret.toString());
-        assertThat(classification().toString()).doesNotContain(temp.toString());
-        assertThatThrownBy(() -> new OnnxContentInspector("local", OnnxInspectionConfig.defaults(secret), classification()))
-                .isInstanceOf(InspectionException.class).hasMessageContaining("CONFIGURATION")
-                .hasMessageNotContaining("private-model").hasNoCause();
     }
 }

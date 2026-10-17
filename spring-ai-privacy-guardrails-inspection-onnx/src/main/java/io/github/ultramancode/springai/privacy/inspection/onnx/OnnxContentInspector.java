@@ -43,13 +43,14 @@ public final class OnnxContentInspector implements ContentInspector, AutoCloseab
     private boolean closed;
 
     public OnnxContentInspector(
-            String inspectorId, OnnxInspectionConfig config, OnnxClassificationConfig classification) {
+            String inspectorId, OnnxInspectionConfig onnxInspectionConfig,
+            OnnxClassificationConfig onnxClassificationConfig) {
         this.inspectorId = InspectionIdentifiers.requireValid(inspectorId);
-        this.maxWindows = Objects.requireNonNull(config, "config").maxWindows();
-        this.labels = Objects.requireNonNull(classification, "classification").labels();
-        tokenizer = new TokenWindowTokenizer(classification);
+        this.maxWindows = Objects.requireNonNull(onnxInspectionConfig, "onnxInspectionConfig").maxWindows();
+        this.labels = Objects.requireNonNull(onnxClassificationConfig, "onnxClassificationConfig").labels();
+        tokenizer = new TokenWindowTokenizer(onnxClassificationConfig);
         try {
-            classifier = new OnnxSequenceClassifier(config, classification);
+            classifier = new OnnxSequenceClassifier(onnxInspectionConfig, onnxClassificationConfig);
         } catch (RuntimeException | Error ex) {
             tokenizer.close();
             throw ex;

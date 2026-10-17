@@ -16,12 +16,12 @@ import java.util.Set;
  * <p>Use matching {@code tokenizer.json} and {@code tokenizer_config.json} files.
  * The padding token, padding type ID and padding/truncation directions in {@code tokenizer_config.json}
  * take precedence over those in {@code tokenizer.json}. Overlap must be smaller than
- * {@code maxTokens} minus the special-token count, which is checked when the tokenizer loads.
+ * {@code windowSize} minus the special-token count.
  *
  * @param tokenizer path to the model's {@code tokenizer.json} in Hugging Face Tokenizers format
  * @param tokenizerConfig path to the model's {@code tokenizer_config.json}
- * @param maxTokens supported length of each inference window, including special tokens and padding
- * @param overlapTokens number of content tokens repeated between adjacent windows
+ * @param windowSize number of tokens per inference window, including special tokens and padding
+ * @param overlapSize number of content tokens repeated between adjacent windows
  * @param logitCount expected number of raw scores in the model's [1, logitCount] logits output
  * @param activation conversion from raw logits to scores, as specified by the model
  * @param labels finding mappings for selected output indexes, with distinct finding codes
@@ -29,7 +29,7 @@ import java.util.Set;
  * @param modelOutputName name of the raw logits output in the ONNX model
  */
 public record OnnxClassificationConfig(
-        Path tokenizer, Path tokenizerConfig, int maxTokens, int overlapTokens,
+        Path tokenizer, Path tokenizerConfig, int windowSize, int overlapSize,
         int logitCount, Activation activation, List<Label> labels, TokenInputType tokenInputType,
         String modelOutputName) {
 
@@ -74,14 +74,14 @@ public record OnnxClassificationConfig(
         if (modelOutputName.isBlank()) {
             throw new IllegalArgumentException("modelOutputName must not be blank");
         }
-        if (maxTokens < 1) {
-            throw new IllegalArgumentException("maxTokens must be greater than 0");
+        if (windowSize < 1) {
+            throw new IllegalArgumentException("windowSize must be greater than 0");
         }
-        if (overlapTokens < 0) {
-            throw new IllegalArgumentException("overlapTokens must be 0 or greater");
+        if (overlapSize < 0) {
+            throw new IllegalArgumentException("overlapSize must be 0 or greater");
         }
-        if (overlapTokens >= maxTokens) {
-            throw new IllegalArgumentException("overlapTokens must be less than maxTokens");
+        if (overlapSize >= windowSize) {
+            throw new IllegalArgumentException("overlapSize must be less than windowSize");
         }
         if (logitCount < 1) {
             throw new IllegalArgumentException("logitCount must be greater than 0");
@@ -106,7 +106,7 @@ public record OnnxClassificationConfig(
 
     /**
      * Creates a builder with no overlap, INT64 token inputs and the output name {@code logits}.
-     * Tokenizer files, window length, logit count, activation and labels are required.
+     * Tokenizer files, window size, logit count, activation and labels are required.
      *
      * @return a new builder
      */
@@ -119,8 +119,8 @@ public record OnnxClassificationConfig(
 
         private Path tokenizer;
         private Path tokenizerConfig;
-        private Integer maxTokens;
-        private int overlapTokens;
+        private Integer windowSize;
+        private int overlapSize;
         private Integer logitCount;
         private Activation activation;
         private List<Label> labels;
@@ -142,15 +142,15 @@ public record OnnxClassificationConfig(
             return this;
         }
 
-        /** Sets each inference window's length, including special tokens and padding. Longer text uses more windows. */
-        public Builder maxTokens(int maxTokens) {
-            this.maxTokens = maxTokens;
+        /** Sets the number of tokens per inference window, including special tokens and padding. */
+        public Builder windowSize(int windowSize) {
+            this.windowSize = windowSize;
             return this;
         }
 
         /** Sets content tokens repeated between windows. Defaults to zero. */
-        public Builder overlapTokens(int overlapTokens) {
-            this.overlapTokens = overlapTokens;
+        public Builder overlapSize(int overlapSize) {
+            this.overlapSize = overlapSize;
             return this;
         }
 
@@ -196,7 +196,7 @@ public record OnnxClassificationConfig(
          */
         public OnnxClassificationConfig build() {
             return new OnnxClassificationConfig(tokenizer, tokenizerConfig,
-                    Objects.requireNonNull(maxTokens, "maxTokens"), overlapTokens,
+                    Objects.requireNonNull(windowSize, "windowSize"), overlapSize,
                     Objects.requireNonNull(logitCount, "logitCount"), activation, labels, tokenInputType,
                     modelOutputName);
         }
@@ -204,8 +204,8 @@ public record OnnxClassificationConfig(
 
     @Override
     public String toString() {
-        return "OnnxClassificationConfig[tokenizer=<local>, tokenizerConfig=<local>, maxTokens=" + maxTokens
-                + ", overlapTokens=" + overlapTokens + ", logitCount=" + logitCount
+        return "OnnxClassificationConfig[tokenizer=<local>, tokenizerConfig=<local>, windowSize=" + windowSize
+                + ", overlapSize=" + overlapSize + ", logitCount=" + logitCount
                 + ", activation=" + activation + ", labels=" + labels + ", tokenInputType=" + tokenInputType + "]";
     }
 }

@@ -34,7 +34,7 @@ def main():
     session = ort.InferenceSession(str(args.model_directory / "model.onnx"), options,
                                   providers=["CPUExecutionProvider"])
     safe = "Thank you for your help. "
-    insult = "Ты идиот. "
+    insult = "You are an idiot. "
     cases = [
         ("ordinary", safe, 128, 32, "right"),
         ("insult", insult, 128, 32, "right"),
@@ -43,7 +43,7 @@ def main():
         ("unicode", "Café ＡＢＣ ﬁ 안녕하세요 Привет 👋", 128, 32, "right"),
         ("special-tokens", "[CLS] Hello [MASK] world [SEP]", 128, 32, "right"),
         ("long-safe", safe * 40, 128, 32, "right"),
-        ("long-tail", safe * 40 + insult * 20, 128, 32, "right"),
+        ("long-text-with-insult-at-end", safe * 40 + insult * 20, 128, 32, "right"),
         ("larger-window", safe * 40 + insult * 20, 256, 32, "right"),
         ("no-overlap", safe * 4, 8, 0, "right"),
         ("maximum-overlap", safe * 2, 8, 5, "right"),
@@ -71,8 +71,8 @@ def main():
                                         for key, value in tensors.items()},
                             "softmax": (exp / exp.sum()).tolist(),
                             "sigmoid": (1 / (1 + np.exp(-logits))).tolist()})
-        reference["cases"].append({"name": name, "text": text, "maxTokens": length,
-                                   "overlapTokens": overlap, "direction": direction, "windows": windows})
+        reference["cases"].append({"name": name, "text": text, "windowSize": length,
+                                   "overlapSize": overlap, "direction": direction, "windows": windows})
     output = RESOURCES / "public-model-reference.json"
     output.write_text(json.dumps(reference, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"Wrote {len(cases)} public-model reference cases")

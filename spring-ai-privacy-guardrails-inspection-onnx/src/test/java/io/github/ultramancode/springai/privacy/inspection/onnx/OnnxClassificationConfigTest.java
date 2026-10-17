@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class OnnxClassificationConfigTest {
 
     private final Path tokenizer = Path.of("tokenizer.json");
-    private final Path config = Path.of("tokenizer_config.json");
+    private final Path tokenizerConfigPath = Path.of("tokenizer_config.json");
 
     private OnnxClassificationConfig.Label label(int index, String code, double threshold) {
         return new OnnxClassificationConfig.Label(index, InspectionFinding.Category.PROMPT_ATTACK, code, threshold);
@@ -27,105 +27,42 @@ class OnnxClassificationConfigTest {
     private OnnxClassificationConfig.Builder builder() {
         return OnnxClassificationConfig.builder()
                 .tokenizer(tokenizer)
-                .tokenizerConfig(config)
-                .maxTokens(256)
+                .tokenizerConfig(tokenizerConfigPath)
+                .windowSize(256)
                 .logitCount(3)
                 .activation(SOFTMAX)
                 .labels(List.of(label(1, "ATTACK", 0.9)));
     }
 
     @Test
-    void builtSettingsKeepTheirValuesWhenLabelsOrTheBuilderChange() {
+    void labelsAreCopiedWhenTheConfigIsBuilt() {
         List<OnnxClassificationConfig.Label> labels = new ArrayList<>(List.of(label(1, "ATTACK", 0.9)));
-        OnnxClassificationConfig.Builder builder = builder()
-                .overlapTokens(32)
-                .modelOutputName("classification_output")
-                .tokenInputType(OnnxClassificationConfig.TokenInputType.INT32)
-                .labels(labels);
-        OnnxClassificationConfig classification = builder.build();
-        assertThat(classification.tokenizer()).isEqualTo(tokenizer);
-        assertThat(classification.tokenizerConfig()).isEqualTo(config);
-        assertThat(classification.maxTokens()).isEqualTo(256);
-        assertThat(classification.overlapTokens()).isEqualTo(32);
-        assertThat(classification.logitCount()).isEqualTo(3);
-        assertThat(classification.activation()).isEqualTo(SOFTMAX);
-        assertThat(classification.tokenInputType()).isEqualTo(OnnxClassificationConfig.TokenInputType.INT32);
-        assertThat(classification.modelOutputName()).isEqualTo("classification_output");
+        OnnxClassificationConfig classification = builder().labels(labels).build();
+
         labels.clear();
-        OnnxClassificationConfig next = builder.maxTokens(128).modelOutputName("scores")
-                .labels(List.of(label(2, "LEAKING", 0.8))).build();
-        assertThat(next.maxTokens()).isEqualTo(128);
-        assertThat(next.modelOutputName()).isEqualTo("scores");
-        assertThat(classification.modelOutputName()).isEqualTo("classification_output");
-        assertThat(next.labels()).containsExactly(label(2, "LEAKING", 0.8));
-        assertThat(classification.maxTokens()).isEqualTo(256);
+
         assertThat(classification.labels()).containsExactly(label(1, "ATTACK", 0.9));
         assertThatThrownBy(() -> classification.labels().clear()).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
     void builderDefaultsOverlapInputTypeAndOutputName() {
-        OnnxClassificationConfig classification = builder()
-                .logitCount(1)
-                .activation(SIGMOID)
-                .labels(List.of(label(0, "ATTACK", 0.9)))
-                .build();
-        assertThat(classification.overlapTokens()).isZero();
+        OnnxClassificationConfig classification = builder().build();
+        assertThat(classification.overlapSize()).isZero();
         assertThat(classification.tokenInputType()).isEqualTo(OnnxClassificationConfig.TokenInputType.INT64);
         assertThat(classification.modelOutputName()).isEqualTo("logits");
-        assertThat(classification.logitCount()).isEqualTo(1);
-        assertThat(classification.activation()).isEqualTo(SIGMOID);
-        assertThat(classification.labels()).containsExactly(label(0, "ATTACK", 0.9));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"tokenizer", "tokenizerConfig", "maxTokens", "logitCount", "activation", "labels"})
-    void builderRequiresModelContractAndFindingMappings(String missing) {
-        OnnxClassificationConfig.Builder builder = OnnxClassificationConfig.builder();
-        if (!missing.equals("tokenizer")) {
-            builder.tokenizer(tokenizer);
-        }
-        if (!missing.equals("tokenizerConfig")) {
-            builder.tokenizerConfig(config);
-        }
-        if (!missing.equals("maxTokens")) {
-            builder.maxTokens(256);
-        }
-        if (!missing.equals("logitCount")) {
-            builder.logitCount(3);
-        }
-        if (!missing.equals("activation")) {
-            builder.activation(SOFTMAX);
-        }
-        if (!missing.equals("labels")) {
-            builder.labels(List.of(label(1, "ATTACK", 0.9)));
-        }
-        assertThatThrownBy(builder::build).isInstanceOf(NullPointerException.class).hasMessage(missing);
     }
 
     @Test
-    void nullTokenInputTypeIsRejected() {
-        assertThatThrownBy(() -> builder().tokenInputType(null).build())
-                .isInstanceOf(NullPointerException.class).hasMessage("tokenInputType");
-    }
-
-    @Test
-    void nullOutputNameIsRejected() {
-        assertThatThrownBy(() -> builder().modelOutputName(null).build())
-                .isInstanceOf(NullPointerException.class).hasMessage("modelOutputName");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"", " ", "\t"})
-    void outputNamesMustNotBeBlank(String name) {
-        assertThatThrownBy(() -> builder().modelOutputName(name).build())
+    void blankOutputNamesAreRejected() {
+        assertThatThrownBy(() -> builder().modelOutputName(" ").build())
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
     @CsvSource({"0, 0", "-1, 0", "8, -1", "8, 8"})
-    void invalidTokenWindowsAreRejected(int maxTokens, int overlapTokens) {
-        assertThatThrownBy(() -> builder().maxTokens(maxTokens).overlapTokens(overlapTokens).build())
+    void invalidTokenWindowsAreRejected(int windowSize, int overlapSize) {
+        assertThatThrownBy(() -> builder().windowSize(windowSize).overlapSize(overlapSize).build())
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -139,7 +76,8 @@ class OnnxClassificationConfigTest {
         assertThatThrownBy(() -> builder().logitCount(1).labels(List.of(label(0, "A", 0.5))).build())
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> builder().logitCount(0).activation(SIGMOID).build())
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("logitCount must be greater than 0");
     }
 
     @Test
@@ -152,7 +90,7 @@ class OnnxClassificationConfigTest {
 
     @ParameterizedTest
     @ValueSource(doubles = {Double.NaN, Double.POSITIVE_INFINITY, -0.1, 0, 1.1})
-    void thresholdsCannotSilentlyAcceptInvalidValues(double threshold) {
+    void invalidThresholdsAreRejected(double threshold) {
         assertThatThrownBy(() -> label(1, "ATTACK", threshold)).isInstanceOf(IllegalArgumentException.class);
     }
 

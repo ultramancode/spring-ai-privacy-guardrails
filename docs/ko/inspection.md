@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: e5e8cc3bab6525527a24d46873d0596afb1ee1d9717d1b1bc1b0f083886d4464 -->
+<!-- i18n-source-sha256: 810f76856beb048e595a609ff574700c1c8434ff807b8eb43c46e7612eb595b6 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -235,28 +235,30 @@ Java에서 직접 구성할 때 `InspectionChatClientConfigurer`의 기본 resol
 
 `spring-ai-privacy-guardrails-inspection-onnx`를 추가하면 사용자가 준비한
 ONNX 텍스트 분류 모델을 로컬에서 실행해 콘텐츠를 검사할 수 있습니다.
-모델은 ONNX Runtime을 통해 CPU에서 실행되며, 토큰화에는 DJL을 사용합니다.
-서로 호환되는 모델과 토크나이저 파일을 준비하고 검사기를 등록합니다.
+모델은 ONNX Runtime을 통해 CPU에서 실행됩니다.
+탐지할 수 있는 항목은 선택한 모델에 따라 달라집니다.
 
-이 예시는 모델의 출력 순서가 정상(0), 인젝션(1), 유출(2)인 경우의 설정입니다.
-`Label.index`는 사용하는 모델의 실제 출력 순서에 맞춰 지정하세요.
+`model.onnx`와 이에 맞는 `tokenizer.json`, `tokenizer_config.json`을
+애플리케이션 작업 디렉터리 기준 `models/guard`에 준비합니다.
+모델 가중치가 별도 파일로 분리되어 있다면 해당 파일도 함께 준비합니다.
+
+아래 등록 예시는 인덱스 0이 `SAFE`, 인덱스 1이 `INJECTION`인 두 출력에
+`SOFTMAX`를 적용하는 모델을 가정합니다. 분류 설정은 실제 모델에 맞추고,
+임계값은 애플리케이션에 맞게 선택합니다.
 
 ```java
 @Bean(destroyMethod = "close")
 OnnxContentInspector localGuard() {
-    Path directory = Path.of("/opt/models/local-classifier");
+    Path directory = Path.of("models/guard");
     OnnxClassificationConfig onnxClassificationConfig = OnnxClassificationConfig.builder()
         .tokenizer(directory.resolve("tokenizer.json"))
         .tokenizerConfig(directory.resolve("tokenizer_config.json"))
-        .maxTokens(256)
-        .overlapTokens(32)
-        .logitCount(3)
+        .windowSize(128)
+        .overlapSize(32)
+        .logitCount(2)
         .activation(OnnxClassificationConfig.Activation.SOFTMAX)
-        .labels(List.of(
-            new OnnxClassificationConfig.Label(1,
-                InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.9),
-            new OnnxClassificationConfig.Label(2,
-                InspectionFinding.Category.PROMPT_LEAKING, "LEAKING", 0.9)))
+        .labels(List.of(new OnnxClassificationConfig.Label(1,
+            InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.5)))
         .build();
     return new OnnxContentInspector("local-guard",
         OnnxInspectionConfig.defaults(directory.resolve("model.onnx")),
@@ -264,25 +266,21 @@ OnnxContentInspector localGuard() {
 }
 ```
 
-시작 전에 `model.onnx`, `tokenizer.json`, `tokenizer_config.json`을 준비합니다.
-모델 가중치가 별도 파일로 분리되어 있다면 해당 파일도 함께 준비합니다.
-
-검사기는 토크나이저와 ONNX 세션의 네이티브 자원을 사용합니다. 위 예시에서는
-애플리케이션 종료 시 Spring이 `close()`를 호출해 이 자원을 해제합니다.
+검사기는 토크나이저와 ONNX 세션의 네이티브 자원을 사용합니다.
+Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
+수명을 직접 관리할 때는 try-with-resources를 사용합니다.
 
 ### 모델 요구 사항
 
 | 구성 요소 | 지원 형식 |
 | --- | --- |
-| 입력 | `input_ids`, 선택적 `attention_mask`와 `token_type_ids`. 각각 `[1, maxTokens]` 형태 |
+| 입력 | `input_ids`, 선택적 `attention_mask`와 `token_type_ids`. 각각 `[1, windowSize]` 형태 |
 | 토큰 타입 | 모든 토큰 입력에 동일한 INT64 또는 INT32 |
 | 출력 | `[1, logitCount]` 형태의 FLOAT 원시 로짓 |
 
-초기화할 때 입력 이름, 타입, 고정된 차원과 선택한 출력을 설정과 비교합니다.
-모델 로딩 실패와 메타정보 불일치는 검사 전에 `CONFIGURATION`을 담은
-`InspectionException`을 발생시킵니다.
-모델 파일에서 출력 크기를 확정할 수 없는 경우에는 실행 후 실제 출력 크기를 확인합니다.
-예상과 다른 출력 형태나 유한하지 않은 로짓은 `MODEL_ERROR`로 처리합니다.
+모델 로딩 실패와 모델 메타정보 불일치는 `CONFIGURATION`을 담은
+`InspectionException`을 발생시킵니다. 검사 중 예상과 다른 출력 형태나
+유한하지 않은 로짓은 `MODEL_ERROR`로 처리합니다.
 
 ### 분류 설정
 
@@ -298,14 +296,14 @@ OnnxContentInspector localGuard() {
 | `activation` | 모델에 맞게 `SOFTMAX` 또는 `SIGMOID`를 선택합니다. 선택 기준은 아래의 [`activation` 선택](#activation-선택)을 참고하세요. |
 | `Label.index` | 탐지할 출력의 위치를 0부터 세어 지정합니다. |
 | `tokenInputType` | ONNX 모델 파일에 정의된 모든 토큰 입력의 정수 타입에 맞춥니다. 기본값은 INT64입니다. |
-| `maxTokens` | 특수 토큰과 패딩을 포함한 창 길이입니다. 모델이 지원하는 길이를 선택하고, 고정 길이 모델은 정확한 길이를 사용합니다. |
-| `overlapTokens` | 창 사이에 반복할 본문 토큰 수를 정합니다. `maxTokens`에서 특수 토큰 수를 뺀 값보다 작아야 합니다. 기본값은 0입니다. |
+| `windowSize` | 특수 토큰과 패딩을 포함한 윈도우 하나의 토큰 수입니다. 입력 길이가 고정된 모델은 해당 길이를 사용하고, 가변 길이 모델은 지원하는 최대 길이 이내로 설정합니다. |
+| `overlapSize` | 윈도우 사이에 반복할 본문 토큰 수를 정합니다. `windowSize`에서 특수 토큰 수를 뺀 값보다 작아야 합니다. 기본값은 0입니다. |
 | `Label.category`, `Label.code` | 탐지 조건마다 범주와 탐지 유형 코드를 지정합니다. |
 | `Label.threshold` | 활성화 함수 적용 후 점수가 이 값 이상이면 탐지 결과를 생성합니다. |
 
-`labels`는 선택한 모델 출력을 탐지 결과에 연결합니다. 위 예시에서는 정상 출력을
-매핑하지 않습니다. 서로 다른 코드를 가진 여러 레이블이 같은 출력 인덱스를 사용할 수
-있습니다. 임계값은 각각 독립적으로 적용되며, 조건을 충족한 매핑마다 탐지 결과가 생성됩니다.
+`labels`는 선택한 모델 출력을 탐지 결과에 연결합니다. 매핑하지 않은 출력에서는
+탐지 결과를 생성하지 않습니다. 서로 다른 코드를 가진 여러 레이블이 같은 출력 인덱스를
+사용할 수 있습니다. 임계값은 각각 독립적으로 적용되며, 조건을 충족한 매핑마다 탐지 결과가 생성됩니다.
 
 ### `activation` 선택
 
@@ -315,7 +313,7 @@ OnnxContentInspector localGuard() {
 
 | `activation` | 사용하는 모델 |
 | --- | --- |
-| `SOFTMAX` | 정상·인젝션·유출처럼 서로 배타적인 범주 중 하나를 판별하는 모델. 로짓 두 개 이상 |
+| `SOFTMAX` | 서로 배타적인 범주 중 하나를 판별하는 모델. 로짓 두 개 이상 |
 | `SIGMOID` | 항목별로 독립적으로 판단하는 모델 또는 로짓 하나를 반환하는 이진 분류 모델 |
 
 로짓 하나를 반환하는 이진 분류 모델은 `logitCount=1`을 사용합니다.
@@ -334,15 +332,15 @@ OnnxContentInspector localGuard() {
 ### 실행 한도
 
 모델 내부 연산에 사용할 CPU 스레드 수(`intraOpThreads`, 기본 2개)와 요청 전체의
-창 개수 한도(`maxWindows`, 기본 256개)는 `OnnxInspectionConfig`에서 설정합니다.
+윈도우 개수 한도(`maxWindows`, 기본 256개)는 `OnnxInspectionConfig`에서 설정합니다.
 전체 검사 시간 제한은 `InspectionLimits`에서 설정하며 기본값은 10초입니다.
 
-긴 텍스트는 토큰 창으로 나누어 검사합니다. 각 구간의 모든 창을 검사해야 해당 구간을 완료로 처리합니다.
+긴 텍스트는 토큰 윈도우로 나누어 검사합니다. 각 구간의 모든 윈도우를 검사해야 해당 구간을 완료로 처리합니다.
 탐지 결과에는 각 구간에서 레이블별로 임계값을 충족한 최고 점수를 담습니다.
 
 같은 검사기 인스턴스는 요청을 한 번에 하나씩 처리하며, 대기·토큰화·추론 모두 제한 시간에
 포함됩니다. 실행 중인 토큰화나 추론이 끝날 때까지 기다리므로 제한 시간을 넘겨 반환할 수 있습니다.
-이미 얻은 결과는 유효하며, 제한 시간을 넘긴 뒤 검사할 창이나 구간이 남아 있으면 `TIMEOUT`을
+이미 얻은 결과는 유효하며, 제한 시간을 넘긴 뒤 검사할 윈도우나 구간이 남아 있으면 `TIMEOUT`을
 반환합니다. 완료한 구간 ID와 부분 탐지 결과는 보존합니다.
 
 ## 결과, 정책, 실패

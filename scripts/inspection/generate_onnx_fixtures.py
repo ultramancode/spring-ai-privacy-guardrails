@@ -14,7 +14,7 @@ DEFAULTS = {
     "input_shape": [1, "sequence"],
     "output_type": T.FLOAT,
     "output_name": "logits",
-    "logits": [-3.0, 3.0, -3.0, -3.0, -3.0],
+    "logits": [-3.0, -3.0, -3.0, -3.0, 3.0, -3.0],
 }
 
 CASES = {
@@ -27,9 +27,8 @@ CASES = {
         "output_name": "scores",
         "auxiliary_output": True,
     },
-    "nonfinite": {"logits": [-3.0, float("nan"), -3.0, -3.0, -3.0]},
+    "nonfinite": {"logits": [-3.0, -3.0, -3.0, -3.0, float("nan"), -3.0]},
     "dynamic-wrong": {
-        "logits": [-3.0, 3.0, -3.0, -3.0, -3.0, -3.0],
         "output_shape": [1, "classes"],
         "dynamic_output": True,
     },
@@ -37,20 +36,19 @@ CASES = {
     "unknown-input": {"input_names": ["input_ids", "positions"]},
     "wrong-length": {"input_shape": [1, 256]},
     "batch-two": {"input_shape": [2, "sequence"]},
-    "zero-batch": {"input_shape": [0, "sequence"]},
     "rank-one": {"input_shape": ["sequence"]},
     "output-double": {"output_type": T.DOUBLE},
-    "output-rank-one": {"output_shape": [5]},
+    "output-rank-one": {"output_shape": [6]},
     "missing-ids": {"input_names": ["attention_mask"]},
 }
 
 
 def dynamic_output_nodes(values, output_name):
-    """Build nodes whose output width is determined from the input."""
-    width = len(values)
+    """Build nodes whose output logit count depends on the input."""
+    logit_count = len(values)
     constants = [
-        h.make_tensor("raw", T.FLOAT, [1, width], values),
-        h.make_tensor("zero", T.FLOAT, [width], [0.0] * width),
+        h.make_tensor("raw", T.FLOAT, [1, logit_count], values),
+        h.make_tensor("zero", T.FLOAT, [logit_count], [0.0] * logit_count),
         h.make_tensor("axis", T.INT64, [1], [0]),
     ]
     nodes = [

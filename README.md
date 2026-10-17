@@ -42,8 +42,8 @@ are shown to the model and checks authorization before tool execution. It can
 be used independently of PII protection.
 
 The optional [content inspection](docs/inspection.md) modules check model input and
-output with application-defined rules or an HTTP guard model. They can be
-used with or without PII protection and tool authorization.
+output with application-defined rules, local ONNX classifiers or an HTTP guard model.
+They can be used with or without PII protection and tool authorization.
 
 ## Why It Exists
 
@@ -363,7 +363,7 @@ is recommended for new users.
   and output policies
 - [Spring Security Tool Authorization](docs/security.md): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
-- [Content Inspection](docs/inspection.md): opt-in rules and HTTP guard models
+- [Content Inspection](docs/inspection.md): opt-in rules, local ONNX classifiers and HTTP guard models
 - [Architecture](docs/architecture.md): modules and model, tool, and session
   execution flow
 - [Threat Model](docs/threat-model.md): protected assets, trust boundaries,

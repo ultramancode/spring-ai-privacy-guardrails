@@ -5,13 +5,13 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding
 import java.nio.file.Path;
 import java.util.List;
 
-final class PublicModel {
+final class OnnxTestModel {
 
     static final String SAFE = "Thank you for your help. ";
-    static final String INSULT = "Ты идиот. ";
-    static final String LONG_TAIL = SAFE.repeat(40) + INSULT.repeat(20);
+    static final String INSULT = "You are an idiot. ";
+    static final String LONG_TEXT_WITH_INSULT_AT_END = SAFE.repeat(40) + INSULT.repeat(20);
 
-    private PublicModel() {}
+    private OnnxTestModel() {}
 
     static Path directory() {
         return Path.of(System.getProperty("inspection.test.model"));
@@ -21,15 +21,15 @@ final class PublicModel {
         return directory().resolve("model.onnx");
     }
 
-    static OnnxClassificationConfig.Builder classification(Path tokenizer, Path settings) {
+    static OnnxClassificationConfig.Builder classificationBuilder(Path tokenizer, Path tokenizerConfigPath) {
         return OnnxClassificationConfig.builder()
                 .tokenizer(tokenizer)
-                .tokenizerConfig(settings)
-                .maxTokens(128)
-                .overlapTokens(32)
-                .logitCount(5)
+                .tokenizerConfig(tokenizerConfigPath)
+                .windowSize(128)
+                .overlapSize(32)
+                .logitCount(6)
                 .activation(OnnxClassificationConfig.Activation.SIGMOID)
-                .labels(List.of(new OnnxClassificationConfig.Label(1,
+                .labels(List.of(new OnnxClassificationConfig.Label(4,
                         InspectionFinding.Category.TOXICITY, "INSULT", 0.8)));
     }
 }

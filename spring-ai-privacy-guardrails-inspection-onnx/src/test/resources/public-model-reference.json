@@ -1,6 +1,6 @@
 {
-  "repository": "onnx-community/rubert-tiny-toxicity-ONNX",
-  "revision": "3c117322c91030ff04846b72e15509ae7f5232f1",
+  "repository": "Xenova/toxic-bert",
+  "revision": "65cbc2607cb7fad64f98d1e8a5a3d1f8577895fd",
   "versions": {
     "transformers": "4.57.6",
     "tokenizers": "0.22.2",
@@ -11,61 +11,65 @@
     {
       "name": "ordinary",
       "text": "Thank you for your help. ",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "04777b32dca347eaea690dc299d8b0dbd8ea767bd3fd4b482fc6f618f6060969",
+            "input_ids": "497fe8f758b02dd9fd3533a5811d301f758cf76b19b4b15d4987b2d6414a9c34",
             "attention_mask": "f13cec18747abe3e404dc88ea15c71d13fc9348a781402065254502bf4ab47ce",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "f3971249ee6e6078453e9fd82f3c1f1a10ec6e2517f72e004f2b51e7c36732aa"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         }
       ]
     },
     {
       "name": "insult",
-      "text": "Ты идиот. ",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "text": "You are an idiot. ",
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "d8b15fd50544a22114e5f6dc1e9057bd9b495f9de1fcdd4acc81725e61f629a6",
-            "attention_mask": "f13cec18747abe3e404dc88ea15c71d13fc9348a781402065254502bf4ab47ce",
+            "input_ids": "c4e1de4b7e626d3cc0c00a4008105e508c5ec86df104d4dd23f7cfae665713a8",
+            "attention_mask": "b9291b391a04b728bd580c77218ff5b44a9f5518c5c2e0b6857304c2da0efbfc",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
-            "special_tokens_mask": "f3971249ee6e6078453e9fd82f3c1f1a10ec6e2517f72e004f2b51e7c36732aa"
+            "special_tokens_mask": "7f5b114cca931d764cff4c8f91a8b8f31d2134c295db18a1fef20e7b355b34fa"
           },
           "softmax": [
-            0.000156876567012463,
-            0.9607189164122419,
-            1.4572859657248294e-05,
-            2.0549517025474875e-05,
-            0.039089084644062876
+            0.7578193159241895,
+            0.00041497870993488414,
+            0.03180426603503168,
+            1.2194197676705441e-05,
+            0.20982270580278092,
+            0.00012653933038645125
           ],
           "sigmoid": [
-            0.01081924472328697,
-            0.9852902719384651,
-            0.0010150021395210179,
-            0.0014306817785828833,
-            0.7315672296032549
+            0.9878075095546363,
+            0.04248031759076835,
+            0.7727356389550211,
+            0.0013019720228163631,
+            0.9573231977246978,
+            0.013347622867211615
           ]
         }
       ]
@@ -73,30 +77,32 @@
     {
       "name": "empty",
       "text": "",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "4806a9e94bcf950f11db32f01cfc607821ebc541cc6c4d5bc6dcbf7659f80c2e",
+            "input_ids": "00a16dfed30930e01738506c3648db9a35dcd97042c8cd39b024d5dfc605159b",
             "attention_mask": "3d7637197ea50807d7ba369f514e111e5011e37ed375da29bc89e183c0e15ce9",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "01476cf1a34744ed1f8b738f63b753c898716ce9a63b8410a896ab522d5cfc51"
           },
           "softmax": [
-            0.999819838251808,
-            8.156641324731674e-06,
-            2.2217419665541855e-06,
-            9.638293324559317e-07,
-            0.0001688195355684087
+            0.6923705061086218,
+            0.03787539942848978,
+            0.08236378471338332,
+            0.03923875895143049,
+            0.08488554989054375,
+            0.06326600090753104
           ],
           "sigmoid": [
-            0.9963752211083691,
-            0.002237475055141218,
-            0.0006104471527155977,
-            0.0002649138851717996,
-            0.044354644553529665
+            0.001995437005767105,
+            0.00010936457214995309,
+            0.00023779348174987963,
+            0.00011330080357316427,
+            0.0002450723162985817,
+            0.00018266611024932082
           ]
         }
       ]
@@ -104,30 +110,32 @@
     {
       "name": "whitespace",
       "text": " \t\n ",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "4806a9e94bcf950f11db32f01cfc607821ebc541cc6c4d5bc6dcbf7659f80c2e",
+            "input_ids": "00a16dfed30930e01738506c3648db9a35dcd97042c8cd39b024d5dfc605159b",
             "attention_mask": "3d7637197ea50807d7ba369f514e111e5011e37ed375da29bc89e183c0e15ce9",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "01476cf1a34744ed1f8b738f63b753c898716ce9a63b8410a896ab522d5cfc51"
           },
           "softmax": [
-            0.999819838251808,
-            8.156641324731674e-06,
-            2.2217419665541855e-06,
-            9.638293324559317e-07,
-            0.0001688195355684087
+            0.6923705061086218,
+            0.03787539942848978,
+            0.08236378471338332,
+            0.03923875895143049,
+            0.08488554989054375,
+            0.06326600090753104
           ],
           "sigmoid": [
-            0.9963752211083691,
-            0.002237475055141218,
-            0.0006104471527155977,
-            0.0002649138851717996,
-            0.044354644553529665
+            0.001995437005767105,
+            0.00010936457214995309,
+            0.00023779348174987963,
+            0.00011330080357316427,
+            0.0002450723162985817,
+            0.00018266611024932082
           ]
         }
       ]
@@ -135,30 +143,32 @@
     {
       "name": "unicode",
       "text": "Café ＡＢＣ ﬁ 안녕하세요 Привет 👋",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "ec23f8c2d79a43b52a05526bc698cd03ea0c7ffab07755dcb625870d6ec6977e",
-            "attention_mask": "9e00fc38d7fb7994ddadbf0f44e6f35386845dd66a4825fd7a0bb8e32bcd1c7a",
+            "input_ids": "5fdef4fb25bd998d09560658b67575694e685866cc2f68c6df149c24f3cfc125",
+            "attention_mask": "a70671b0cf28728f00f16f23340b895e74ad3f40e7978567bfd04b7f8a562e15",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
-            "special_tokens_mask": "1ce7fe5c7d871591ddbada0c79ef141af5d3c30a93a77fd72c4d460d59e7ef5c"
+            "special_tokens_mask": "44a85b47baf72eaa120abf6ed558e48923db46c54c810d76389846e0c77d9b29"
           },
           "softmax": [
-            0.9999687959919995,
-            5.140178800183529e-07,
-            2.0407588596725404e-07,
-            9.562472911767712e-08,
-            3.03902895054948e-05
+            0.5413955659068386,
+            0.06739964752005062,
+            0.11553808837494549,
+            0.07721757372355381,
+            0.11005717992581569,
+            0.08839194454879595
           ],
           "sigmoid": [
-            0.9992434427840585,
-            0.0006784636027472642,
-            0.0002694745309288254,
-            0.0001262869427996634,
-            0.03859100591628315
+            0.0008788086777078877,
+            0.00010948926587252751,
+            0.00018767444307212286,
+            0.00012543627350970277,
+            0.000178773113956911,
+            0.00014358590069037314
           ]
         }
       ]
@@ -166,30 +176,32 @@
     {
       "name": "special-tokens",
       "text": "[CLS] Hello [MASK] world [SEP]",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "e0b31ecb30aa89299dd73d4f5b9e950767a7bc183946179f8298aaa81dca2e51",
+            "input_ids": "8c0d558bb9c0514bc73a4bf2bb2c446d663f177fcb34f5f7a04a57b98b953544",
             "attention_mask": "b9291b391a04b728bd580c77218ff5b44a9f5518c5c2e0b6857304c2da0efbfc",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "7f5b114cca931d764cff4c8f91a8b8f31d2134c295db18a1fef20e7b355b34fa"
           },
           "softmax": [
-            0.9989931203846572,
-            5.680135972274218e-06,
-            3.6368644875755173e-07,
-            3.678917126587443e-07,
-            0.0010004679012090218
+            0.5833026486022321,
+            0.061760192070176065,
+            0.10536716930573493,
+            0.061067855523500275,
+            0.10536546105820871,
+            0.08313667344014797
           ],
           "sigmoid": [
-            0.9972851087790151,
-            0.0020842844951838653,
-            0.00013371294317426373,
-            0.00013525884118385122,
-            0.2689423471707731
+            0.0009873449909381126,
+            0.00010463264002276485,
+            0.00017849735071174692,
+            0.00010345982135912403,
+            0.00017849445736998131,
+            0.00014084306270185492
           ]
         }
       ]
@@ -197,224 +209,242 @@
     {
       "name": "long-safe",
       "text": "Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. ",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "8968b7dc4af1360df144399ac858af78e4a9a95cfe0a62f042e234ed6ce7f794",
+            "input_ids": "550a0e84273aca0534d86cc99118b5c140c2a11d80e161e81bc164da8a0d1384",
             "attention_mask": "01476cf1a34744ed1f8b738f63b753c898716ce9a63b8410a896ab522d5cfc51",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "48b4f5b44847b6a5e1ebf25cbf8fb8b2ff48ecb0dbcc5fe35c759621ebccd618"
           },
           "softmax": [
-            0.9999983968034672,
-            1.6628239200003334e-08,
-            2.523733459478697e-08,
-            3.033686214634223e-08,
-            1.530994096801079e-06
+            0.3928489488587237,
+            0.10557722727512146,
+            0.15349446365308908,
+            0.11108730832496132,
+            0.1291346749723187,
+            0.1078573769157859
           ],
           "sigmoid": [
-            0.9999016160849493,
-            0.00016896888594836027,
-            0.00025642831096665353,
-            0.0003082269735703239,
-            0.015321519171868013
+            0.0005440039992299222,
+            0.00014625797213979028,
+            0.00021262444029656517,
+            0.0001538900087308984,
+            0.00017888667692954872,
+            0.000149416231192395
           ]
         },
         {
           "tensors": {
-            "input_ids": "066e0353164bcfceb643d3fab2c5fa17ef8c06314d6dffc5f21bb6855b3d20e4",
+            "input_ids": "5c118753b1bf50c17a3924d32e43b2f04974ff72ce75d1871e21479e996b6e58",
             "attention_mask": "01476cf1a34744ed1f8b738f63b753c898716ce9a63b8410a896ab522d5cfc51",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "48b4f5b44847b6a5e1ebf25cbf8fb8b2ff48ecb0dbcc5fe35c759621ebccd618"
           },
           "softmax": [
-            0.9999983598020714,
-            1.6617664712763292e-08,
-            2.5075586425370244e-08,
-            2.999598146732238e-08,
-            1.5685086959228193e-06
+            0.38922341625924506,
+            0.10668983786407174,
+            0.15372569690063928,
+            0.11194997662133634,
+            0.12973031018741785,
+            0.10868076216728992
           ],
           "sigmoid": [
-            0.9999011441833051,
-            0.00016805543013760928,
-            0.0002535692055603056,
-            0.0003033101054374004,
-            0.015617317690850976
+            0.0005378312819524106,
+            0.00014748224437359912,
+            0.00021248824845406495,
+            0.00015475244959430905,
+            0.00017932643193273618,
+            0.00015023397666502202
           ]
         },
         {
           "tensors": {
-            "input_ids": "e70612bdde85135414b544629402482f15d96d5f19e4795526a3b0931a9354bb",
+            "input_ids": "8a800a17e30655d919d8b5bb6b0ddac6fddd233cf6cea7d8754f1bb30925b687",
             "attention_mask": "9e4aadbf293c1cbaff4596158db82d3e5d31ba8e710d60389c1853f0dfdec5a8",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "5cb8fb3a8afc4f515ac85f1f3986babfc6dd69a1543d21e9927ff0d5bfc3872f"
           },
           "softmax": [
-            0.9999981352952542,
-            1.782088930091483e-08,
-            2.454149352397983e-08,
-            2.9052336054751957e-08,
-            1.7932900269372361e-06
+            0.3885083340919047,
+            0.10694367157115522,
+            0.15331425857059303,
+            0.11088802464041532,
+            0.13164662466569743,
+            0.10869908646023438
           ],
           "sigmoid": [
-            0.9998950125585205,
-            0.00016969675108195008,
-            0.00023367774448187074,
-            0.00027661693764556144,
-            0.016792432283761247
+            0.000533424318013845,
+            0.000146891101542765,
+            0.00021056941205322696,
+            0.00015230799169552658,
+            0.00018081538919289598,
+            0.0001493018690498661
           ]
         }
       ]
     },
     {
-      "name": "long-tail",
-      "text": "Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. ",
-      "maxTokens": 128,
-      "overlapTokens": 32,
+      "name": "long-text-with-insult-at-end",
+      "text": "Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. ",
+      "windowSize": 128,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "8968b7dc4af1360df144399ac858af78e4a9a95cfe0a62f042e234ed6ce7f794",
+            "input_ids": "550a0e84273aca0534d86cc99118b5c140c2a11d80e161e81bc164da8a0d1384",
             "attention_mask": "01476cf1a34744ed1f8b738f63b753c898716ce9a63b8410a896ab522d5cfc51",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "48b4f5b44847b6a5e1ebf25cbf8fb8b2ff48ecb0dbcc5fe35c759621ebccd618"
           },
           "softmax": [
-            0.9999983968034672,
-            1.6628239200003334e-08,
-            2.523733459478697e-08,
-            3.033686214634223e-08,
-            1.530994096801079e-06
+            0.3928489488587237,
+            0.10557722727512146,
+            0.15349446365308908,
+            0.11108730832496132,
+            0.1291346749723187,
+            0.1078573769157859
           ],
           "sigmoid": [
-            0.9999016160849493,
-            0.00016896888594836027,
-            0.00025642831096665353,
-            0.0003082269735703239,
-            0.015321519171868013
+            0.0005440039992299222,
+            0.00014625797213979028,
+            0.00021262444029656517,
+            0.0001538900087308984,
+            0.00017888667692954872,
+            0.000149416231192395
           ]
         },
         {
           "tensors": {
-            "input_ids": "066e0353164bcfceb643d3fab2c5fa17ef8c06314d6dffc5f21bb6855b3d20e4",
+            "input_ids": "5c118753b1bf50c17a3924d32e43b2f04974ff72ce75d1871e21479e996b6e58",
             "attention_mask": "01476cf1a34744ed1f8b738f63b753c898716ce9a63b8410a896ab522d5cfc51",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "48b4f5b44847b6a5e1ebf25cbf8fb8b2ff48ecb0dbcc5fe35c759621ebccd618"
           },
           "softmax": [
-            0.9999983598020714,
-            1.6617664712763292e-08,
-            2.5075586425370244e-08,
-            2.999598146732238e-08,
-            1.5685086959228193e-06
+            0.38922341625924506,
+            0.10668983786407174,
+            0.15372569690063928,
+            0.11194997662133634,
+            0.12973031018741785,
+            0.10868076216728992
           ],
           "sigmoid": [
-            0.9999011441833051,
-            0.00016805543013760928,
-            0.0002535692055603056,
-            0.0003033101054374004,
-            0.015617317690850976
+            0.0005378312819524106,
+            0.00014748224437359912,
+            0.00021248824845406495,
+            0.00015475244959430905,
+            0.00017932643193273618,
+            0.00015023397666502202
           ]
         },
         {
           "tensors": {
-            "input_ids": "d7d5f05eeec5d2291b86a40ef8e8f3cef2bfa1ffd4bd67f4de9fd7a02c42699e",
+            "input_ids": "b3b9b887ad27a34d3bc6e6249e5323df19ffde477434f8c97b49893bd68c1779",
             "attention_mask": "01476cf1a34744ed1f8b738f63b753c898716ce9a63b8410a896ab522d5cfc51",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
             "special_tokens_mask": "48b4f5b44847b6a5e1ebf25cbf8fb8b2ff48ecb0dbcc5fe35c759621ebccd618"
           },
           "softmax": [
-            1.6467882075733337e-05,
-            0.9741223327259013,
-            0.0001786366033584437,
-            0.00015075396788215585,
-            0.025531808820782292
+            0.6792409382707336,
+            0.0005358010491226367,
+            0.043097536659245074,
+            2.3298491302862454e-05,
+            0.2768395784213875,
+            0.0002628471082082653
           ],
           "sigmoid": [
-            0.004246649247254716,
-            0.9960516875925256,
-            0.04421674187209572,
-            0.03757446084771593,
-            0.8686299543033554
+            0.9786215272988129,
+            0.03485076120250857,
+            0.7438832001192771,
+            0.0015676917079399718,
+            0.9491276043996433,
+            0.01740570733025354
           ]
         },
         {
           "tensors": {
-            "input_ids": "2e8ffb15edecfe2bf2ee8583a8be9de9459fec6681a340c03fbcc8520ce48b1d",
-            "attention_mask": "f7b00b01dd4b94f2d611e3f61d1eef03099f0df6ed70423e4d3088f6a0bb36ec",
+            "input_ids": "5ea19837cb743aca020843b89673bf220febd4f691ac443c07769749bb514881",
+            "attention_mask": "ae04aba9f8d7073390e9c3d038cb3a02795e9a5079d0cf21d5b5c7646e56fda2",
             "token_type_ids": "5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
-            "special_tokens_mask": "437fe84c530018b3b23ee9cac947508f64073945f4ec8e3af3e13264a5a075c8"
+            "special_tokens_mask": "e6074a94b2310e68813b476b1767e6f2ce999a8bd80261bb89480a31d290fc94"
           },
           "softmax": [
-            3.0177378995814605e-06,
-            0.9942300710038307,
-            1.6918768445407512e-05,
-            2.5007383262436405e-05,
-            0.005724985106561938
+            0.810299300571619,
+            0.000470879269612981,
+            0.03751748670073786,
+            8.571059948423942e-06,
+            0.15160528068758236,
+            9.84817104994372e-05
           ],
           "sigmoid": [
-            0.0018918440664392848,
-            0.9984012079219674,
-            0.010514877823225154,
-            0.015464148138795175,
-            0.7824120056653486
+            0.9945804819372847,
+            0.09636842657145599,
+            0.8947040069041656,
+            0.0019374303615989695,
+            0.9717001495402859,
+            0.02181771068885669
           ]
         }
       ]
     },
     {
       "name": "larger-window",
-      "text": "Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. Ты идиот. ",
-      "maxTokens": 256,
-      "overlapTokens": 32,
+      "text": "Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. You are an idiot. ",
+      "windowSize": 256,
+      "overlapSize": 32,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "99423c58877a482f336d4fb2c9f8c69c7f3faa8aaaec0112eaf1341105f942db",
+            "input_ids": "a8f153ba502e7e5da79f026fe50efc2f22b6416e20d61e199cc6526317aa57b2",
             "attention_mask": "924ae03b6111734d8ab1d2d4c88ec6a7da5ba6612c50b2f0e3c27d0511980e0f",
             "token_type_ids": "e5a00aa9991ac8a5ee3109844d84a55583bd20572ad3ffcd42792f3c36b183ad",
             "special_tokens_mask": "61e242cc8cb755d84a593ac3794410af032ab69c965fbed340245551080a8b46"
           },
           "softmax": [
-            0.9999983094512295,
-            1.8235205558790064e-08,
-            2.7994092587104213e-08,
-            3.161057184798383e-08,
-            1.6127089004502272e-06
+            0.4878093715171587,
+            0.0021458617116239475,
+            0.08178038772804011,
+            0.0010484703235973307,
+            0.4216856472340846,
+            0.00553026148549548
           ],
           "sigmoid": [
-            0.9998992157690331,
-            0.0001808824682693824,
-            0.00027765798541202336,
-            0.0003135166054694532,
-            0.015748044909278103
+            0.35196280061130636,
+            0.0023834829551275653,
+            0.08345452185145205,
+            0.0011659935588522546,
+            0.31949638308582184,
+            0.006119648251437239
           ]
         },
         {
           "tensors": {
-            "input_ids": "f4679d2496f1ca29fad6a934b8d1f460d03e946da115e8aaf462003f9928e4a6",
-            "attention_mask": "80655fb5b273df0c66fb526a36a732f5fd34f0c0e32c2ad4b86e0b4a3b7b1cfb",
+            "input_ids": "5fd790193c0d63071d319c33158975f432da0bde3d21549c81b0e01eb8e85864",
+            "attention_mask": "4bdf436fe2c187e814666279d0e68a87c42f66aed5d29dccedae2758275ad4a5",
             "token_type_ids": "e5a00aa9991ac8a5ee3109844d84a55583bd20572ad3ffcd42792f3c36b183ad",
-            "special_tokens_mask": "d8c83c244c4a94d87479e268777556af5e4f52be766ee00a37ca7ea939272dd4"
+            "special_tokens_mask": "008fb83f0e9f85f56994968f00df5caa67d3c7e5b2e11adada8ec19faf0eae5b"
           },
           "softmax": [
-            2.033244905359256e-06,
-            0.9929887955932699,
-            7.374449656777502e-05,
-            3.7209022778382454e-05,
-            0.006898217642478449
+            0.742984692757009,
+            0.0004808960262814736,
+            0.03774992391869273,
+            1.5320295311842572e-05,
+            0.21858776154441464,
+            0.000181405458290495
           ],
           "sigmoid": [
-            0.0015394057378908853,
-            0.9986736847006037,
-            0.05295797210318759,
-            0.027440801289717993,
-            0.839507355106132
+            0.987981047474364,
+            0.050517326646629265,
+            0.8068213331177904,
+            0.0016921301317052277,
+            0.960292234646617,
+            0.01967534707610272
           ]
         }
       ]
@@ -422,96 +452,104 @@
     {
       "name": "no-overlap",
       "text": "Thank you for your help. Thank you for your help. Thank you for your help. Thank you for your help. ",
-      "maxTokens": 8,
-      "overlapTokens": 0,
+      "windowSize": 8,
+      "overlapSize": 0,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "46817467b0cc9b0020ee64328d5cb68c235f82c0b54b10a76ce6e2af96985d58",
+            "input_ids": "b70046c727781daf869b7dd54f65f2c5452b661302af59cbe24e0265c0bba6b3",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         },
         {
           "tensors": {
-            "input_ids": "46817467b0cc9b0020ee64328d5cb68c235f82c0b54b10a76ce6e2af96985d58",
+            "input_ids": "b70046c727781daf869b7dd54f65f2c5452b661302af59cbe24e0265c0bba6b3",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         },
         {
           "tensors": {
-            "input_ids": "46817467b0cc9b0020ee64328d5cb68c235f82c0b54b10a76ce6e2af96985d58",
+            "input_ids": "b70046c727781daf869b7dd54f65f2c5452b661302af59cbe24e0265c0bba6b3",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         },
         {
           "tensors": {
-            "input_ids": "46817467b0cc9b0020ee64328d5cb68c235f82c0b54b10a76ce6e2af96985d58",
+            "input_ids": "b70046c727781daf869b7dd54f65f2c5452b661302af59cbe24e0265c0bba6b3",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         }
       ]
@@ -519,162 +557,176 @@
     {
       "name": "maximum-overlap",
       "text": "Thank you for your help. Thank you for your help. ",
-      "maxTokens": 8,
-      "overlapTokens": 5,
+      "windowSize": 8,
+      "overlapSize": 5,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "46817467b0cc9b0020ee64328d5cb68c235f82c0b54b10a76ce6e2af96985d58",
+            "input_ids": "b70046c727781daf869b7dd54f65f2c5452b661302af59cbe24e0265c0bba6b3",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         },
         {
           "tensors": {
-            "input_ids": "1c0f899158efae5488daac898d79cc3491d8ca8a19379a13541615ba9c142c8f",
+            "input_ids": "3d92020dc91004c2616f8e5180230838894342b49e36d5e344cb8cbbfcc9b570",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999956129959451,
-            3.3761820570848104e-08,
-            2.3176934365280317e-08,
-            2.8257522600983502e-08,
-            4.301807777241733e-06
+            0.3842423774935996,
+            0.10894734221272223,
+            0.14530129167309597,
+            0.11309354647343908,
+            0.13578708307766393,
+            0.11262835906947909
           ],
           "sigmoid": [
-            0.9998351858772315,
-            0.00020477305746909803,
-            0.0001405823603314394,
-            0.00017139397062366794,
-            0.025433057582543953
+            0.0005148191837116908,
+            0.00014602469883239811,
+            0.00019474126791054158,
+            0.0001515811120652335,
+            0.00018199209116808753,
+            0.00015095770797512927
           ]
         },
         {
           "tensors": {
-            "input_ids": "923cd7bec0ffab54ece681089f712dc75faeb2b5d1fc76da40819d073a3ee35d",
+            "input_ids": "a7e24678f7b741630501bd47191363fc282f30433078c9e00c55841514722a4d",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999965777989754,
-            2.745180487054452e-08,
-            2.2980587970616847e-08,
-            2.649710127261647e-08,
-            3.3452715303563305e-06
+            0.3819375208336046,
+            0.10957887760217783,
+            0.15004906439515475,
+            0.11083398066743555,
+            0.13559914972368659,
+            0.11200140677794067
           ],
           "sigmoid": [
-            0.9998518794685506,
-            0.00018527308141265384,
-            0.00015510138045397084,
-            0.0001788309095230581,
-            0.022082860269813036
+            0.0005092705686712634,
+            0.00014616414427073553,
+            0.00020013537021945255,
+            0.0001478380430044347,
+            0.0001808655668262857,
+            0.00014939500420358746
           ]
         },
         {
           "tensors": {
-            "input_ids": "02396a2d7ad45c7f6e00ec2b1f17a10d0b0b0df2f2d4b5d6440c3958be8b93fd",
+            "input_ids": "00dc230a9acbd7d79bb1019a6c379af9c39d181d3b9876c5991860d1c85e8d95",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999956050195601,
-            3.156424593564518e-08,
-            2.4693444638142133e-08,
-            2.80341447686922e-08,
-            4.310688604568859e-06
+            0.3919221800741569,
+            0.10729040028731926,
+            0.14769436052688234,
+            0.1075678412141588,
+            0.1343422687491231,
+            0.11118294914835952
           ],
           "sigmoid": [
-            0.9998364358244025,
-            0.00019290980839320048,
-            0.00015092417303773289,
-            0.0001713387415301162,
-            0.02567400491405731
+            0.0005212535750588913,
+            0.00014274947077865397,
+            0.0001964962235716672,
+            0.00014311855204992744,
+            0.00017873544607770696,
+            0.0001479277261583568
           ]
         },
         {
           "tensors": {
-            "input_ids": "a538141e93f227dc01fa95b079bbb1c4431734d8dedc58bbed579417348c6ade",
+            "input_ids": "088cdc6edaa3c29b0fc59458cfe45ba5fbdf99ed8a08d0485341d6ce6ada493e",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999945464427379,
-            4.135042070215994e-08,
-            3.2938203294860674e-08,
-            3.656292566043826e-08,
-            5.342705712556364e-06
+            0.38662274157213844,
+            0.10856817969700004,
+            0.15470256477978162,
+            0.10502436817319828,
+            0.13479879709217976,
+            0.11028334868570187
           ],
           "sigmoid": [
-            0.9998021020581322,
-            0.00020886436536492046,
-            0.00016638063515348592,
-            0.00018468680147528638,
-            0.026282658612449078
+            0.0005143196307751162,
+            0.0001444803993017889,
+            0.00020586249318503598,
+            0.00013976502372704992,
+            0.00017938132759035737,
+            0.00014676257748755478
           ]
         },
         {
           "tensors": {
-            "input_ids": "8ede5f8deb9a6f5279c05d1ce8cf29ac8bcce8e1eb4a964f76450e63ebe224f2",
+            "input_ids": "f2702b7a5e2e268ab48721a143ebabf4e823ced9e5eb53b7951520d126ce662e",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.999997063169971,
-            2.7873964992624567e-08,
-            2.089645452705202e-08,
-            2.729271338013805e-08,
-            2.860766896155008e-06
+            0.4212574538787676,
+            0.09677940754263353,
+            0.14175516464085938,
+            0.10811885897801318,
+            0.12893348007183805,
+            0.10315563488788844
           ],
           "sigmoid": [
-            0.9998575174771527,
-            0.0001955652125986318,
-            0.00014661780775612735,
-            0.00019148790144922785,
-            0.019680134864257817
+            0.0005689719183014529,
+            0.0001307725423890747,
+            0.0001915341002978005,
+            0.00014609266360040383,
+            0.0001742129536993501,
+            0.00013938717701009656
           ]
         },
         {
           "tensors": {
-            "input_ids": "46817467b0cc9b0020ee64328d5cb68c235f82c0b54b10a76ce6e2af96985d58",
+            "input_ids": "b70046c727781daf869b7dd54f65f2c5452b661302af59cbe24e0265c0bba6b3",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         }
       ]
@@ -682,30 +734,32 @@
     {
       "name": "left-padding",
       "text": "Hello world",
-      "maxTokens": 8,
-      "overlapTokens": 1,
+      "windowSize": 8,
+      "overlapSize": 1,
       "direction": "left",
       "windows": [
         {
           "tensors": {
-            "input_ids": "2c2505c57c89275ece2212c3d1c095d6d103ae28d5c384fbf7a30053f5bdc75c",
+            "input_ids": "499d8cf521d9829b99a3696dbed403cfd30474310590842b888298b0254a8f02",
             "attention_mask": "af0a4f884bcbcc445a7f26cf2e7bbd2ae5ae86b54da9e99f2cc48a2635c2b21a",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "db2d2722432d132a270edc6d11f4fcba181b4c49896e8dd68a47255462963239"
           },
           "softmax": [
-            0.9999707850803524,
-            1.5375257606736502e-07,
-            4.9789972573988815e-08,
-            6.613862852452005e-08,
-            2.8945238470547598e-05
+            0.5508129089483318,
+            0.06724553978733178,
+            0.10929111054556574,
+            0.07358698294601516,
+            0.1118045842767965,
+            0.08725887349595915
           ],
           "sigmoid": [
-            0.9996242549145501,
-            0.000408884787189595,
-            0.00013244651240059443,
-            0.0001759279888975276,
-            0.07150140064476793
+            0.0008678594062246842,
+            0.00010603268707021216,
+            0.0001723186686991678,
+            0.0001160307068804067,
+            0.00017628094975279698,
+            0.00013758534605206582
           ]
         }
       ]
@@ -713,74 +767,80 @@
     {
       "name": "left-overflow",
       "text": "Thank you for your help. Thank you for your help. ",
-      "maxTokens": 8,
-      "overlapTokens": 1,
+      "windowSize": 8,
+      "overlapSize": 1,
       "direction": "left",
       "windows": [
         {
           "tensors": {
-            "input_ids": "46817467b0cc9b0020ee64328d5cb68c235f82c0b54b10a76ce6e2af96985d58",
+            "input_ids": "b70046c727781daf869b7dd54f65f2c5452b661302af59cbe24e0265c0bba6b3",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999970887076235,
-            2.7814112684578172e-08,
-            2.2777682025838997e-08,
-            2.977321565198728e-08,
-            2.8309273662863287e-06
+            0.3880727852086144,
+            0.10826005886642569,
+            0.1499322670694357,
+            0.10770571601809796,
+            0.13516501331551914,
+            0.1108641595219071
           ],
           "sigmoid": [
-            0.9998559486587761,
-            0.00019302020254567876,
-            0.00015807466222572393,
-            0.0002066128821301885,
-            0.01927077743873798
+            0.0005181002187380197,
+            0.00014458762205213666,
+            0.00020023214226569088,
+            0.00014384737134884545,
+            0.00018051427129981725,
+            0.00014806503538211676
           ]
         },
         {
           "tensors": {
-            "input_ids": "1c0f899158efae5488daac898d79cc3491d8ca8a19379a13541615ba9c142c8f",
+            "input_ids": "3d92020dc91004c2616f8e5180230838894342b49e36d5e344cb8cbbfcc9b570",
             "attention_mask": "4bceb969a21579c6bc5a0fcbb54aa78d88778821db0846e1b49a71df6ed1f0f0",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "ee372ed16866b44637142f4196556d0a51b0d93460bb32e996a2dd378f1e92ac"
           },
           "softmax": [
-            0.9999956129959451,
-            3.3761820570848104e-08,
-            2.3176934365280317e-08,
-            2.8257522600983502e-08,
-            4.301807777241733e-06
+            0.3842423774935996,
+            0.10894734221272223,
+            0.14530129167309597,
+            0.11309354647343908,
+            0.13578708307766393,
+            0.11262835906947909
           ],
           "sigmoid": [
-            0.9998351858772315,
-            0.00020477305746909803,
-            0.0001405823603314394,
-            0.00017139397062366794,
-            0.025433057582543953
+            0.0005148191837116908,
+            0.00014602469883239811,
+            0.00019474126791054158,
+            0.0001515811120652335,
+            0.00018199209116808753,
+            0.00015095770797512927
           ]
         },
         {
           "tensors": {
-            "input_ids": "8346f88c682bb5dda108db5a62dc45520f8e64a9d3149c09771caf99ce54ed94",
+            "input_ids": "75b606542f075077e6689c36ec7ff61dd48777cb062ee10ecd7a187ac8611338",
             "attention_mask": "af0a4f884bcbcc445a7f26cf2e7bbd2ae5ae86b54da9e99f2cc48a2635c2b21a",
             "token_type_ids": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
             "special_tokens_mask": "db2d2722432d132a270edc6d11f4fcba181b4c49896e8dd68a47255462963239"
           },
           "softmax": [
-            0.9999977407674652,
-            4.348603246770102e-08,
-            6.580858159202377e-08,
-            5.809065922051103e-08,
-            2.091847261727093e-06
+            0.4545055918029095,
+            0.0891141140377434,
+            0.13659453739449787,
+            0.09603195749789192,
+            0.12282299564036978,
+            0.1009308036265875
           ],
           "sigmoid": [
-            0.9998299439791306,
-            0.00025560766337100286,
-            0.000386767198434421,
-            0.00034142326335260886,
-            0.012149441889200804
+            0.0006275279891794107,
+            0.00012310041484370806,
+            0.00018867652573735971,
+            0.00013265531466067417,
+            0.0001696572745288844,
+            0.00013942147237994102
           ]
         }
       ]
@@ -788,52 +848,56 @@
     {
       "name": "minimum-window",
       "text": "Hello world",
-      "maxTokens": 3,
-      "overlapTokens": 0,
+      "windowSize": 3,
+      "overlapSize": 0,
       "direction": "right",
       "windows": [
         {
           "tensors": {
-            "input_ids": "b15c931ca8f6cb85ae8099d36f1ec4e415072b8ba0e0ee40d800bfb6d968f579",
+            "input_ids": "7dadb813c608d8794497bd93c5783f0319943c0be8a92ad07fd7ece7869a6a4e",
             "attention_mask": "605390e5a369ee568b19ead1733af824c7c1d286d7d24b86283238fc44a99334",
             "token_type_ids": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
             "special_tokens_mask": "f95f8eadc54fa71e640a67ff7e86733158e44683c7f77996ea3a0008397167ac"
           },
           "softmax": [
-            0.9999940493717318,
-            1.255174293578376e-07,
-            6.165329521813841e-08,
-            5.700959156813364e-08,
-            5.706447952015142e-06
+            0.5666940333488089,
+            0.0639285750439616,
+            0.10710167714900266,
+            0.0648993339168906,
+            0.11236733154907734,
+            0.08500904899225896
           ],
           "sigmoid": [
-            0.9996782973483443,
-            0.000389890706425125,
-            0.0001915496241508888,
-            0.00017712473196490044,
-            0.01742369873115637
+            0.0009314660026626925,
+            0.0001051652930700443,
+            0.00017617441607480173,
+            0.00010676206324594134,
+            0.0001848344310050487,
+            0.0001398387424001819
           ]
         },
         {
           "tensors": {
-            "input_ids": "bd6d1527e89a09882a6017fafd0e558995c2697325f2cbf1d500976747fe2cf7",
+            "input_ids": "ba567ec4165086d5cc7102bb8c7bd76f30ff6e4067d8df91618a2fca9dd9f0c3",
             "attention_mask": "605390e5a369ee568b19ead1733af824c7c1d286d7d24b86283238fc44a99334",
             "token_type_ids": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
             "special_tokens_mask": "f95f8eadc54fa71e640a67ff7e86733158e44683c7f77996ea3a0008397167ac"
           },
           "softmax": [
-            0.9456958603961988,
-            0.0005160718183905641,
-            1.8635874940281837e-05,
-            9.699342384238758e-06,
-            0.05375973256808617
+            0.5635328256241952,
+            0.0657486792432138,
+            0.1116000928101732,
+            0.06299659275342694,
+            0.10818003315408216,
+            0.08794177641490886
           ],
           "sigmoid": [
-            0.9679325151134686,
-            0.01620479486416199,
-            0.0005944567101483659,
-            0.0003094828267380837,
-            0.631794619169826
+            0.0009407798072042914,
+            0.00010985424857495182,
+            0.0001864494517134389,
+            0.00010525648973320928,
+            0.00018073661598319745,
+            0.00014692948455594175
           ]
         }
       ]

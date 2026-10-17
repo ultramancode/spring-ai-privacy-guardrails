@@ -33,15 +33,15 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-class PublicModelReferenceTest {
+class OnnxModelReferenceTest {
 
     @TempDir Path temp;
 
     static Stream<Arguments> references() throws Exception {
-        try (InputStreamReader reader = new InputStreamReader(PublicModelReferenceTest.class.getResourceAsStream(
+        try (InputStreamReader reader = new InputStreamReader(OnnxModelReferenceTest.class.getResourceAsStream(
                 "/public-model-reference.json"), StandardCharsets.UTF_8)) {
             JsonObject reference = JsonUtils.GSON.fromJson(reader, JsonObject.class);
-            assertThat(PublicModel.directory().getFileName().toString())
+            assertThat(OnnxTestModel.directory().getFileName().toString())
                     .isEqualTo(reference.get("revision").getAsString());
             List<Arguments> cases = new ArrayList<>();
             for (JsonElement entry : reference.getAsJsonArray("cases")) {
@@ -58,20 +58,21 @@ class PublicModelReferenceTest {
     @MethodSource("references")
     void tokenWindowsScoresAndAggregatedFindingsMatchPython(
             String name, OnnxClassificationConfig.Activation activation, JsonObject expected) throws Exception {
-        JsonObject settings = JsonUtils.GSON.fromJson(
-                Files.readString(PublicModel.directory().resolve("tokenizer_config.json")), JsonObject.class);
-        settings.add("padding_side", expected.get("direction"));
-        settings.add("truncation_side", expected.get("direction"));
-        Path configFile = Files.writeString(temp.resolve("tokenizer_config.json"), settings.toString());
-        OnnxClassificationConfig classification = PublicModel.classification(
-                PublicModel.directory().resolve("tokenizer.json"), configFile)
-                .maxTokens(expected.get("maxTokens").getAsInt())
-                .overlapTokens(expected.get("overlapTokens").getAsInt())
+        JsonObject tokenizerConfigJson = JsonUtils.GSON.fromJson(
+                Files.readString(OnnxTestModel.directory().resolve("tokenizer_config.json")), JsonObject.class);
+        tokenizerConfigJson.add("padding_side", expected.get("direction"));
+        tokenizerConfigJson.add("truncation_side", expected.get("direction"));
+        Path tokenizerConfigPath = Files.writeString(
+                temp.resolve("tokenizer_config.json"), tokenizerConfigJson.toString());
+        OnnxClassificationConfig classification = OnnxTestModel.classificationBuilder(
+                OnnxTestModel.directory().resolve("tokenizer.json"), tokenizerConfigPath)
+                .windowSize(expected.get("windowSize").getAsInt())
+                .overlapSize(expected.get("overlapSize").getAsInt())
                 .activation(activation)
-                .labels(IntStream.range(0, 5).mapToObj(index -> new OnnxClassificationConfig.Label(index,
+                .labels(IntStream.range(0, 6).mapToObj(index -> new OnnxClassificationConfig.Label(index,
                         InspectionFinding.Category.POLICY_VIOLATION, "LABEL_" + index, 1e-300)).toList())
                 .build();
-        OnnxInspectionConfig config = OnnxInspectionConfig.defaults(PublicModel.model());
+        OnnxInspectionConfig config = OnnxInspectionConfig.defaults(OnnxTestModel.model());
         try (TokenWindowTokenizer tokenizer = new TokenWindowTokenizer(classification);
                 OnnxSequenceClassifier classifier = new OnnxSequenceClassifier(config, classification);
                 OnnxContentInspector inspector = new OnnxContentInspector("public-model", config, classification)) {
@@ -79,7 +80,7 @@ class PublicModelReferenceTest {
             List<Encoding> actual = tokenizer.encodeWindows(text);
             JsonArray windows = expected.getAsJsonArray("windows");
             assertThat(actual).as(name).hasSize(windows.size());
-            double[] maximum = new double[5];
+            double[] maximum = new double[6];
             for (int index = 0; index < actual.size(); index++) {
                 Encoding encoding = actual.get(index);
                 JsonObject window = windows.get(index).getAsJsonObject();
@@ -90,8 +91,8 @@ class PublicModelReferenceTest {
                 assertTensor(tensors, "special_tokens_mask", encoding.getSpecialTokenMask());
                 JsonArray scores = window.getAsJsonArray(activation.name().toLowerCase(Locale.ROOT));
                 double[] actualScores = classifier.classify(encoding);
-                assertThat(actualScores).hasSize(5);
-                for (int label = 0; label < 5; label++) {
+                assertThat(actualScores).hasSize(6);
+                for (int label = 0; label < 6; label++) {
                     double score = scores.get(label).getAsDouble();
                     assertThat(actualScores[label]).as("%s window %s label %s", name, index, label)
                             .isCloseTo(score, within(1e-4));
@@ -104,8 +105,8 @@ class PublicModelReferenceTest {
             InspectionResult result = inspector.inspect(request);
             assertThat(result.status()).as(name).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(result.completedSegmentIds()).containsExactly("segment");
-            assertThat(result.findings()).hasSize(5);
-            for (int label = 0; label < 5; label++) {
+            assertThat(result.findings()).hasSize(6);
+            for (int label = 0; label < 6; label++) {
                 String code = "LABEL_" + label;
                 double score = maximum[label];
                 assertThat(result.findings()).filteredOn(finding -> finding.code().equals(code)).singleElement()

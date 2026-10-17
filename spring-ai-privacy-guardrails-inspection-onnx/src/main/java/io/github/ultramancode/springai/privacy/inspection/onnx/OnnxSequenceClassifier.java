@@ -23,36 +23,39 @@ import java.util.Set;
 /** Classifies one token window with ONNX Runtime. The owning inspector serializes access. */
 final class OnnxSequenceClassifier implements AutoCloseable {
 
-    private final OrtEnvironment environment;
-    private final OrtSession session;
+    private final OrtEnvironment ortEnvironment;
+    private final OrtSession ortSession;
     private final Set<String> inputNames;
-    private final OnnxClassificationConfig classification;
+    private final OnnxClassificationConfig onnxClassificationConfig;
 
-    OnnxSequenceClassifier(OnnxInspectionConfig config, OnnxClassificationConfig classification) {
-        this.classification = classification;
-        OrtSession loaded = null;
+    OnnxSequenceClassifier(
+            OnnxInspectionConfig onnxInspectionConfig, OnnxClassificationConfig onnxClassificationConfig) {
+        this.onnxClassificationConfig = onnxClassificationConfig;
+        OrtSession loadedOrtSession = null;
         try {
-            if (!Files.isRegularFile(config.model())) {
+            if (!Files.isRegularFile(onnxInspectionConfig.model())) {
                 throw new InspectionException(InspectionFailureCode.CONFIGURATION);
             }
-            environment = OrtEnvironment.getEnvironment();
+            ortEnvironment = OrtEnvironment.getEnvironment();
             try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
-                options.setIntraOpNumThreads(config.intraOpThreads());
-                options.setInterOpNumThreads(1);
-                loaded = environment.createSession(config.model().toString(), options);
+                options.setIntraOpNumThreads(onnxInspectionConfig.intraOpThreads());
+                loadedOrtSession = ortEnvironment.createSession(onnxInspectionConfig.model().toString(), options);
             }
-            validateInputs(loaded.getInputInfo(), classification);
-            NodeInfo output = loaded.getOutputInfo().get(classification.modelOutputName());
-            if (output == null || !(output.getInfo() instanceof TensorInfo tensor)
-                    || tensor.type != OnnxJavaType.FLOAT || !matchesShape(tensor, classification.logitCount())) {
+            validateInputs(loadedOrtSession.getInputInfo(), onnxClassificationConfig);
+            NodeInfo outputInfo = loadedOrtSession.getOutputInfo().get(onnxClassificationConfig.modelOutputName());
+            if (outputInfo == null || !(outputInfo.getInfo() instanceof TensorInfo outputTensorInfo)) {
                 throw new InspectionException(InspectionFailureCode.CONFIGURATION);
             }
-            inputNames = Set.copyOf(loaded.getInputNames());
-            session = loaded;
+            if (outputTensorInfo.type != OnnxJavaType.FLOAT
+                    || !matchesShape(outputTensorInfo, onnxClassificationConfig.logitCount())) {
+                throw new InspectionException(InspectionFailureCode.CONFIGURATION);
+            }
+            inputNames = Set.copyOf(loadedOrtSession.getInputNames());
+            ortSession = loadedOrtSession;
         } catch (OrtException | RuntimeException | LinkageError ex) {
-            if (loaded != null) {
+            if (loadedOrtSession != null) {
                 try {
-                    loaded.close();
+                    loadedOrtSession.close();
                 } catch (OrtException ignored) {
                     // Keep the sanitized configuration failure if cleanup also fails.
                 }
@@ -61,26 +64,52 @@ final class OnnxSequenceClassifier implements AutoCloseable {
         }
     }
 
-    private static void validateInputs(Map<String, NodeInfo> inputs, OnnxClassificationConfig config) {
-        OnnxJavaType type = config.tokenInputType() == OnnxClassificationConfig.TokenInputType.INT32
-                ? OnnxJavaType.INT32 : OnnxJavaType.INT64;
+    private static void validateInputs(
+            Map<String, NodeInfo> inputs, OnnxClassificationConfig onnxClassificationConfig) {
+        OnnxJavaType expectedInputType;
+        if (onnxClassificationConfig.tokenInputType() == OnnxClassificationConfig.TokenInputType.INT32) {
+            expectedInputType = OnnxJavaType.INT32;
+        } else {
+            expectedInputType = OnnxJavaType.INT64;
+        }
         if (!inputs.containsKey("input_ids")) {
             throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }
+        Set<String> supportedInputNames = Set.of("input_ids", "attention_mask", "token_type_ids");
         for (Map.Entry<String, NodeInfo> input : inputs.entrySet()) {
-            if (!Set.of("input_ids", "attention_mask", "token_type_ids").contains(input.getKey())
-                    || !(input.getValue().getInfo() instanceof TensorInfo tensor)
-                    || tensor.type != type || !matchesShape(tensor, config.maxTokens())) {
+            String inputName = input.getKey();
+            NodeInfo inputInfo = input.getValue();
+            if (!supportedInputNames.contains(inputName)) {
+                throw new InspectionException(InspectionFailureCode.CONFIGURATION);
+            }
+            if (!(inputInfo.getInfo() instanceof TensorInfo inputTensorInfo)) {
+                throw new InspectionException(InspectionFailureCode.CONFIGURATION);
+            }
+            if (inputTensorInfo.type != expectedInputType
+                    || !matchesShape(inputTensorInfo, onnxClassificationConfig.windowSize())) {
                 throw new InspectionException(InspectionFailureCode.CONFIGURATION);
             }
         }
     }
 
-    /** Dynamic dimensions are checked against the actual tensors during inference. */
-    private static boolean matchesShape(TensorInfo tensor, int width) {
-        long[] shape = tensor.getShape();
-        return shape.length == 2 && (shape[0] < 0 || shape[0] == 1)
-                && (shape[1] < 0 || shape[1] == width);
+    /**
+     * Checks for [1, expectedSecondDimensionSize], treating negative dimensions as dynamic.
+     * The second dimension is the window size for inputs and the logit count for outputs.
+     */
+    private static boolean matchesShape(TensorInfo tensorInfo, int expectedSecondDimensionSize) {
+        long[] shape = tensorInfo.getShape();
+        if (shape.length != 2) {
+            return false;
+        }
+        long batchSize = shape[0];
+        if (batchSize >= 0 && batchSize != 1) {
+            return false;
+        }
+        long secondDimensionSize = shape[1];
+        if (secondDimensionSize < 0) {
+            return true;
+        }
+        return secondDimensionSize == expectedSecondDimensionSize;
     }
 
     double[] classify(Encoding encoding) {
@@ -95,14 +124,25 @@ final class OnnxSequenceClassifier implements AutoCloseable {
                 };
                 inputTensors.put(inputName, createInputTensor(inputValues));
             }
-            try (OrtSession.Result result = session.run(inputTensors, Set.of(classification.modelOutputName()))) {
-                OnnxValue output = result.get(classification.modelOutputName()).orElseThrow();
-                if (!(output instanceof OnnxTensor tensor) || tensor.getInfo().type != OnnxJavaType.FLOAT
-                        || !Arrays.equals(tensor.getInfo().getShape(), new long[]{1, classification.logitCount()})) {
+            String outputName = onnxClassificationConfig.modelOutputName();
+            try (OrtSession.Result result = ortSession.run(inputTensors, Set.of(outputName))) {
+                OnnxValue output = result.get(outputName).orElseThrow();
+                if (!(output instanceof OnnxTensor)) {
                     throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
                 }
-                float[] logits = new float[classification.logitCount()];
-                tensor.getFloatBuffer().get(logits);
+                OnnxTensor outputTensor = (OnnxTensor) output;
+                TensorInfo outputTensorInfo = outputTensor.getInfo();
+                if (outputTensorInfo.type != OnnxJavaType.FLOAT) {
+                    throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
+                }
+
+                long[] outputShape = outputTensorInfo.getShape();
+                long[] expectedOutputShape = {1, onnxClassificationConfig.logitCount()};
+                if (!Arrays.equals(outputShape, expectedOutputShape)) {
+                    throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
+                }
+                float[] logits = new float[onnxClassificationConfig.logitCount()];
+                outputTensor.getFloatBuffer().get(logits);
                 return calculateScores(logits);
             }
         } catch (OrtException | RuntimeException ex) {
@@ -114,38 +154,57 @@ final class OnnxSequenceClassifier implements AutoCloseable {
 
     private OnnxTensor createInputTensor(long[] inputValues) throws OrtException {
         long[] shape = {1, inputValues.length};
-        if (classification.tokenInputType() == OnnxClassificationConfig.TokenInputType.INT32) {
+        if (onnxClassificationConfig.tokenInputType() == OnnxClassificationConfig.TokenInputType.INT32) {
             int[] intValues = new int[inputValues.length];
             for (int i = 0; i < inputValues.length; i++) {
                 intValues[i] = Math.toIntExact(inputValues[i]);
             }
-            return OnnxTensor.createTensor(environment, IntBuffer.wrap(intValues), shape);
+            return OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(intValues), shape);
         }
-        return OnnxTensor.createTensor(environment, LongBuffer.wrap(inputValues), shape);
+        return OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(inputValues), shape);
     }
 
     private double[] calculateScores(float[] logits) {
-        double maximumLogit = Double.NEGATIVE_INFINITY;
         for (float logit : logits) {
             if (!Float.isFinite(logit)) {
                 throw new InspectionException(InspectionFailureCode.MODEL_ERROR);
             }
+        }
+        return switch (onnxClassificationConfig.activation()) {
+            case SOFTMAX -> calculateSoftmaxScores(logits);
+            case SIGMOID -> calculateSigmoidScores(logits);
+        };
+    }
+
+    private static double[] calculateSoftmaxScores(float[] logits) {
+        double maximumLogit = Double.NEGATIVE_INFINITY;
+        for (float logit : logits) {
             maximumLogit = Math.max(maximumLogit, logit);
         }
         double[] scores = new double[logits.length];
-        if (classification.activation() == OnnxClassificationConfig.Activation.SOFTMAX) {
-            double exponentialSum = 0;
-            for (int i = 0; i < logits.length; i++) {
-                scores[i] = Math.exp(logits[i] - maximumLogit);
-                exponentialSum += scores[i];
-            }
-            for (int i = 0; i < scores.length; i++) {
-                scores[i] /= exponentialSum;
-            }
-        } else {
-            for (int i = 0; i < logits.length; i++) {
-                double exponential = Math.exp(-Math.abs((double) logits[i]));
-                scores[i] = logits[i] >= 0 ? 1 / (1 + exponential) : exponential / (1 + exponential);
+        double exponentialSum = 0;
+        // Subtracting the maximum logit prevents overflow without changing softmax scores.
+        for (int i = 0; i < logits.length; i++) {
+            scores[i] = Math.exp(logits[i] - maximumLogit);
+            exponentialSum += scores[i];
+        }
+        for (int i = 0; i < scores.length; i++) {
+            scores[i] /= exponentialSum;
+        }
+        return scores;
+    }
+
+    private static double[] calculateSigmoidScores(float[] logits) {
+        double[] scores = new double[logits.length];
+        // A non-positive exponent avoids overflow in both sigmoid branches.
+        for (int i = 0; i < logits.length; i++) {
+            double logit = logits[i];
+            if (logit >= 0) {
+                double exponential = Math.exp(-logit);
+                scores[i] = 1 / (1 + exponential);
+            } else {
+                double exponential = Math.exp(logit);
+                scores[i] = exponential / (1 + exponential);
             }
         }
         return scores;
@@ -154,7 +213,7 @@ final class OnnxSequenceClassifier implements AutoCloseable {
     @Override
     public void close() {
         try {
-            session.close();
+            ortSession.close();
         } catch (OrtException ex) {
             throw new InspectionException(InspectionFailureCode.CONFIGURATION);
         }

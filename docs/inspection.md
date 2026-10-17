@@ -155,7 +155,7 @@ It reports `PROCESSED` when it can confirm processing of the current input, and
 `UNKNOWN` otherwise. Without privacy integration or a custom resolver, input status
 defaults to `UNKNOWN`.
 
-The HTTP inspector sends one request per text segment. Each request uses the shorter
+By default, the HTTP inspector sends one request per text segment. Each request uses the shorter
 of `requestTimeout` and the time remaining for the inspection.
 
 Choose a protocol matching the deployed model:
@@ -201,6 +201,27 @@ default. `maxCompletionTokens` limits generated tokens, including reasoning toke
 GuardModelGenerationOptions generationOptions = new GuardModelGenerationOptions(1024L, null);
 JsonVerdictProtocol protocol = new JsonVerdictProtocol(generationOptions);
 ```
+
+### Split long text for HTTP inspection
+
+Pass `TextWindowConfig` to split each text segment into smaller pieces called text windows.
+Window sizes are measured in characters:
+
+```java
+TextWindowConfig windowConfig = new TextWindowConfig(2_000, 200, 256);
+ContentInspector inspector = new OpenAiCompatibleContentInspector(
+    "primary-guard", config, new KananaSafeguardPromptProtocol(), windowConfig);
+```
+
+This example sends at most 2,000 characters per window, repeats 200 characters between
+adjacent windows and allows at most 256 windows across the entire inspection request.
+
+Each window uses a separate HTTP request, and all windows share the inspection deadline.
+If more windows are needed than `maxWindows` allows, inspection stops with `LIMIT_EXCEEDED`.
+
+A segment is complete only after all its windows finish. Within each segment, findings with the
+same category and code are combined into one finding, keeping the highest score if available.
+Failures preserve findings already collected and IDs of fully inspected segments.
 
 ### Configure without the Spring Boot starter
 

@@ -31,9 +31,10 @@ import io.github.ultramancode.springai.privacy.inspection.openaicompatible.proto
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -47,22 +48,42 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Inspects text through an OpenAI-compatible API.
  * Guard requests do not pass through the application's ChatClient advisors.
+ * Optional character windows run in order within the request's shared deadline.
+ * Within each segment, findings with the same category and inspector-defined code are merged.
+ * The highest available score is kept.
+ * A segment is complete only after all its windows finish.
+ * If inspection fails, the returned result includes any findings already collected.
  */
 public final class OpenAiCompatibleContentInspector implements ContentInspector {
 
     private final OpenAiCompatibleInspectionConfig config;
     private final String inspectorId;
     private final GuardModelProtocol protocol;
+    private final TextWindowConfig windowConfig;
     private final ObjectReader responseReader;
     private final OpenAIClientAsync client;
 
-    /** Creates an inspector with an explicit instance ID, transport settings and model protocol. */
-    @SuppressWarnings("deprecation")
+    /** Creates an inspector that sends each complete text segment in one request. */
     public OpenAiCompatibleContentInspector(
             String inspectorId, OpenAiCompatibleInspectionConfig config, GuardModelProtocol protocol) {
+        this(inspectorId, config, protocol, null);
+    }
+
+    /**
+     * Creates an inspector with optional character windows.
+     *
+     * @param inspectorId stable inspector ID
+     * @param config transport settings and privacy requirements
+     * @param protocol request and verdict format for the deployed model
+     * @param windowConfig character window settings, or null to send each complete segment
+     */
+    @SuppressWarnings("deprecation")
+    public OpenAiCompatibleContentInspector(String inspectorId, OpenAiCompatibleInspectionConfig config,
+            GuardModelProtocol protocol, TextWindowConfig windowConfig) {
         this.inspectorId = InspectionIdentifiers.requireValid(inspectorId);
         this.config = Objects.requireNonNull(config, "config");
         this.protocol = Objects.requireNonNull(protocol, "protocol");
+        this.windowConfig = windowConfig;
         JsonMapper jsonMapper = ObjectMappers.jsonMapper().rebuild()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
                 .build();
@@ -102,22 +123,75 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
             request.requirePrivacyProcessed();
         }
         Set<String> completedSegmentIds = new HashSet<>();
-        List<InspectionFinding> findings = new ArrayList<>();
+        Map<FindingKey, InspectionFinding> requestFindings = new LinkedHashMap<>();
         try {
+            int windowCount = 0;
             for (ContentSegment segment : request.segments()) {
                 request.checkActive();
-                String output = requestModelOutput(request, segment.text());
-                Optional<InspectionFinding> finding = protocol.parse(segment.id(), output);
-                if (finding.isPresent()) {
-                    findings.add(finding.get());
+                String text = segment.text();
+                int remainingCharacterCount = text.codePointCount(0, text.length());
+                int windowStart = 0;
+                while (true) {
+                    request.checkActive();
+                    if (windowConfig != null && windowCount == windowConfig.maxWindows()) {
+                        throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
+                    }
+                    int windowCharacterCount = remainingCharacterCount;
+                    if (windowConfig != null) {
+                        windowCharacterCount = Math.min(windowConfig.windowSize(), remainingCharacterCount);
+                    }
+                    int windowEnd = text.offsetByCodePoints(windowStart, windowCharacterCount);
+                    String windowText = text.substring(windowStart, windowEnd);
+                    Optional<InspectionFinding> windowFinding = inspectWindow(request, segment.id(), windowText);
+                    windowCount++;
+                    if (windowFinding.isPresent()) {
+                        collectFinding(windowFinding.get(), requestFindings);
+                    }
+                    InspectionRequest.checkInterrupted();
+                    if (windowEnd == text.length()) {
+                        break;
+                    }
+                    int windowSizeWithoutOverlap = windowCharacterCount - windowConfig.overlapSize();
+                    windowStart = text.offsetByCodePoints(windowStart, windowSizeWithoutOverlap);
+                    remainingCharacterCount -= windowSizeWithoutOverlap;
                 }
                 completedSegmentIds.add(segment.id());
             }
-            return InspectionResult.completed(completedSegmentIds, findings);
+            return InspectionResult.completed(completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (InspectionException ex) {
-            return InspectionResult.failed(ex.failureCode(), completedSegmentIds, findings);
+            return InspectionResult.failed(
+                    ex.failureCode(), completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (RuntimeException ex) {
-            return InspectionResult.failed(InspectionFailureCode.INVALID_RESULT, completedSegmentIds, findings);
+            return InspectionResult.failed(
+                    InspectionFailureCode.INVALID_RESULT, completedSegmentIds, List.copyOf(requestFindings.values()));
+        }
+    }
+
+    private Optional<InspectionFinding> inspectWindow(InspectionRequest request, String segmentId, String windowText) {
+        String output = requestModelOutput(request, windowText);
+        Optional<InspectionFinding> finding = protocol.parse(segmentId, output);
+        if (finding.isPresent() && !segmentId.equals(finding.get().segmentId())) {
+            throw new InspectionException(InspectionFailureCode.INVALID_RESULT);
+        }
+        return finding;
+    }
+
+    private static void collectFinding(InspectionFinding finding, Map<FindingKey, InspectionFinding> requestFindings) {
+        FindingKey key = new FindingKey(finding.segmentId(), finding.category(), finding.code());
+        InspectionFinding existingFinding = requestFindings.get(key);
+        if (existingFinding == null) {
+            requestFindings.put(key, finding);
+            return;
+        }
+
+        Double newScore = finding.score();
+        if (newScore == null) {
+            return;
+        }
+
+        Double existingScore = existingFinding.score();
+        if (existingScore == null || newScore > existingScore) {
+            requestFindings.put(key, finding);
         }
     }
 
@@ -223,4 +297,6 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
     private static InspectionException invalidResponse() {
         return new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
     }
+
+    private record FindingKey(String segmentId, InspectionFinding.Category category, String code) {}
 }

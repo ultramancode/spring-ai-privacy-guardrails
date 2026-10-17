@@ -9,8 +9,8 @@ class TextWindowConfigTest {
 
     @ParameterizedTest
     @CsvSource({"0,0,1", "-1,0,1", "4,-1,1", "4,4,1", "4,5,1", "4,0,0", "4,0,-1"})
-    void rejectsInvalidWindowLimits(int characters, int overlap, int windows) {
-        assertThatThrownBy(() -> new TextWindowConfig(characters, overlap, windows))
+    void rejectsInvalidWindowLimits(int windowSize, int overlapSize, int maxWindows) {
+        assertThatThrownBy(() -> new TextWindowConfig(windowSize, overlapSize, maxWindows))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

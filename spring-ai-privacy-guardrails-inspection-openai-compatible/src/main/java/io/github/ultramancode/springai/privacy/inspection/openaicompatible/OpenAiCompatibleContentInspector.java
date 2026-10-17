@@ -31,9 +31,8 @@ import io.github.ultramancode.springai.privacy.inspection.openaicompatible.proto
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -50,7 +49,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Inspects text through an OpenAI-compatible API.
  * Guard requests do not pass through the application's ChatClient advisors.
  * Optional character windows run in order within the request's shared deadline.
- * Findings are collected per segment, category and code, keeping the highest available score.
+ * Within each segment, findings with the same category and inspector-defined code are merged.
+ * The highest available score is kept.
  * A segment is complete only after all its windows finish.
  * If inspection fails, the returned result includes any findings already collected.
  */
@@ -123,62 +123,75 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
             request.requirePrivacyProcessed();
         }
         Set<String> completedSegmentIds = new HashSet<>();
-        List<InspectionFinding> findings = new ArrayList<>();
+        Map<FindingKey, InspectionFinding> requestFindings = new LinkedHashMap<>();
         try {
             int windowCount = 0;
             for (ContentSegment segment : request.segments()) {
                 request.checkActive();
                 String text = segment.text();
-                int remainingCharacters = text.codePointCount(0, text.length());
-                int start = 0;
-                Map<FindingKey, Integer> findingPositions = new HashMap<>();
+                int remainingCharacterCount = text.codePointCount(0, text.length());
+                int windowStart = 0;
                 while (true) {
                     request.checkActive();
                     if (windowConfig != null && windowCount == windowConfig.maxWindows()) {
                         throw new InspectionException(InspectionFailureCode.LIMIT_EXCEEDED);
                     }
-                    int windowCharacters = windowConfig == null ? remainingCharacters
-                            : Math.min(windowConfig.maxCharacters(), remainingCharacters);
-                    int end = text.offsetByCodePoints(start, windowCharacters);
-                    String output = requestModelOutput(request, text.substring(start, end));
+                    int windowCharacterCount = remainingCharacterCount;
+                    if (windowConfig != null) {
+                        windowCharacterCount = Math.min(windowConfig.windowSize(), remainingCharacterCount);
+                    }
+                    int windowEnd = text.offsetByCodePoints(windowStart, windowCharacterCount);
+                    String windowText = text.substring(windowStart, windowEnd);
+                    Optional<InspectionFinding> windowFinding = inspectWindow(request, segment.id(), windowText);
                     windowCount++;
-                    Optional<InspectionFinding> parsed = protocol.parse(segment.id(), output);
-                    if (parsed.isPresent()) {
-                        InspectionFinding finding = parsed.get();
-                        if (!segment.id().equals(finding.segmentId())) {
-                            throw new InspectionException(InspectionFailureCode.INVALID_RESULT);
-                        }
-                        collectFinding(finding, findingPositions, findings);
+                    if (windowFinding.isPresent()) {
+                        collectFinding(windowFinding.get(), requestFindings);
                     }
                     InspectionRequest.checkInterrupted();
-                    if (end == text.length()) {
+                    if (windowEnd == text.length()) {
                         break;
                     }
-                    start = text.offsetByCodePoints(end, -windowConfig.overlapCharacters());
-                    remainingCharacters -= windowCharacters - windowConfig.overlapCharacters();
+                    int windowSizeWithoutOverlap = windowCharacterCount - windowConfig.overlapSize();
+                    windowStart = text.offsetByCodePoints(windowStart, windowSizeWithoutOverlap);
+                    remainingCharacterCount -= windowSizeWithoutOverlap;
                 }
                 completedSegmentIds.add(segment.id());
             }
-            return InspectionResult.completed(completedSegmentIds, findings);
+            return InspectionResult.completed(completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (InspectionException ex) {
-            return InspectionResult.failed(ex.failureCode(), completedSegmentIds, findings);
+            return InspectionResult.failed(
+                    ex.failureCode(), completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (RuntimeException ex) {
-            return InspectionResult.failed(InspectionFailureCode.INVALID_RESULT, completedSegmentIds, findings);
+            return InspectionResult.failed(
+                    InspectionFailureCode.INVALID_RESULT, completedSegmentIds, List.copyOf(requestFindings.values()));
         }
     }
 
-    private record FindingKey(InspectionFinding.Category category, String code) {}
+    private Optional<InspectionFinding> inspectWindow(InspectionRequest request, String segmentId, String windowText) {
+        String output = requestModelOutput(request, windowText);
+        Optional<InspectionFinding> finding = protocol.parse(segmentId, output);
+        if (finding.isPresent() && !segmentId.equals(finding.get().segmentId())) {
+            throw new InspectionException(InspectionFailureCode.INVALID_RESULT);
+        }
+        return finding;
+    }
 
-    private static void collectFinding(InspectionFinding finding, Map<FindingKey, Integer> positions,
-            List<InspectionFinding> findings) {
-        FindingKey key = new FindingKey(finding.category(), finding.code());
-        Integer position = positions.get(key);
-        if (position == null) {
-            positions.put(key, findings.size());
-            findings.add(finding);
-        } else if (finding.score() != null
-                && (findings.get(position).score() == null || finding.score() > findings.get(position).score())) {
-            findings.set(position, finding);
+    private static void collectFinding(InspectionFinding finding, Map<FindingKey, InspectionFinding> requestFindings) {
+        FindingKey key = new FindingKey(finding.segmentId(), finding.category(), finding.code());
+        InspectionFinding existingFinding = requestFindings.get(key);
+        if (existingFinding == null) {
+            requestFindings.put(key, finding);
+            return;
+        }
+
+        Double newScore = finding.score();
+        if (newScore == null) {
+            return;
+        }
+
+        Double existingScore = existingFinding.score();
+        if (existingScore == null || newScore > existingScore) {
+            requestFindings.put(key, finding);
         }
     }
 
@@ -284,4 +297,6 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
     private static InspectionException invalidResponse() {
         return new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
     }
+
+    private record FindingKey(String segmentId, InspectionFinding.Category category, String code) {}
 }

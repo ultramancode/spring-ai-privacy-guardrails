@@ -215,17 +215,13 @@ ContentInspector inspector = new OpenAiCompatibleContentInspector(
 
 This example sends at most 2,000 characters per window, repeats 200 characters between
 adjacent windows and allows at most 256 windows across the entire inspection request.
-Lengths count Unicode code points. Set the overlap to `0` for adjacent windows without overlap.
+
 Each window uses a separate HTTP request, and all windows share the inspection deadline.
 If more windows are needed than `maxWindows` allows, inspection stops with `LIMIT_EXCEEDED`.
 
 A segment is complete only after all its windows finish. Within each segment, findings with the
 same category and code are combined into one finding, keeping the highest score if available.
 Failures preserve findings already collected and IDs of fully inspected segments.
-
-Character counts differ from token counts. Choose a window size that fits the model's token limit,
-including protocol instructions and generated output. Splitting changes the context of each verdict,
-so test window size and overlap with representative inputs.
 
 ### Configure without the Spring Boot starter
 

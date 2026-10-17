@@ -1,20 +1,22 @@
 package io.github.ultramancode.springai.privacy.inspection.openaicompatible;
 
 /**
- * Character window limits for HTTP inspection. Lengths count Unicode code points.
+ * Character window settings for HTTP inspection. Lengths count Unicode code points.
+ * The last window of each segment may be shorter than {@code windowSize}.
  *
- * @param maxCharacters positive maximum number of code points in each window
- * @param overlapCharacters code points repeated between adjacent windows, from zero to maxCharacters minus one
+ * @param windowSize positive number of characters per window
+ * @param overlapSize number of characters repeated between adjacent windows,
+ *        from {@code 0} to {@code windowSize - 1}
  * @param maxWindows positive maximum number of HTTP windows across all request segments
  */
-public record TextWindowConfig(int maxCharacters, int overlapCharacters, int maxWindows) {
+public record TextWindowConfig(int windowSize, int overlapSize, int maxWindows) {
 
     public TextWindowConfig {
-        if (maxCharacters < 1) {
-            throw new IllegalArgumentException("maxCharacters must be positive");
+        if (windowSize < 1) {
+            throw new IllegalArgumentException("windowSize must be positive");
         }
-        if (overlapCharacters < 0 || overlapCharacters >= maxCharacters) {
-            throw new IllegalArgumentException("overlapCharacters must be non-negative and less than maxCharacters");
+        if (overlapSize < 0 || overlapSize >= windowSize) {
+            throw new IllegalArgumentException("overlapSize must be non-negative and less than windowSize");
         }
         if (maxWindows < 1) {
             throw new IllegalArgumentException("maxWindows must be positive");

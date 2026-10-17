@@ -23,6 +23,8 @@ test where practical. `check` runs the test suite and verifies the repository's
 module rules. Update the declared module policy when a change intentionally
 alters that graph.
 
+ONNX tests download and cache a public model on first run.
+
 To reproduce another compatibility lane locally, install that JDK and override
 the build/test toolchain, for example with `-PtestJavaVersion=21`.
 

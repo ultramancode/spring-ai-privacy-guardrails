@@ -1,6 +1,6 @@
 ---
 description: >-
-  규칙이나 HTTP 검사 모델을 사용해 모델 입력과 출력을 검사합니다.
+  규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해 모델 입력과 출력을 검사합니다.
 ---
 
 # 콘텐츠 검사
@@ -8,9 +8,10 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: f92a9e9988b2f66cf2e404f119e2fa7a0f7eb61fe458d2e05f34d927e37f5f65 -->
+<!-- i18n-source-sha256: e5e8cc3bab6525527a24d46873d0596afb1ee1d9717d1b1bc1b0f083886d4464 -->
 
-콘텐츠 검사는 규칙이나 검사 모델을 사용해 모델에 전달할 텍스트를 검사합니다.
+콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
+모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
 도구 실행 후 모델을 다시 호출하는 경우를 포함해 매 모델 호출 전에 검사하며,
 애플리케이션에 전달할 응답도 검사하도록 설정할 수 있습니다.
@@ -230,6 +231,120 @@ Java에서 직접 구성할 때 `InspectionChatClientConfigurer`의 기본 resol
 `PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)`의 반환값이
 `true`이면 `PROCESSED`, `false`이면 `UNKNOWN`으로 매핑합니다.
 
+## ONNX 기반 로컬 콘텐츠 검사
+
+`spring-ai-privacy-guardrails-inspection-onnx`를 추가하면 사용자가 준비한
+ONNX 텍스트 분류 모델을 로컬에서 실행해 콘텐츠를 검사할 수 있습니다.
+모델은 ONNX Runtime을 통해 CPU에서 실행되며, 토큰화에는 DJL을 사용합니다.
+서로 호환되는 모델과 토크나이저 파일을 준비하고 검사기를 등록합니다.
+
+이 예시는 모델의 출력 순서가 정상(0), 인젝션(1), 유출(2)인 경우의 설정입니다.
+`Label.index`는 사용하는 모델의 실제 출력 순서에 맞춰 지정하세요.
+
+```java
+@Bean(destroyMethod = "close")
+OnnxContentInspector localGuard() {
+    Path directory = Path.of("/opt/models/local-classifier");
+    OnnxClassificationConfig onnxClassificationConfig = OnnxClassificationConfig.builder()
+        .tokenizer(directory.resolve("tokenizer.json"))
+        .tokenizerConfig(directory.resolve("tokenizer_config.json"))
+        .maxTokens(256)
+        .overlapTokens(32)
+        .logitCount(3)
+        .activation(OnnxClassificationConfig.Activation.SOFTMAX)
+        .labels(List.of(
+            new OnnxClassificationConfig.Label(1,
+                InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.9),
+            new OnnxClassificationConfig.Label(2,
+                InspectionFinding.Category.PROMPT_LEAKING, "LEAKING", 0.9)))
+        .build();
+    return new OnnxContentInspector("local-guard",
+        OnnxInspectionConfig.defaults(directory.resolve("model.onnx")),
+        onnxClassificationConfig);
+}
+```
+
+시작 전에 `model.onnx`, `tokenizer.json`, `tokenizer_config.json`을 준비합니다.
+모델 가중치가 별도 파일로 분리되어 있다면 해당 파일도 함께 준비합니다.
+
+검사기는 토크나이저와 ONNX 세션의 네이티브 자원을 사용합니다. 위 예시에서는
+애플리케이션 종료 시 Spring이 `close()`를 호출해 이 자원을 해제합니다.
+
+### 모델 요구 사항
+
+| 구성 요소 | 지원 형식 |
+| --- | --- |
+| 입력 | `input_ids`, 선택적 `attention_mask`와 `token_type_ids`. 각각 `[1, maxTokens]` 형태 |
+| 토큰 타입 | 모든 토큰 입력에 동일한 INT64 또는 INT32 |
+| 출력 | `[1, logitCount]` 형태의 FLOAT 원시 로짓 |
+
+초기화할 때 입력 이름, 타입, 고정된 차원과 선택한 출력을 설정과 비교합니다.
+모델 로딩 실패와 메타정보 불일치는 검사 전에 `CONFIGURATION`을 담은
+`InspectionException`을 발생시킵니다.
+모델 파일에서 출력 크기를 확정할 수 없는 경우에는 실행 후 실제 출력 크기를 확인합니다.
+예상과 다른 출력 형태나 유한하지 않은 로짓은 `MODEL_ERROR`로 처리합니다.
+
+### 분류 설정
+
+출력 이름, 인덱스, 타입과 점수 계산 방식은 모델 문서와 ONNX 모델 파일에 맞춰 지정합니다.
+탐지 결과 매핑, 임계값과 겹침은 애플리케이션에 맞게 선택합니다.
+이 값들은 `OnnxClassificationConfig`에서 설정합니다.
+
+| 설정 | 지정 방법 |
+| --- | --- |
+| `tokenizer`, `tokenizerConfig` | 모델과 일치하는 로컬 토크나이저 파일을 지정합니다. |
+| `modelOutputName` | ONNX 모델에 정의된 원시 로짓 출력 이름을 지정합니다. 기본값은 `logits`입니다. |
+| `logitCount` | 출력 형태가 `[1, N]`이면 N을 지정합니다. 탐지 결과에 매핑하지 않는 출력도 포함합니다. |
+| `activation` | 모델에 맞게 `SOFTMAX` 또는 `SIGMOID`를 선택합니다. 선택 기준은 아래의 [`activation` 선택](#activation-선택)을 참고하세요. |
+| `Label.index` | 탐지할 출력의 위치를 0부터 세어 지정합니다. |
+| `tokenInputType` | ONNX 모델 파일에 정의된 모든 토큰 입력의 정수 타입에 맞춥니다. 기본값은 INT64입니다. |
+| `maxTokens` | 특수 토큰과 패딩을 포함한 창 길이입니다. 모델이 지원하는 길이를 선택하고, 고정 길이 모델은 정확한 길이를 사용합니다. |
+| `overlapTokens` | 창 사이에 반복할 본문 토큰 수를 정합니다. `maxTokens`에서 특수 토큰 수를 뺀 값보다 작아야 합니다. 기본값은 0입니다. |
+| `Label.category`, `Label.code` | 탐지 조건마다 범주와 탐지 유형 코드를 지정합니다. |
+| `Label.threshold` | 활성화 함수 적용 후 점수가 이 값 이상이면 탐지 결과를 생성합니다. |
+
+`labels`는 선택한 모델 출력을 탐지 결과에 연결합니다. 위 예시에서는 정상 출력을
+매핑하지 않습니다. 서로 다른 코드를 가진 여러 레이블이 같은 출력 인덱스를 사용할 수
+있습니다. 임계값은 각각 독립적으로 적용되며, 조건을 충족한 매핑마다 탐지 결과가 생성됩니다.
+
+### `activation` 선택
+
+`OnnxClassificationConfig.activation`은 모델의 원시 출력(로짓)을 0에서 1 사이의
+점수로 변환하는 방식을 지정합니다. 검사기가 변환을 수행하고 그 점수를 `Label.threshold`와
+비교합니다. 모델 문서에 맞는 값을 선택하세요.
+
+| `activation` | 사용하는 모델 |
+| --- | --- |
+| `SOFTMAX` | 정상·인젝션·유출처럼 서로 배타적인 범주 중 하나를 판별하는 모델. 로짓 두 개 이상 |
+| `SIGMOID` | 항목별로 독립적으로 판단하는 모델 또는 로짓 하나를 반환하는 이진 분류 모델 |
+
+로짓 하나를 반환하는 이진 분류 모델은 `logitCount=1`을 사용합니다.
+모델 출력은 활성화 함수를 적용하기 전의 원시 로짓이어야 합니다.
+
+### 토크나이저 파일
+
+모델에 맞는 `tokenizer.json`을 준비합니다. DJL이 지원하는 Hugging Face Tokenizers JSON
+형식이어야 하며, 모델의 토큰화 설정이 그대로 포함되어야 합니다.
+[DJL의 토크나이저 로딩](https://github.com/deepjavalibrary/djl/blob/v0.38.0/extensions/tokenizers/README.md#from-huggingface-pipeline)을 참고하세요.
+
+`tokenizer_config.json`에 지정한 패딩 방향(`padding_side`)과 잘림 방향(`truncation_side`)을
+`tokenizer.json`의 설정보다 우선 적용합니다. 패딩 토큰은 `tokenizer.json`의 어휘나
+추가 토큰 목록에 등록되어 있어야 합니다.
+
+### 실행 한도
+
+모델 내부 연산에 사용할 CPU 스레드 수(`intraOpThreads`, 기본 2개)와 요청 전체의
+창 개수 한도(`maxWindows`, 기본 256개)는 `OnnxInspectionConfig`에서 설정합니다.
+전체 검사 시간 제한은 `InspectionLimits`에서 설정하며 기본값은 10초입니다.
+
+긴 텍스트는 토큰 창으로 나누어 검사합니다. 각 구간의 모든 창을 검사해야 해당 구간을 완료로 처리합니다.
+탐지 결과에는 각 구간에서 레이블별로 임계값을 충족한 최고 점수를 담습니다.
+
+같은 검사기 인스턴스는 요청을 한 번에 하나씩 처리하며, 대기·토큰화·추론 모두 제한 시간에
+포함됩니다. 실행 중인 토큰화나 추론이 끝날 때까지 기다리므로 제한 시간을 넘겨 반환할 수 있습니다.
+이미 얻은 결과는 유효하며, 제한 시간을 넘긴 뒤 검사할 창이나 구간이 남아 있으면 `TIMEOUT`을
+반환합니다. 완료한 구간 ID와 부분 탐지 결과는 보존합니다.
+
 ## 결과, 정책, 실패
 
 Spring Boot 스타터를 사용하면 Spring 빈 순서(`@Order`)대로 검사기를 실행합니다.
@@ -239,6 +354,7 @@ Spring Boot 스타터를 사용하면 Spring 빈 순서(`@Order`)대로 검사�
 탐지 임계값은 각 검사기에 설정합니다. 서로 다른 모델의 점수를 직접 비교할 수는 없습니다.
 
 서비스는 검사기를 실행하기 전에 입력이 개인정보 처리 조건을 충족하는지 확인합니다.
+로컬 ONNX 검사기와 규칙 검사기는 사전 개인정보 처리를 요구하지 않습니다.
 `PROCESSED` 상태를 요구하는 검사기가 있는데 입력 구간 중 하나라도 `UNKNOWN` 또는
 `UNPROCESSED`이면 요청을 중단합니다. 이때 `PRIVACY_PROCESSING_REQUIRED` 오류 코드를 담은
 `InspectionException`을 던지며, `FAIL_OPEN`으로 설정했어도 어떤 검사기도 실행하지 않습니다.
@@ -246,9 +362,22 @@ Spring Boot 스타터를 사용하면 Spring 빈 순서(`@Order`)대로 검사�
 확인할 수 있습니다.
 
 `InspectionReport`에는 각 검사기의 결과가 담깁니다. 탐지 결과에는 해당 텍스트 구간의
-ID, 범주, 코드가 포함되며 검사한 원문은 담기지 않습니다. 범주는 `PROMPT_ATTACK`,
-`PROMPT_INJECTION`, `PROMPT_LEAKING`, `POLICY_VIOLATION`입니다.
+ID, 범주, 코드가 포함되며 검사한 원문은 담기지 않습니다.
+
+| 범주 | 의미 |
+| --- | --- |
+| `PROMPT_ATTACK` | 세부 유형을 구분하지 않은 프롬프트 공격 |
+| `PROMPT_INJECTION` | 모델이 따라야 할 지시를 덮어쓰려는 시도 |
+| `PROMPT_LEAKING` | 숨겨진 프롬프트나 지침을 추출하려는 시도 |
+| `TOXICITY` | 모욕·욕설·위협 같은 독성 표현 |
+| `POLICY_VIOLATION` | 다른 범주에 해당하지 않는 애플리케이션 정의 콘텐츠 정책 위반 |
+
+범주 내의 구체적인 탐지 유형은 `code`로 구분합니다. 예를 들어 `TOXICITY` 범주에서
+모욕 표현을 `INSULT` 코드로 나타낼 수 있습니다.
 사용자 정의 ID와 코드에도 사용자 입력이나 응답 내용을 넣지 마세요.
+
+`InspectionFinding.score`는 0에서 1 사이의 선택적 점수입니다. ONNX 검사기는 점수를
+제공하며, 규칙·Kanana·JSON-verdict의 탐지 결과에서는 `null`입니다.
 
 기본 실패 정책인 `FAIL_CLOSED`는 검사기가 실패하면 요청을 차단합니다.
 아래 표에서 허용하는 종류의 실패가 발생해도 검사를 이어가려면
@@ -281,7 +410,7 @@ InspectionService service = new InspectionService(
 | 오류 코드 | 동작 |
 | --- | --- |
 | `TIMEOUT`, `TRANSPORT_ERROR`, `HTTP_ERROR`, `MODEL_ERROR`, `INVALID_RESPONSE`, `INCOMPLETE` | `FAIL_CLOSED`는 요청을 차단합니다. `FAIL_OPEN`은 수집한 탐지 결과를 콘텐츠 정책이 허용하면 검사를 이어갑니다. |
-| `CANCELLED`, `LIMIT_EXCEEDED`, `PRIVACY_PROCESSING_REQUIRED`, `CONFIGURATION`, `UNSUPPORTED_CONTENT`, `INVALID_RESULT` | 실패 정책과 관계없이 `InspectionException` 발생 |
+| `CANCELLED`, `LIMIT_EXCEEDED`, `PRIVACY_PROCESSING_REQUIRED`, `CONFIGURATION`, `INSPECTOR_CLOSED`, `UNSUPPORTED_CONTENT`, `INVALID_RESULT` | 실패 정책과 관계없이 `InspectionException` 발생 |
 
 한 요청의 검사기들은 같은 제한 시간을 사용하며, 콘텐츠 정책을 평가하는 시간도 여기에
 포함됩니다. 서비스는 각 검사기를 시작하기 전에 남은 시간을 확인합니다.
@@ -388,13 +517,14 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 | --- | --- |
 | `inspection-core` | Spring 없이 사용하는 콘텐츠 검사, 정책과 검사 결과 |
 | `inspection-rules` | 문자열 및 RE2/J 규칙 매칭 |
+| `inspection-onnx` | ONNX 기반 로컬 콘텐츠 검사 |
 | `inspection-openai-compatible` | OpenAI 호환 HTTP API를 통한 검사 모델 호출 |
 | `inspection-spring-ai` | 클라이언트별 입력·출력 검사 |
 | `inspection-spring-boot-starter` | 선택한 클라이언트의 콘텐츠 검사를 위한 Spring Boot 설정 |
 
 ## 검증
 
-`./gradlew check`는 규칙 테스트, 로컬 HTTP 테스트와 Spring AI 통합 테스트를 실행합니다.
+`./gradlew check`는 규칙 테스트, ONNX 모델·토크나이저 테스트, 로컬 HTTP 테스트와 Spring AI 통합 테스트를 실행합니다.
 이 테스트는 검사 실행과 정책 적용이 의도대로 동작하는지 확인합니다.
 모델의 탐지 품질은 별도로 평가해야 합니다.
 저장소 검증 방법은 [평가](evaluation.md)를 참고하세요.

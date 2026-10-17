@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 2609f5de3cc992a29898e9463e52aa05399c3c8aeb57d6a3f9bf3e35f5359a02 -->
+<!-- i18n-source-sha256: 33a8a02d6dc72cd221dca78cb2ce1eb5cb1953330cc8dc5506ea5d91b8f478d5 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -294,8 +294,8 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 
 ## 라이브러리 모듈
 
-규칙이나 HTTP 검사 모델로 모델 입력과 응답을 검사하고 개인정보 보호와 함께 사용하는
-방법은 [콘텐츠 검사](docs/ko/inspection.md)를 참고하세요.
+규칙, 로컬 ONNX 텍스트 분류 모델, HTTP 검사 모델로 모델 입력과 응답을 검사하고
+개인정보 보호와 함께 사용하는 방법은 [콘텐츠 검사](docs/ko/inspection.md)를 참고하세요.
 
 분석기별 스타터는 해당 런타임 모듈을 전이 의존성으로 가져옵니다. 테스트 지원은
 애플리케이션의 테스트 범위에 별도로 추가합니다.
@@ -311,6 +311,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | 도구 권한 검사를 위한 Spring Boot 설정 |
 | `spring-ai-privacy-guardrails-inspection-core` | 콘텐츠 검사, 허용·차단 정책과 검사 결과 |
 | `spring-ai-privacy-guardrails-inspection-rules` | 문자열 및 RE2/J 규칙 검사 |
+| `spring-ai-privacy-guardrails-inspection-onnx` | ONNX 기반 로컬 콘텐츠 검사 |
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | OpenAI 호환 HTTP API를 통한 검사 모델 호출 |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | 모델 입력 검사와 선택적 출력 검사 |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | 선택한 클라이언트의 콘텐츠 검사를 위한 Spring Boot 설정 |

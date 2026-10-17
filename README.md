@@ -310,7 +310,8 @@ for registration, outcome semantics, and callback execution guidance.
 ## Library Modules
 
 See [Content Inspection](docs/inspection.md) to inspect model input and responses
-with rules or an HTTP guard model, and combine inspection with privacy protection.
+with rules, local ONNX text classification models or an HTTP guard model, and
+combine inspection with privacy protection.
 
 Analyzer-specific starters bring in their runtime modules as transitive
 dependencies. Add test support separately in the application's test scope.
@@ -326,6 +327,7 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Spring Boot configuration for tool authorization |
 | `spring-ai-privacy-guardrails-inspection-core` | Content inspection, allow/block policies, and inspection results |
 | `spring-ai-privacy-guardrails-inspection-rules` | Literal and RE2/J inspectors |
+| `spring-ai-privacy-guardrails-inspection-onnx` | Local content inspection with ONNX |
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | Calls guard models through OpenAI-compatible HTTP APIs |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | Model-input inspection and optional output inspection |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | Spring Boot configuration for inspecting selected clients |

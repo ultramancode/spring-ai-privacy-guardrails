@@ -108,6 +108,7 @@ class InspectionServiceTest {
             "LIMIT_EXCEEDED, false", "LIMIT_EXCEEDED, true",
             "PRIVACY_PROCESSING_REQUIRED, false", "PRIVACY_PROCESSING_REQUIRED, true",
             "CONFIGURATION, false", "CONFIGURATION, true",
+            "INSPECTOR_CLOSED, false", "INSPECTOR_CLOSED, true",
             "UNSUPPORTED_CONTENT, false", "UNSUPPORTED_CONTENT, true",
             "INVALID_RESULT, false", "INVALID_RESULT, true"
     })
@@ -439,7 +440,8 @@ class InspectionServiceTest {
 
     @ParameterizedTest
     @EnumSource(value = InspectionFailureCode.class, names = {
-            "CANCELLED", "LIMIT_EXCEEDED", "PRIVACY_PROCESSING_REQUIRED", "CONFIGURATION", "UNSUPPORTED_CONTENT"
+            "CANCELLED", "LIMIT_EXCEEDED", "PRIVACY_PROCESSING_REQUIRED", "CONFIGURATION",
+            "INSPECTOR_CLOSED", "UNSUPPORTED_CONTENT"
     })
     void invalidAssociationsPreserveHardFailureCodes(InspectionFailureCode failureCode) {
         List<InspectionResult> invalidResults = List.of(

@@ -42,8 +42,8 @@ are shown to the model and checks authorization before tool execution. It can
 be used independently of PII protection.
 
 The optional [content inspection](docs/inspection.md) modules check model input and
-output with application-defined rules or an HTTP guard model. They can be
-used with or without PII protection and tool authorization.
+output with application-defined rules, local ONNX classifiers or an HTTP guard model.
+They can be used with or without PII protection and tool authorization.
 
 ## Why It Exists
 
@@ -142,7 +142,7 @@ starter, so do not add it separately. Add the Spring Security starter by itself
 for tool authorization alone, or add it alongside a privacy starter to use both
 capabilities.
 
-For content inspection, also choose an inspector implementation and follow the
+Content inspection requires version `0.4.0` or later. Choose an inspector implementation and follow the
 [inspection setup](docs/inspection.md#set-up-input-inspection).
 
 Adding a starter dependency alone does not apply its protection. Follow the
@@ -310,7 +310,8 @@ for registration, outcome semantics, and callback execution guidance.
 ## Library Modules
 
 See [Content Inspection](docs/inspection.md) to inspect model input and responses
-with rules or an HTTP guard model, and combine inspection with privacy protection.
+with rules, local ONNX text classification models or an HTTP guard model, and
+combine inspection with privacy protection.
 
 Analyzer-specific starters bring in their runtime modules as transitive
 dependencies. Add test support separately in the application's test scope.
@@ -326,6 +327,7 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | Spring Boot configuration for tool authorization |
 | `spring-ai-privacy-guardrails-inspection-core` | Content inspection, allow/block policies, and inspection results |
 | `spring-ai-privacy-guardrails-inspection-rules` | Literal and RE2/J inspectors |
+| `spring-ai-privacy-guardrails-inspection-onnx` | Local content inspection with ONNX |
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | Calls guard models through OpenAI-compatible HTTP APIs |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | Model-input inspection and optional output inspection |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | Spring Boot configuration for inspecting selected clients |
@@ -361,7 +363,7 @@ is recommended for new users.
   and output policies
 - [Spring Security Tool Authorization](docs/security.md): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
-- [Content Inspection](docs/inspection.md): opt-in rules and HTTP guard models
+- [Content Inspection](docs/inspection.md): opt-in rules, local ONNX classifiers and HTTP guard models
 - [Architecture](docs/architecture.md): modules and model, tool, and session
   execution flow
 - [Threat Model](docs/threat-model.md): protected assets, trust boundaries,

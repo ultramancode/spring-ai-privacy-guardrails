@@ -22,7 +22,9 @@ public record InspectionFinding(String segmentId, Category category, String code
         PROMPT_INJECTION,
         /** An attempt to extract hidden prompts or instructions. */
         PROMPT_LEAKING,
-        /** An application-defined content violation outside the prompt-attack categories. */
+        /** Toxic language, such as insults, profanity or threats. */
+        TOXICITY,
+        /** An application-defined content violation not covered by the other categories. */
         POLICY_VIOLATION
     }
 

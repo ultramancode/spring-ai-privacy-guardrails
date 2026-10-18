@@ -26,6 +26,8 @@ public enum InspectionFailureCode {
     INVALID_RESULT(false),
     /** Inspection could not run with the supplied configuration. */
     CONFIGURATION(false),
+    /** Inspection was attempted after the inspector was closed. */
+    INSPECTOR_CLOSED(false),
     /** The request contained content outside the supported inspection scope. */
     UNSUPPORTED_CONTENT(false);
 

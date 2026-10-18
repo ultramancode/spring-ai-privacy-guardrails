@@ -1,16 +1,19 @@
 ---
 description: >-
-  Inspect model input and output with rules or an HTTP guard model.
+  Inspect model input and output with rules, local ONNX text classification models or an HTTP guard model.
 ---
 
 # Content inspection
 
 **English** | [한국어](ko/inspection.md)
 
-Content inspection uses rules or a guard model to check the text sent to a model.
+Content inspection uses rules, local ONNX text classification models or an HTTP guard model
+to check the text sent to a model.
 An inspection policy decides whether the request can proceed based on the findings.
 Inspection runs before each model call, including calls made after a tool returns.
 You can also inspect responses before they reach your application.
+
+Use the same version, `0.4.0` or later, for all Privacy Guardrails modules when enabling content inspection.
 
 ## Set up input inspection
 
@@ -231,6 +234,120 @@ returns `UNKNOWN`. Supply a
 use `PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)` to map
 `true` to `PROCESSED` and `false` to `UNKNOWN`.
 
+## Local content inspection with ONNX
+
+Add `spring-ai-privacy-guardrails-inspection-onnx` to inspect content with an ONNX
+text classification model you provide. The model runs locally on the CPU through
+ONNX Runtime. The selected model determines what can be detected.
+
+Prepare `model.onnx` and its matching `tokenizer.json` and `tokenizer_config.json`
+in `models/guard`, relative to the application's working directory. If the model's
+weights are stored in separate files, provision those files as well.
+
+The example assumes a model that outputs raw scores (logits) for two classes,
+`SAFE` at index 0 and `INJECTION` at index 1. It uses `SOFTMAX` to convert logits
+to scores. Adjust the classification settings to match your model and choose a
+threshold for your application.
+
+```java
+@Bean(destroyMethod = "close")
+OnnxContentInspector localGuard() {
+    Path directory = Path.of("models/guard");
+    OnnxClassificationConfig onnxClassificationConfig = OnnxClassificationConfig.builder()
+        .tokenizer(directory.resolve("tokenizer.json"))
+        .tokenizerConfig(directory.resolve("tokenizer_config.json"))
+        .windowSize(128)
+        .overlapSize(32)
+        .logitCount(2)
+        .activation(OnnxClassificationConfig.Activation.SOFTMAX)
+        .labels(List.of(new OnnxClassificationConfig.Label(1,
+            InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.5)))
+        .build();
+    return new OnnxContentInspector("local-guard",
+        OnnxInspectionConfig.defaults(directory.resolve("model.onnx")),
+        onnxClassificationConfig);
+}
+```
+
+The inspector uses native resources for its tokenizer and ONNX session. Register
+it as a Spring bean with `destroyMethod = "close"`, or use try-with-resources when
+managing its lifetime directly.
+
+### Model requirements
+
+| Component | Supported form |
+| --- | --- |
+| Inputs | `input_ids`, optional `attention_mask` and `token_type_ids`, shaped `[1, windowSize]` |
+| Token type | INT64 or INT32, shared by all token inputs |
+| Output tensor | FLOAT logits shaped `[1, logitCount]` |
+
+Model-loading failures and incompatible model metadata raise `InspectionException`
+with `CONFIGURATION`. Unexpected output tensor shapes and nonfinite logits during inspection
+produce `MODEL_ERROR`.
+
+### Classification settings
+
+Use the model documentation and ONNX model file to set output names, indexes, types
+and scoring conventions. Choose finding mappings, thresholds and overlap for your
+application. Supply these values through `OnnxClassificationConfig`.
+
+| Setting | How to set it |
+| --- | --- |
+| `tokenizer`, `tokenizerConfig` | Supply local tokenizer files matching the model. |
+| `modelOutputName` | Use the name of the output tensor containing logits. Defaults to `logits`. |
+| `logitCount` | Use N from the output tensor shape `[1, N]`, including classes without a finding mapping. |
+| `activation` | Choose `SOFTMAX` or `SIGMOID` to match the model. See [Choosing `activation`](#choosing-activation). |
+| `Label.index` | Use the selected class's position in the model output, starting from zero. |
+| `tokenInputType` | Match the integer type of every token input in the ONNX model. Defaults to INT64. |
+| `windowSize` | Tokens per window, including special tokens and padding. Use the model's fixed input length or stay within its supported maximum. |
+| `overlapSize` | Choose the number of content tokens repeated between windows. It must be smaller than `windowSize` minus the number of special tokens. Defaults to zero. |
+| `Label.category`, `Label.code` | Map each detected condition to a category and finding code. |
+| `Label.threshold` | Set the minimum score after activation that emits a finding, including equality. |
+
+`labels` maps selected classes to findings. Classes without a mapping do not produce
+findings. Labels may share a class index with distinct codes and independent
+thresholds. Each qualifying mapping produces a finding.
+
+### Choosing `activation`
+
+`OnnxClassificationConfig.activation` specifies how the inspector converts logits to
+scores between zero and one. It compares the scores with `Label.threshold`.
+Select the value documented for your model:
+
+| `activation` | When to use it |
+| --- | --- |
+| `SOFTMAX` | A model that chooses one of mutually exclusive categories. Requires at least two logits. |
+| `SIGMOID` | A model that evaluates labels independently, or a binary classifier that returns one logit. |
+
+A single-logit binary classifier uses `logitCount=1`. Model outputs must be logits
+before activation.
+
+### Tokenizer files
+
+Use the model's Hugging Face `tokenizer.json` and `tokenizer_config.json` files
+to preserve its tokenization settings.
+
+Padding direction (`padding_side`) and truncation direction (`truncation_side`)
+specified in `tokenizer_config.json` take precedence over those in `tokenizer.json`.
+The padding token must be registered in the vocabulary or added-token list in `tokenizer.json`.
+
+### Execution limits
+
+Configure the model's internal CPU threads (`intraOpThreads`, default 2) and the
+window limit across the entire request (`maxWindows`, default 256) in
+`OnnxInspectionConfig`. Set the shared inspection deadline in `InspectionLimits`,
+which defaults to 10 seconds.
+
+Long text is split into token windows. A segment is complete only after all
+its windows have been inspected. Findings retain each label's highest qualifying
+score per segment.
+
+Each inspector instance handles one request at a time. Waiting, tokenization and
+inference all count toward the deadline. Active tokenization and inference run to
+completion, so calls can return after the deadline. Results already produced remain
+valid. If windows or segments remain after the deadline, inspection returns `TIMEOUT`,
+retaining completed segment IDs and partial findings.
+
 ## Results, policies and failures
 
 With the Spring Boot starter, inspectors run in Spring bean order (`@Order`).
@@ -241,16 +358,29 @@ Configure detection thresholds in each inspector, as scores from different model
 are not directly comparable.
 
 Before running any inspector, the service checks whether the input meets the
-inspectors' privacy processing requirements. If an inspector requires `PROCESSED`
-content and any segment is `UNKNOWN` or `UNPROCESSED`, the service stops the request.
+inspectors' privacy processing requirements. Local ONNX and rule inspectors do not
+require prior privacy processing. If an inspector requires `PROCESSED` content and
+any segment is `UNKNOWN` or `UNPROCESSED`, the service stops the request.
 It throws `InspectionException` with the failure code `PRIVACY_PROCESSING_REQUIRED`,
 even when `FAIL_OPEN` is configured. No inspector runs. The attached report identifies
 the first inspector whose requirement could not be met and records the failure code.
 
 An `InspectionReport` contains each inspector's result. Findings identify the text
-segment, category and code without including the inspected text. Categories are
-`PROMPT_ATTACK`, `PROMPT_INJECTION`, `PROMPT_LEAKING` and `POLICY_VIOLATION`.
+segment, category and code without including the inspected text.
+
+| Category | Meaning |
+| --- | --- |
+| `PROMPT_ATTACK` | A prompt attack whose specific type was not determined |
+| `PROMPT_INJECTION` | An attempt to override the model's intended instructions |
+| `PROMPT_LEAKING` | An attempt to extract hidden prompts or instructions |
+| `TOXICITY` | Toxic language, such as insults, profanity or threats |
+| `POLICY_VIOLATION` | An application-defined content violation not covered by the other categories |
+
+Use `code` for a specific finding within a category, such as `INSULT` under `TOXICITY`.
 Keep custom IDs and codes free of user content.
+
+`InspectionFinding.score` is optional and ranges from zero to one when present.
+ONNX inspectors provide scores. Rule, Kanana and JSON-verdict findings use `null`.
 
 The default failure policy, `FAIL_CLOSED`, blocks the request if an inspector fails.
 Set `spring.ai.inspection.failure-policy=FAIL_OPEN` to continue after the failures
@@ -281,7 +411,7 @@ InspectionService service = new InspectionService(
 | Failure code | Behavior |
 | --- | --- |
 | `TIMEOUT`, `TRANSPORT_ERROR`, `HTTP_ERROR`, `MODEL_ERROR`, `INVALID_RESPONSE`, `INCOMPLETE` | `FAIL_CLOSED` blocks the request. `FAIL_OPEN` allows inspection to continue if the content policy allows the findings collected so far |
-| `CANCELLED`, `LIMIT_EXCEEDED`, `PRIVACY_PROCESSING_REQUIRED`, `CONFIGURATION`, `UNSUPPORTED_CONTENT`, `INVALID_RESULT` | Throws `InspectionException` regardless of the failure policy |
+| `CANCELLED`, `LIMIT_EXCEEDED`, `PRIVACY_PROCESSING_REQUIRED`, `CONFIGURATION`, `INSPECTOR_CLOSED`, `UNSUPPORTED_CONTENT`, `INVALID_RESULT` | Throws `InspectionException` regardless of the failure policy |
 
 All inspectors in a request share one timeout. Time spent evaluating the content
 policy also counts toward it. Before starting each inspector, the service checks the
@@ -390,12 +520,13 @@ the full implementation requirements.
 | --- | --- |
 | `inspection-core` | Content inspection, policies and results without a Spring dependency |
 | `inspection-rules` | Literal and RE2/J rule matching |
+| `inspection-onnx` | Local content inspection with ONNX |
 | `inspection-openai-compatible` | Calls guard models through OpenAI-compatible HTTP APIs |
 | `inspection-spring-ai` | Client-scoped input and output inspection |
 | `inspection-spring-boot-starter` | Spring Boot configuration for inspecting selected clients |
 
 ## Verification
 
-`./gradlew check` runs rule tests, local HTTP fixtures, and Spring AI
-integration tests. These verify execution and enforcement, not model detection quality.
+`./gradlew check` runs rule tests, ONNX model and tokenizer tests, local HTTP tests,
+and Spring AI integration tests. These verify execution and enforcement, not model detection quality.
 See [Evaluation](evaluation.md) for repository verification guidance.

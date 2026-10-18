@@ -78,8 +78,9 @@ public final class InspectionService {
      * @param request content and execution limits
      * @return final decision and inspector outcomes in configured order
      * @throws InspectionException on cancellation, exceeded limits, unmet privacy-processing
-     *         requirements, configuration errors, unsupported content, invalid inspector results
-     *         or content policy errors. The exception includes the results collected so far
+     *         requirements, configuration errors, closed inspectors, unsupported content,
+     *         invalid inspector results or content policy errors. The exception includes
+     *         the results collected so far
      */
     public InspectionReport inspect(InspectionRequest request) {
         Objects.requireNonNull(request, "request");

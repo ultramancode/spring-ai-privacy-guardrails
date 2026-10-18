@@ -1,0 +1,15 @@
+description = 'Local content inspection with ONNX text classification models.'
+
+dependencies {
+    api project(':spring-ai-privacy-guardrails-inspection-core')
+    implementation "ai.djl:api:${providers.gradleProperty('djlVersion').get()}"
+    implementation "ai.djl.huggingface:tokenizers:${providers.gradleProperty('djlVersion').get()}"
+    implementation "com.microsoft.onnxruntime:onnxruntime:${providers.gradleProperty('onnxRuntimeVersion').get()}"
+    testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
+}
+
+tasks.withType(Test).configureEach {
+    dependsOn rootProject.tasks.named('prepareOnnxTestModel')
+    inputs.dir(rootProject.inspectionTestModelDirectory)
+    systemProperty 'inspection.test.model', rootProject.inspectionTestModelDirectory.absolutePath
+}

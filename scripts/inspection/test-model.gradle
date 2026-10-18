@@ -1,0 +1,56 @@
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.DigestInputStream
+import java.security.MessageDigest
+
+def manifestFile = file('scripts/inspection/test-model.properties')
+def manifest = new Properties()
+manifestFile.withInputStream { manifest.load(it) }
+def modelDirectory = file(".gradle/inspection-models/${manifest.revision}")
+ext.inspectionTestModelDirectory = modelDirectory
+def offline = gradle.startParameter.offline
+
+tasks.register('prepareOnnxTestModel') {
+    group = 'verification'
+    description = 'Downloads and verifies the pinned public ONNX test model.'
+    inputs.file(manifestFile)
+    outputs.dir(modelDirectory)
+    outputs.upToDateWhen { false }
+    doLast {
+        def sha256 = { File artifact ->
+            def digest = MessageDigest.getInstance('SHA-256')
+            artifact.withInputStream { input ->
+                new DigestInputStream(input, digest).transferTo(OutputStream.nullOutputStream())
+            }
+            HexFormat.of().formatHex(digest.digest())
+        }
+        modelDirectory.mkdirs()
+        manifest.stringPropertyNames().findAll { it.endsWith('.path') }.sort().each { key ->
+            def name = key.substring(0, key.length() - '.path'.length())
+            def target = new File(modelDirectory, name)
+            def expected = manifest.getProperty(name + '.sha256')
+            if (target.isFile() && sha256(target) == expected) {
+                return
+            }
+            if (offline) {
+                throw new GradleException("Missing or invalid ONNX test artifact ${name}. Run prepareOnnxTestModel online first.")
+            }
+            def temporary = Files.createTempFile(modelDirectory.toPath(), name, '.part')
+            try {
+                def url = new URI("https://huggingface.co/${manifest.repository}/resolve/${manifest.revision}/${manifest.getProperty(key)}")
+                def connection = url.toURL().openConnection()
+                connection.connectTimeout = 15000
+                connection.readTimeout = 120000
+                connection.inputStream.withCloseable { input ->
+                    Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING)
+                }
+                if (sha256(temporary.toFile()) != expected) {
+                    throw new GradleException("SHA-256 mismatch for ONNX test artifact ${name}")
+                }
+                Files.move(temporary, target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } finally {
+                Files.deleteIfExists(temporary)
+            }
+        }
+    }
+}

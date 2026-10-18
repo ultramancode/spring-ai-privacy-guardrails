@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 2609f5de3cc992a29898e9463e52aa05399c3c8aeb57d6a3f9bf3e35f5359a02 -->
+<!-- i18n-source-sha256: 6b110eaa74c0ea54cf44c39856818c691f3e9cd30e30f4233f23bf0138946509 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -44,7 +44,7 @@ Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보�
 기능 없이도 사용할 수 있습니다.
 
 선택적 [콘텐츠 검사](docs/ko/inspection.md)는 애플리케이션에서 정의한
-규칙이나 HTTP 검사 모델로 모델 입력과 출력을 검사합니다.
+규칙, 로컬 ONNX 분류 모델이나 HTTP 검사 모델로 모델 입력과 출력을 검사합니다.
 개인정보 보호 및 도구 권한 검사와 함께 사용하거나 독립적으로 사용할 수 있습니다.
 
 ## 왜 필요한가
@@ -141,7 +141,7 @@ Presidio와 OpenNLP 스타터에는 기본 Privacy Guardrails 스타터가 이�
 별도로 추가하지 마세요. 도구 권한 검사만 사용하려면 Spring Security 스타터만 추가하고,
 개인정보 보호도 필요하면 개인정보 보호 스타터를 함께 추가하세요.
 
-콘텐츠 검사는 검사기 구현도 선택해야 합니다.
+콘텐츠 검사는 `0.4.0` 이상에서 사용할 수 있으며, 검사기 구현도 선택해야 합니다.
 [검사 설정 안내](docs/ko/inspection.md#입력-검사-설정)에서 설정 방법을 확인하세요.
 
 스타터 의존성을 추가하는 것만으로는 보호 기능이 적용되지 않습니다. 아래 예제와 각
@@ -294,8 +294,8 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 
 ## 라이브러리 모듈
 
-규칙이나 HTTP 검사 모델로 모델 입력과 응답을 검사하고 개인정보 보호와 함께 사용하는
-방법은 [콘텐츠 검사](docs/ko/inspection.md)를 참고하세요.
+규칙, 로컬 ONNX 텍스트 분류 모델, HTTP 검사 모델로 모델 입력과 응답을 검사하고
+개인정보 보호와 함께 사용하는 방법은 [콘텐츠 검사](docs/ko/inspection.md)를 참고하세요.
 
 분석기별 스타터는 해당 런타임 모듈을 전이 의존성으로 가져옵니다. 테스트 지원은
 애플리케이션의 테스트 범위에 별도로 추가합니다.
@@ -311,6 +311,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | 도구 권한 검사를 위한 Spring Boot 설정 |
 | `spring-ai-privacy-guardrails-inspection-core` | 콘텐츠 검사, 허용·차단 정책과 검사 결과 |
 | `spring-ai-privacy-guardrails-inspection-rules` | 문자열 및 RE2/J 규칙 검사 |
+| `spring-ai-privacy-guardrails-inspection-onnx` | ONNX 기반 로컬 콘텐츠 검사 |
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | OpenAI 호환 HTTP API를 통한 검사 모델 호출 |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | 모델 입력 검사와 선택적 출력 검사 |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | 선택한 클라이언트의 콘텐츠 검사를 위한 Spring Boot 설정 |
@@ -343,7 +344,7 @@ Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자�
 - [설정과 사용법](docs/ko/configuration.md): 스타터, 분석기, 도구와 출력 정책
 - [Spring Security 도구 권한](docs/ko/security.md): 도구 권한 정책, 고급 도구
   구성, Tool Search와 보안 컨텍스트 전달
-- [콘텐츠 검사](docs/ko/inspection.md): 선택적 규칙, HTTP 검사 모델
+- [콘텐츠 검사](docs/ko/inspection.md): 선택적 규칙, 로컬 ONNX 분류 모델과 HTTP 검사 모델
 - [아키텍처](docs/ko/architecture.md): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](docs/ko/threat-model.md): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역
 - [평가와 벤치마크](docs/ko/evaluation.md): 검증 항목과 해석 범위

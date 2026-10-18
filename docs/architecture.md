@@ -308,10 +308,11 @@ policies, custom tool execution, and authentication in asynchronous calls.
 
 ## Optional Content Inspection
 
-[Content inspection](inspection.md) evaluates request text with rules or a guard model
-before each model call, including tool-loop continuations. When combined with privacy
-protection and tool authorization, it runs after privacy processing and tool-definition
-authorization. If the policy blocks the request, the model is not called.
+[Content inspection](inspection.md) evaluates request text with rules, local ONNX
+text classification models or an HTTP guard model before each model call, including
+tool-loop continuations. When combined with privacy protection and tool
+authorization, it runs after privacy processing and tool-definition authorization.
+If the policy blocks the request, the model is not called.
 
 Output inspection is disabled by default. When enabled, it allows or blocks
 model responses and `returnDirect` tool results before delivery to the application.

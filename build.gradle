@@ -3,6 +3,8 @@ plugins {
     id 'privacy.release'
 }
 
+apply from: 'scripts/inspection/test-model.gradle'
+
 privacyBuild {
     module('spring-ai-privacy-guardrails-spring-ai-boundary') { module ->
         module.publication('io.github.ultramancode.springai.privacy.boundary', 'Spring AI Privacy Guardrails Model Request Boundary')
@@ -14,7 +16,7 @@ privacyBuild {
         module.denyAllExternalMainDependencies()
         module.springIndependentPublication()
     }
-    ['rules', 'openai-compatible'].each { backend ->
+    ['rules', 'openai-compatible', 'onnx'].each { backend ->
         module("spring-ai-privacy-guardrails-inspection-${backend}") { module ->
             module.publication("io.github.ultramancode.springai.privacy.inspection.${backend.replace('-', '')}", "Spring AI Privacy Guardrails Inspection ${backend}")
             module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-core'

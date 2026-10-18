@@ -34,12 +34,12 @@ and original PII disclosure separately:
 
 - `AuthorizationManager<ToolAuthorizationContext>` decides whether the current
   principal may discover or execute a tool.
-- `tools.disclosures` decides which PII entity types an authorized tool may
+- `ToolDisclosurePolicy` decides which PII entity types an authorized tool may
   receive as original values.
 
 Authorizing a tool does not automatically disclose original PII. An original
 value is provided only when the authorization policy allows execution and its
-entity type is configured under `tools.disclosures`.
+entity type is configured under `ToolDisclosurePolicy`.
 
 ## Add the Spring Boot Starter
 
@@ -69,12 +69,12 @@ that uses tools begins.
 ### Tool Authorization Only
 
 Add the [client starter](clients.md) and an `AuthorizationManager<ToolAuthorizationContext>`
-bean, then select `spring.ai.guardrails.tool-authorization=true`. No privacy analyzer is required.
+bean, then select `toolAuthorization(true)` in `GuardrailsPolicy`. No privacy analyzer is required.
 
 ### With Privacy Protection
 
 Configure an analyzer as described in [Getting Started](getting-started.md) and select
-`spring.ai.guardrails.privacy=true` too. Keep using the same factory.
+`privacy()` in the same policy.
 
 ## Define the Authorization Policy
 
@@ -145,25 +145,25 @@ the unified factory. `customerLookupToolCallback` is an application-provided too
 @Bean
 ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails,
         ToolCallback customerLookupToolCallback) {
-    return guardrails.builder(chatModel)
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    return guardrails.builder(chatModel, policy)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
 ```
 
 When privacy is also selected, the factory protects tools automatically.
-Configure allowed original-value disclosure using the existing settings:
+Select the permitted original-value disclosure in the client policy:
 
-```yaml
-spring:
-  ai:
-    guardrails:
-      privacy: true
-      tool-authorization: true
-    privacy:
-      tools:
-        disclosures:
-          customerLookup: [CUSTOMER_ID]
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .toolAuthorization(true)
+        .build();
+ChatClient client = guardrails.builder(chatModel, policy)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
 
 ## Tool Advisor Configuration

@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 25fd6ddeb3f21301afd01169cf61b36808ff4d19d10b04f975f67e44b82c0251 -->
+<!-- i18n-source-sha256: 24962320ce7fbcbf305848d196aae1b10b1823448ab32225815c89a67b76a116 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -83,8 +83,6 @@ Regex를 활성화하고 애플리케이션 전용 식별자 규칙을 정의합
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
       regex:
         enabled: true
@@ -117,7 +115,8 @@ Factory로 보호된 클라이언트를 생성합니다. 기능 조합과 Java �
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
@@ -158,19 +157,16 @@ Employee [PII_EMPLOYEE_ID_1:<opaque>] requested customer
 
 도구에 개인정보 보호를 적용하면, 탐지된 값은 기본적으로 불투명 토큰으로 전달됩니다.
 고객 조회에 고객번호가 필요한 경우처럼 도구가 원문을 받아야 한다면,
-`tools.disclosures`에 도구 이름과 공개할 개인정보 유형을 지정하세요.
+`ToolDisclosurePolicy`에 도구 이름과 공개할 개인정보 유형을 지정하세요.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .build();
 ```
 
-로컬 도구와 MCP 도구 모두 `tools.disclosures`에 설정한 도구 이름은 대소문자를
+로컬 도구와 MCP 도구 모두 `ToolDisclosurePolicy`에 설정한 도구 이름은 대소문자를
 구분하며 실제 `ToolDefinition.name()`과 정확히 일치해야 합니다. 위 설정을 적용하면
 `customerLookup`에 고객번호(`CUSTOMER_ID`)만 원문으로 전달하고, 그 외에
 탐지된 개인정보는 불투명 토큰으로 전달합니다.
@@ -180,7 +176,7 @@ spring:
 기존 콜백이나 도구 어노테이션을 가진 객체를 그대로 등록합니다.
 
 ```java
-ChatClient toolClient = guardrails.builder(chatModel)
+ChatClient toolClient = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -193,12 +189,12 @@ ChatClient toolClient = guardrails.builder(chatModel)
 제공자 자체를 등록하면 Spring AI가 요청마다 최신 도구 목록을 가져옵니다.
 
 ```java
-ChatClient mcpClient = guardrails.builder(chatModel)
+ChatClient mcpClient = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(mcpToolCallbackProvider)
         .build();
 ```
 
-MCP 도구 제공자가 이름에 접두사를 추가하는 경우에는 `tools.disclosures`에
+MCP 도구 제공자가 이름에 접두사를 추가하는 경우에는 `ToolDisclosurePolicy`에
 접두사가 포함된 최종 도구 이름을 설정하세요.
 
 `ToolCallingManager`나 `ToolCallbackResolver`를 직접 구성한 별도 도구 호출
@@ -215,8 +211,8 @@ MCP 도구 제공자가 이름에 접두사를 추가하는 경우에는 `tools.
 Spring Security 스타터를 추가하고, 도구 권한 정책을
 `AuthorizationManager<ToolAuthorizationContext>` Bean으로 등록합니다.
 
-`spring.ai.guardrails.tool-authorization=true`로 선택하고 동일하게
-`guardrails.builder(chatModel)`로 클라이언트를 생성합니다. 개인정보 보호는 별도로 선택합니다.
+`GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택하고
+`guardrails.builder(chatModel, policy)`로 클라이언트를 생성합니다. 개인정보 보호는 별도로 선택합니다.
 권한 검사와 도구별 원문 공개 정책은 각각 유지됩니다.
 자세한 설정은 [도구 권한](security.md)을 참고하세요.
 
@@ -250,8 +246,6 @@ Presidio를 활성화하고 `analyzer-url`을 지정합니다.
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
       analysis:
         language: en
@@ -303,8 +297,6 @@ dependencies {
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
       analysis:
         language: en

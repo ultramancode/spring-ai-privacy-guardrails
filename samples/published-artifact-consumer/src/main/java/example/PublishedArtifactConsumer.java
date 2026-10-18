@@ -1,6 +1,7 @@
 package example;
 
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
@@ -10,6 +11,7 @@ import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBounda
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
 import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -40,6 +42,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,6 +51,16 @@ import java.util.regex.Matcher;
 @SpringBootConfiguration
 @EnableAutoConfiguration
 public class PublishedArtifactConsumer {
+
+    @Bean
+    GuardrailsPolicy guardrailsPolicy() {
+        ToolDisclosurePolicy disclosure = ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")));
+        return GuardrailsPolicy.builder()
+                .privacy(privacy -> privacy.toolDisclosurePolicy(disclosure).outputProtection(true))
+                .toolAuthorization(true)
+                .build();
+    }
 
     @Bean
     PublishedAuthorizationChecks publishedAuthorizationChecks() {
@@ -71,8 +84,6 @@ public class PublishedArtifactConsumer {
                 .web(WebApplicationType.NONE)
                 .properties(
                         "spring.main.banner-mode=off",
-                        "spring.ai.guardrails.privacy=true",
-                        "spring.ai.guardrails.tool-authorization=true",
                         "logging.level.root=ERROR",
                         "spring.ai.privacy.regex.enabled=true",
                         "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
@@ -81,9 +92,7 @@ public class PublishedArtifactConsumer {
                         "spring.ai.privacy.regex.rules[0].score=0.95",
                         "spring.ai.privacy.regex.rules[1].entity-type=CUSTOMER_ID",
                         "spring.ai.privacy.regex.rules[1].pattern=\\bCUST-\\d{4}\\b",
-                        "spring.ai.privacy.regex.rules[1].score=0.99",
-                        "spring.ai.privacy.tools.disclosures[customerLookup][0]=CUSTOMER_ID",
-                        "spring.ai.privacy.output.enabled=true"
+                        "spring.ai.privacy.regex.rules[1].score=0.99"
                 )
                 .run(args)) {
             verifyRuntime(context);

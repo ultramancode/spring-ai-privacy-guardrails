@@ -32,61 +32,10 @@ Presidio or an inspection backend.
 Providing a component alone does not enable its feature. A selected feature with
 missing components causes an error when creating the client builder.
 
-## Default policy in Spring Boot
+## Policy per client
 
-Select features explicitly. All three selections default to `false`:
-
-```yaml
-spring:
-  ai:
-    guardrails:
-      privacy: true
-      inspection: true
-      tool-authorization: true
-    privacy:
-      tools:
-        disclosures:
-          customerLookup: [CUSTOMER_ID]
-      output:
-        enabled: true
-        action: REDACT
-    inspection:
-      output:
-        enabled: true
-```
-
-This example requires all three components listed above. Privacy protects model
-requests and tools. It discloses the original customer ID only to `customerLookup`
-and redacts detected PII from final output. Inspection checks every model request
-and the final output. Tool authorization uses the application's current authentication
-and authorization policy.
-
-```java
-@Bean
-ChatClient supportClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails,
-        ToolCallback customerLookup, ToolCallbackProvider mcpTools) {
-    return guardrails.builder(chatModel)
-            .defaultTools(customerLookup, mcpTools)
-            .build();
-}
-```
-
-Register raw callbacks, objects with annotated tools, or providers. Do not wrap them
-with `PrivacyToolCallbackFactory` before passing them to this factory. Providers are
-resolved for each request, so later MCP tool-list changes are included. Tools passed
-to `client.prompt().tools(...)` receive the same protection. Unlisted tool/entity
-combinations keep opaque tokens instead of receiving original PII.
-
-Tool execution permission and original-value disclosure are separate decisions.
-Enabling tool authorization does not supply a business authorization rule.
-
-Without the `output` settings above, privacy protects model requests and tools,
-and inspection checks model requests only. Final output protection and inspection
-are separate opt-in settings.
-
-## Explicit policy per client
-
-Use a Java policy when clients need different protection:
+Select features, output handling and tool disclosure in `GuardrailsPolicy`.
+Keep shared service settings, such as analyzers, model paths and server connections, in YAML.
 
 ```java
 GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
@@ -103,18 +52,72 @@ ChatClient client = guardrails.builder(chatModel, supportPolicy)
         .build();
 ```
 
-`builder(chatModel)` uses the default policy. `builder(chatModel, policy)` uses
-only the supplied policy, including its disclosure and output settings. It does
-not merge the Boot default. Engine settings, such as detector models and inspection
-server connections, remain in the corresponding services.
+This example requires all three components listed above. Privacy protects model
+requests and tools. It discloses the original customer ID only to `customerLookup`
+and redacts detected PII from final output. Inspection checks every model request
+and the final output. Tool authorization uses the application's current authentication
+and authorization policy.
 
-A `GuardrailsPolicy` bean can replace the property-based default. If there is no
-unique default, use an explicit policy. A policy must select at least one feature.
-Different clients share services without changing each other's policies or sessions.
-`builder.clone()` and `client.mutate()` preserve the configured protection.
+Register raw callbacks, objects with annotated tools, or providers. Do not wrap them
+with `PrivacyToolCallbackFactory` before passing them to this factory. Providers are
+resolved for each request, so later MCP tool-list changes are included. Tools passed
+to `client.prompt().tools(...)` receive the same protection. Unlisted tool/entity
+combinations keep opaque tokens instead of receiving original PII.
 
+Tool execution permission and original-value disclosure are separate decisions.
+Enabling tool authorization does not supply a business authorization rule.
+
+Selecting `privacy()` protects model requests and tools. Selecting `inspection()`
+checks model requests. Final output protection and inspection are separate opt-in settings.
 For output-only inspection, select
 `.inspection(inspection -> inspection.modelRequests(false).applicationOutput(true))`.
+
+## Reuse policies
+
+Create policies and clients once and reuse them across requests. Policies do not each
+need a Spring bean. `mutate()` returns a builder with the existing settings. It changes
+only the settings you specify and leaves the original policy unchanged.
+
+```java
+GuardrailsPolicy inputPolicy = supportPolicy.mutate()
+        .privacy(privacy -> privacy.outputProtection(false))
+        .inspection(inspection -> inspection.applicationOutput(false))
+        .build();
+
+GuardrailsPolicy privacyOnly = supportPolicy.mutate()
+        .inspection(false)
+        .toolAuthorization(false)
+        .build();
+
+ChatClient inputClient = guardrails.builder(chatModel, inputPolicy).build();
+ChatClient privacyClient = guardrails.builder(chatModel, privacyOnly).build();
+```
+
+`privacy(false)` and `inspection(false)` remove the entire feature.
+A policy must select at least one feature. Different clients share services without
+changing each other's policies or sessions.
+
+`builder.clone()` and `client.mutate()` preserve the configured protection.
+To change protection, derive a policy and create a new client through the factory.
+
+## Default policy in Spring Boot
+
+Register a `GuardrailsPolicy` bean if clients should share a default:
+
+```java
+@Bean
+GuardrailsPolicy defaultGuardrailsPolicy() {
+    return GuardrailsPolicy.builder().privacy().build();
+}
+
+@Bean
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
+}
+```
+
+`builder(chatModel)` uses the default policy. If there is no unique default, supply
+an explicit policy. `builder(chatModel, policy)` uses only the supplied policy.
 
 ## Custom tool advisors and non-Boot applications
 
@@ -156,9 +159,9 @@ Content inspection does not inspect newly generated tool arguments immediately
 before execution.
 
 Privacy output protection and output inspection buffer streaming responses until
-completion. This delays delivery. Configure privacy `response-inspection` limits
-and inspection `output.max-frames` / `output.stream-timeout` together with the
-[inspection limits](inspection.md#scope-and-limits). Collection errors, timeouts
+completion. This delays delivery. Set `privacy.responseLimits(...)` and
+`inspection.maxOutputFrames(...)` / `outputStreamTimeout(...)` in the policy together
+with the [inspection limits](inspection.md#scope-and-limits). Collection errors, timeouts
 and cancellation release no buffered output. Blocking final output cannot undo
 side effects of tools that have already run.
 

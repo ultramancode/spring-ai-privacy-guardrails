@@ -25,11 +25,8 @@ final class PrivacyConfigurationPropertyDiagnostics {
 
     static final List<String> ROOT_PROPERTIES = List.of(
             "processing",
-            "output",
-            "response-inspection",
             "analysis",
-            "regex",
-            "tools"
+            "regex"
     );
     static final List<String> PROCESSING_PROPERTIES = List.of(
             "max-text-characters",
@@ -39,17 +36,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "max-depth",
             "max-analysis-segments",
             "max-result-spans"
-    );
-    static final List<String> OUTPUT_PROPERTIES = List.of(
-            "enabled",
-            "action",
-            "block-exception-message"
-    );
-    static final List<String> RESPONSE_INSPECTION_PROPERTIES = List.of(
-            "max-stream-frames",
-            "max-characters",
-            "max-media-bytes",
-            "stream-idle-timeout"
     );
     static final List<String> ANALYSIS_PROPERTIES = List.of(
             "language",
@@ -80,9 +66,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "capture-group",
             "validator-id"
     );
-    static final List<String> TOOLS_PROPERTIES = List.of("disclosures");
-    static final Set<String> TOOLS_MAP_PROPERTIES = Set.of("disclosures");
-
     PrivacyConfigurationPropertyDiagnostics(Environment environment) {
         findDiagnostics(environment).forEach(PrivacyConfigurationPropertyDiagnostics::warn);
     }
@@ -128,20 +111,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     PROCESSING_PROPERTIES,
                     context
             );
-            case "output" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    OUTPUT_PROPERTIES,
-                    context
-            );
-            case "response-inspection" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    RESPONSE_INSPECTION_PROPERTIES,
-                    context
-            );
             case "analysis" -> diagnoseFixedPropertyPath(
                     name,
                     propertyIndex,
@@ -155,15 +124,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     name,
                     propertyIndex,
                     propertyRoot,
-                    context
-            );
-            case "tools" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    TOOLS_PROPERTIES,
-                    TOOLS_MAP_PROPERTIES,
-                    Set.of(),
                     context
             );
             default -> Optional.empty();

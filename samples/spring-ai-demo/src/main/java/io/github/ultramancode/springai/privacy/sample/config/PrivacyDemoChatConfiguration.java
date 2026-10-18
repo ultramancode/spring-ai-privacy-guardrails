@@ -1,6 +1,7 @@
 package io.github.ultramancode.springai.privacy.sample.config;
 
 import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoMcpToolLoop;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoRag;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoSecurityPolicy;
@@ -22,11 +23,25 @@ import org.springframework.security.authorization.AuthorizationManager;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Configuration(proxyBeanMethods = false)
 class PrivacyDemoChatConfiguration {
+
+    @Bean
+    ToolDisclosurePolicy toolDisclosurePolicy() {
+        return ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")));
+    }
+
+    @Bean
+    GuardrailsPolicy guardrailsPolicy(ToolDisclosurePolicy disclosurePolicy) {
+        return GuardrailsPolicy.builder()
+                .privacy(privacy -> privacy.toolDisclosurePolicy(disclosurePolicy).outputProtection(true))
+                .toolAuthorization(true)
+                .build();
+    }
 
     @Bean("privacyDemoChatModel")
     ChatModel privacyDemoChatModel() {

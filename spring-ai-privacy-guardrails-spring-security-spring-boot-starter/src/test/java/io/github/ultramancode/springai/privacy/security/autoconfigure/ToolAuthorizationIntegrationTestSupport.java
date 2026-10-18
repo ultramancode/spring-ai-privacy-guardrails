@@ -3,6 +3,12 @@ package io.github.ultramancode.springai.privacy.security.autoconfigure;
 import com.sun.net.httpserver.HttpServer;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
+import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
+import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
+import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.ai.chat.client.ChatClient;
@@ -33,6 +39,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -64,13 +71,21 @@ abstract class ToolAuthorizationIntegrationTestSupport {
     }
 
     protected ApplicationContextRunner privacyContextRunner() {
+        return privacyContextRunner(false, PrivacyResponseInspectionLimits.defaults());
+    }
+
+    protected ApplicationContextRunner privacyContextRunner(
+            boolean outputEnabled, PrivacyResponseInspectionLimits limits) {
         return contextRunner().withConfiguration(AutoConfigurations.of(
                         PrivacyGuardrailsAutoConfiguration.class, PrivacySecurityAutoConfiguration.class))
+                .withUserConfiguration(PrivacyClientConfiguration.class)
+                .withBean(PrivacyClientSettings.class, () -> new PrivacyClientSettings(outputEnabled, limits))
+                .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.byToolName(
+                        Map.of("customerLookup", List.of("EMPLOYEE_ID"))))
                 .withPropertyValues("spring.ai.privacy.regex.enabled=true",
                         "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
                         "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
-                        "spring.ai.privacy.regex.rules[0].score=0.9",
-                        "spring.ai.privacy.tools.disclosures.customerLookup[0]=EMPLOYEE_ID");
+                        "spring.ai.privacy.regex.rules[0].score=0.9");
     }
 
     protected void startModelServer(String... responses) throws IOException {
@@ -208,6 +223,23 @@ abstract class ToolAuthorizationIntegrationTestSupport {
         @Override
         public int getOrder() {
             return 0;
+        }
+    }
+
+    private record PrivacyClientSettings(boolean outputEnabled, PrivacyResponseInspectionLimits limits) {}
+
+    @Configuration(proxyBeanMethods = false)
+    static class PrivacyClientConfiguration {
+        @Bean
+        PrivacyChatClientConfigurer privacyChatClientConfigurer(
+                PrivacyService service, PrivacyToolCallbackFactory toolFactory, PrivacyClientSettings settings) {
+            PrivacyChatClientConfigurer.Builder builder = PrivacyChatClientConfigurer.builder(service)
+                    .toolCallbackFactory(toolFactory).responseInspectionLimits(settings.limits());
+            if (settings.outputEnabled()) {
+                builder.outputProtection(PrivacyOutputAdvisor.DEFAULT_ACTION,
+                        PrivacyOutputAdvisor.DEFAULT_BLOCK_EXCEPTION_MESSAGE);
+            }
+            return builder.build();
         }
     }
 

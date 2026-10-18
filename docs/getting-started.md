@@ -21,8 +21,7 @@ Use OpenNLP when you want to run your own NER models inside the JVM, or a
 custom `PiiAnalyzer` when you need detection tailored to your application.
 
 The application provides a `ChatModel`. The client starter supplies
-`GuardrailsChatClientFactory`. See [Client policies](clients.md) to combine features
-or define a policy in Java.
+`GuardrailsChatClientFactory`. See [Client policies](clients.md) to select and reuse client protection policies.
 
 To check protection with a local model and fixed examples, without an external model API key, see
 the [Sample / Demo Guide](sample.md).
@@ -80,8 +79,6 @@ Enable Regex and define application-specific identifiers:
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
       regex:
         enabled: true
@@ -114,7 +111,8 @@ Create the protected client through the factory:
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
@@ -156,19 +154,16 @@ To inspect the input sent to the model, run the fixed examples in the
 
 Once privacy protection is applied to a tool, detected PII is passed as opaque tokens
 by default. If a tool needs an original value, such as a customer ID for a
-lookup, specify the tool name and permitted PII types in `tools.disclosures`.
+lookup, specify the tool name and permitted PII types in `ToolDisclosurePolicy`.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .build();
 ```
 
-For both local and MCP tools, the name configured in `tools.disclosures` is
+For both local and MCP tools, the name configured in `ToolDisclosurePolicy` is
 case-sensitive and must exactly match the actual `ToolDefinition.name()`. With
 this policy, `customerLookup` receives only customer IDs (`CUSTOMER_ID`) as
 original values. Other detected PII is passed as opaque tokens.
@@ -178,7 +173,7 @@ original values. Other detected PII is passed as opaque tokens.
 Register existing callbacks or objects with annotated tools directly:
 
 ```java
-ChatClient toolClient = guardrails.builder(chatModel)
+ChatClient toolClient = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -191,12 +186,12 @@ or application. Request-specific tools passed to `.tools(...)` follow the same p
 Register the provider itself so Spring AI resolves its current tools for every request:
 
 ```java
-ChatClient mcpClient = guardrails.builder(chatModel)
+ChatClient mcpClient = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(mcpToolCallbackProvider)
         .build();
 ```
 
-If an MCP provider adds a tool-name prefix, configure `tools.disclosures` with
+If an MCP provider adds a tool-name prefix, configure `ToolDisclosurePolicy` with
 the final prefixed tool name.
 
 Privacy protection is not applied automatically to separate tool-calling paths
@@ -212,8 +207,8 @@ tool-result re-protection, see the
 To limit which tools the model can discover and execute based on the current
 user's permissions, add the Spring Security starter and register a tool
 authorization policy as an `AuthorizationManager<ToolAuthorizationContext>`
-bean. Enable `spring.ai.guardrails.tool-authorization=true` and keep using
-`guardrails.builder(chatModel)`. Privacy is selected independently.
+bean. Select `toolAuthorization(true)` in `GuardrailsPolicy` and pass it to
+`guardrails.builder(chatModel, policy)`. Privacy is selected independently.
 When both
 features are used, permission is checked again immediately before tool
 execution, and only then are the original PII values allowed for that tool
@@ -253,8 +248,6 @@ Enable Presidio and configure its Analyzer endpoint:
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
       analysis:
         language: en
@@ -307,8 +300,6 @@ A minimal `PERSON` configuration can look like:
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
       analysis:
         language: en

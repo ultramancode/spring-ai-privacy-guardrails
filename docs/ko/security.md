@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: d1dfce3fd40c3c1d74bae166aba08d68679850be23e1553169f2648dfdae9128 -->
+<!-- i18n-source-sha256: f579b0d97603acca549bc856a39b50b5619a9d8ed7ba352c6e0d9b97ad85e97c -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -33,11 +33,11 @@ Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라
 
 - `AuthorizationManager<ToolAuthorizationContext>`는 현재 사용자의 권한에 따라 모델에
   보여 줄 도구와 실행을 허용할 도구를 결정합니다.
-- `tools.disclosures`는 권한이 허용된 도구에 어떤 유형의 개인정보를 원문으로 전달할지
+- `ToolDisclosurePolicy`는 권한이 허용된 도구에 어떤 유형의 개인정보를 원문으로 전달할지
   결정합니다.
 
 도구 실행 권한이 있어도 개인정보 원문이 자동으로 전달되지는 않습니다. 권한 정책이
-도구 실행을 허용하고 `tools.disclosures`에 해당 개인정보 유형을 설정한 경우에만 원문을
+도구 실행을 허용하고 `ToolDisclosurePolicy`에 해당 개인정보 유형을 설정한 경우에만 원문을
 전달합니다.
 
 ## Spring Boot 스타터 추가
@@ -67,13 +67,13 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 ### 도구 권한 검사만 사용
 
 [클라이언트 스타터](clients.md)와 `AuthorizationManager<ToolAuthorizationContext>` 빈을
-추가하고 `spring.ai.guardrails.tool-authorization=true`를 선택합니다.
+추가하고 `GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택합니다.
 개인정보 분석기는 필요하지 않습니다.
 
 ### 개인정보 보호와 함께 사용
 
 [시작하기](getting-started.md)에 따라 분석기를 구성하고
-`spring.ai.guardrails.privacy=true`도 선택합니다. 같은 Factory를 사용합니다.
+같은 정책에서 `privacy()`도 선택합니다.
 
 ## 권한 정책 정의
 
@@ -139,25 +139,25 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 @Bean
 ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails,
         ToolCallback customerLookupToolCallback) {
-    return guardrails.builder(chatModel)
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    return guardrails.builder(chatModel, policy)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
 ```
 
 개인정보 보호도 선택했다면 Factory가 도구를 자동으로 보호합니다.
-허용한 원문 공개 범위는 기존 설정에 지정합니다.
+허용할 원문 공개 범위는 클라이언트 정책에 지정합니다.
 
-```yaml
-spring:
-  ai:
-    guardrails:
-      privacy: true
-      tool-authorization: true
-    privacy:
-      tools:
-        disclosures:
-          customerLookup: [CUSTOMER_ID]
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .toolAuthorization(true)
+        .build();
+ChatClient client = guardrails.builder(chatModel, policy)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
 
 ## 도구 Advisor 구성

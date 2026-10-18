@@ -54,7 +54,7 @@ class GuardrailsAutoConfigurationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void yamlAndExplicitPoliciesProduceTheSameOutputProtectionWithoutSecurity(boolean streaming) {
+    void defaultPolicyAndMutatedPolicyWorkWithoutSecurity(boolean streaming) {
         EchoModel model = new EchoModel("Alice");
         AtomicInteger observations = new AtomicInteger();
         ObservationRegistry registry = ObservationRegistry.create();
@@ -67,15 +67,16 @@ class GuardrailsAutoConfigurationTest {
                 .withBean(PrivacyService.class, GuardrailsAutoConfigurationTest::privacy)
                 .withBean(ObservationRegistry.class, () -> registry)
                 .withBean(ChatClientBuilderCustomizer.class, () -> builder -> builder.defaultSystem("Be concise"))
-                .withPropertyValues("spring.ai.guardrails.privacy=true", "spring.ai.privacy.output.enabled=true",
-                        "spring.ai.privacy.output.action=REDACT")
+                .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder()
+                        .privacy(privacy -> privacy.outputAction(PrivacyOutputAction.REDACT)).build())
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     GuardrailsChatClientFactory factory = context.getBean(GuardrailsChatClientFactory.class);
-                    GuardrailsPolicy explicit = GuardrailsPolicy.builder().privacy(settings -> settings
-                            .outputAction(PrivacyOutputAction.REDACT)).build();
+                    GuardrailsPolicy inputOnly = context.getBean(GuardrailsPolicy.class).mutate()
+                            .privacy(privacy -> privacy.outputProtection(false)).build();
                     assertThat(invoke(factory.builder(model).build(), streaming)).isEqualTo("[REDACTED_PERSON]");
-                    assertThat(invoke(factory.builder(model, explicit).build(), streaming)).isEqualTo("[REDACTED_PERSON]");
+                    assertThat(invoke(factory.builder(model, inputOnly).build(), streaming)).isEqualTo("Alice");
+                    assertThat(invoke(factory.builder(model).build(), streaming)).isEqualTo("[REDACTED_PERSON]");
                     assertThat(model.lastPrompt.getSystemMessage().getText()).isEqualTo("Be concise");
                     assertThat(observations).hasValueGreaterThan(0);
                 });
@@ -112,8 +113,8 @@ class GuardrailsAutoConfigurationTest {
         runner.withBean(PrivacyService.class, GuardrailsAutoConfigurationTest::privacy)
                 .withBean(ChatClientBuilderCustomizer.class, () -> builder ->
                         builder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(true)))
-                .withPropertyValues("spring.ai.guardrails.privacy=true",
-                        "spring.ai.chat.client.tool-calling.enabled=false")
+                .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder().privacy().build())
+                .withPropertyValues("spring.ai.chat.client.tool-calling.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     ChatClient client = context.getBean(GuardrailsChatClientFactory.class).builder(model)
@@ -144,7 +145,7 @@ class GuardrailsAutoConfigurationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void selectsInputAndOutputInspectionFromBootSettings(boolean streaming) {
+    void selectsInputAndOutputInspectionFromPolicyBean(boolean streaming) {
         AtomicInteger inspections = new AtomicInteger();
         ContentInspector inspector = new ContentInspector() {
             public String inspectorId() { return "rules"; }
@@ -156,7 +157,8 @@ class GuardrailsAutoConfigurationTest {
             }
         };
         runner.withBean(ContentInspector.class, () -> inspector)
-                .withPropertyValues("spring.ai.guardrails.inspection=true", "spring.ai.inspection.output.enabled=true")
+                .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder()
+                        .inspection(inspection -> inspection.applicationOutput(true)).build())
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     ChatClient client = context.getBean(GuardrailsChatClientFactory.class).builder(new EchoModel()).build();
@@ -177,14 +179,15 @@ class GuardrailsAutoConfigurationTest {
                     customizations.incrementAndGet();
                     builder.defaultSystem("Be concise");
                 })
-                .withPropertyValues("spring.ai.guardrails.tool-authorization=true").run(context -> {
+                .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder().toolAuthorization(true).build())
+                .run(context -> {
                     assertThat(context).hasNotFailed();
                     ChatClient client = context.getBean(GuardrailsChatClientFactory.class).builder(model).build();
                     assertThat(client.prompt().user("hello").call().content()).isEqualTo("hello");
                     assertThat(model.lastPrompt.getSystemMessage().getText()).isEqualTo("Be concise");
                     assertThat(customizations).hasValue(1);
                 });
-        runner.withPropertyValues("spring.ai.guardrails.privacy=true").run(context -> {
+        runner.withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder().privacy().build()).run(context -> {
             assertThat(context).hasNotFailed();
             assertThatThrownBy(() -> context.getBean(GuardrailsChatClientFactory.class).builder(new EchoModel()))
                     .hasMessageContaining("no PrivacyService");

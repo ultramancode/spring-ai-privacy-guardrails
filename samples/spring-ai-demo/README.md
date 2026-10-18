@@ -161,10 +161,11 @@ model call. `activeSessionsAfterCall` is the service-wide active session count
 observed after the call; concurrent requests can make it nonzero without
 showing that this request leaked a session.
 
-Set the PII types each tool may receive as original values in
-`spring.ai.privacy.tools.disclosures`. The sample selects privacy and tool authorization under `spring.ai.guardrails`
-and registers raw tools with `GuardrailsChatClientFactory`. The factory applies
-protection for each request.
+The sample defines a `GuardrailsPolicy` bean in `PrivacyDemoChatConfiguration`.
+It selects privacy, output protection and tool authorization, and uses
+`ToolDisclosurePolicy` to allow original customer IDs for `customerLookup`.
+Raw tools are registered with `GuardrailsChatClientFactory`, which applies the
+policy for each request.
 
 The `/demo/tool-loop` endpoint calls a local CRM tool included in the sample,
 so no external CRM service is required.

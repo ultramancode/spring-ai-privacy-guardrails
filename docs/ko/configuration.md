@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 73d061a94fcb03414e7b22d9bec7dfc10a4a18c52825ef68bfd8a92ea6652f8c -->
+<!-- i18n-source-sha256: 949089cc3bbba659031bfe146508ade557725df98684674a3c5871548d6599f4 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -52,23 +52,24 @@ description: >-
 수 있습니다. 인증 정보는 애플리케이션의 기존 Spring Security 설정을 사용합니다.
 
 `AuthorizationManager<ToolAuthorizationContext>` Bean을 등록하고
-`spring.ai.guardrails.tool-authorization=true`를 선택한 뒤
+`GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택한 뒤
 `GuardrailsChatClientFactory`로 클라이언트를 생성하세요.
 
 개인정보 보호와 함께 사용하려면 분석기를 구성하고
-`spring.ai.guardrails.privacy=true`도 선택하세요.
+같은 정책에서 `privacy()`도 선택하세요.
 
 전체 설정은 [Spring Security 도구 권한](security.md)을 참고하세요.
 
 ## ChatClient에 보호 적용
 
 [클라이언트 스타터](clients.md)를 추가하고 분석기를 구성한 뒤
-`spring.ai.guardrails.privacy=true`를 선택합니다.
+클라이언트 정책에서 개인정보 보호를 선택합니다.
 
 ```java
 @Bean
 ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
@@ -109,9 +110,6 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 | `analysis.provider-minimum-scores` | 비어 있음 | 분석기 ID별 최소 신뢰도입니다. 전체 최소 신뢰도와 비교해 더 큰 값을 적용합니다. |
 | `analysis.entity-aliases` | 비어 있음 | 분석기 엔티티 레이블을 정규 유형에 연결하는 명시적 매핑입니다. |
 | `analysis.type-conflict-fallback` | `PII` | 해석하지 못한 중첩 유형 충돌에 사용할 유형입니다. |
-| `output.enabled` | `false` | 출력 보호를 활성화합니다. |
-| `output.action` | `TOKENIZE` | `TOKENIZE`, `REDACT` 또는 유형이 지정된 예외를 던지는 `BLOCK`을 선택합니다. |
-| `output.block-exception-message` | `Response blocked by privacy guardrail.` | `BLOCK` 예외에 사용할 안전한 메시지입니다. |
 | `processing.max-text-characters` | `1000000` | 텍스트나 JSON 문서 하나의 최대 길이입니다. 배치 분석에서는 모든 텍스트의 길이를 합산합니다. |
 | `processing.max-output-characters` | `8000000` | 변환 결과의 최대 길이입니다. 원문을 그대로 반환할 때도 적용합니다. |
 | `processing.max-value-tree-characters` | `1000000` | 값 트리나 JSON 문서 하나에서 문자열 값·맵 키·숫자 표현의 길이를 합산한 상한입니다. 직접 값 트리를 토큰화할 때는 `BigDecimal` 분석 텍스트의 누적 길이에도 적용합니다. |
@@ -119,11 +117,6 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 | `processing.max-depth` | `128` | 값 트리나 JSON 문서 하나의 최대 중첩 깊이입니다. |
 | `processing.max-analysis-segments` | `100000` | 한 번의 배치 분석에 전달하는 텍스트의 최대 개수입니다. |
 | `processing.max-result-spans` | `100000` | 한 번의 분석에서 분석기나 호출자로부터 받는 원시 탐지 범위의 최대 개수입니다. 세션 배치에서 새로 생성된 결과는 합산하고 재사용한 결과는 다시 세지 않습니다. |
-| `response-inspection.max-stream-frames` | `1024` | 스트리밍 응답 하나에서 검사할 최대 프레임 수입니다. |
-| `response-inspection.max-characters` | `1000000` | 호출 또는 스트리밍 응답 하나에서 검사하는 텍스트 기반 콘텐츠의 최대 누적 문자 수입니다. |
-| `response-inspection.max-media-bytes` | `16777216` | 응답 하나에서 허용하는 미디어 데이터의 최대 누적 바이트 수입니다. |
-| `response-inspection.stream-idle-timeout` | `60s` | 스트리밍 응답 프레임이 도착하지 않아도 기다리는 최대 시간입니다. |
-| `tools.disclosures` | 비어 있음 | 특정 도구에 원문으로 복원해 전달할 엔티티 유형을 지정합니다. |
 | `regex.enabled` | `false` | 애플리케이션이 제공한 Regex 규칙을 활성화합니다. |
 | `regex.rules[].entity-type` | 규칙마다 필수 | 규칙의 일치 결과에 부여할 정규 엔티티 유형입니다. |
 | `regex.rules[].pattern` | 규칙마다 필수 | 원문 텍스트에 적용할 Java 정규식입니다. |
@@ -162,21 +155,21 @@ Bean도 제공합니다.
 알 수 없는 프로퍼티 이름을 발견하면 경고합니다. 이 경고는 애플리케이션 시작을
 막지 않으며, 분석기를 구성하지 않아도 진단은 실행됩니다.
 
-예를 들어 다음처럼 `output.enabled`를 잘못 입력하면 애플리케이션은 계속 시작되지만
+예를 들어 다음처럼 `regex.enabled`를 잘못 입력하면 애플리케이션은 계속 시작되지만
 올바른 프로퍼티 이름을 제안하는 경고가 기록됩니다.
 
 ```yaml
 spring:
   ai:
     privacy:
-      output:
+      regex:
         enabledd: true
 ```
 
-진단 대상은 `output`, `response-inspection`, `analysis`, `regex`, `tools` 안의
+진단 대상은 `processing`, `analysis`, `regex` 안의
 프로퍼티 이름입니다. 알 수 없는 최상위 영역과 분석기별 설정은 검사하지 않습니다.
 
-`analysis.provider-minimum-scores`, `analysis.entity-aliases`, `tools.disclosures`
+`analysis.provider-minimum-scores`, `analysis.entity-aliases`
 아래의 동적 키와 `analysis.included-entity-types`,
 `analysis.supplemental-providers`의 목록 항목은 진단 대상이 아닙니다. Presidio의
 `headers`와 OpenNLP의 `entity-models`처럼 분석기별 설정에서 사용하는 동적 맵도
@@ -446,37 +439,34 @@ OpenNLP 연동은 기존 NER 모델을 활용하려는 애플리케이션을 위
 
 개인정보 보호가 적용된 도구에는 탐지된 값을 기본적으로 **불투명 토큰(opaque token)**으로 전달합니다.
 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.
-특정 도구가 원문을 받아야 한다면 `tools.disclosures`에 해당 도구에 공개할
+특정 도구가 원문을 받아야 한다면 `ToolDisclosurePolicy`에 해당 도구에 공개할
 엔티티 유형을 지정하세요.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .build();
 ```
 
 위 설정에서는 `customerLookup` 도구에만 `CUSTOMER_ID`의 원문을 전달합니다.
-공개하도록 지정하지 않은 엔티티 유형과 `tools.disclosures`에 등록되지 않은 도구에는
+공개하도록 지정하지 않은 엔티티 유형과 `ToolDisclosurePolicy`에 등록되지 않은 도구에는
 보호된 값이 그대로 전달됩니다.
 
 Factory가 도구를 자동으로 보호하므로 원래 콜백이나 제공자를 등록합니다.
 MCP 제공자는 요청마다 현재 도구 목록을 사용합니다.
 
 ```java
-ChatClient client = guardrails.builder(chatModel)
+ChatClient client = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookup, knowledgeSearch, mcpTools)
         .build();
 ```
 
-`tools.disclosures`의 도구 이름은 대소문자를 구분하며 최종
+`ToolDisclosurePolicy`의 도구 이름은 대소문자를 구분하며 최종
 `ToolDefinition.name()`과 일치해야 합니다. 동적 provider가 도구 이름에 접두사를
 추가한다면 변경된 최종 이름을 사용하세요. 와일드카드는 지원하지 않으며 `PII`를 포함해
 원문 공개가 필요한 엔티티 유형은 모두 명시적으로 지정해야 합니다. 공개할 유형이
-없다면 해당 도구를 `tools.disclosures`에 등록하지 마세요.
+없다면 해당 도구를 `ToolDisclosurePolicy`에 등록하지 마세요.
 
 원문 공개 허용 여부는 병합 후 확정된 엔티티 유형을 기준으로 판단합니다.
 예를 들어 `PERSON`과 `ORGANIZATION`의 탐지 결과가 하나의 `PII` 구간으로 병합되면,
@@ -492,7 +482,7 @@ ChatClient client = guardrails.builder(chatModel)
 
 Spring Security 연동을 활성화하면 원문 공개 정책을 적용하기 전에 도구 사용 권한을
 확인합니다. 권한 정책은 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한
-도구를 결정합니다. `tools.disclosures`는 권한 검사를 통과한 도구에 어떤 개인정보
+도구를 결정합니다. `ToolDisclosurePolicy`는 권한 검사를 통과한 도구에 어떤 개인정보
 유형의 값을 원문으로 제공할지 결정합니다. 자세한 내용은
 [Spring Security 도구 권한](security.md#보장-범위)을 참고하세요.
 
@@ -504,17 +494,17 @@ Spring Security 연동을 활성화하면 원문 공개 정책을 적용하기 �
 
 ## 출력 정책과 스트리밍
 
-```yaml
-spring:
-  ai:
-    privacy:
-      output:
-        enabled: true
-        action: tokenize
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.outputAction(PrivacyOutputAction.TOKENIZE))
+        .build();
+ChatClient client = guardrails.builder(chatModel, policy).build();
 ```
 
-출력 보호를 활성화하면 모델이나 도구에서 애플리케이션으로 반환되는 개인정보에
-설정한 정책을 적용합니다.
+`outputAction(...)`을 지정하면 해당 방식으로 출력 보호를 활성화합니다.
+`outputProtection(true)`는 지정한 방식이 없으면 `TOKENIZE`로 활성화합니다.
+모델이나 도구에서 애플리케이션으로 반환되는 개인정보에 이 정책을 적용합니다.
+`BLOCK` 예외의 안전한 메시지는 `outputBlockMessage(...)`로 지정합니다.
 
 - `TOKENIZE`는 같은 요청 안에서 동일한 개인정보를 일관된 불투명 토큰으로 치환합니다.
 - `REDACT`는 개인정보를 원문으로 복원할 수 없는 유형 마커로 대체합니다.
@@ -540,17 +530,17 @@ spring:
 호출하지 않고 결과를 직접 반환합니다. 그렇지 않으면 도구 결과는 모델로 다시
 전달됩니다.
 
-`output.enabled=false`인 경우에도 `returnDirect`로 직접 반환되는 도구 결과의
+`outputProtection(false)`인 경우에도 `returnDirect`로 직접 반환되는 도구 결과의
 개인정보는 불투명 토큰 상태를 유지합니다. 출력 보호를 활성화하면 최종 결과에
 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용합니다.
 
 ### 최종 모델 출력 검사
 
-`output.enabled`는 모델이 생성한 최종 응답에 출력 정책을 적용할지를 결정합니다.
+`outputProtection(...)`는 모델이 생성한 최종 응답에 출력 정책을 적용할지를 결정합니다.
 이 설정을 비활성화해도 입력, 모델 호출 경계와 도구 결과에 대한 개인정보 보호는 계속
 적용됩니다.
 
-| `output.enabled` | 최종 모델 출력 검사 | 전달 방식 |
+| 출력 보호 | 최종 모델 출력 검사 | 전달 방식 |
 | --- | --- | --- |
 | `false` | 하지 않음 | 최종 모델 출력을 별도로 검사하지 않습니다. 스트리밍 호출에서는 모델이 생성하는 텍스트를 실시간으로 전달할 수 있습니다. 다른 개인정보 보호 경계는 계속 적용되며, `returnDirect` 결과의 개인정보도 불투명 토큰으로 바뀝니다. |
 | `true` | 적용 | 완성된 응답을 검사한 뒤 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용하여 전달합니다. |
@@ -558,7 +548,7 @@ spring:
 출력 보호가 활성화되어도 Spring AI의 스트리밍 API를 사용할 수 있지만, 개인정보를
 검사하기 위해 완성된 응답을 먼저 버퍼링합니다. 따라서 모델 응답이 생성되는 즉시
 전달되는 실시간 스트리밍은 사용할 수 없습니다. 실시간 스트리밍이 반드시 필요하다면
-`output.enabled=false`로 두고 최종 모델 출력의 개인정보 보호를 애플리케이션에서
+`outputProtection(false)`로 두고 최종 모델 출력의 개인정보 보호를 애플리케이션에서
 처리해야 합니다.
 
 ### 추론 텍스트 보호
@@ -576,15 +566,14 @@ spring:
 
 ## 입력·응답 처리 제한
 
-`response-inspection.*` 설정은 `output.enabled`와 별개입니다. 이 설정들은 도구 호출
-과정의 중간 응답 등 라이브러리가 검사해야 하는 콘텐츠의 크기와 스트리밍 범위를
-제한합니다. 출력 보호가 활성화되면 `response-inspection.max-characters`와
-`response-inspection.max-media-bytes` 제한을 최종 응답에도 적용합니다. 미디어
-제한은 데이터 크기만 확인하며, 이미지나 오디오 내용에서 개인정보를 탐지하지는
-않습니다.
+클라이언트 정책의 `privacy.responseLimits(...)`에 `PrivacyResponseInspectionLimits`를 지정합니다.
+기본값은 스트림 1,024프레임, 텍스트 1,000,000자, 미디어 16,777,216바이트,
+프레임 간 대기 시간 60초입니다. 최종 출력 보호를 꺼도 도구 호출 과정의 중간 응답에는
+이 한도를 적용합니다. 출력 보호를 켜면 최종 응답에도 텍스트와 미디어 한도를 적용합니다.
+미디어 한도는 데이터 크기만 확인하며 이미지나 오디오 내용에서 개인정보를 탐지하지는 않습니다.
 
 `processing.*`는 개인정보를 분석하거나 변환할 때 적용하는 제한입니다.
-`output.enabled=false`여도 적용되며, 각 설정에는 양의 정수를 지정합니다.
+`outputProtection(false)`여도 적용되며, 각 설정에는 양의 정수를 지정합니다.
 
 문자열 길이는 Java `String.length()` 기준인 UTF-16 코드 단위로 계산합니다.
 JSON의 출력 길이에는 JSON 구문과 이스케이프 문자도 포함합니다. 값 트리의 출력 길이는

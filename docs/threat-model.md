@@ -140,7 +140,7 @@ Session cleanup releases the mappings held by the library. It does not delete
 data already saved in storage or strings and copies retained by other components.
 
 Spring Security integration controls which tools the model may discover and
-execute. When combined with privacy protection, the `tools.disclosures` settings
+execute. When combined with privacy protection, the `ToolDisclosurePolicy`
 still apply per tool and entity type; enabling authorization does not make those
 settings user-specific.
 

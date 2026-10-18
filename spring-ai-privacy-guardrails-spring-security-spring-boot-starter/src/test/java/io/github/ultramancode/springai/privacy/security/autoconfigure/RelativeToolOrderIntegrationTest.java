@@ -7,6 +7,7 @@ import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -46,6 +47,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -135,7 +137,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                         .summary("Find customer").build()).build());
         AtomicReference<String> customerInput = new AtomicReference<>();
 
-        privacyContextRunner().withPropertyValues("spring.ai.privacy.output.enabled=" + outputEnabled).run(context -> {
+        privacyContextRunner(outputEnabled, PrivacyResponseInspectionLimits.defaults()).run(context -> {
             PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
             ChatClient client = protectedBuilder(context,
                             ToolSearchToolCallingAdvisor.builder().toolIndex(index).advisorOrder(toolOrder)
@@ -211,8 +213,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                 streaming ? toolStreamResponse("customerLookup", arguments) : toolResponse("customerLookup", arguments),
                 streaming ? finalStreamResponse() : finalResponse());
         AtomicInteger calls = new AtomicInteger();
-        privacyContextRunner().withPropertyValues("spring.ai.privacy.response-inspection.max-characters=64",
-                        "spring.ai.privacy.output.enabled=" + outputEnabled)
+        privacyContextRunner(outputEnabled, new PrivacyResponseInspectionLimits(1024, 64, 16_777_216, Duration.ofSeconds(60)))
                 .run(context -> {
                     PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
                     ChatClient client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0))
@@ -398,7 +399,7 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
     private void assertToolOrderRejectedBeforeCustomization(int toolOrder, boolean outputEnabled) {
         AtomicInteger customizations = new AtomicInteger();
         ChatClientBuilderCustomizer customizer = builder -> customizations.incrementAndGet();
-        privacyContextRunner().withPropertyValues("spring.ai.privacy.output.enabled=" + outputEnabled)
+        privacyContextRunner(outputEnabled, PrivacyResponseInspectionLimits.defaults())
                 .withBean(ChatClientBuilderCustomizer.class, () -> customizer).run(context -> {
             assertThatThrownBy(() -> protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(toolOrder)))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("order");

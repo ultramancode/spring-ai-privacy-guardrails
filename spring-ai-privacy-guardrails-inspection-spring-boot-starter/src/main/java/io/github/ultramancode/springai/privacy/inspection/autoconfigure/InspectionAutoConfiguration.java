@@ -8,7 +8,6 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
-import io.github.ultramancode.springai.privacy.inspection.springai.InspectionOutputAdvisor;
 import io.github.ultramancode.springai.privacy.inspection.springai.PrivacyProcessingStatusResolver;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
@@ -32,8 +31,6 @@ import java.util.function.Predicate;
  * <p>The default service runs inspectors in Spring order. The default content policy
  * blocks findings. The default failure policy is
  * {@link InspectionFailurePolicy#FAIL_CLOSED}.
- * Output inspection is disabled by default. Enable it on the auto-configured
- * configurer with {@code spring.ai.inspection.output.enabled=true}.
  * Applications can provide policy, resolver and observer beans to customize inspection.
  */
 @AutoConfiguration(
@@ -66,23 +63,15 @@ public class InspectionAutoConfiguration {
     @ConditionalOnMissingBean
     InspectionChatClientConfigurer inspectionChatClientConfigurer(
             InspectionService service,
-            InspectionProperties properties,
             ObjectProvider<PrivacyProcessingStatusResolver> resolver,
             ObjectProvider<InspectionObserver> observer) {
         InspectionObserver inspectionObserver = observer.getIfAvailable(InspectionObserver::noop);
-        InspectionLimits limits = properties.limits();
-        InspectionChatClientConfigurer configurer = new InspectionChatClientConfigurer(
+        InspectionLimits limits = InspectionLimits.defaults();
+        return new InspectionChatClientConfigurer(
                 service,
                 limits,
                 resolver.getIfAvailable(PrivacyProcessingStatusResolver::unknown),
                 inspectionObserver);
-        InspectionProperties.Output output = properties.getOutput();
-        if (output.isEnabled()) {
-            InspectionOutputAdvisor outputAdvisor = new InspectionOutputAdvisor(
-                    service, limits, inspectionObserver, output.getMaxFrames(), output.getStreamTimeout());
-            return configurer.withOutputInspection(outputAdvisor);
-        }
-        return configurer;
     }
 
     @Configuration(proxyBeanMethods = false)

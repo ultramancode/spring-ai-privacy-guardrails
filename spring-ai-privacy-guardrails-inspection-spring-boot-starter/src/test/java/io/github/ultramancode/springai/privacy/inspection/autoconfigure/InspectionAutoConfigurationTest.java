@@ -74,9 +74,6 @@ class InspectionAutoConfigurationTest {
             assertThat(properties)
                     .extracting(property -> (String) ((Map<?, ?>) property).get("name"))
                     .containsExactlyInAnyOrder(
-                            "spring.ai.inspection.max-segments",
-                            "spring.ai.inspection.max-characters",
-                            "spring.ai.inspection.timeout",
                             "spring.ai.inspection.failure-policy",
                             "spring.ai.inspection.failure-policy-overrides",
                             "spring.ai.inspection.pii-token-simplification-inspectors",
@@ -96,49 +93,6 @@ class InspectionAutoConfigurationTest {
                 .hasNotFailed()
                 .doesNotHaveBean(InspectionService.class)
                 .doesNotHaveBean(InspectionChatClientConfigurer.class));
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void outputInspectionRequiresExplicitOptIn(boolean enabled) {
-        ChatModel model = new ChatModel() {
-            public ChatResponse call(Prompt prompt) {
-                return new ChatResponse(List.of(new Generation(new AssistantMessage("attack"))));
-            }
-        };
-        ApplicationContextRunner configuredRunner = runner.withBean(ContentInspector.class, this::rules);
-        if (enabled) {
-            configuredRunner = configuredRunner.withPropertyValues("spring.ai.inspection.output.enabled=true");
-        }
-        configuredRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-            ChatClient client = context.getBean(InspectionChatClientConfigurer.class)
-                    .configure(ChatClient.builder(model)).build();
-            if (enabled) {
-                assertThatThrownBy(() -> client.prompt().user("hello").call().content())
-                        .isInstanceOf(InspectionBlockedException.class);
-            } else {
-                assertThat(client.prompt().user("hello").call().content()).isEqualTo("attack");
-            }
-        });
-    }
-
-    @ParameterizedTest(name = "{0}")
-    @CsvSource({
-            "max-frames=0, Maximum stream frame count must be positive",
-            "stream-timeout=0s, Stream timeout must be positive",
-            "stream-timeout=-1s, Stream timeout must be positive"
-    })
-    void invalidEnabledOutputBudgetsFailStartup(String setting, String expectedMessage) {
-        runner.withPropertyValues("spring.ai.inspection.output.enabled=true",
-                        "spring.ai.inspection.output." + setting)
-                .withBean(ContentInspector.class, this::rules)
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure())
-                            .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                            .hasRootCauseMessage(expectedMessage);
-                });
     }
 
     @Test
@@ -233,7 +187,7 @@ class InspectionAutoConfigurationTest {
                     InspectionRequest request = new InspectionRequest(
                             List.of(new ContentSegment("s1", ContentSegment.Role.USER,
                                     ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "hello")),
-                            context.getBean(InspectionProperties.class).limits());
+                            InspectionLimits.defaults());
 
                     InspectionReport report = context.getBean(InspectionService.class).inspect(request);
 
@@ -312,23 +266,6 @@ class InspectionAutoConfigurationTest {
                 });
     }
 
-    @ParameterizedTest(name = "{0}")
-    @CsvSource({
-            "max-segments=0, maxSegments must be positive",
-            "max-characters=0, maxCharacters must be positive",
-            "timeout=0s, timeout must be positive"
-    })
-    void invalidLimitsFailStartup(String property, String expectedMessage) {
-        runner.withPropertyValues("spring.ai.inspection." + property)
-                .withBean(ContentInspector.class, this::rules)
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure())
-                            .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                            .hasRootCauseMessage(expectedMessage);
-                });
-    }
-
     @ParameterizedTest(name = "streaming={0}")
     @ValueSource(booleans = {false, true})
     void privacyProtectionPrecedesRequiredProtectedInspectionForCallAndStream(boolean streaming) {
@@ -349,7 +286,6 @@ class InspectionAutoConfigurationTest {
                 return Flux.defer(() -> Flux.just(call(prompt)));
             }
         };
-        // The same inspector requires completed Privacy processing for both input and output.
         ContentInspector protectedInspector = new ContentInspector() {
             @Override
             public String inspectorId() {
@@ -375,9 +311,7 @@ class InspectionAutoConfigurationTest {
                         List.of());
             }
         };
-        // Enable output inspection and Privacy output protection separately.
         runner.withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
-                .withPropertyValues("spring.ai.inspection.output.enabled=true", "spring.ai.privacy.output.enabled=true")
                 .withBean(ContentInspector.class, () -> protectedInspector)
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> {
@@ -398,8 +332,7 @@ class InspectionAutoConfigurationTest {
                         result = request.call().content();
                     }
                     assertThat(result).isEqualTo("done");
-                    // Inspect once before the model call and once before delivering its output.
-                    assertThat(inspections).hasValue(2);
+                    assertThat(inspections).hasValue(1);
                 });
     }
 

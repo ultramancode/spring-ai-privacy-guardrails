@@ -6,46 +6,29 @@ import io.github.ultramancode.springai.privacy.core.PiiResolutionMode;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
-import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
-import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Configuration for the core privacy guardrails and fixed Spring AI boundary. */
+/** Configuration for privacy processing and PII analyzers. */
 @ConfigurationProperties("spring.ai.privacy")
 public class PrivacyGuardrailsProperties {
 
     /** Configurable privacy processing limits. */
     private final Processing processing = new Processing();
 
-    /** Optional output-boundary settings. */
-    private final Output output = new Output();
-    /** Model-response inspection limits shared by call, stream, and tool-execution boundaries. */
-    private final ResponseInspection responseInspection = new ResponseInspection();
     /** PII analyzer resolution settings. */
     private final Analysis analysis = new Analysis();
+
     /** Built-in regular-expression analyzer settings. */
     private final Regex regex = new Regex();
-    /** Tool boundary policy settings. */
-    private final Tools tools = new Tools();
 
     public Processing getProcessing() {
         return this.processing;
-    }
-
-    public Output getOutput() {
-        return this.output;
-    }
-
-    public ResponseInspection getResponseInspection() {
-        return this.responseInspection;
     }
 
     public Analysis getAnalysis() {
@@ -54,10 +37,6 @@ public class PrivacyGuardrailsProperties {
 
     public Regex getRegex() {
         return this.regex;
-    }
-
-    public Tools getTools() {
-        return this.tools;
     }
 
     /** Per-service limits for input, output, value trees, and analysis. */
@@ -144,131 +123,6 @@ public class PrivacyGuardrailsProperties {
             }
             return value;
         }
-    }
-
-    /** Properties for optional application-facing output protection. */
-    public static class Output {
-
-        /** Whether final model-output protection is included in the configured boundary. */
-        private boolean enabled = false;
-        /** Action applied when output PII is detected. */
-        private PrivacyOutputAction action = PrivacyOutputAdvisor.DEFAULT_ACTION;
-        /** Safe exception message used when output is blocked. */
-        private String blockExceptionMessage = PrivacyOutputAdvisor.DEFAULT_BLOCK_EXCEPTION_MESSAGE;
-        public boolean isEnabled() {
-            return this.enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public PrivacyOutputAction getAction() {
-            return this.action;
-        }
-
-        public void setAction(PrivacyOutputAction action) {
-            this.action = Objects.requireNonNull(action, "output.action must not be null");
-        }
-
-        public String getBlockExceptionMessage() {
-            return this.blockExceptionMessage;
-        }
-
-        public void setBlockExceptionMessage(String blockExceptionMessage) {
-            if (blockExceptionMessage == null || blockExceptionMessage.isBlank()) {
-                throw new IllegalArgumentException("output.block-exception-message must not be blank");
-            }
-            this.blockExceptionMessage = blockExceptionMessage;
-        }
-
-    }
-
-    /** Properties for bounded model-response inspection across call and stream paths. */
-    public static class ResponseInspection {
-
-        /** Maximum response frames buffered before streaming inspection fails closed. */
-        private int maxStreamFrames = PrivacyResponseInspectionLimits.DEFAULT_MAX_STREAM_FRAMES;
-        /** Maximum text and tool-argument characters inspected per response. */
-        private long maxCharacters = PrivacyResponseInspectionLimits.DEFAULT_MAX_CHARACTERS;
-        /** Maximum known media bytes inspected per response. */
-        private long maxMediaBytes = PrivacyResponseInspectionLimits.DEFAULT_MAX_MEDIA_BYTES;
-        /** Maximum idle interval allowed between streaming response frames. */
-        private Duration streamIdleTimeout = PrivacyResponseInspectionLimits.DEFAULT_STREAM_IDLE_TIMEOUT;
-
-        public int getMaxStreamFrames() {
-            return this.maxStreamFrames;
-        }
-
-        public void setMaxStreamFrames(int maxStreamFrames) {
-            this.maxStreamFrames = requirePositive(
-                    maxStreamFrames,
-                    "response-inspection.max-stream-frames"
-            );
-        }
-
-        public long getMaxCharacters() {
-            return this.maxCharacters;
-        }
-
-        public void setMaxCharacters(long maxCharacters) {
-            this.maxCharacters = requirePositive(
-                    maxCharacters,
-                    "response-inspection.max-characters"
-            );
-        }
-
-        public long getMaxMediaBytes() {
-            return this.maxMediaBytes;
-        }
-
-        public void setMaxMediaBytes(long maxMediaBytes) {
-            this.maxMediaBytes = requirePositive(
-                    maxMediaBytes,
-                    "response-inspection.max-media-bytes"
-            );
-        }
-
-        public Duration getStreamIdleTimeout() {
-            return this.streamIdleTimeout;
-        }
-
-        public void setStreamIdleTimeout(Duration streamIdleTimeout) {
-            Duration validatedTimeout = Objects.requireNonNull(
-                    streamIdleTimeout,
-                    "response-inspection.stream-idle-timeout must not be null"
-            );
-            if (validatedTimeout.isZero() || validatedTimeout.isNegative()) {
-                throw new IllegalArgumentException(
-                        "response-inspection.stream-idle-timeout must be positive"
-                );
-            }
-            this.streamIdleTimeout = validatedTimeout;
-        }
-
-        public PrivacyResponseInspectionLimits limits() {
-            return new PrivacyResponseInspectionLimits(
-                    this.maxStreamFrames,
-                    this.maxCharacters,
-                    this.maxMediaBytes,
-                    this.streamIdleTimeout
-            );
-        }
-
-        private int requirePositive(int value, String property) {
-            if (value <= 0) {
-                throw new IllegalArgumentException(property + " must be positive");
-            }
-            return value;
-        }
-
-        private long requirePositive(long value, String property) {
-            if (value <= 0) {
-                throw new IllegalArgumentException(property + " must be positive");
-            }
-            return value;
-        }
-
     }
 
     /** Properties for analyzer selection, evidence resolution, and failure handling. */
@@ -475,31 +329,6 @@ public class PrivacyGuardrailsProperties {
                 this.validatorId = validatorId;
             }
         }
-    }
-
-    /** Properties for exact-name, least-privilege tool disclosures. */
-    public static class Tools {
-
-        /** Exact wrapped-tool names mapped to canonical entity types they may receive as originals. */
-        private Map<String, List<String>> disclosures = new LinkedHashMap<>();
-
-        public Map<String, List<String>> getDisclosures() {
-            return this.disclosures;
-        }
-
-        public void setDisclosures(Map<String, List<String>> disclosures) {
-            Map<String, List<String>> copiedDisclosures = new LinkedHashMap<>();
-            Objects.requireNonNull(disclosures, "tools.disclosures must not be null")
-                    .forEach((toolName, entityTypes) -> copiedDisclosures.put(
-                            toolName,
-                            List.copyOf(Objects.requireNonNull(
-                                    entityTypes,
-                                    "tools.disclosures values must not be null"
-                            ))
-                    ));
-            this.disclosures = copiedDisclosures;
-        }
-
     }
 
 }

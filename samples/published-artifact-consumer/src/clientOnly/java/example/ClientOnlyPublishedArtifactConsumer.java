@@ -1,6 +1,7 @@
 package example;
 
 import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
@@ -34,12 +35,14 @@ public class ClientOnlyPublishedArtifactConsumer {
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(ClientOnlyPublishedArtifactConsumer.class)
                 .web(WebApplicationType.NONE)
                 .properties("spring.main.banner-mode=off", "logging.level.root=ERROR",
-                        "spring.ai.guardrails.privacy=true", "spring.ai.privacy.regex.enabled=true",
+                        "spring.ai.privacy.regex.enabled=true",
                         "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
                         "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
                         "spring.ai.privacy.regex.rules[0].score=1.0")
                 .run(args)) {
-            ChatClient client = context.getBean(GuardrailsChatClientFactory.class).builder(new EchoModel()).build();
+            GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
+            ChatClient client = context.getBean(GuardrailsChatClientFactory.class)
+                    .builder(new EchoModel(), policy).build();
             String input = "EMP-1234";
             String blocking = client.prompt().user(input).call().content();
             String streaming = client.prompt().user(input).stream().content().collectList()

@@ -55,7 +55,6 @@ import reactor.core.publisher.Flux;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -91,11 +90,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
             String metadata = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             assertThat(metadata)
                     .contains("spring.ai.privacy.analysis.included-entity-types")
-                    .contains("spring.ai.privacy.tools.disclosures")
-                    .contains("spring.ai.privacy.response-inspection.max-stream-frames")
-                    .contains("spring.ai.privacy.response-inspection.max-characters")
-                    .contains("spring.ai.privacy.response-inspection.max-media-bytes")
-                    .contains("spring.ai.privacy.response-inspection.stream-idle-timeout")
                     .contains("\"name\": \"spring.ai.privacy.regex.rules\"")
                     .contains("\"type\": \"java.util.List<io.github.ultramancode.springai.privacy.autoconfigure."
                             + "PrivacyGuardrailsProperties$Regex$Rule>\"")
@@ -245,9 +239,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
         assertThatThrownBy(() -> properties.getRegex().setRules(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("regex.rules must not be null");
-        assertThatThrownBy(() -> properties.getTools().setDisclosures(null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("tools.disclosures must not be null");
     }
 
     @Test
@@ -288,65 +279,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
         assertThatThrownBy(() -> processing.setMaxResultSpans(0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("processing.max-result-spans must be positive");
-    }
-
-    @Test
-    void responseInspectionLimitsArePositiveAndHaveOneValidatedConfigurationSource() {
-        PrivacyGuardrailsProperties.ResponseInspection inspection =
-                new PrivacyGuardrailsProperties().getResponseInspection();
-        inspection.setMaxStreamFrames(7);
-        inspection.setMaxCharacters(8);
-        inspection.setMaxMediaBytes(9);
-        inspection.setStreamIdleTimeout(Duration.ofSeconds(10));
-
-        assertThat(inspection.limits())
-                .extracting(
-                        "maxStreamFrames",
-                        "maxCharacters",
-                        "maxMediaBytes",
-                        "streamIdleTimeout"
-                )
-                .containsExactly(7, 8L, 9L, Duration.ofSeconds(10));
-        assertThatThrownBy(() -> inspection.setMaxStreamFrames(0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.max-stream-frames must be positive");
-        assertThatThrownBy(() -> inspection.setMaxCharacters(0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.max-characters must be positive");
-        assertThatThrownBy(() -> inspection.setMaxMediaBytes(0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.max-media-bytes must be positive");
-        assertThatThrownBy(() -> inspection.setStreamIdleTimeout(Duration.ZERO))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.stream-idle-timeout must be positive");
-    }
-
-    @Test
-    void responseInspectionPropertiesBindIndependentlyOfTheOptionalOutputPolicy() {
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
-        this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> analyzer)
-                .withPropertyValues(
-                        "spring.ai.privacy.output.enabled=false",
-                        "spring.ai.privacy.response-inspection.max-stream-frames=7",
-                        "spring.ai.privacy.response-inspection.max-characters=8",
-                        "spring.ai.privacy.response-inspection.max-media-bytes=9",
-                        "spring.ai.privacy.response-inspection.stream-idle-timeout=10s"
-                )
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    PrivacyGuardrailsProperties properties =
-                            context.getBean(PrivacyGuardrailsProperties.class);
-                    assertThat(properties.getOutput().isEnabled()).isFalse();
-                    assertThat(properties.getResponseInspection().limits())
-                            .extracting(
-                                    "maxStreamFrames",
-                                    "maxCharacters",
-                                    "maxMediaBytes",
-                                    "streamIdleTimeout"
-                            )
-                            .containsExactly(7, 8L, 9L, Duration.ofSeconds(10));
-                });
     }
 
     @Test
@@ -442,11 +374,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void explicitConfigurerRegistersTheCompleteEnabledAdvisorBundle() {
+    void defaultConfigurerRegistersInputAndToolProtection() {
         PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
-                .withPropertyValues("spring.ai.privacy.output.enabled=true")
                 .run(context -> {
                     ChatClient.Builder builder = mock(ChatClient.Builder.class);
                     PrivacyChatClientConfigurer configurer = context.getBean(PrivacyChatClientConfigurer.class);
@@ -460,7 +391,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             .containsExactly(
                                     "PrivacyLifecycleAdvisor",
                                     "PrivacyInputAdvisor",
-                                    "PrivacyOutputAdvisor",
                                     "PrivacyToolContextAdvisor",
                                     "PrivacyToolCallValidationAdvisor",
                                     "PrivacyAdvisorChainValidator"
@@ -579,14 +509,17 @@ class PrivacyGuardrailsAutoConfigurationTest {
                         )
                 )))
                 .withBean(PrivacyEnforcementObserver.class, () -> enforcementEvents::add)
-                .withPropertyValues(
-                        "spring.ai.privacy.output.enabled=true",
-                        "spring.ai.privacy.tools.disclosures[customerLookup][0]=CUSTOMER_ID"
-                )
+                .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.byToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
                 .run(context -> {
                     StarterToolLoopModel model = new StarterToolLoopModel();
                     ChatClient.Builder builder = ChatClient.builder(model);
-                    context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
+                    PrivacyChatClientConfigurer.builder(context.getBean(PrivacyService.class))
+                            .toolCallbackFactory(context.getBean(PrivacyToolCallbackFactory.class))
+                            .outputProtection(PrivacyOutputAdvisor.DEFAULT_ACTION,
+                                    PrivacyOutputAdvisor.DEFAULT_BLOCK_EXCEPTION_MESSAGE)
+                            .enforcementObserver(context.getBean(PrivacyEnforcementObserver.class))
+                            .build().configure(builder);
                     ToolCallbackProvider sourceProvider = () -> new ToolCallback[]{
                             customerLookup(delegateToolInput)
                     };
@@ -838,7 +771,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationBindsResolutionAndToolDisclosurePolicies() {
+    void autoConfigurationBindsResolutionPolicyAndDeniesDisclosureByDefault() {
         PiiAnalyzer analyzer = new PiiAnalyzer() {
             @Override
             public List<PiiSpan> analyze(
@@ -860,8 +793,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                         "spring.ai.privacy.analysis.mode=primary",
                         "spring.ai.privacy.analysis.primary-provider=presidio",
                         "spring.ai.privacy.analysis.failure-policy=require-primary",
-                        "spring.ai.privacy.analysis.provider-minimum-scores.presidio=0.72",
-                        "spring.ai.privacy.tools.disclosures[customerLookup][0]=CUSTOMER_ID"
+                        "spring.ai.privacy.analysis.provider-minimum-scores.presidio=0.72"
                 )
                 .run(context -> {
                     PiiResolutionPolicy policy = context.getBean(PiiResolutionPolicy.class);
@@ -871,8 +803,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     assertThat(policy.providerMinimumScores()).containsEntry("PRESIDIO", 0.72);
 
                     ToolDisclosurePolicy toolPolicy = context.getBean(ToolDisclosurePolicy.class);
-                    assertThat(toolPolicy.scopeFor(tool("customerLookup")).entityTypes())
-                            .containsExactly("CUSTOMER_ID");
+                    assertThat(toolPolicy.scopeFor(tool("customerLookup")).entityTypes()).isEmpty();
                     assertThat(toolPolicy.scopeFor(tool("externalSearch")).entityTypes())
                             .isEmpty();
                 });

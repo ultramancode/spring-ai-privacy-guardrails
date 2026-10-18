@@ -8,7 +8,7 @@ description: >-
 [English](../clients.md) | **한국어**
 
 <!-- i18n-source: docs/clients.md -->
-<!-- i18n-source-sha256: a2263e33f995d46881bf1acdfb6d6b47115e873a9b63dc5b2654f00d92b629a6 -->
+<!-- i18n-source-sha256: 4bea1bda9242d575915ad50a1e3c9aa87b61fead685505cd6142fd3136f70b87 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. Factory는 선택한 기능을 조립하고 Spring AI를 통해
@@ -34,59 +34,10 @@ Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인�
 구성 요소가 있다는 이유만으로 기능을 활성화하지 않습니다. 선택한 기능의 필수
 구성 요소가 없으면 클라이언트 빌더를 생성할 때 오류가 발생합니다.
 
-## Spring Boot 기본 정책
+## 클라이언트별 정책
 
-사용할 기능을 명시적으로 선택합니다. 세 선택 항목의 기본값은 모두 `false`입니다.
-
-```yaml
-spring:
-  ai:
-    guardrails:
-      privacy: true
-      inspection: true
-      tool-authorization: true
-    privacy:
-      tools:
-        disclosures:
-          customerLookup: [CUSTOMER_ID]
-      output:
-        enabled: true
-        action: REDACT
-    inspection:
-      output:
-        enabled: true
-```
-
-이 예제는 위 표의 세 구성 요소가 모두 필요합니다. 개인정보 보호는 모델 요청과
-도구에 적용합니다. 고객 ID 원문은 `customerLookup`에만 공개하고, 최종 출력에서
-탐지한 개인정보는 가립니다. 콘텐츠 검사는 모든 모델 요청과 최종 출력에 적용합니다.
-도구 권한 검사는 애플리케이션의 현재 인증 정보와 권한 정책을 사용합니다.
-
-```java
-@Bean
-ChatClient supportClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails,
-        ToolCallback customerLookup, ToolCallbackProvider mcpTools) {
-    return guardrails.builder(chatModel)
-            .defaultTools(customerLookup, mcpTools)
-            .build();
-}
-```
-
-원래 콜백, 도구 어노테이션이 있는 객체 또는 제공자를 등록합니다.
-이 Factory에 전달하기 전에 `PrivacyToolCallbackFactory`로 감싸지 마세요.
-제공자는 요청마다 해석하므로 이후 MCP 도구 목록 변경도 반영합니다.
-`client.prompt().tools(...)`로 전달한 도구도 같은 보호를 받습니다.
-허용 목록에 없는 도구·유형 조합에는 원문 대신 불투명 토큰을 전달합니다.
-
-도구 실행 권한과 원문 공개 범위는 별도로 결정합니다.
-도구 권한 검사를 활성화해도 업무 권한 규칙을 대신 만들어 주지는 않습니다.
-
-위의 `output` 설정을 생략하면 개인정보 보호는 모델 요청과 도구에,
-콘텐츠 검사는 모델 요청에만 적용합니다. 최종 출력 보호와 검사는 별도로 활성화합니다.
-
-## 클라이언트별 명시적 정책
-
-클라이언트마다 보호 범위가 다르면 Java 정책을 전달합니다.
+`GuardrailsPolicy`에서 사용할 기능과 출력 처리, 도구 원문 공개 범위를 선택합니다.
+분석기, 모델 경로, 서버 연결 같은 공통 서비스 설정은 YAML에 둡니다.
 
 ```java
 GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
@@ -103,18 +54,70 @@ ChatClient client = guardrails.builder(chatModel, supportPolicy)
         .build();
 ```
 
-`builder(chatModel)`은 기본 정책을 사용합니다. `builder(chatModel, policy)`는
-원문 공개와 출력 설정까지 전달받은 정책만 사용하며 Boot 기본 정책을 합치지 않습니다.
-탐지 모델이나 검사 서버 연결 같은 엔진 설정은 각 서비스에서 관리합니다.
+이 예제는 위 표의 세 구성 요소가 모두 필요합니다. 개인정보 보호는 모델 요청과
+도구에 적용합니다. 고객 ID 원문은 `customerLookup`에만 공개하고, 최종 출력에서
+탐지한 개인정보는 가립니다. 콘텐츠 검사는 모든 모델 요청과 최종 출력에 적용합니다.
+도구 권한 검사는 애플리케이션의 현재 인증 정보와 권한 정책을 사용합니다.
 
-`GuardrailsPolicy` 빈을 등록하면 속성 기반 기본 정책을 대체할 수 있습니다.
-기본 정책을 하나로 정할 수 없으면 명시적 정책을 전달하세요.
-정책은 기능을 하나 이상 선택해야 합니다. 서로 다른 클라이언트는 서비스를 공유해도
-상대의 정책이나 세션을 변경하지 않습니다. `builder.clone()`과 `client.mutate()`는
-구성한 보호를 유지합니다.
+원래 콜백, 도구 어노테이션이 있는 객체 또는 제공자를 등록합니다.
+이 Factory에 전달하기 전에 `PrivacyToolCallbackFactory`로 감싸지 마세요.
+제공자는 요청마다 해석하므로 이후 MCP 도구 목록 변경도 반영합니다.
+`client.prompt().tools(...)`로 전달한 도구도 같은 보호를 받습니다.
+허용 목록에 없는 도구·유형 조합에는 원문 대신 불투명 토큰을 전달합니다.
 
+도구 실행 권한과 원문 공개 범위는 별도로 결정합니다.
+도구 권한 검사를 활성화해도 업무 권한 규칙을 대신 만들어 주지는 않습니다.
+
+`privacy()`만 선택하면 모델 요청과 도구를 보호합니다. `inspection()`만 선택하면
+모델 요청을 검사합니다. 최종 출력 보호와 검사는 별도로 활성화합니다.
 출력만 검사하려면
 `.inspection(inspection -> inspection.modelRequests(false).applicationOutput(true))`를 선택합니다.
+
+## 정책 재사용
+
+정책과 클라이언트는 한 번 만들어 여러 요청에 재사용합니다. 정책마다 빈을 등록할 필요는 없습니다.
+`mutate()`는 기존 설정을 복사한 빌더를 반환합니다. 지정한 항목만 바꾸며 원래 정책은 유지합니다.
+
+```java
+GuardrailsPolicy inputPolicy = supportPolicy.mutate()
+        .privacy(privacy -> privacy.outputProtection(false))
+        .inspection(inspection -> inspection.applicationOutput(false))
+        .build();
+
+GuardrailsPolicy privacyOnly = supportPolicy.mutate()
+        .inspection(false)
+        .toolAuthorization(false)
+        .build();
+
+ChatClient inputClient = guardrails.builder(chatModel, inputPolicy).build();
+ChatClient privacyClient = guardrails.builder(chatModel, privacyOnly).build();
+```
+
+`privacy(false)`와 `inspection(false)`는 해당 기능 전체를 제외합니다.
+정책은 기능을 하나 이상 선택해야 합니다. 서로 다른 클라이언트는 서비스를 공유해도
+상대의 정책이나 세션을 변경하지 않습니다.
+
+`builder.clone()`과 `client.mutate()`는 이미 구성한 보호를 유지합니다.
+보호 범위를 바꾸려면 정책을 수정하고 Factory로 새 클라이언트를 만드세요.
+
+## Spring Boot 기본 정책
+
+공통 기본값이 필요하면 `GuardrailsPolicy` 빈을 등록합니다.
+
+```java
+@Bean
+GuardrailsPolicy defaultGuardrailsPolicy() {
+    return GuardrailsPolicy.builder().privacy().build();
+}
+
+@Bean
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
+}
+```
+
+`builder(chatModel)`은 기본 정책을 사용합니다. 기본 정책을 하나로 정할 수 없으면
+명시적 정책을 전달하세요. `builder(chatModel, policy)`는 전달받은 정책만 사용합니다.
 
 ## 사용자 정의 도구 Advisor와 Boot 없는 구성
 
@@ -154,8 +157,8 @@ GuardrailsChatClientFactory guardrails = GuardrailsChatClientFactory.builder()
 콘텐츠 검사는 새로 생성된 도구 인자를 실행 직전에 검사하지 않습니다.
 
 개인정보 출력 보호와 출력 검사는 스트리밍 응답을 끝까지 모으므로 전달이 늦어집니다.
-개인정보의 `response-inspection` 한도와 검사의 `output.max-frames`,
-`output.stream-timeout`을 [검사 한도](inspection.md#검사-범위와-한도)와 함께 설정하세요.
+정책의 `privacy.responseLimits(...)`와 `inspection.maxOutputFrames(...)`,
+`outputStreamTimeout(...)`을 [검사 한도](inspection.md#검사-범위와-한도)와 함께 설정하세요.
 수집 중 오류, 시간 초과 또는 취소가 발생하면 모은 출력을 전달하지 않습니다.
 최종 출력 차단은 이미 실행한 도구의 부작용을 되돌리지 않습니다.
 

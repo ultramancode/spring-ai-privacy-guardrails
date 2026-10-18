@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 4f6fc8354ca659bddef4e33f9008600e5d1023fe0841c97e8325f56263816884 -->
+<!-- i18n-source-sha256: c80956cd2a28ebebd3aaf4b0bfe6547f47074725d6ee4139e89331a1f396ca19 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -28,11 +28,7 @@ description: >-
 
 검사 스타터에는 규칙 검사기나 모델 백엔드가 포함되어 있지 않습니다.
 
-기본 정책에서 검사를 선택한 뒤 규칙과 클라이언트를 등록합니다.
-
-```properties
-spring.ai.guardrails.inspection=true
-```
+규칙을 등록하고 클라이언트 정책에서 검사를 선택합니다.
 
 ```java
 @Bean
@@ -44,7 +40,8 @@ ContentInspector applicationRules() {
 
 @Bean
 ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
@@ -60,9 +57,8 @@ ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory 
 
 ### 개인정보 보호 또는 도구 권한 검사와 조합
 
-필요한 구성 요소를 준비하고 `spring.ai.guardrails.privacy` 또는
-`spring.ai.guardrails.tool-authorization`을 선택합니다.
-클라이언트 생성 코드는 `guardrails.builder(chatModel)`로 동일합니다.
+필요한 구성 요소를 준비하고 같은 `GuardrailsPolicy`에서 `privacy()` 또는
+`toolAuthorization(true)`를 추가로 선택합니다.
 개인정보 처리, 도구 정의 권한 검사, 콘텐츠 검사 순으로 실행합니다.
 클라이언트별 Java 정책은 [클라이언트 정책](clients.md)을 참고하세요.
 
@@ -114,15 +110,13 @@ InspectionReport report = service.inspect(request);
 
 ## 선택적 모델 출력 검사
 
-출력 검사는 기본적으로 꺼져 있습니다. 다음 설정으로 활성화하면 앞에서 구성한
-클라이언트에 출력 검사도 적용됩니다.
+출력 검사는 기본적으로 꺼져 있습니다. 클라이언트 정책에서 활성화합니다.
 
-```yaml
-spring:
-  ai:
-    inspection:
-      output:
-        enabled: true
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .inspection(inspection -> inspection.applicationOutput(true))
+        .build();
+ChatClient client = guardrails.builder(chatModel, policy).build();
 ```
 
 출력 검사는 답변을 애플리케이션에 반환하기 전에 실행하며, `returnDirect`로
@@ -150,7 +144,7 @@ ChatClient client = guardrails.builder(chatModel, inputPolicy)
 ```
 
 정책에서는 출력 검사를 끄고 별도 Advisor에 맡깁니다. 같은 서비스로 출력만 검사하려면
-[클라이언트 정책](clients.md#클라이언트별-명시적-정책)을 사용하세요.
+[클라이언트 정책](clients.md#클라이언트별-정책)을 사용하세요.
 
 ## HTTP guard 모델과 개인정보 처리
 
@@ -527,19 +521,23 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 
 | 설정 | 기본값 | 적용 범위 |
 | --- | --- | --- |
-| `output.enabled` | `false` | 기본 클라이언트 정책에서 출력 검사 활성화 |
 | `failure-policy` | `FAIL_CLOSED` | 위 실패 정책 표에 해당하는 오류가 발생했을 때 적용할 기본 정책 |
 | `failure-policy-overrides` | 빈 맵 | 검사기 ID별 실패 정책 |
-| `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 난수 부분 없이 전달받을 검사기 ID |
-| `max-segments` | 64 | 빈 본문을 포함한 최대 텍스트 구간 수 |
-| `max-characters` | 131072 | 한 번의 검사에서 처리하는 텍스트의 최대 합산 길이 |
-| `timeout` | 10s | 정책 평가를 포함해 한 요청의 모든 검사기가 함께 사용하는 제한 시간 |
-| `output.max-frames` | 4096 | 출력 검사에서 수집하는 최대 응답 프레임 수. 빈 프레임 포함 |
-| `output.stream-timeout` | 60s | 모델 호출과 도구 실행을 포함한 전체 스트림 수집 시간 |
+| `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 유형 표기로 전달받을 검사기 ID |
+
+정책의 `inspection.limits(...)`에 `InspectionLimits`를 전달하고 출력 수집 한도를 설정합니다.
+
+| 정책 설정 | 기본값 | 적용 범위 |
+| --- | --- | --- |
+| `limits.maxSegments` | 64 | 빈 본문을 포함한 최대 텍스트 구간 수 |
+| `limits.maxCharacters` | 131072 | 한 번의 검사에서 처리하는 텍스트의 최대 합산 길이 |
+| `limits.timeout` | 10s | 정책 평가를 포함해 한 요청의 모든 검사기가 함께 사용하는 제한 시간 |
+| `maxOutputFrames` | 4096 | 출력 검사에서 수집하는 최대 응답 프레임 수. 빈 프레임 포함 |
+| `outputStreamTimeout` | 60s | 모델 호출과 도구 실행을 포함한 전체 스트림 수집 시간 |
 
 입력 한도는 매 모델 호출에 각각 적용합니다. 출력 한도는 도구 루프에서 반환된 중간 텍스트를
 포함해 애플리케이션에 전달할 전체 응답에 적용합니다.
-`spring.ai.privacy.processing`, `spring.ai.privacy.response-inspection` 설정과는
+개인정보 서비스의 `processing` 설정, 정책의 `privacy.responseLimits(...)`와는
 독립적입니다. 직접 API를 사용할 때는 `InspectionLimits`를 전달합니다.
 
 콘텐츠 검사는 개인정보 보호와 도구 권한 검사를 보완합니다. 애플리케이션의 데이터로

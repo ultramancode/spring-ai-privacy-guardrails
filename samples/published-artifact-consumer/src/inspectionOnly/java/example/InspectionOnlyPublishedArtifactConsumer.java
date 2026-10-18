@@ -2,6 +2,8 @@ package example;
 
 import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionOutputAdvisor;
 import io.github.ultramancode.springai.privacy.inspection.rules.InspectionRule;
 import io.github.ultramancode.springai.privacy.inspection.rules.RuleBasedContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionBlockedException;
@@ -41,10 +43,12 @@ public class InspectionOnlyPublishedArtifactConsumer {
                 .web(WebApplicationType.NONE)
                 .properties(
                         "spring.main.banner-mode=off",
-                        "logging.level.root=ERROR",
-                        "spring.ai.inspection.output.enabled=true")
+                        "logging.level.root=ERROR")
                 .run(args)) {
-            InspectionChatClientConfigurer configurer = context.getBean(InspectionChatClientConfigurer.class);
+            InspectionOutputAdvisor outputAdvisor = new InspectionOutputAdvisor(
+                    context.getBean(InspectionService.class));
+            InspectionChatClientConfigurer configurer = context.getBean(InspectionChatClientConfigurer.class)
+                    .withOutputInspection(outputAdvisor);
             verifyInspection(configurer, false);
             verifyInspection(configurer, true);
         }

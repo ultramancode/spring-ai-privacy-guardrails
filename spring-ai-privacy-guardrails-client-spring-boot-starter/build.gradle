@@ -4,7 +4,6 @@ dependencies {
     api project(':spring-ai-privacy-guardrails-spring-boot-starter')
     api project(':spring-ai-privacy-guardrails-inspection-spring-boot-starter')
     compileOnly project(':spring-ai-privacy-guardrails-spring-security')
-    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${providers.gradleProperty('springBootVersion').get()}"
     testImplementation 'org.springframework.boot:spring-boot-test'
     testImplementation project(':spring-ai-privacy-guardrails-spring-security-spring-boot-starter')
     testImplementation project(':spring-ai-privacy-guardrails-inspection-rules')

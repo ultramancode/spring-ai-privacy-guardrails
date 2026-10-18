@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 84d3c4505b5e1868d110e5a9954b7e38b132802cffff803b887712dedf68fd6b -->
+<!-- i18n-source-sha256: 5d577c7974f93ec185acf9d3a3786b013ce1ca6a0d19422a80b932d6f1443f6f -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -161,12 +161,7 @@ dependencies {
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
-      output:
-        enabled: true
-        action: tokenize
       regex:
         enabled: true
         rules:
@@ -174,8 +169,6 @@ spring:
             pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
 ```
-
-`output` 설정은 선택 사항이며, 생략하면 개인정보 출력 보호가 비활성화됩니다.
 
 이 규칙은 `EMP-1234` 형식만 탐지하는 애플리케이션 전용 예제입니다. 일반적인 개인정보
 탐지 성능을 의미하지 않으므로, 운영에 사용할 분석기는 해당 환경을 대표하는 데이터로
@@ -188,11 +181,11 @@ spring:
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
-`spring.ai.guardrails.privacy=true`로 개인정보 보호를 선택하고 분석기를 구성합니다.
 콘텐츠 검사와 도구 권한도 같은 Factory를 사용합니다. 기능 선택과 Java 정책은
 [클라이언트 정책](docs/ko/clients.md)을 참고하세요.
 
@@ -205,20 +198,17 @@ ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory gu
 대소문자를 구분하는 정확한 도구 이름과 필요한 정규 엔티티 유형을 설정해야만 실행 직전에
 해당 값을 복원합니다.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .build();
 ```
 
 애플리케이션 도구와 MCP 제공자를 그대로 등록합니다.
 
 ```java
-ChatClient client = guardrails.builder(chatModel)
+ChatClient client = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
         .build();
 ```
@@ -244,8 +234,8 @@ dependencies {
 ```
 
 `AuthorizationManager<ToolAuthorizationContext>` Bean을 제공하고
-`spring.ai.guardrails.tool-authorization=true`로 선택합니다.
-클라이언트는 동일하게 `guardrails.builder(chatModel)`로 생성합니다.
+`GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택합니다.
+클라이언트는 `guardrails.builder(chatModel, policy)`로 생성합니다.
 개인정보 보호가 필요하면 별도로 선택하세요. 사용자 인증은 애플리케이션이 담당합니다.
 
 개인정보 보호와 함께 사용해도 도구 권한과 개인정보 원문 공개 범위는 서로 다른 정책으로

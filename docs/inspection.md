@@ -25,11 +25,7 @@ For a rules-based setup, add these modules to an application that provides a Spr
 
 The inspection starter does not include a rule or model backend.
 
-Select inspection in the default policy, then register a rule and client:
-
-```properties
-spring.ai.guardrails.inspection=true
-```
+Register a rule and select inspection in the client policy:
 
 ```java
 @Bean
@@ -41,7 +37,8 @@ ContentInspector applicationRules() {
 
 @Bean
 ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
@@ -58,8 +55,8 @@ prompt-injection detector.
 
 ### Combine with privacy or tool authorization
 
-Prepare the required components and select `spring.ai.guardrails.privacy` or
-`spring.ai.guardrails.tool-authorization`. Keep using `guardrails.builder(chatModel)`.
+Prepare the required components and add `privacy()` or `toolAuthorization(true)`
+to the same `GuardrailsPolicy`.
 Privacy processing runs first, followed by tool-definition authorization and content
 inspection. See [Client policies](clients.md) for per-client Java policies.
 
@@ -113,12 +110,11 @@ the caller to enforce. The ChatClient integration throws an exception for a bloc
 
 Output inspection is disabled by default. Enable it on the configured client with:
 
-```yaml
-spring:
-  ai:
-    inspection:
-      output:
-        enabled: true
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .inspection(inspection -> inspection.applicationOutput(true))
+        .build();
+ChatClient client = guardrails.builder(chatModel, policy).build();
 ```
 
 Output inspection checks the assistant text, including `returnDirect` tool
@@ -149,7 +145,7 @@ ChatClient client = guardrails.builder(chatModel, inputPolicy)
 ```
 
 The policy leaves output inspection disabled so the separate advisor owns it.
-For output-only inspection with the same service, use a [client policy](clients.md#explicit-policy-per-client).
+For output-only inspection with the same service, use a [client policy](clients.md#policy-per-client).
 
 ## HTTP guard models and privacy
 
@@ -529,20 +525,24 @@ The following properties use the `spring.ai.inspection` prefix:
 
 | Setting | Default | Scope |
 | --- | --- | --- |
-| `output.enabled` | `false` | Enables output inspection in the default client policy |
 | `failure-policy` | `FAIL_CLOSED` | Default handling of eligible operational inspection failures |
 | `failure-policy-overrides` | Empty map | Failure policies keyed by inspector ID |
 | `pii-token-simplification-inspectors` | Empty set | Inspector IDs that receive session-issued PII tokens without their random part |
-| `max-segments` | 64 | Extracted text segments, including empty bodies |
-| `max-characters` | 131072 | Maximum combined text length per inspection |
-| `timeout` | 10s | Time available to all inspectors in one request, including policy evaluation |
-| `output.max-frames` | 4096 | Maximum response frames collected for output inspection, including empty frames |
-| `output.stream-timeout` | 60s | Total stream assembly time, including model calls and tool execution |
+
+Pass `InspectionLimits` to `inspection.limits(...)` in the policy and set output collection limits.
+
+| Policy setting | Default | Scope |
+| --- | --- | --- |
+| `limits.maxSegments` | 64 | Extracted text segments, including empty bodies |
+| `limits.maxCharacters` | 131072 | Maximum combined text length per inspection |
+| `limits.timeout` | 10s | Time available to all inspectors in one request, including policy evaluation |
+| `maxOutputFrames` | 4096 | Maximum response frames collected for output inspection, including empty frames |
+| `outputStreamTimeout` | 60s | Total stream assembly time, including model calls and tool execution |
 
 Input limits apply separately to each model call. Output limits apply to the complete
 response collected for the application, including intermediate text returned during the tool loop.
-These settings are independent of `spring.ai.privacy.processing` and
-`spring.ai.privacy.response-inspection`. Direct API callers supply `InspectionLimits`.
+These limits are independent of the privacy service's `processing` settings and
+the policy's `privacy.responseLimits(...)`. Direct API callers supply `InspectionLimits`.
 
 Inspection supplements privacy protection and tool authorization. Validate detection
 quality with your application's data.

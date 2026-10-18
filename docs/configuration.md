@@ -52,23 +52,23 @@ a privacy analyzer and uses the `Authentication` established by the
 application's existing Spring Security configuration.
 
 Register an `AuthorizationManager<ToolAuthorizationContext>` bean and create
-clients with `GuardrailsChatClientFactory` after selecting
-`spring.ai.guardrails.tool-authorization=true`.
+clients with `GuardrailsChatClientFactory` and a `GuardrailsPolicy` that selects
+`toolAuthorization(true)`.
 
 To combine authorization with privacy protection, configure an analyzer and
-select `spring.ai.guardrails.privacy=true` too.
+select `privacy()` in the same policy.
 
 See [Spring Security Tool Authorization](security.md) for the complete setup.
 
 ## Apply Privacy Protection to ChatClient
 
-Add the [client starter](clients.md), configure an analyzer and select
-`spring.ai.guardrails.privacy=true`.
+Add the [client starter](clients.md), configure an analyzer and select privacy in the client policy.
 
 ```java
 @Bean
 ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
@@ -109,9 +109,6 @@ configured under `spring.ai.privacy`.
 | `analysis.provider-minimum-scores` | empty | Confidence floor by provider ID. The effective floor is the greater of the global and provider-specific values. |
 | `analysis.entity-aliases` | empty | Explicit mappings from analyzer entity labels to canonical types. |
 | `analysis.type-conflict-fallback` | `PII` | Type used when an overlap type conflict cannot be resolved. |
-| `output.enabled` | `false` | Enables output protection. |
-| `output.action` | `TOKENIZE` | Selects `TOKENIZE`, `REDACT`, or `BLOCK`, which throws a typed exception. |
-| `output.block-exception-message` | `Response blocked by privacy guardrail.` | Safe message used by a `BLOCK` exception. |
 | `processing.max-text-characters` | `1000000` | Maximum length of one text or JSON document. Batch analysis uses the combined length of all texts. |
 | `processing.max-output-characters` | `8000000` | Maximum output length per transformation, including unchanged text. |
 | `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. Direct value-tree tokenization also bounds combined `BigDecimal` analysis text by this value. |
@@ -119,11 +116,6 @@ configured under `spring.ai.privacy`.
 | `processing.max-depth` | `128` | Maximum nesting depth in a value tree or JSON document. |
 | `processing.max-analysis-segments` | `100000` | Maximum number of texts in one batch analysis. |
 | `processing.max-result-spans` | `100000` | Maximum raw spans accepted from analyzers or callers in one analysis. Newly produced analyzer spans are summed across session batches; reused results are not counted again. |
-| `response-inspection.max-stream-frames` | `1024` | Maximum number of frames inspected in one streaming response. |
-| `response-inspection.max-characters` | `1000000` | Maximum cumulative characters of text-based content inspected in one call or streaming response. |
-| `response-inspection.max-media-bytes` | `16777216` | Maximum cumulative media-data size allowed in one response. |
-| `response-inspection.stream-idle-timeout` | `60s` | Maximum time to wait without receiving a streaming-response frame. |
-| `tools.disclosures` | empty | Entity types that may be restored to original values for specific tools. |
 | `regex.enabled` | `false` | Enables application-supplied Regex rules. |
 | `regex.rules[].entity-type` | required per rule | Canonical entity type assigned to each rule match. |
 | `regex.rules[].pattern` | required per rule | Java regular expression evaluated against source text. |
@@ -163,7 +155,7 @@ inside the fixed `spring.ai.privacy` configuration defined by this library.
 Warnings never prevent application startup, and diagnostics run even when no
 analyzer is configured.
 
-For example, misspelling `output.enabled` as shown below still allows the
+For example, misspelling `regex.enabled` as shown below still allows the
 application to start, but records a warning that suggests the correct property
 name.
 
@@ -171,16 +163,15 @@ name.
 spring:
   ai:
     privacy:
-      output:
+      regex:
         enabledd: true
 ```
 
-Diagnostics check property names within `output`, `response-inspection`,
-`analysis`, `regex`, and `tools`. Unknown top-level sections and analyzer-specific
-settings are left untouched.
+Diagnostics check property names within `processing`, `analysis`, and `regex`.
+Unknown top-level sections and analyzer-specific settings are left untouched.
 
-Dynamic keys below `analysis.provider-minimum-scores`,
-`analysis.entity-aliases`, and `tools.disclosures` are not diagnostic targets.
+Dynamic keys below `analysis.provider-minimum-scores` and
+`analysis.entity-aliases` are not diagnostic targets.
 Entries in the `analysis.included-entity-types` and
 `analysis.supplemental-providers` lists are not treated as property names.
 Dynamic maps used by analyzer-specific configuration, such as Presidio
@@ -468,37 +459,34 @@ integration test.
 Privacy-protected tools receive detected PII as **opaque tokens** by default.
 These replacement strings do not directly reveal the original values. If a tool
 needs original values, specify the entity types it may receive in
-`tools.disclosures`.
+`ToolDisclosurePolicy`.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .build();
 ```
 
 With the configuration above, only the `customerLookup` tool receives the
 original value of `CUSTOMER_ID`. Entity types not listed for disclosure and
-tools not registered under `tools.disclosures` continue to receive protected
+tools not registered under `ToolDisclosurePolicy` continue to receive protected
 values.
 
 The factory protects tools automatically, so register the original callbacks or
 providers. MCP providers supply their current tool list for each request.
 
 ```java
-ChatClient client = guardrails.builder(chatModel)
+ChatClient client = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookup, knowledgeSearch, mcpTools)
         .build();
 ```
 
-Tool names in `tools.disclosures` are case-sensitive and must match the final
+Tool names in `ToolDisclosurePolicy` are case-sensitive and must match the final
 `ToolDefinition.name()`. If a dynamic provider adds a prefix, configure the
 resulting final name. Wildcards are not supported, and every entity type that
 requires original disclosure, including `PII`, must be listed explicitly. If a
-tool requires no original values, do not register it in `tools.disclosures`.
+tool requires no original values, do not register it in `ToolDisclosurePolicy`.
 
 Original disclosure is checked against the final entity type after detection
 results are merged. For example, if `PERSON` and `ORGANIZATION` detections are
@@ -515,7 +503,7 @@ the tool implementation does not expose PII in exception messages or logs.
 
 When the optional Spring Security integration is enabled, tool authorization
 runs before this disclosure policy. Authorization decides whether the current
-principal may discover or execute the tool. `tools.disclosures` still decides
+principal may discover or execute the tool. `ToolDisclosurePolicy` still decides
 which original PII values that authorized tool may receive, based on their
 entity types. See
 [Spring Security Tool Authorization](security.md#guarantees).
@@ -529,17 +517,17 @@ configure the boundary explicitly as described in
 
 ## Output Policy and Streaming
 
-```yaml
-spring:
-  ai:
-    privacy:
-      output:
-        enabled: true
-        action: tokenize
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.outputAction(PrivacyOutputAction.TOKENIZE))
+        .build();
+ChatClient client = guardrails.builder(chatModel, policy).build();
 ```
 
-When output protection is enabled, the configured policy is applied to PII
-returned from the model or tools to the application.
+Selecting `outputAction(...)` enables output protection with that action.
+`outputProtection(true)` enables it with `TOKENIZE` if no action is selected.
+The policy applies to PII returned from the model or tools to the application.
+Use `outputBlockMessage(...)` to set the safe exception message for `BLOCK`.
 
 - `TOKENIZE` consistently replaces the same PII value with the same opaque token within
   one request.
@@ -567,18 +555,18 @@ A single `ChatClient` may register both kinds of tools. Spring AI skips the
 additional model call only when every tool selected in one model response has
 `returnDirect = true`. Otherwise, tool results are returned to the model.
 
-Even when `output.enabled=false`, PII in a directly returned `returnDirect`
+Even with `outputProtection(false)`, PII in a directly returned `returnDirect`
 result remains in the form of opaque tokens. When output protection is enabled,
 the final result is processed according to the configured `TOKENIZE`, `REDACT`,
 or `BLOCK` policy.
 
 ### Final Model Output Inspection
 
-`output.enabled` controls whether the output policy is applied to the final
+`outputProtection(...)` controls whether the output policy is applied to the final
 model-generated response. Disabling it does not disable privacy protection for
 inputs, model-call boundaries, or tool results.
 
-| `output.enabled` | Final model-output inspection | Delivery behavior |
+| Output protection | Final model-output inspection | Delivery behavior |
 | --- | --- | --- |
 | `false` | No | The final model output is not inspected separately. Streaming calls may deliver model-generated text incrementally. Other privacy boundaries remain active, and PII in `returnDirect` results is still replaced with opaque tokens. |
 | `true` | Yes | The complete response is inspected, then `TOKENIZE`, `REDACT`, or `BLOCK` is applied before delivery. |
@@ -586,7 +574,7 @@ inputs, model-call boundaries, or tool results.
 The Spring AI streaming API remains usable when output protection is enabled,
 but the library must first buffer the complete response for privacy inspection.
 Model-generated text therefore cannot be delivered in real time as it is
-generated. If real-time streaming is required, leave `output.enabled=false`
+generated. If real-time streaming is required, use `outputProtection(false)`
 and handle privacy protection for final model output in the application.
 
 ### Reasoning Text Protection
@@ -605,16 +593,15 @@ automatically.
 
 ## Input and Response Limits
 
-`response-inspection.*` is independent of `output.enabled`. These settings bound
-the amount and streaming scope of content the library must inspect, including
-intermediate responses during tool-call processing. When output protection is
-enabled, `response-inspection.max-characters` and
-`response-inspection.max-media-bytes` also apply to the final response. The
-media limit measures data size only; it does not detect PII in image or audio
-content.
+Set `privacy.responseLimits(...)` in the client policy with `PrivacyResponseInspectionLimits`.
+The defaults allow 1,024 stream frames, 1,000,000 text characters, 16,777,216 media
+bytes and 60 seconds between frames. These limits apply to intermediate tool-call
+responses even when final output protection is disabled. With output protection,
+text and media limits also apply to the final response. The media limit measures
+data size. It does not detect PII in image or audio content.
 
 `processing.*` sets limits on privacy analysis and transformation. These limits
-apply even when `output.enabled=false`. All values must be positive integers.
+apply even with `outputProtection(false)`. All values must be positive integers.
 
 String lengths are measured in UTF-16 code units, as with Java `String.length()`.
 JSON output length includes JSON syntax and escape sequences. Value-tree output

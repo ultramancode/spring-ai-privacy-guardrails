@@ -3,6 +3,7 @@ package io.github.ultramancode.springai.privacy.client;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
+import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 
@@ -24,6 +25,11 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
 
     public static Builder builder() {
         return new Builder();
+    }
+
+    /** Returns a builder with this policy's settings. Changes do not affect this policy. */
+    public Builder mutate() {
+        return new Builder(this);
     }
 
     /** Privacy protects model requests and tools. A null output action disables final output protection. */
@@ -61,26 +67,54 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
         private Inspection inspection;
         private boolean toolAuthorization;
 
-        /** Enables model and tool privacy without disclosing originals or protecting final output. */
+        private Builder() {}
+
+        private Builder(GuardrailsPolicy source) {
+            privacy = source.privacy();
+            inspection = source.inspection();
+            toolAuthorization = source.toolAuthorization();
+        }
+
+        /** Enables privacy, preserving its settings if already selected. */
         public Builder privacy() {
             return privacy(settings -> {});
         }
 
+        /** Selects or removes privacy. Selecting it preserves existing settings. */
+        public Builder privacy(boolean enabled) {
+            if (enabled) {
+                return privacy();
+            }
+            privacy = null;
+            return this;
+        }
+
+        /** Customizes privacy while preserving settings that are not changed. */
         public Builder privacy(Consumer<PrivacyBuilder> customizer) {
-            PrivacyBuilder settings = new PrivacyBuilder();
-            customizer.accept(settings);
+            PrivacyBuilder settings = new PrivacyBuilder(privacy);
+            Objects.requireNonNull(customizer, "customizer").accept(settings);
             privacy = settings.build();
             return this;
         }
 
-        /** Enables inspection before each model request. */
+        /** Enables inspection, preserving its settings if already selected. */
         public Builder inspection() {
             return inspection(settings -> {});
         }
 
+        /** Selects or removes inspection. Selecting it preserves existing settings. */
+        public Builder inspection(boolean enabled) {
+            if (enabled) {
+                return inspection();
+            }
+            inspection = null;
+            return this;
+        }
+
+        /** Customizes inspection while preserving settings that are not changed. */
         public Builder inspection(Consumer<InspectionBuilder> customizer) {
-            InspectionBuilder settings = new InspectionBuilder();
-            customizer.accept(settings);
+            InspectionBuilder settings = new InspectionBuilder(inspection);
+            Objects.requireNonNull(customizer, "customizer").accept(settings);
             inspection = settings.build();
             return this;
         }
@@ -101,8 +135,27 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
         private String outputBlockMessage = "Response blocked by privacy guardrail.";
         private PrivacyResponseInspectionLimits responseLimits = PrivacyResponseInspectionLimits.defaults();
 
+        private PrivacyBuilder(Privacy source) {
+            if (source != null) {
+                disclosure = source.toolDisclosurePolicy();
+                outputAction = source.outputAction();
+                outputBlockMessage = source.outputBlockMessage();
+                responseLimits = source.responseLimits();
+            }
+        }
+
         public PrivacyBuilder toolDisclosurePolicy(ToolDisclosurePolicy policy) {
             disclosure = Objects.requireNonNull(policy, "toolDisclosurePolicy");
+            return this;
+        }
+
+        /** Enables final output protection with TOKENIZE if no action is selected, or disables it. */
+        public PrivacyBuilder outputProtection(boolean enabled) {
+            if (!enabled) {
+                outputAction = null;
+            } else if (outputAction == null) {
+                outputAction = PrivacyOutputAdvisor.DEFAULT_ACTION;
+            }
             return this;
         }
 
@@ -132,6 +185,16 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
         private InspectionLimits limits = InspectionLimits.defaults();
         private int maxOutputFrames = InspectionOutputAdvisor.DEFAULT_MAX_FRAMES;
         private Duration outputStreamTimeout = InspectionOutputAdvisor.DEFAULT_STREAM_TIMEOUT;
+
+        private InspectionBuilder(Inspection source) {
+            if (source != null) {
+                modelRequests = source.modelRequests();
+                applicationOutput = source.applicationOutput();
+                limits = source.limits();
+                maxOutputFrames = source.maxOutputFrames();
+                outputStreamTimeout = source.outputStreamTimeout();
+            }
+        }
 
         public InspectionBuilder modelRequests(boolean enabled) {
             modelRequests = enabled;

@@ -9,7 +9,7 @@ description: >-
 [English](../threat-model.md) | **한국어**
 
 <!-- i18n-source: docs/threat-model.md -->
-<!-- i18n-source-sha256: 4f4382361b8e102921d3bc5e77e345cc051322ed01464138bbf31219eed624e4 -->
+<!-- i18n-source-sha256: 6ad4983d1642f009f2171fc2452cb7b9e1cdabf83d5d838357cc01cd12ddc404 -->
 
 ## 보호 대상
 
@@ -127,7 +127,7 @@ Spring Security 통합은 애플리케이션의 인증 방식과 도구 권한 �
 다른 구성 요소가 보관한 문자열·사본까지 삭제하지는 않습니다.
 
 Spring Security 통합은 모델에 공개할 도구와 실행 가능한 도구를 제어합니다. 개인정보
-보호와 함께 사용해도 `tools.disclosures`에 설정한 도구별·엔티티 유형별 공개 범위가
+보호와 함께 사용해도 `ToolDisclosurePolicy`에 설정한 도구별·엔티티 유형별 공개 범위가
 적용되며, 권한 검사를 활성화한다고 이 설정이 사용자별로 달라지지는 않습니다.
 
 ## 별도로 관리할 영역

@@ -162,12 +162,7 @@ dependencies {
 ```yaml
 spring:
   ai:
-    guardrails:
-      privacy: true
     privacy:
-      output:
-        enabled: true
-        action: tokenize
       regex:
         enabled: true
         rules:
@@ -175,9 +170,6 @@ spring:
             pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
             score: 0.90
 ```
-
-The `output` section is optional. When omitted, privacy output protection is
-disabled.
 
 This example rule is application-specific and detects only values in the
 `EMP-1234` format. It does not establish general PII-detection performance.
@@ -191,11 +183,11 @@ Use the factory for clients that should follow the configured policy.
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    return guardrails.builder(chatModel).build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
+    return guardrails.builder(chatModel, policy).build();
 }
 ```
 
-Enable `spring.ai.guardrails.privacy=true` and configure an analyzer.
 The same factory supports inspection and tool authorization. See
 [Client policies](docs/clients.md) for feature selection and explicit Java policies.
 
@@ -210,20 +202,17 @@ deny-by-default. Original values are restored immediately before execution only
 when the policy lists both the exact, case-sensitive tool name and the required
 canonical entity types.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .build();
 ```
 
 Register application tools and MCP providers directly:
 
 ```java
-ChatClient client = guardrails.builder(chatModel)
+ChatClient client = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
         .build();
 ```
@@ -251,8 +240,8 @@ dependencies {
 ```
 
 Provide an `AuthorizationManager<ToolAuthorizationContext>` bean and select
-`spring.ai.guardrails.tool-authorization=true`. Keep using
-`guardrails.builder(chatModel)`. Select privacy separately when needed.
+`toolAuthorization(true)` in `GuardrailsPolicy`. Pass the policy to
+`guardrails.builder(chatModel, policy)`. Select privacy separately when needed.
 Authentication remains the application's responsibility.
 
 When combined with privacy protection, tool authorization and original-value

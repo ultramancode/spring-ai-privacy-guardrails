@@ -35,7 +35,8 @@ missing components causes an error when creating the client builder.
 ## Policy per client
 
 Select features, output handling and tool disclosure in `GuardrailsPolicy`.
-Keep shared service settings, such as analyzers, model paths and server connections, in YAML.
+Configure analyzers through their starter properties. Supply model paths and
+connection settings when creating HTTP or ONNX inspector beans.
 
 ```java
 GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()

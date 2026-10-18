@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 44087f0c809d613fde453b5deeca6bffccb2b23c608990b3aa3c73b176657219 -->
+<!-- i18n-source-sha256: 04ca7ad80602c989f59c80c551cd5bb1eaba892682744a33ef8781d72b9b4147 -->
 
 ## 책임 범위
 
@@ -246,17 +246,17 @@ sequenceDiagram
 
 ## 도구 실행
 
-`PrivacyToolCallbackFactory`는 `ToolCallback`과 `ToolCallbackProvider`에 개인정보
-보호를 적용하는 공개 API입니다. 보호된 도구는 현재 요청 세션을 사용해 필요한
-원문 값만 복원하고, 실행 결과를 다시 보호합니다.
+개인정보 보호를 선택한 `GuardrailsChatClientFactory`는 등록한 `ToolCallback`과
+`ToolCallbackProvider`를 자동으로 보호합니다. 직접 조립할 때는
+`PrivacyToolCallbackFactory`로 감싸서 등록합니다. 보호된 도구는 현재 요청 세션을
+사용해 허용된 원문 값만 복원하고, 실행 결과를 다시 보호합니다.
 
 도구에 대한 원문 값 공개는 기본적으로 허용되지 않습니다. 도구 등록과 원문 값 공개
 권한은 별개이며, 공개할 엔티티 유형을 명시한 도구에만 실행 직전에 해당 원문 값을
 복원합니다.
 
-보호된 `ChatClient`의 표준 도구 경로에서는 `PrivacyToolCallbackFactory`로 감싸지 않은
-콜백을 오류로 처리합니다. 사용자 정의 `ToolCallingManager`나 `ToolCallbackResolver`를
-사용하는 별도 실행 경로는 자동 보호 범위에 포함되지 않습니다.
+사용자 정의 `ToolCallingManager`나 `ToolCallbackResolver`를 사용하는 별도 실행 경로는
+자동 보호 범위에 포함되지 않습니다.
 
 원문 값이 공개된 뒤 도구 내부에서 남긴 로그나 발생한 예외는 재보호 대상이 아니므로
 공개된 값을 포함할 수 있습니다.

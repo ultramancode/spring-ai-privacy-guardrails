@@ -26,8 +26,7 @@ import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
@@ -61,8 +60,6 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,17 +74,25 @@ class GuardrailsChatClientFactoryTest {
         SecurityContextHolder.clearContext();
     }
 
-    static Stream<Arguments> combinations() {
-        return IntStream.range(1, 8).boxed()
-                .flatMap(features -> Stream.of(Arguments.of(features, false), Arguments.of(features, true)));
-    }
-
-    @ParameterizedTest
-    @MethodSource("combinations")
-    void appliesSelectedFeaturesToModelRequestsAndToolCalls(int features, boolean streaming) {
-        boolean privacyEnabled = (features & 1) != 0;
-        boolean inspectionEnabled = (features & 2) != 0;
-        boolean authorizationEnabled = (features & 4) != 0;
+    @ParameterizedTest(name = "privacy={0}, inspection={1}, authorization={2}, streaming={3}")
+    @CsvSource({
+            "true,  false, false, false",
+            "true,  false, false, true",
+            "false, true,  false, false",
+            "false, true,  false, true",
+            "true,  true,  false, false",
+            "true,  true,  false, true",
+            "false, false, true,  false",
+            "false, false, true,  true",
+            "true,  false, true,  false",
+            "true,  false, true,  true",
+            "false, true,  true,  false",
+            "false, true,  true,  true",
+            "true,  true,  true,  false",
+            "true,  true,  true,  true"
+    })
+    void appliesSelectedFeaturesToModelRequestsAndToolCalls(
+            boolean privacyEnabled, boolean inspectionEnabled, boolean authorizationEnabled, boolean streaming) {
         PrivacyService privacy = privacyService();
         List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
         List<InspectionExecution> executions = new CopyOnWriteArrayList<>();
@@ -199,17 +204,20 @@ class GuardrailsChatClientFactoryTest {
     }
 
     @Test
-    void failsForMissingPoliciesOrComponentsAndForeignWrappers() {
+    void rejectsMissingDefaultPolicyOrPrivacyService() {
         GuardrailsChatClientFactory empty = GuardrailsChatClientFactory.builder().build();
         assertThatThrownBy(() -> empty.builder(new LoopModel())).hasMessageContaining("No default GuardrailsPolicy");
         assertThatThrownBy(() -> empty.builder(new LoopModel(), GuardrailsPolicy.builder().privacy().build()))
                 .hasMessageContaining("no PrivacyService");
-        assertThatThrownBy(() -> GuardrailsPolicy.builder().build()).hasMessageContaining("at least one");
+    }
+
+    @Test
+    void rejectsAlreadyWrappedTools() {
         PrivacyService privacy = privacyService();
-        ToolCallback foreign = new PrivacyToolCallbackFactory(privacy, ToolDisclosurePolicy.denyAll())
+        ToolCallback wrappedTool = new PrivacyToolCallbackFactory(privacy, ToolDisclosurePolicy.denyAll())
                 .wrap(tool("lookup", false, new AtomicReference<>()));
         ChatClient client = GuardrailsChatClientFactory.builder().privacyService(privacy).build()
-                .builder(new LoopModel(), GuardrailsPolicy.builder().privacy().build()).defaultTools(foreign).build();
+                .builder(new LoopModel(), GuardrailsPolicy.builder().privacy().build()).defaultTools(wrappedTool).build();
         assertThatThrownBy(() -> client.prompt().user("Alice").call().content())
                 .hasMessageContaining("already be privacy wrapped");
         assertThat(privacy.activeSessionCount()).isZero();

@@ -267,20 +267,19 @@ Output policy and streaming behavior are documented under
 
 ## Tool Execution
 
-`PrivacyToolCallbackFactory` is the public API for applying privacy protection
-to `ToolCallback` and `ToolCallbackProvider` instances. Protected tools use the
-current request session to restore only the original values they need and
-protect their results again after execution.
+When privacy is selected, `GuardrailsChatClientFactory` automatically protects
+registered `ToolCallback` and `ToolCallbackProvider` instances. For manual assembly,
+wrap them with `PrivacyToolCallbackFactory`. Protected tools use the current request
+session to restore only the permitted original values and protect their results
+again after execution.
 
 Original-value disclosure to tools is default-deny. Tool registration and
 permission to receive original values are separate concerns: only tools
 configured for specific entity types receive those originals immediately before
 execution.
 
-On a protected `ChatClient`'s standard tool path, callbacks that are not wrapped
-by `PrivacyToolCallbackFactory` are rejected. Separate execution paths that use
-a custom `ToolCallingManager` or `ToolCallbackResolver` are outside the automatic
-protection scope.
+Separate execution paths that use a custom `ToolCallingManager` or
+`ToolCallbackResolver` are outside the automatic protection scope.
 
 Logs written or exceptions raised inside a tool after original values have been
 disclosed are not re-protected and may contain those values.

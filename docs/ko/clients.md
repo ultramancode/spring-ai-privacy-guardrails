@@ -8,7 +8,7 @@ description: >-
 [English](../clients.md) | **한국어**
 
 <!-- i18n-source: docs/clients.md -->
-<!-- i18n-source-sha256: 4bea1bda9242d575915ad50a1e3c9aa87b61fead685505cd6142fd3136f70b87 -->
+<!-- i18n-source-sha256: 17dc86e130ce873f6047962f869a4d8804784d2c05be4e04985bb8b317b6e183 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. Factory는 선택한 기능을 조립하고 Spring AI를 통해
@@ -37,7 +37,8 @@ Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인�
 ## 클라이언트별 정책
 
 `GuardrailsPolicy`에서 사용할 기능과 출력 처리, 도구 원문 공개 범위를 선택합니다.
-분석기, 모델 경로, 서버 연결 같은 공통 서비스 설정은 YAML에 둡니다.
+분석기는 스타터의 설정 프로퍼티로 구성합니다. HTTP·ONNX 검사기는 빈을 만들 때
+모델 경로와 연결 설정을 전달합니다.
 
 ```java
 GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()

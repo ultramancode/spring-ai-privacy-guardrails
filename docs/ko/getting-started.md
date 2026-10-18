@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 40dc130e6eb9c6c1b9f8f0bc3c52bbf5bfaccc42cefe837abab54727ba4b8760 -->
+<!-- i18n-source-sha256: 25fd6ddeb3f21301afd01169cf61b36808ff4d19d10b04f975f67e44b82c0251 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -33,18 +33,18 @@ JVM 내부에서 자체 NER 모델을 사용하려면 OpenNLP를, 애플리케�
 
 최소 버전은 Java 17, Spring AI 2.0.0과 Spring Boot 4.0.0입니다.
 
-## 1. 개인정보 보호 스타터 선택
+## 1. 분석기 선택
 
-사용할 분석기에 맞는 스타터를 선택합니다. 각 링크에서 해당 스타터의 Gradle·Maven
+클라이언트 스타터로 `ChatClient`를 구성하고 사용할 분석기를 선택합니다.
+Presidio와 OpenNLP는 별도 스타터가 필요합니다. 각 링크에서 Gradle·Maven
 의존성을 확인할 수 있습니다.
 
-| 스타터 | 용도 |
+| 분석기 | 용도 |
 | --- | --- |
-| [기본](#2-regex로-빠르게-시작) | 직접 정의한 Regex 규칙 또는 사용자 정의 분석기 |
+| [Regex](#2-regex로-빠르게-시작) | 직접 정의한 패턴으로 탐지합니다. 클라이언트 스타터에 포함되어 있습니다. |
 | [Presidio](#5-presidio로-다양한-pii-유형-탐지) | 외부 Presidio 서비스를 연동해 다양한 유형의 개인정보를 탐지합니다. |
 | [OpenNLP](#6-jvm-내부-탐지에-opennlp-사용) | 직접 준비한 OpenNLP 모델로 애플리케이션 내부에서 개인정보를 탐지합니다. 외부 분석 서비스가 필요하지 않습니다. |
 
-Presidio와 OpenNLP 스타터에는 기본 스타터가 이미 포함되어 있습니다.
 함께 사용하는 Privacy Guardrails 모듈은 같은 버전을 사용하세요.
 스타터 의존성을 추가하는 것만으로 개인정보 보호나 분석기가 자동으로 활성화되지는
 않습니다.
@@ -225,9 +225,7 @@ Spring Security 스타터를 추가하고, 도구 권한 정책을
 Presidio는 오픈소스 PII 탐지·비식별화 프레임워크입니다. 애플리케이션 고유 형식뿐 아니라 다양한 PII 유형을 탐지하려면 외부 Presidio
 Analyzer 서비스를 연동하는 Presidio 스타터를 사용합니다.
 
-Presidio 스타터에는 기본 Privacy Guardrails 스타터가 이미 포함되어 있으므로,
-Presidio를 사용할 때는 기본 스타터를 별도로 추가할 필요가 없습니다. 다른 분석기도
-함께 사용할 때만 해당 분석기 스타터를 추가하세요.
+[클라이언트 스타터](#2-regex로-빠르게-시작)와 함께 Presidio 스타터를 추가합니다.
 
 ### Gradle
 
@@ -252,6 +250,8 @@ Presidio를 활성화하고 `analyzer-url`을 지정합니다.
 ```yaml
 spring:
   ai:
+    guardrails:
+      privacy: true
     privacy:
       analysis:
         language: en
@@ -267,9 +267,7 @@ spring:
 docker compose -f samples/presidio/docker-compose.yml up -d --wait
 ```
 
-Presidio를 사용할 때도 [ChatClient 보호](#3-chatclient-보호)의
-`PrivacyChatClientConfigurer` 구성이 필요합니다. 앞에서 이미 적용했다면
-클라이언트를 다시 구성할 필요는 없습니다.
+[ChatClient 보호](#3-chatclient-보호)의 예제에 따라 클라이언트를 생성합니다.
 
 Regex와 Presidio를 함께 활성화할 수도 있습니다. 기본 `UNION` 모드에서는 구성한
 분석기를 모두 실행한 뒤 탐지 결과를 합칩니다. 기본 실패 정책인 `REQUIRE_ALL`에서는
@@ -280,7 +278,7 @@ Regex와 Presidio를 함께 활성화할 수도 있습니다. 기본 `UNION` 모
 ## 6. JVM 내부 탐지에 OpenNLP 사용
 
 호환되는 OpenNLP 모델을 애플리케이션 JVM 내부에서 사용해 탐지하려면
-OpenNLP 스타터를 사용합니다.
+OpenNLP 스타터를 사용합니다. [클라이언트 스타터](#2-regex로-빠르게-시작)와 함께 추가하세요.
 
 ### Gradle
 
@@ -305,6 +303,8 @@ dependencies {
 ```yaml
 spring:
   ai:
+    guardrails:
+      privacy: true
     privacy:
       analysis:
         language: en

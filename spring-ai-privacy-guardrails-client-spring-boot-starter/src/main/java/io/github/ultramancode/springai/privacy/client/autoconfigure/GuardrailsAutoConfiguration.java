@@ -32,7 +32,7 @@ import org.springframework.context.annotation.ConditionContext;
 import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
-/** Assembles selected guardrails without changing shared engine policies. */
+/** Configures the default client policy and factory for Spring Boot. */
 @AutoConfiguration(afterName = {
         "io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration",
         "io.github.ultramancode.springai.privacy.inspection.autoconfigure.InspectionAutoConfiguration",
@@ -95,11 +95,11 @@ public class GuardrailsAutoConfiguration {
                 .advisorObservationConvention(advisorConvention.getIfUnique())
                 .toolAdvisorBuilder(toolBuilder)
                 .clientCustomizer(client -> {
-                    legacyCustomizers.orderedStream().forEach(customizer -> customizer.customize(client));
-                    customizers.orderedStream().forEach(customizer -> customizer.customize(client));
                     if (!environment.getProperty("spring.ai.chat.client.tool-calling.enabled", Boolean.class, true)) {
                         client.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
                     }
+                    legacyCustomizers.orderedStream().forEach(customizer -> customizer.customize(client));
+                    customizers.orderedStream().forEach(customizer -> customizer.customize(client));
                     return client;
                 });
         privacy.ifAvailable(builder::privacyService);

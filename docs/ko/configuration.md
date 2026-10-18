@@ -9,34 +9,32 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 3630289d1e44f1443cea6920a132e0d51cf1999355bbc36d9734e2f680ba949f -->
+<!-- i18n-source-sha256: 73d061a94fcb03414e7b22d9bec7dfc10a4a18c52825ef68bfd8a92ea6652f8c -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
 
-기본 Spring Boot 스타터는 개인정보 탐지 설정과 `ChatClient`·도구의 보호 구성을
-제공합니다. Presidio와 OpenNLP 스타터는 여기에 각 분석기 연동을 추가하며, 같은
-개인정보 보호 설정을 사용합니다. Spring Security 스타터를 추가하면 사용자별 도구
-권한 검사도 사용할 수 있습니다.
+클라이언트 스타터는 클라이언트별 보호를 구성하는 `GuardrailsChatClientFactory`를
+제공합니다. Presidio와 OpenNLP 스타터는 분석기 연동을 추가하며 같은 개인정보 보호
+설정을 사용합니다. Spring Security 스타터를 추가하면 사용자별 도구 권한 검사도
+사용할 수 있습니다.
 
 ## 스타터 선택
 
-사용할 분석기에 맞는 개인정보 보호 스타터를 선택하고, 필요한 연동 스타터를 추가하세요.
+클라이언트 스타터를 추가한 뒤 필요한 분석기와 권한 검사 스타터를 추가하세요.
 
 스타터 이름을 누르면 Gradle·Maven 의존성 예제로 이동합니다.
 
 | 스타터 | 용도 |
 | --- | --- |
+| [클라이언트](getting-started.md#2-regex로-빠르게-시작) | Factory로 클라이언트를 구성합니다. Regex가 포함되어 있으며 사용자 정의 분석기도 지원합니다. |
 | [Presidio](getting-started.md#5-presidio로-다양한-pii-유형-탐지) | 외부 Presidio 서비스를 연동해 다양한 유형의 개인정보를 탐지합니다. |
-| [기본](getting-started.md#2-regex로-빠르게-시작) | Regex 또는 사용자 정의 분석기를 사용합니다. 별도의 분석기 연동은 포함하지 않습니다. |
 | [OpenNLP](getting-started.md#6-jvm-내부-탐지에-opennlp-사용) | 직접 준비한 OpenNLP 모델로 애플리케이션 내부에서 개인정보를 탐지합니다. 외부 분석 서비스가 필요하지 않습니다. |
 | [Spring Security](security.md#spring-boot-스타터-추가) | 애플리케이션의 기존 Spring Security 인증 정보로 도구 권한을 검사합니다. 단독으로 사용하거나 개인정보 보호와 함께 사용할 수 있습니다. |
 
-Presidio와 OpenNLP 스타터에는 기본 스타터가 포함되어 있습니다. 두 스타터를 함께
-사용할 때도 기본 스타터를 별도로 추가할 필요가 없습니다. 함께 사용하는 Privacy
-Guardrails 모듈은 같은 버전을 사용하세요.
+함께 사용하는 Privacy Guardrails 모듈은 같은 버전을 사용하세요.
 
-개인정보 보호 스타터를 추가한 뒤에는 다음 순서로 설정하세요.
+개인정보 보호는 다음 순서로 설정하세요.
 
 1. **분석기 설정:** 사용할 [Regex](#regex-분석기), [Presidio](#presidio-분석기),
    [OpenNLP](#opennlp-분석기-jvm-전용-선택-사항)를 설정하거나
@@ -57,7 +55,7 @@ Guardrails 모듈은 같은 버전을 사용하세요.
 `spring.ai.guardrails.tool-authorization=true`를 선택한 뒤
 `GuardrailsChatClientFactory`로 클라이언트를 생성하세요.
 
-개인정보 보호와 함께 사용하려면 개인정보 보호 스타터를 추가하고 분석기를 구성한 뒤
+개인정보 보호와 함께 사용하려면 분석기를 구성하고
 `spring.ai.guardrails.privacy=true`도 선택하세요.
 
 전체 설정은 [Spring Security 도구 권한](security.md)을 참고하세요.
@@ -153,7 +151,8 @@ Spring Boot 설정 메타데이터는 IDE 자동 완성을 제공합니다.
 
 스타터는 `PiiAnalyzer` Bean이 하나 이상 있으면 `PrivacyService`를 생성합니다.
 자동 구성되거나 애플리케이션이 직접 등록한 `PrivacyService` Bean이 있으면
-`PrivacyChatClientConfigurer`와 `PrivacyToolCallbackFactory`를 제공합니다.
+직접 연동할 때 사용할 `PrivacyChatClientConfigurer`와 `PrivacyToolCallbackFactory`
+Bean도 제공합니다.
 이 서비스가 없으면 두 연동 Bean을 생성하지 않으며, 이를 주입받지 않는 애플리케이션은
 정상적으로 시작할 수 있습니다.
 

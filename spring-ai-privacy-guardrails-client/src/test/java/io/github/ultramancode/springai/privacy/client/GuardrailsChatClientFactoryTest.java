@@ -84,7 +84,7 @@ class GuardrailsChatClientFactoryTest {
 
     @ParameterizedTest
     @MethodSource("combinations")
-    void protectsToolsAndPreservesStageOrderForEveryFeatureCombination(int features, boolean streaming) {
+    void appliesSelectedFeaturesToModelRequestsAndToolCalls(int features, boolean streaming) {
         boolean privacyEnabled = (features & 1) != 0;
         boolean inspectionEnabled = (features & 2) != 0;
         boolean authorizationEnabled = (features & 4) != 0;
@@ -97,12 +97,7 @@ class GuardrailsChatClientFactoryTest {
         ToolCallback callback = tool("lookup", false, toolInput);
         GuardrailsChatClientFactory factory = GuardrailsChatClientFactory.builder()
                 .privacyService(privacy).inspectionService(inspectionService(inspections))
-                .inspectionObserver(new InspectionObserver() {
-                    public void onInspection(InspectionReport report) {}
-                    public void onInspection(InspectionReport report, InspectionExecution execution) {
-                        executions.add(execution);
-                    }
-                })
+                .inspectionObserver((report, execution) -> executions.add(execution))
                 .toolAuthorization(authorizationFactory(authorizations)::builder).build();
         GuardrailsPolicy.Builder policy = GuardrailsPolicy.builder().toolAuthorization(authorizationEnabled);
         if (privacyEnabled) {
@@ -281,7 +276,6 @@ class GuardrailsChatClientFactoryTest {
         assertThat(privacy.activeSessionCount()).isZero();
     }
 
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void connectsPrivacyTokenSimplificationToInputAndOutputInspection(boolean streaming) {
@@ -316,12 +310,7 @@ class GuardrailsChatClientFactoryTest {
         InspectionService inspection = new InspectionService(List.of(new RuleBasedContentInspector("rules", List.of(rule))));
         List<InspectionExecution> executions = new CopyOnWriteArrayList<>();
         GuardrailsChatClientFactory factory = GuardrailsChatClientFactory.builder().inspectionService(inspection)
-                .inspectionObserver(new InspectionObserver() {
-                    public void onInspection(InspectionReport report) {}
-                    public void onInspection(InspectionReport report, InspectionExecution execution) {
-                        executions.add(execution);
-                    }
-                }).build();
+                .inspectionObserver((report, execution) -> executions.add(execution)).build();
         GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection(settings -> settings
                 .modelRequests(false).applicationOutput(true)).build();
         ChatClient client = factory.builder(responseModel(Flux.just(response("attack"))), policy).build();
@@ -344,7 +333,7 @@ class GuardrailsChatClientFactoryTest {
         GuardrailsChatClientFactory factory = GuardrailsChatClientFactory.builder().privacyService(privacy)
                 .inspectionService(inspectionService(new CopyOnWriteArrayList<>()))
                 .inspectionObserver(new InspectionObserver() {
-                    public void onInspection(InspectionReport report) {}
+                    public void onInspection(InspectionReport report, InspectionExecution execution) {}
                     public void onFailure(InspectionException failure, InspectionExecution execution) {
                         failureContext.set(execution);
                     }

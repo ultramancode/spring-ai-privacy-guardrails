@@ -58,13 +58,13 @@ class InspectionEnforcementTest {
         List<InspectionException> observedFailures = new ArrayList<>();
         InspectionObserver observer = new InspectionObserver() {
             @Override
-            public void onInspection(InspectionReport report) {
+            public void onInspection(InspectionReport report, InspectionExecution execution) {
                 observedReports.add(report);
                 Thread.currentThread().interrupt();
             }
 
             @Override
-            public void onFailure(InspectionException failure) {
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 observedFailures.add(failure);
             }
         };

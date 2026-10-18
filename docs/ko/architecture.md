@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: d728a6e847082b527ec09cc44d88482122104b5396ff98bd2d9ed7e4154b521e -->
+<!-- i18n-source-sha256: 44087f0c809d613fde453b5deeca6bffccb2b23c608990b3aa3c73b176657219 -->
 
 ## 책임 범위
 
@@ -85,13 +85,14 @@ Spring AI 연동 모듈은 `core`를 `ChatClient`, 모델 호출과 도구 실�
 Spring Security 연동은 Spring AI의 도구 호출 API와 `spring-security-core`를
 사용합니다. 전용 Spring Boot 스타터는 기본 스타터와 독립적으로 사용할 수 있습니다.
 
-두 연동 모듈은 `spring-ai-privacy-guardrails-spring-ai-boundary`에 의존합니다.
+개인정보 보호, 콘텐츠 검사와 권한 검사 연동은
+`spring-ai-privacy-guardrails-spring-ai-boundary`를 공유합니다.
 이 공통 모듈은 매 모델 호출 전에 개인정보 보호 → 도구 인가 → 모델 입력 콘텐츠 검사
 순서로 실행하며, 등록하지 않은 단계는 건너뜁니다.
 
-개인정보 보호와 도구 권한 검사를 함께 사용하려면 개인정보 보호 스타터와 Spring
-Security 스타터를 함께 추가하고, 두 기능을 동일한 `ChatClient`에 적용하세요. `core`와
-기존 개인정보 보호 모듈에는 Spring Security 의존성이 추가되지 않습니다.
+개인정보 보호와 도구 권한 검사를 함께 사용하려면 클라이언트와 Spring Security
+스타터를 추가하고 [클라이언트 정책](clients.md)에서 두 기능을 선택하세요.
+코어와 개인정보 보호 모듈은 Spring Security에 의존하지 않습니다.
 
 테스트 지원 모듈은 애플리케이션에서 개인정보 보호 동작을 검증하기 위한 테스트 전용
 API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행 가능한 사용 예제를 위한

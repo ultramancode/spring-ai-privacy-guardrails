@@ -31,20 +31,20 @@ the [Sample / Demo Guide](sample.md).
 
 Minimum versions: Java 17, Spring AI 2.0.0 and Spring Boot 4.0.0.
 
-## 1. Choose a Privacy Starter
+## 1. Choose an Analyzer
 
-Choose the starter for the analyzer you want to use. Each linked section
-includes its Gradle and Maven dependencies.
+Use the client starter to configure your `ChatClient`, then choose an analyzer.
+Presidio and OpenNLP require an additional starter. Each linked section includes
+its Gradle and Maven dependencies.
 
-| Starter | Use |
+| Analyzer | Use |
 | --- | --- |
-| [Base](#2-quick-start-with-regex) | Application-defined Regex rules or custom analyzers |
+| [Regex](#2-quick-start-with-regex) | Application-defined patterns. Included in the client starter. |
 | [Presidio](#5-use-presidio-for-pii-detection) | Detect various types of PII through an external Presidio service. |
 | [OpenNLP](#6-use-opennlp-for-jvm-local-detection) | Detect PII inside the application using OpenNLP models you provide. No external analysis service is needed. |
 
-The Presidio and OpenNLP starters already include the base starter. Use the
-same version for all Privacy Guardrails modules used together. Adding a starter
-does not enable privacy protection or an analyzer automatically.
+Use the same version for all Privacy Guardrails modules used together. Adding a
+starter does not enable privacy protection or an analyzer automatically.
 
 Tool authorization uses a separate Spring Security starter. It can be used on
 its own or together with a privacy starter. See
@@ -228,9 +228,7 @@ Presidio is an open-source framework for PII detection and de-identification.
 Use the Presidio starter when you want to detect PII beyond
 application-specific patterns through an external Presidio Analyzer service.
 
-The Presidio starter already includes the base Privacy Guardrails starter, so
-do not add the base starter separately when using Presidio. Add another analyzer
-starter only when that analyzer is also needed.
+Add the Presidio starter alongside the [client starter](#2-quick-start-with-regex):
 
 ### Gradle
 
@@ -255,6 +253,8 @@ Enable Presidio and configure its Analyzer endpoint:
 ```yaml
 spring:
   ai:
+    guardrails:
+      privacy: true
     privacy:
       analysis:
         language: en
@@ -269,9 +269,7 @@ If you cloned this repository, start its pinned local Presidio service with:
 docker compose -f samples/presidio/docker-compose.yml up -d --wait
 ```
 
-Presidio also requires the `PrivacyChatClientConfigurer` setup in
-[Protect a ChatClient](#3-protect-a-chatclient). If you already applied it above,
-you do not need to configure the client again.
+Create the client as shown in [Protect a ChatClient](#3-protect-a-chatclient).
 
 Regex and Presidio may also be enabled together. In the default `UNION` mode,
 all configured analyzers run and their detection findings are merged. The
@@ -283,7 +281,8 @@ analyzers in production.
 ## 6. Use OpenNLP for JVM-Local Detection
 
 Use the OpenNLP starter when detection should run inside the application JVM
-with application-supplied compatible OpenNLP models.
+with application-supplied compatible OpenNLP models. Add it alongside the
+[client starter](#2-quick-start-with-regex).
 
 ### Gradle
 
@@ -308,6 +307,8 @@ A minimal `PERSON` configuration can look like:
 ```yaml
 spring:
   ai:
+    guardrails:
+      privacy: true
     privacy:
       analysis:
         language: en
@@ -322,7 +323,7 @@ OpenNLP model binaries are not bundled with this project. The application owns
 the model files and must validate model provenance, tokenizer compatibility, and
 detection quality for the target environment.
 
-`tokenizer-model` is optional; when omitted, the integration uses OpenNLP's
+`tokenizer-model` is optional. When omitted, the integration uses OpenNLP's
 `SimpleTokenizer`.
 
 See the

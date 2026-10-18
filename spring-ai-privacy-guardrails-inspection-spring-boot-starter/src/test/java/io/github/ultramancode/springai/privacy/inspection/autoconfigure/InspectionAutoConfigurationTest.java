@@ -21,6 +21,7 @@ import io.github.ultramancode.springai.privacy.inspection.rules.InspectionRule;
 import io.github.ultramancode.springai.privacy.inspection.rules.RuleBasedContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionBlockedException;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionExecution;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -431,12 +432,12 @@ class InspectionAutoConfigurationTest {
             }
         };
         InspectionObserver observer = new InspectionObserver() {
-            public void onInspection(InspectionReport report) {
+            public void onInspection(InspectionReport report, InspectionExecution execution) {
                 observedReport.set(report);
                 throw new IllegalStateException("observer unavailable");
             }
 
-            public void onFailure(InspectionException failure) {
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 observedFailure.set(failure);
                 throw new IllegalStateException("observer unavailable");
             }

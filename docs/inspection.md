@@ -479,13 +479,13 @@ Register an `InspectionObserver` bean to receive reports and failures:
 InspectionObserver inspectionObserver() {
     return new InspectionObserver() {
         @Override
-        public void onInspection(InspectionReport report) {
-            auditDecision(report);
+        public void onInspection(InspectionReport report, InspectionExecution execution) {
+            auditDecision(report, execution);
         }
 
         @Override
-        public void onFailure(InspectionException failure) {
-            auditFailure(failure.failureCode(), failure.report());
+        public void onFailure(InspectionException failure, InspectionExecution execution) {
+            auditFailure(failure.failureCode(), failure.report(), execution);
         }
     };
 }
@@ -499,10 +499,8 @@ Callbacks may run concurrently and should return promptly. A runtime exception i
 callback does not change the inspection decision. Reports contain identifiers and
 findings without prompt or response text.
 
-To distinguish boundaries and execution modes, implement the `onInspection` and
-`onFailure` overloads that accept `InspectionExecution`. Its `boundary()` is
-`MODEL_REQUEST` or `APPLICATION_OUTPUT`, and `streaming()` identifies streaming.
-`inspectorInvoked` indicates invocation, not confirmed remote delivery or success.
+Both callbacks receive `InspectionExecution`. Its `boundary()` is `MODEL_REQUEST`
+or `APPLICATION_OUTPUT`, and `streaming()` identifies streaming.
 
 ## Scope and limits
 

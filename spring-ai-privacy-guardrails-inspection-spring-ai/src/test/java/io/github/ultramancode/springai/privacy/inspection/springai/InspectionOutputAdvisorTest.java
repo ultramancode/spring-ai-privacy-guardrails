@@ -382,11 +382,11 @@ class InspectionOutputAdvisorTest {
         for (InspectionLimits limits : restrictiveLimits) {
             AtomicInteger failureNotificationCount = new AtomicInteger();
             InspectionObserver observer = new InspectionObserver() {
-                public void onInspection(InspectionReport report) {
+                public void onInspection(InspectionReport report, InspectionExecution execution) {
                     fail("No inspection before assembly succeeds");
                 }
 
-                public void onFailure(InspectionException failure) {
+                public void onFailure(InspectionException failure, InspectionExecution execution) {
                     failureNotificationCount.incrementAndGet();
                 }
             };
@@ -953,8 +953,8 @@ class InspectionOutputAdvisorTest {
             }
         };
         InspectionObserver observer = new InspectionObserver() {
-            public void onInspection(InspectionReport report) {}
-            public void onFailure(InspectionException failure) {
+            public void onInspection(InspectionReport report, InspectionExecution execution) {}
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 failureNotificationCount.incrementAndGet();
                 throw new IllegalArgumentException("observer");
             }

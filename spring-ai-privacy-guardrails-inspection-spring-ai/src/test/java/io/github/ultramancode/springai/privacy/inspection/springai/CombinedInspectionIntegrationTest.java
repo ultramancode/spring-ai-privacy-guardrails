@@ -127,7 +127,7 @@ class CombinedInspectionIntegrationTest {
                 request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
                         ? ContentSegment.PrivacyProcessingStatus.PROCESSED
                         : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
-                ignored -> {});
+                InspectionObserver.noop());
     }
 
     private static ChatResponse toolCallResponse(String toolName, String toolArgumentsJson) {

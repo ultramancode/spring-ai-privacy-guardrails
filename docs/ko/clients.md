@@ -8,7 +8,7 @@ description: >-
 [English](../clients.md) | **한국어**
 
 <!-- i18n-source: docs/clients.md -->
-<!-- i18n-source-sha256: d62933979a3131152ea267b385ce3f5de5fdbad1bd7ff8b27366bba9120970b3 -->
+<!-- i18n-source-sha256: a2263e33f995d46881bf1acdfb6d6b47115e873a9b63dc5b2654f00d92b629a6 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. Factory는 선택한 기능을 조립하고 Spring AI를 통해
@@ -159,29 +159,17 @@ GuardrailsChatClientFactory guardrails = GuardrailsChatClientFactory.builder()
 수집 중 오류, 시간 초과 또는 취소가 발생하면 모은 출력을 전달하지 않습니다.
 최종 출력 차단은 이미 실행한 도구의 부작용을 되돌리지 않습니다.
 
-`InspectionObserver`의 `InspectionExecution`을 받는 오버로드로 모델 요청인지
-애플리케이션 출력인지, call인지 stream인지 구분할 수 있습니다. 보고서는 판정,
-실패, `allowedAfterFailure()`, `inspectorInvoked`를 제공합니다.
-호출 여부가 원격 서버의 수신이나 검사 완료를 증명하지는 않습니다.
-설정한 범위만으로 실제 검사 성공을 판단하지 마세요.
+`InspectionObserver`로 검사 보고서와 실패를 기록할 수 있습니다. 콜백에는
+검사 경계와 call 또는 stream 실행 여부도 전달됩니다.
+[검사 결과 기록](inspection.md#검사-결과-기록)을 참고하세요.
 
 `ChatModel`을 직접 호출하면 이 클라이언트를 거치지 않습니다.
 탐지 범위는 구성한 분석기와 검사기에 따라 달라집니다.
 [검사 범위와 한도](inspection.md#검사-범위와-한도)와 [위협 모델](threat-model.md)을 참고하세요.
 
-## 기존 연동에서 전환
-
-| 기존 클라이언트 구성 | Factory 구성 |
-| --- | --- |
-| `PrivacyChatClientConfigurer.configure(...)` | 개인정보 보호를 선택하고 `guardrails.builder(model)`을 호출합니다. |
-| `InspectionChatClientConfigurer.configure(...)` | 같은 Factory에서 콘텐츠 검사를 선택합니다. |
-| `PrivacySecurityChatClientFactory` | 개인정보 보호와 도구 권한 검사를 선택합니다. |
-| 수동 `wrap(...)` / `wrapProvider(...)` | 원래 콜백이나 제공자를 등록합니다. |
-| `ModelRequestBoundaryConfigurer.compose(...)` | 하나의 정책에서 사용할 기능을 선택합니다. |
-
-개별 Configurer와 코어 서비스는 사용자 정의 연동에 사용할 수 있습니다.
-클라이언트에는 하나의 조립 경로만 적용하세요. Factory로 만든 클라이언트에
-Configurer를 다시 적용하면 경계가 중복되어 거부됩니다.
+사용자 정의 조립에는 [직접 조립하는 고급 연동](configuration.md#직접-조립하는-고급-연동)의
+개별 Configurer를 Spring AI 빌더에 직접 적용하세요. Factory로 만든 클라이언트에는
+선택한 기능이 이미 구성되어 있습니다.
 
 모델 API 키 없이 처음 실행하려면 [로컬 데모](sample.md)를 사용하세요.
 ChatClient 없는 검사는 [단독 검사 예제](inspection.md#chatclient-없이-검사)를 참고하세요.

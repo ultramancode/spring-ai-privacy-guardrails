@@ -2,7 +2,7 @@ package io.github.ultramancode.springai.privacy.inspection.springai;
 
 import java.util.Objects;
 
-/** Identifies where inspection ran, without retaining request or response content. */
+/** Identifies the inspection boundary and execution mode. */
 public record InspectionExecution(Boundary boundary, boolean streaming) {
     public InspectionExecution {
         Objects.requireNonNull(boundary, "boundary");

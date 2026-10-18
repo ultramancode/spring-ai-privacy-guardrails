@@ -89,14 +89,14 @@ The optional Spring Security integration uses Spring AI's tool-calling APIs and
 Spring Security Core. Its Spring Boot starter can be used independently of the
 base starter.
 
-Both integration modules depend on `spring-ai-privacy-guardrails-spring-ai-boundary`.
+The privacy, inspection and security integrations share
+`spring-ai-privacy-guardrails-spring-ai-boundary`.
 Before each model call, this shared module runs privacy protection, tool authorization,
 and content inspection in that order. Unconfigured stages are skipped.
 
-To use privacy protection and tool authorization together, add a privacy
-starter alongside the Spring Security starter and apply both capabilities to
-the same `ChatClient`. No Spring Security dependency is added to `core` or any
-existing privacy module.
+To use privacy protection and tool authorization together, add the client and
+Spring Security starters and select both features in the [client policy](clients.md).
+The core and privacy modules do not depend on Spring Security.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
 Benchmarks and samples are repository-internal modules for performance

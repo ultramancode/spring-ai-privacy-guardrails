@@ -14,13 +14,13 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
-import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
 import org.springframework.ai.chat.model.ChatModel;
@@ -28,7 +28,11 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -37,7 +41,6 @@ import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -51,7 +54,7 @@ class GuardrailsAutoConfigurationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void yamlAndExplicitPoliciesProduceTheSameProtectionWithoutSecurity(boolean streaming) {
+    void yamlAndExplicitPoliciesProduceTheSameOutputProtectionWithoutSecurity(boolean streaming) {
         EchoModel model = new EchoModel("Alice");
         AtomicInteger observations = new AtomicInteger();
         ObservationRegistry registry = ObservationRegistry.create();
@@ -65,18 +68,57 @@ class GuardrailsAutoConfigurationTest {
                 .withBean(ObservationRegistry.class, () -> registry)
                 .withBean(ChatClientBuilderCustomizer.class, () -> builder -> builder.defaultSystem("Be concise"))
                 .withPropertyValues("spring.ai.guardrails.privacy=true", "spring.ai.privacy.output.enabled=true",
-                        "spring.ai.privacy.output.action=REDACT",
-                        "spring.ai.privacy.tools.disclosures.lookup[0]=PERSON")
+                        "spring.ai.privacy.output.action=REDACT")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     GuardrailsChatClientFactory factory = context.getBean(GuardrailsChatClientFactory.class);
                     GuardrailsPolicy explicit = GuardrailsPolicy.builder().privacy(settings -> settings
-                            .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PERSON"))))
                             .outputAction(PrivacyOutputAction.REDACT)).build();
                     assertThat(invoke(factory.builder(model).build(), streaming)).isEqualTo("[REDACTED_PERSON]");
                     assertThat(invoke(factory.builder(model, explicit).build(), streaming)).isEqualTo("[REDACTED_PERSON]");
                     assertThat(model.lastPrompt.getSystemMessage().getText()).isEqualTo("Be concise");
                     assertThat(observations).hasValueGreaterThan(0);
+                });
+    }
+
+    @Test
+    void customizerCanOverrideTheDefaultToolCallingSetting() {
+        ChatModel model = new ChatModel() {
+            public ToolCallingChatOptions getOptions() {
+                return ToolCallingChatOptions.builder().build();
+            }
+
+            public ChatResponse call(Prompt prompt) {
+                AssistantMessage message = AssistantMessage.builder().content("")
+                        .toolCalls(List.of(new AssistantMessage.ToolCall("call-1", "function", "lookup", "{}")))
+                        .build();
+                return new ChatResponse(List.of(new Generation(message)));
+            }
+        };
+        ToolCallback lookup = new ToolCallback() {
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder().name("lookup").description("Look up a record")
+                        .inputSchema("{\"type\":\"object\",\"properties\":{}}").build();
+            }
+
+            public ToolMetadata getToolMetadata() {
+                return ToolMetadata.builder().returnDirect(true).build();
+            }
+
+            public String call(String input) {
+                return "found";
+            }
+        };
+        runner.withBean(PrivacyService.class, GuardrailsAutoConfigurationTest::privacy)
+                .withBean(ChatClientBuilderCustomizer.class, () -> builder ->
+                        builder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(true)))
+                .withPropertyValues("spring.ai.guardrails.privacy=true",
+                        "spring.ai.chat.client.tool-calling.enabled=false")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    ChatClient client = context.getBean(GuardrailsChatClientFactory.class).builder(model)
+                            .defaultTools(lookup).build();
+                    assertThat(client.prompt().user("Find the record").call().content()).isEqualTo("found");
                 });
     }
 

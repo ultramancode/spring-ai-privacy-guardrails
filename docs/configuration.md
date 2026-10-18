@@ -11,30 +11,27 @@ description: >-
 This document is the comprehensive application-facing reference for Spring AI
 Privacy Guardrails.
 
-The base Spring Boot starter provides PII detection settings and protection
-configuration for `ChatClient` and tools. The Presidio and OpenNLP starters add
-their analyzer integrations and use the same privacy settings. The Spring
-Security starter adds tool authorization for the current user.
+The client starter provides `GuardrailsChatClientFactory` to configure protection
+for each client. The Presidio and OpenNLP starters add analyzer integrations and
+use the same privacy settings. The Spring Security starter adds tool authorization
+for the current user.
 
 ## Starter Selection
 
-Choose a privacy starter for the analyzer you plan to use, then add optional
-integration starters as needed.
+Start with the client starter, then add analyzer and authorization starters as needed.
 
 Each starter links to its Gradle and Maven dependency examples.
 
 | Starter | Use |
 | --- | --- |
+| [Client](getting-started.md#2-quick-start-with-regex) | Configure clients with the factory. Includes Regex and supports custom analyzers. |
 | [Presidio](getting-started.md#5-use-presidio-for-pii-detection) | Detect various types of PII through an external Presidio service. |
-| [Base](getting-started.md#2-quick-start-with-regex) | Use Regex or custom analyzers. Does not include a separate analyzer integration. |
 | [OpenNLP](getting-started.md#6-use-opennlp-for-jvm-local-detection) | Detect PII inside the application using OpenNLP models you provide. No external analysis service is needed. |
 | [Spring Security](security.md#add-the-spring-boot-starter) | Authorize tools using the application's existing Spring Security authentication. Can be used independently or with privacy protection. |
 
-The Presidio and OpenNLP starters include the base starter. Even when using
-both analyzer starters, you do not need to add the base starter separately.
 Use the same version for all Privacy Guardrails modules used together.
 
-After adding a privacy starter, complete these two setup steps:
+For privacy protection, complete these two setup steps:
 
 1. **Configure an analyzer:** Set up [Regex](#regex-analyzer),
    [Presidio](#presidio-analyzer), or [OpenNLP](#opennlp-analyzer-jvm-only-optional),
@@ -58,8 +55,8 @@ Register an `AuthorizationManager<ToolAuthorizationContext>` bean and create
 clients with `GuardrailsChatClientFactory` after selecting
 `spring.ai.guardrails.tool-authorization=true`.
 
-To combine authorization with privacy protection, add a privacy starter,
-configure an analyzer, and select `spring.ai.guardrails.privacy=true` too.
+To combine authorization with privacy protection, configure an analyzer and
+select `spring.ai.guardrails.privacy=true` too.
 
 See [Spring Security Tool Authorization](security.md) for the complete setup.
 
@@ -154,10 +151,10 @@ Whitespace, punctuation outside that grammar, and empty or repeated separators
 are rejected rather than trimmed or repaired.
 
 The starter creates `PrivacyService` when at least one `PiiAnalyzer` bean is
-available. A `PrivacyService` bean, whether auto-configured or application-provided,
-enables `PrivacyChatClientConfigurer` and `PrivacyToolCallbackFactory`.
-Without that service, these integration beans are not created; applications
-that do not inject them can start normally.
+available. When a `PrivacyService` bean is available, the starter also creates
+`PrivacyChatClientConfigurer` and `PrivacyToolCallbackFactory` beans for manual
+integration. Without that service, these integration beans are not
+created. Applications that do not inject them can start normally.
 
 ### Configuration Typo Diagnostics
 

@@ -25,8 +25,7 @@ import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
 
 /**
- * Creates clients with an explicit protection policy and request-scoped tool protection.
- * Components are shared without changing their policies or retaining request state.
+ * Creates client builders with selected privacy, content inspection and tool authorization.
  */
 public final class GuardrailsChatClientFactory {
     private final Builder settings;
@@ -142,7 +141,7 @@ public final class GuardrailsChatClientFactory {
                 BiFunction<ChatModel, ToolCallingAdvisor.Builder<?>, ChatClient.Builder> clientBuilderFactory);
     }
 
-    /** Reusable engine and client infrastructure settings. */
+    /** Configures shared services and client defaults. */
     public static final class Builder {
         private PrivacyService privacyService;
         private InspectionService inspectionService;

@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 20cc4cbdc3c0a481e51dc9b1838b94a4c93a0e5892ce3bea2770e5c77832f0aa -->
+<!-- i18n-source-sha256: 4f6fc8354ca659bddef4e33f9008600e5d1023fe0841c97e8325f56263816884 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -478,13 +478,13 @@ HTTP 검사기는 제한 시간이 지나거나 인터럽트되면 응답 대기
 InspectionObserver inspectionObserver() {
     return new InspectionObserver() {
         @Override
-        public void onInspection(InspectionReport report) {
-            auditDecision(report);
+        public void onInspection(InspectionReport report, InspectionExecution execution) {
+            auditDecision(report, execution);
         }
 
         @Override
-        public void onFailure(InspectionException failure) {
-            auditFailure(failure.failureCode(), failure.report());
+        public void onFailure(InspectionException failure, InspectionExecution execution) {
+            auditFailure(failure.failureCode(), failure.report(), execution);
         }
     };
 }
@@ -498,10 +498,8 @@ InspectionObserver inspectionObserver() {
 발생해도 검사 결정은 바뀌지 않습니다. 보고서에는 식별자와 탐지 결과가 담기며,
 프롬프트나 응답 원문은 포함되지 않습니다.
 
-경계와 실행 방식을 구분하려면 `InspectionExecution`을 받는 `onInspection`과
-`onFailure` 오버로드를 구현하세요. `boundary()`는 `MODEL_REQUEST` 또는
-`APPLICATION_OUTPUT`, `streaming()`은 스트리밍 여부를 나타냅니다.
-`inspectorInvoked`는 호출 여부이며 원격 전송이나 검사 성공을 보장하지 않습니다.
+두 콜백 모두 `InspectionExecution`을 받습니다. `boundary()`는 `MODEL_REQUEST`
+또는 `APPLICATION_OUTPUT`, `streaming()`은 스트리밍 여부를 나타냅니다.
 
 ## 검사 범위와 한도
 

@@ -162,29 +162,18 @@ and inspection `output.max-frames` / `output.stream-timeout` together with the
 and cancellation release no buffered output. Blocking final output cannot undo
 side effects of tools that have already run.
 
-`InspectionObserver` has overloads accepting `InspectionExecution` to identify the
-model-request or application-output boundary and call or stream mode. Reports
-provide the decision, failures, `allowedAfterFailure()` and `inspectorInvoked`.
-Invocation does not prove a remote server received the request or completed inspection.
-Configured scope alone is not evidence of a successful inspection.
+Use `InspectionObserver` to record inspection reports and failures. Its callbacks
+also receive the inspection boundary and call or stream mode. See
+[observability](inspection.md#observability).
 
 Direct calls to `ChatModel` bypass this client. Detection coverage depends on the
 configured analyzers and inspectors. See [scope and limits](inspection.md#scope-and-limits)
 and the [threat model](threat-model.md).
 
-## Existing integrations
-
-| Existing client setup | Factory setup |
-| --- | --- |
-| `PrivacyChatClientConfigurer.configure(...)` | Select privacy and call `guardrails.builder(model)`. |
-| `InspectionChatClientConfigurer.configure(...)` | Select inspection through the same factory. |
-| `PrivacySecurityChatClientFactory` | Select privacy and tool authorization. |
-| Manual `wrap(...)` / `wrapProvider(...)` | Register the original callback or provider. |
-| `ModelRequestBoundaryConfigurer.compose(...)` | Select the features in one policy. |
-
-The individual configurers and core services remain available for custom integration.
-Apply one assembly path to a client. Reapplying configurers to a factory-built client
-creates duplicate boundaries and is rejected.
+For custom assembly, use the individual configurers as described in
+[advanced manual assembly](configuration.md#advanced-manual-assembly).
+Apply them directly to a Spring AI builder. A factory-built client already has
+its selected features configured.
 
 For a first run without a model API key, use the [local demo](sample.md).
 For inspection without a ChatClient, see the [standalone example](inspection.md#inspect-without-a-chatclient).

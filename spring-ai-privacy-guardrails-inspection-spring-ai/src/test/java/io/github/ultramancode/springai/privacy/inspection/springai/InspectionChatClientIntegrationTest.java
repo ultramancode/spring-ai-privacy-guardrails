@@ -357,10 +357,10 @@ class InspectionChatClientIntegrationTest {
         };
         InspectionObserver inspectionObserver = new InspectionObserver() {
             @Override
-            public void onInspection(InspectionReport report) {}
+            public void onInspection(InspectionReport report, InspectionExecution execution) {}
 
             @Override
-            public void onFailure(InspectionException failure) {
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 inspectionFailure.complete(failure);
             }
         };

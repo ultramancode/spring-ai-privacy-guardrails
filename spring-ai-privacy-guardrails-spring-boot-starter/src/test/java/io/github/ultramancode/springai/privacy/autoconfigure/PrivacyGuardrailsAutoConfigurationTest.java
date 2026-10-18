@@ -138,7 +138,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
         PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
         ModelRequestBoundaryConfigurer inspectionConfigurer =
-                (clientBuilder, boundarySpec) -> boundarySpec.inspection(inspectedRequest::set);
+                (clientBuilder, boundarySpec) -> boundarySpec.inspection((request, streamed) -> inspectedRequest.set(request));
 
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)

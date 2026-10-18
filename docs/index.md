@@ -41,6 +41,7 @@ See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 
 | Guide | Covers |
 | --- | --- |
+| [Client policies](clients.md) | Feature selection, per-client policies and automatic tool protection. |
 | [Getting Started](getting-started.md) | Starter selection, basic setup, and model, tool, MCP, and output protection. |
 | [Sample / Demo Guide](sample.md) | Inspector scenarios, expected results, endpoints, and language selection. |
 | [Configuration](configuration.md) | Starters, analyzers, output policy, tool disclosure, and processing limits. |

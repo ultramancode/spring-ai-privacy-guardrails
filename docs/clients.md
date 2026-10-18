@@ -1,0 +1,190 @@
+---
+description: >-
+  Select privacy, content inspection and tool authorization with one ChatClient factory.
+---
+
+# Client policies
+
+**English** | [한국어](ko/clients.md)
+
+Use `GuardrailsChatClientFactory` to select privacy, content inspection and tool
+authorization for each client. The factory assembles the selected features and
+protects tools registered through Spring AI, including request-specific and MCP tools.
+
+## Dependencies and components
+
+Add the client starter alongside your Spring AI model integration:
+
+```gradle
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
+```
+
+Use the same version for all Guardrails modules. This starter includes the privacy
+and inspection integrations, but does not include Spring Security, ONNX Runtime,
+Presidio or an inspection backend.
+
+| Selected feature | Required component | Setup |
+| --- | --- | --- |
+| Privacy | `PrivacyService` | Configure [Regex or another analyzer](getting-started.md). |
+| Inspection | `InspectionService` | Register a `ContentInspector` or your own service. See [content inspection](inspection.md). |
+| Tool authorization | Authorization integration | Add the [Security starter](security.md) and an `AuthorizationManager<ToolAuthorizationContext>` bean. |
+
+Providing a component alone does not enable its feature. A selected feature with
+missing components causes an error when creating the client builder.
+
+## Default policy in Spring Boot
+
+Select features explicitly. All three selections default to `false`:
+
+```yaml
+spring:
+  ai:
+    guardrails:
+      privacy: true
+      inspection: true
+      tool-authorization: true
+    privacy:
+      tools:
+        disclosures:
+          customerLookup: [CUSTOMER_ID]
+      output:
+        enabled: true
+        action: REDACT
+    inspection:
+      output:
+        enabled: true
+```
+
+This example requires all three components listed above. Privacy protects model
+requests and tools. It discloses the original customer ID only to `customerLookup`
+and redacts detected PII from final output. Inspection checks every model request
+and the final output. Tool authorization uses the application's current authentication
+and authorization policy.
+
+```java
+@Bean
+ChatClient supportClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails,
+        ToolCallback customerLookup, ToolCallbackProvider mcpTools) {
+    return guardrails.builder(chatModel)
+            .defaultTools(customerLookup, mcpTools)
+            .build();
+}
+```
+
+Register raw callbacks, objects with annotated tools, or providers. Do not wrap them
+with `PrivacyToolCallbackFactory` before passing them to this factory. Providers are
+resolved for each request, so later MCP tool-list changes are included. Tools passed
+to `client.prompt().tools(...)` receive the same protection. Unlisted tool/entity
+combinations keep opaque tokens instead of receiving original PII.
+
+Tool execution permission and original-value disclosure are separate decisions.
+Enabling tool authorization does not supply a business authorization rule.
+
+Without the `output` settings above, privacy protects model requests and tools,
+and inspection checks model requests only. Final output protection and inspection
+are separate opt-in settings.
+
+## Explicit policy per client
+
+Use a Java policy when clients need different protection:
+
+```java
+GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy
+                .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .outputAction(PrivacyOutputAction.REDACT))
+        .inspection(inspection -> inspection.applicationOutput(true))
+        .toolAuthorization(true)
+        .build();
+
+ChatClient client = guardrails.builder(chatModel, supportPolicy)
+        .defaultTools(customerLookup, mcpTools)
+        .build();
+```
+
+`builder(chatModel)` uses the default policy. `builder(chatModel, policy)` uses
+only the supplied policy, including its disclosure and output settings. It does
+not merge the Boot default. Engine settings, such as detector models and inspection
+server connections, remain in the corresponding services.
+
+A `GuardrailsPolicy` bean can replace the property-based default. If there is no
+unique default, use an explicit policy. A policy must select at least one feature.
+Different clients share services without changing each other's policies or sessions.
+`builder.clone()` and `client.mutate()` preserve the configured protection.
+
+For output-only inspection, select
+`.inspection(inspection -> inspection.modelRequests(false).applicationOutput(true))`.
+
+## Custom tool advisors and non-Boot applications
+
+Supply a tool advisor builder to customize its order or use Tool Search:
+
+```java
+ChatClient client = guardrails.builder(chatModel, supportPolicy,
+        ToolCallingAdvisor.builder().advisorOrder(100))
+    .defaultTools(customerLookup)
+    .build();
+```
+
+The factory copies the builder and preserves its subtype. Custom builders must
+honor Spring AI's `copy()`, `toolCallingManager(...)` and `build()` contracts.
+Do not register another tool advisor separately on the client.
+
+Without Boot, depend on `spring-ai-privacy-guardrails-client` and provide the services:
+
+```java
+GuardrailsChatClientFactory guardrails = GuardrailsChatClientFactory.builder()
+        .privacyService(privacyService)
+        .inspectionService(inspectionService)
+        .defaultPolicy(GuardrailsPolicy.builder().privacy().inspection().build())
+        .build();
+```
+
+For authorization, add the Security module, construct its
+`SpringSecurityToolBoundary` and `ToolAuthorizationChatClientFactory`, and pass
+`.toolAuthorization(authorizationFactory::builder)` to the factory builder.
+Observation settings and client customizers belong on `GuardrailsChatClientFactory`.
+
+## Execution and diagnostics
+
+Before a model call, the factory runs privacy processing, tool-definition
+authorization and content inspection, in that order, for the selected features.
+Tool authorization checks execution permission before restoring allowed original
+values. Tool results are protected before reaching the model or application.
+Content inspection does not inspect newly generated tool arguments immediately
+before execution.
+
+Privacy output protection and output inspection buffer streaming responses until
+completion. This delays delivery. Configure privacy `response-inspection` limits
+and inspection `output.max-frames` / `output.stream-timeout` together with the
+[inspection limits](inspection.md#scope-and-limits). Collection errors, timeouts
+and cancellation release no buffered output. Blocking final output cannot undo
+side effects of tools that have already run.
+
+`InspectionObserver` has overloads accepting `InspectionExecution` to identify the
+model-request or application-output boundary and call or stream mode. Reports
+provide the decision, failures, `allowedAfterFailure()` and `inspectorInvoked`.
+Invocation does not prove a remote server received the request or completed inspection.
+Configured scope alone is not evidence of a successful inspection.
+
+Direct calls to `ChatModel` bypass this client. Detection coverage depends on the
+configured analyzers and inspectors. See [scope and limits](inspection.md#scope-and-limits)
+and the [threat model](threat-model.md).
+
+## Existing integrations
+
+| Existing client setup | Factory setup |
+| --- | --- |
+| `PrivacyChatClientConfigurer.configure(...)` | Select privacy and call `guardrails.builder(model)`. |
+| `InspectionChatClientConfigurer.configure(...)` | Select inspection through the same factory. |
+| `PrivacySecurityChatClientFactory` | Select privacy and tool authorization. |
+| Manual `wrap(...)` / `wrapProvider(...)` | Register the original callback or provider. |
+| `ModelRequestBoundaryConfigurer.compose(...)` | Select the features in one policy. |
+
+The individual configurers and core services remain available for custom integration.
+Apply one assembly path to a client. Reapplying configurers to a factory-built client
+creates duplicate boundaries and is rejected.
+
+For a first run without a model API key, use the [local demo](sample.md).
+For inspection without a ChatClient, see the [standalone example](inspection.md#inspect-without-a-chatclient).

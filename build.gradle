@@ -6,6 +6,19 @@ plugins {
 apply from: 'scripts/inspection/test-model.gradle'
 
 privacyBuild {
+    module('spring-ai-privacy-guardrails-client') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.client', 'Spring AI Privacy Guardrails Client')
+        module.dependsOnProject 'spring-ai-privacy-guardrails-spring-ai'
+        module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-spring-ai'
+        module.denyExternalGroup 'org.springframework.boot'
+    }
+    module('spring-ai-privacy-guardrails-client-spring-boot-starter') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.client.autoconfigure', 'Spring AI Privacy Guardrails Client Starter')
+        module.dependsOnProject 'spring-ai-privacy-guardrails-client'
+        module.dependsOnProject 'spring-ai-privacy-guardrails-spring-boot-starter'
+        module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-spring-boot-starter'
+        module.compileOnlyProject 'spring-ai-privacy-guardrails-spring-security'
+    }
     module('spring-ai-privacy-guardrails-spring-ai-boundary') { module ->
         module.publication('io.github.ultramancode.springai.privacy.boundary', 'Spring AI Privacy Guardrails Model Request Boundary')
         module.denyExternalGroup 'org.springframework.boot'
@@ -141,10 +154,10 @@ privacyBuild {
     }
 
     module('spring-ai-privacy-guardrails-sample-demo') { module ->
+        module.dependsOnProject 'spring-ai-privacy-guardrails-client-spring-boot-starter'
         module.dependsOnProject(
                 'spring-ai-privacy-guardrails-opennlp-spring-boot-starter',
                 'spring-ai-privacy-guardrails-presidio-spring-boot-starter',
-                'spring-ai-privacy-guardrails-spring-boot-starter',
                 'spring-ai-privacy-guardrails-spring-security-spring-boot-starter'
         )
     }
@@ -156,6 +169,7 @@ privacyBuild {
     localizedDocument 'docs/inspection.md', 'docs/ko/inspection.md'
     localizedDocument 'docs/evaluation.md', 'docs/ko/evaluation.md'
     localizedDocument 'docs/getting-started.md', 'docs/ko/getting-started.md'
+    localizedDocument 'docs/clients.md', 'docs/ko/clients.md'
     localizedDocument 'docs/sample.md', 'docs/ko/sample.md'
     localizedDocument 'docs/security.md', 'docs/ko/security.md'
     localizedDocument 'docs/threat-model.md', 'docs/ko/threat-model.md'

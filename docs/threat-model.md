@@ -78,9 +78,9 @@ opaque tokens for each tool.
 
 **Scope and considerations**
 
-- **Tool privacy protection:** Original-value disclosure and PII tokenization of tool
-  results apply to tools wrapped by `PrivacyToolCallbackFactory`. Other execution
-  paths must be protected separately.
+- **Tool privacy protection:** A privacy-enabled `GuardrailsChatClientFactory` client
+  protects Spring AI's resolved callbacks automatically. Direct configurer integrations
+  use `PrivacyToolCallbackFactory` explicitly. Other execution paths need separate protection.
 - **Custom execution paths:** The application must protect advisors that change data
   outside the privacy boundary and separate execution paths that use a custom
   `ToolCallingManager` or `ToolCallbackResolver`.

@@ -1,6 +1,6 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -66,7 +66,7 @@ public final class PrivacyDemoRag {
     private final Map<PrivacyDemoLocale, ChatClient> chatClients;
     private final RecordingPromptChatModel chatModel;
 
-    public PrivacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
+    public PrivacyDemoRag(GuardrailsChatClientFactory guardrails) {
         VectorStore vectorStore = SimpleVectorStore.builder(new DeterministicEmbeddingModel()).build();
         vectorStore.add(List.of(
                 new Document(ENGLISH.retrievedDocument()),
@@ -75,13 +75,13 @@ public final class PrivacyDemoRag {
         ));
         this.chatModel = new RecordingPromptChatModel();
         this.chatClients = Map.of(
-                PrivacyDemoLocale.EN, chatClient(privacyConfigurer, vectorStore, ENGLISH),
-                PrivacyDemoLocale.KO, chatClient(privacyConfigurer, vectorStore, KOREAN)
+                PrivacyDemoLocale.EN, chatClient(guardrails, vectorStore, ENGLISH),
+                PrivacyDemoLocale.KO, chatClient(guardrails, vectorStore, KOREAN)
         );
     }
 
     private ChatClient chatClient(
-            PrivacyChatClientConfigurer privacyConfigurer,
+            GuardrailsChatClientFactory guardrails,
             VectorStore vectorStore,
             RagFixture fixture
     ) {
@@ -92,9 +92,9 @@ public final class PrivacyDemoRag {
                         .build())
                 .promptTemplate(fixture.promptTemplate())
                 .build();
-        ChatClient.Builder builder = ChatClient.builder(this.chatModel)
+        ChatClient.Builder builder = guardrails.builder(this.chatModel)
                 .defaultAdvisors(retrievalAdvisor);
-        return privacyConfigurer.configure(builder).build();
+        return builder.build();
     }
 
     Result run(PrivacyDemoLocale locale) {

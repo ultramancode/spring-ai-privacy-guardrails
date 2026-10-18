@@ -246,7 +246,7 @@ public class PrivacyGuardrailsProperties {
             this.streamIdleTimeout = validatedTimeout;
         }
 
-        PrivacyResponseInspectionLimits limits() {
+        public PrivacyResponseInspectionLimits limits() {
             return new PrivacyResponseInspectionLimits(
                     this.maxStreamFrames,
                     this.maxCharacters,

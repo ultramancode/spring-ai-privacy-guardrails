@@ -9,7 +9,7 @@ description: >-
 [English](../threat-model.md) | **한국어**
 
 <!-- i18n-source: docs/threat-model.md -->
-<!-- i18n-source-sha256: 3f2c399f40a0a1956813a7ac8584c168a838c3ad4f8c7851a0511152b6f81a7d -->
+<!-- i18n-source-sha256: 4f4382361b8e102921d3bc5e77e345cc051322ed01464138bbf31219eed624e4 -->
 
 ## 보호 대상
 
@@ -72,8 +72,9 @@ Spring Security 통합은 애플리케이션의 인증 방식과 도구 권한 �
 
 **보호 범위와 고려사항**
 
-- **도구 개인정보 보호:** 원문 복원과 도구 결과의 개인정보 토큰화는 `PrivacyToolCallbackFactory`로 감싼 도구에 적용합니다.
-  그 밖의 실행 경로는 별도로 보호해야 합니다.
+- **도구 개인정보 보호:** 개인정보 보호를 선택한 `GuardrailsChatClientFactory` 클라이언트는
+  Spring AI가 확정한 콜백을 자동으로 보호합니다. Configurer를 직접 조립하는 연동은
+  `PrivacyToolCallbackFactory`를 명시적으로 사용합니다. 그 밖의 실행 경로는 별도로 보호해야 합니다.
 - **사용자 정의 실행 경로:** 개인정보 보호 경계 밖에서 데이터를 변경하는 Advisor나 사용자 정의
   `ToolCallingManager`·`ToolCallbackResolver`를 사용하는 별도 실행 경로는 애플리케이션에서 보호해야 합니다.
 - **도구 권한 검사:** Spring Security 통합을 구성한 클라이언트에 적용합니다. 이 검사를 거치지 않고 도구를

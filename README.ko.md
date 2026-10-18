@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 6b110eaa74c0ea54cf44c39856818c691f3e9cd30e30f4233f23bf0138946509 -->
+<!-- i18n-source-sha256: 84d3c4505b5e1868d110e5a9954b7e38b132802cffff803b887712dedf68fd6b -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -105,8 +105,8 @@ Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 
 단계별 설정 방법은 [시작하기](docs/ko/getting-started.md)를 참고하세요.
 
-다음 내용은 `ChatModel`과 `ChatClient.Builder`가 이미 구성된 Spring AI 애플리케이션에서
-선택할 수 있는 보호 기능을 설명합니다.
+다음 예제는 통합 클라이언트 스타터와 애플리케이션이 제공하는 `ChatModel`을 사용합니다.
+직접 연동할 때는 개별 기능 스타터도 사용할 수 있습니다.
 
 ### PII 분석기 선택
 
@@ -127,19 +127,17 @@ Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니�
 
 ### 스타터 선택
 
-애플리케이션에 필요한 기능에 맞는 스타터를 선택하세요.
+클라이언트 스타터에 필요한 분석기·권한 스타터를 추가하세요.
 
 | 필요한 기능 | 추가할 스타터 |
 | --- | --- |
-| 정규식(Regex) 규칙 또는 사용자 정의 분석기 사용 | `spring-ai-privacy-guardrails-spring-boot-starter` |
+| 정책에 따른 클라이언트 구성과 개인정보 보호·검사 | `spring-ai-privacy-guardrails-client-spring-boot-starter` |
 | Presidio 연동 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
 | Apache OpenNLP 연동 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | 사용자별 도구 공개·실행 권한 검사 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
-| 규칙이나 검사 모델을 이용한 콘텐츠 검사 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` |
 
-Presidio와 OpenNLP 스타터에는 기본 Privacy Guardrails 스타터가 이미 포함되어 있으므로
-별도로 추가하지 마세요. 도구 권한 검사만 사용하려면 Spring Security 스타터만 추가하고,
-개인정보 보호도 필요하면 개인정보 보호 스타터를 함께 추가하세요.
+클라이언트, Presidio와 OpenNLP 스타터에는 기본 개인정보 보호 스타터가 포함됩니다.
+기본 스타터를 따로 추가할 필요는 없습니다. 도구 권한 검사만 선택하면 분석기는 필요하지 않습니다.
 
 콘텐츠 검사는 `0.4.0` 이상에서 사용할 수 있으며, 검사기 구현도 선택해야 합니다.
 [검사 설정 안내](docs/ko/inspection.md#입력-검사-설정)에서 설정 방법을 확인하세요.
@@ -149,20 +147,22 @@ Presidio와 OpenNLP 스타터에는 기본 Privacy Guardrails 스타터가 이�
 
 ### 의존성과 기본 설정
 
-아래 예제는 버전 `0.3.0`을 사용합니다.
+아래 예제는 버전 `0.4.0-SNAPSHOT`을 사용합니다.
 
-외부 분석 서비스 없이 시작하려면 기본 스타터와 애플리케이션 전용 정규식 규칙을
+외부 분석 서비스 없이 시작하려면 클라이언트 스타터와 애플리케이션 전용 정규식 규칙을
 사용할 수 있습니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
 ```yaml
 spring:
   ai:
+    guardrails:
+      privacy: true
     privacy:
       output:
         enabled: true
@@ -183,20 +183,18 @@ spring:
 
 ### ChatClient에 보호 적용
 
-보호할 `ChatClient.Builder`에 스타터가 제공하는 구성을 적용합니다.
+설정한 정책을 적용할 클라이언트는 Factory로 생성합니다.
 
 ```java
 @Bean
-ChatClient privacyChatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    return privacyConfigurer.configure(builder).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
 }
 ```
 
-`PiiAnalyzer` Bean이 하나 이상 있으면 스타터가 `PrivacyChatClientConfigurer`를
-제공합니다. 개인정보 보호가 필요한 각 클라이언트에 적용하세요.
+`spring.ai.guardrails.privacy=true`로 개인정보 보호를 선택하고 분석기를 구성합니다.
+콘텐츠 검사와 도구 권한도 같은 Factory를 사용합니다. 기능 선택과 Java 정책은
+[클라이언트 정책](docs/ko/clients.md)을 참고하세요.
 
 직접 호출하는 `ChatModel`은 자동 보호 범위에 포함되지 않습니다. 파생 클라이언트,
 분석기 조합과 실패 정책은 [설정 문서](docs/ko/configuration.md)를 참고하세요.
@@ -217,22 +215,17 @@ spring:
             - CUSTOMER_ID
 ```
 
-기존 Spring AI `ToolCallback`을 `PrivacyToolCallbackFactory`로 감싼 뒤 보호된
-`ChatClient`에 등록합니다.
+애플리케이션 도구와 MCP 제공자를 그대로 등록합니다.
 
 ```java
-ToolCallback protectedCustomerLookup =
-        toolCallbackFactory.wrap(customerLookupToolCallback);
+ChatClient client = guardrails.builder(chatModel)
+        .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
+        .build();
 ```
 
-여기서 `customerLookupToolCallback`은 애플리케이션에 이미 존재하는 Spring AI
-`ToolCallback`입니다.
-
-보호된 `ChatClient`의 표준 도구 경로에서는 감싸지 않은 콜백을 실행 전에 거부합니다.
-도구 결과는 모델이나 애플리케이션으로 전달되기 전에 다시 보호됩니다.
-
-MCP처럼 실행 중에 도구 목록이 달라지는 `ToolCallbackProvider`는 `wrapProvider(...)`로
-감쌀 수 있고, 여러 `ToolCallbackProvider`는 `wrapProviders(...)`로 결합할 수 있습니다.
+각 요청에서 확정된 도구에 개인정보 보호가 적용됩니다. 요청별 `.tools(...)`와
+제공자가 갱신한 도구 목록도 포함됩니다. 도구 결과는 모델이나 애플리케이션으로
+전달되기 전에 다시 보호됩니다.
 
 Spring AI의 표준 도구 등록 경로가 아닌 사용자 정의 실행 경로에는 별도의 보호 구성이
 필요합니다. 자세한 규칙은
@@ -246,15 +239,14 @@ Spring Security 스타터를 별도로 추가해 권한 없는 도구 명세(이
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
-Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 수 있습니다.
 `AuthorizationManager<ToolAuthorizationContext>` Bean을 제공하고
-`ToolAuthorizationChatClientFactory`로 클라이언트를 생성하세요. 개인정보 보호도 필요하면
-`PrivacySecurityChatClientFactory`를 사용합니다. 다른 클라이언트에는 영향을 주지 않으며,
-사용자 인증은 애플리케이션이 담당합니다.
+`spring.ai.guardrails.tool-authorization=true`로 선택합니다.
+클라이언트는 동일하게 `guardrails.builder(chatModel)`로 생성합니다.
+개인정보 보호가 필요하면 별도로 선택하세요. 사용자 인증은 애플리케이션이 담당합니다.
 
 개인정보 보호와 함께 사용해도 도구 권한과 개인정보 원문 공개 범위는 서로 다른 정책으로
 관리합니다. 권한 정책은 현재 사용자에게 공개하고 실행할 도구를 결정하고, 원문 공개
@@ -315,6 +307,8 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | OpenAI 호환 HTTP API를 통한 검사 모델 호출 |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | 모델 입력 검사와 선택적 출력 검사 |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | 선택한 클라이언트의 콘텐츠 검사를 위한 Spring Boot 설정 |
+| `spring-ai-privacy-guardrails-client` | 정책에 따른 클라이언트 구성과 도구 자동 보호 |
+| `spring-ai-privacy-guardrails-client-spring-boot-starter` | 기본 클라이언트 정책과 구성 요소 연결 |
 | `spring-ai-privacy-guardrails-test` | 선택형 모델·도구 프로브와 AssertJ 검증 API |
 
 모듈의 책임과 의존성 구조는 [아키텍처](docs/ko/architecture.md)를 참고하세요. 저장소 전용
@@ -323,20 +317,19 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 
 ## 호환성과 상태
 
-| 구성 요소 | 현재 검증 기준 |
+| 구성 요소 | 최소 지원 버전 |
 | --- | --- |
 | Java | 17 |
-| Spring AI | 2.0.1 |
-| Spring Boot | 4.1.1 |
-| Spring Security | 7.1.1 |
-| Presidio Analyzer | 2.2.364 |
-| Apache OpenNLP | 2.5.11 |
-| Gradle wrapper | 9.6.1 |
+| Spring AI | 2.0.0 |
+| Spring Boot | 4.0.0 |
+| Spring Security | 7.0.0 |
+
+Spring AI 2.0.x, Spring Boot 4.x와 Spring Security 7.x를 사용합니다.
+Boot 스타터의 Security 버전은 Spring Boot BOM이 선택합니다.
+독립 Security 모듈은 7.0.0을 기준으로 컴파일합니다. 저장소의 의존성 버전은
+[gradle.properties](gradle.properties)에서 관리합니다.
 
 구조화된 JSON을 Presidio로 분석하려면 Presidio Analyzer 2.2.361 이상을 사용하세요.
-
-Spring AI는 현재 `2.0.x` 계열 호환성을 유지하며, 신규 사용자에게는 `2.0.1`을
-권장합니다.
 
 ## 상세 문서
 

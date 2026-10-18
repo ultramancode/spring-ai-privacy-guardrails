@@ -13,9 +13,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Creates a privacy-aware wrapper for a Spring AI tool callback. Every callback supplied
- * to a privacy-guarded {@code ChatClient} must be wrapped by this factory. Spring AI does
- * not expose a safe global hook that can retroactively protect raw callbacks.
+ * Creates privacy-aware Spring AI tool callbacks with a fixed disclosure policy.
+ * Clients configured for automatic tool protection use this factory for each request.
+ * Direct privacy integrations can wrap callbacks and providers explicitly.
  */
 public final class PrivacyToolCallbackFactory {
 
@@ -157,6 +157,19 @@ public final class PrivacyToolCallbackFactory {
             throw new IllegalArgumentException("toolCallback must not already be privacy wrapped");
         }
         return delegate;
+    }
+
+    List<ToolCallback> prepareCallbacks(List<ToolCallback> callbacks) {
+        List<ToolCallback> prepared = new ArrayList<>(callbacks.size());
+        for (ToolCallback callback : callbacks) {
+            if (isWrapped(callback)) {
+                prepared.add(callback);
+            } else {
+                prepared.add(wrap(callback));
+            }
+        }
+        requireDistinctToolNames(prepared);
+        return List.copyOf(prepared);
     }
 
     private ToolCallbackProvider requireUnwrappedProvider(ToolCallbackProvider toolCallbackProvider) {

@@ -3,7 +3,7 @@ package io.github.ultramancode.springai.privacy.boundary;
 import org.springframework.ai.chat.client.ChatClientRequest;
 
 import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 /**
@@ -15,11 +15,11 @@ final class ModelRequestBoundaryPlan {
     // A null stage means that feature was not configured for this client.
     private final UnaryOperator<ChatClientRequest> privacy;
     private final UnaryOperator<ChatClientRequest> authorization;
-    private final Consumer<ChatClientRequest> inspection;
+    private final BiConsumer<ChatClientRequest, Boolean> inspection;
     private final boolean allowAdvisorsAfterBoundary;
 
     ModelRequestBoundaryPlan(UnaryOperator<ChatClientRequest> privacy,
-            UnaryOperator<ChatClientRequest> authorization, Consumer<ChatClientRequest> inspection,
+            UnaryOperator<ChatClientRequest> authorization, BiConsumer<ChatClientRequest, Boolean> inspection,
             boolean allowAdvisorsAfterBoundary) {
         this.privacy = privacy;
         this.authorization = authorization;
@@ -45,7 +45,7 @@ final class ModelRequestBoundaryPlan {
         return allowAdvisorsAfterBoundary;
     }
 
-    ChatClientRequest prepare(ChatClientRequest request) {
+    ChatClientRequest prepare(ChatClientRequest request, boolean streaming) {
         ChatClientRequest prepared = request;
         if (privacy != null) {
             prepared = Objects.requireNonNull(privacy.apply(prepared), "privacy stage result");
@@ -54,7 +54,7 @@ final class ModelRequestBoundaryPlan {
             prepared = Objects.requireNonNull(authorization.apply(prepared), "authorization stage result");
         }
         if (inspection != null) {
-            inspection.accept(prepared);
+            inspection.accept(prepared, streaming);
         }
         return prepared;
     }

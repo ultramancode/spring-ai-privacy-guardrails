@@ -8,11 +8,11 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 /** Inspects input text before each model call, including calls made after tool execution. */
-final class ContentInspectionStage implements Consumer<ChatClientRequest> {
+final class ContentInspectionStage implements BiConsumer<ChatClientRequest, Boolean> {
     private final InspectionEnforcement enforcement;
     private final InspectionLimits limits;
     private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
@@ -26,9 +26,10 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
     }
 
     @Override
-    public void accept(ChatClientRequest chatClientRequest) {
+    public void accept(ChatClientRequest chatClientRequest, Boolean streaming) {
         UnaryOperator<String> piiTokenSimplifier = PiiTokenSimplifierContext.findSimplifier(chatClientRequest);
-        enforcement.inspect(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier);
+        enforcement.inspect(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier,
+                new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, streaming));
     }
 
     private List<ContentSegment> extractInputSegments(ChatClientRequest chatClientRequest) {

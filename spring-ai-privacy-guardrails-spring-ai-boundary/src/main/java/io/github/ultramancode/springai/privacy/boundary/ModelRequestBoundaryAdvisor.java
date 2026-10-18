@@ -42,7 +42,7 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
         validateAdvisorChain(chain.getCallAdvisors(), true);
-        ChatClientRequest prepared = plan.prepare(request);
+        ChatClientRequest prepared = plan.prepare(request, false);
         checkInterrupted();
         return chain.nextCall(prepared);
     }
@@ -52,14 +52,14 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
         if (!plan.hasInspection()) {
             return Flux.defer(() -> {
                 validateAdvisorChain(chain.getStreamAdvisors(), true);
-                return chain.nextStream(plan.prepare(request));
+                return chain.nextStream(plan.prepare(request, true));
             });
         }
         // Schedule request preparation per subscription for blocking inspection.
         // Cancellation requests interruption. Inspectors must cooperate to stop promptly.
         return Mono.fromCallable(() -> {
                     validateAdvisorChain(chain.getStreamAdvisors(), true);
-                    return plan.prepare(request);
+                    return plan.prepare(request, true);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMapMany(prepared -> {

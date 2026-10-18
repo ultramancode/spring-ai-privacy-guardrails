@@ -1,8 +1,7 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -51,23 +50,20 @@ public final class PrivacyDemoToolLoop {
             CUSTOMER_ID_TOKEN_PATTERN
     );
 
-    private final PrivacySecurityChatClientFactory privacySecurityFactory;
-    private final PrivacyToolCallbackFactory toolCallbackFactory;
+    private final GuardrailsChatClientFactory guardrails;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
     private final ToolCallingManager toolCallingManager;
     private final PrivacyDemoSecurityPolicy securityPolicy;
     private final ObjectMapper objectMapper;
 
     public PrivacyDemoToolLoop(
-            PrivacySecurityChatClientFactory privacySecurityFactory,
-            PrivacyToolCallbackFactory toolCallbackFactory,
+            GuardrailsChatClientFactory guardrails,
             ToolDisclosurePolicy toolDisclosurePolicy,
             ToolCallingManager toolCallingManager,
             PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
-        this.privacySecurityFactory = privacySecurityFactory;
-        this.toolCallbackFactory = toolCallbackFactory;
+        this.guardrails = guardrails;
         this.toolDisclosurePolicy = toolDisclosurePolicy;
         this.toolCallingManager = toolCallingManager;
         this.securityPolicy = securityPolicy;
@@ -105,10 +101,9 @@ public final class PrivacyDemoToolLoop {
                 this.toolCallingManager
         );
         PrivacyDemoCrmTool delegate = new PrivacyDemoCrmTool(this.objectMapper);
-        ToolCallback scopedTool = this.toolCallbackFactory.wrap(delegate);
 
-        ChatClient.Builder builder = this.privacySecurityFactory.builder(model)
-                .defaultTools(scopedTool);
+        ChatClient.Builder builder = this.guardrails.builder(model)
+                .defaultTools(delegate);
         String finalResponse;
         try {
             finalResponse = builder.build().prompt().user(input).call().content();

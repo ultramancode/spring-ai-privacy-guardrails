@@ -23,6 +23,7 @@ public final class PrivacyChatClientConfigurer
         implements ModelRequestBoundaryConfigurer, IntFunction<ModelRequestBoundaryConfigurer> {
     private final PrivacyService service;
     private final PrivacyToolCallbackFactory expectedToolCallbackFactory;
+    private final boolean automaticallyWrapTools;
     // Null means output protection is disabled.
     private final PrivacyOutputAction outputAction;
     private final String outputBlockMessage;
@@ -47,6 +48,7 @@ public final class PrivacyChatClientConfigurer
     private PrivacyChatClientConfigurer(Builder builder) {
         this.service = builder.service;
         this.expectedToolCallbackFactory = builder.expectedToolCallbackFactory;
+        this.automaticallyWrapTools = builder.automaticallyWrapTools;
         this.outputAction = builder.outputAction;
         this.outputBlockMessage = builder.outputBlockMessage;
         this.responseLimits = builder.responseLimits;
@@ -131,7 +133,11 @@ public final class PrivacyChatClientConfigurer
                     new PrivacyModelRequestStage(service, expectedToolCallbackFactory, enforcementObserver);
             boundarySpec.privacy(privacyStage);
             List<Advisor> advisors = new ArrayList<>();
-            advisors.add(new PrivacyLifecycleAdvisor(service));
+            PrivacyToolCallbackFactory automaticToolFactory = null;
+            if (automaticallyWrapTools) {
+                automaticToolFactory = expectedToolCallbackFactory;
+            }
+            advisors.add(new PrivacyLifecycleAdvisor(service, automaticToolFactory));
             advisors.add(new PrivacyInputAdvisor(service));
             if (outputAction != null) {
                 advisors.add(new PrivacyOutputAdvisor(service, outputAction, outputBlockMessage,
@@ -150,6 +156,7 @@ public final class PrivacyChatClientConfigurer
     public static final class Builder {
         private final PrivacyService service;
         private PrivacyToolCallbackFactory expectedToolCallbackFactory;
+        private boolean automaticallyWrapTools;
         // Remains null unless outputProtection(...) is called.
         private PrivacyOutputAction outputAction;
         private String outputBlockMessage = "Response blocked by privacy guardrail.";
@@ -181,6 +188,12 @@ public final class PrivacyChatClientConfigurer
             return this;
         }
 
+        /** Protects each request's resolved tools using the selected tool callback factory. */
+        public Builder automaticallyWrapTools(boolean enabled) {
+            this.automaticallyWrapTools = enabled;
+            return this;
+        }
+
         /** Enables output protection with a safe rejection message for the BLOCK action. */
         public Builder outputProtection(PrivacyOutputAction action, String blockMessage) {
             this.outputAction = Objects.requireNonNull(action, "action");
@@ -201,6 +214,9 @@ public final class PrivacyChatClientConfigurer
         }
 
         public PrivacyChatClientConfigurer build() {
+            if (automaticallyWrapTools && expectedToolCallbackFactory == null) {
+                throw new IllegalStateException("Automatic tool protection requires a tool callback factory");
+            }
             return new PrivacyChatClientConfigurer(this);
         }
     }

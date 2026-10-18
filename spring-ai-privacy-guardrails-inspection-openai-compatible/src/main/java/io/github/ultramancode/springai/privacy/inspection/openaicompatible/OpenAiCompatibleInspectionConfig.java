@@ -63,4 +63,49 @@ public record OpenAiCompatibleInspectionConfig(
                 + requirePrivacyProcessedContent
                 + "]";
     }
+
+    /** Creates connection settings with a 10-second timeout, a 1 MiB response limit and required privacy processing. */
+    public static Builder builder(URI baseUrl, String model) {
+        return new Builder(baseUrl, model);
+    }
+
+    /** Named settings for an HTTP guard model. */
+    public static final class Builder {
+        private final URI baseUrl;
+        private final String model;
+        private String apiKey;
+        private Duration requestTimeout = Duration.ofSeconds(10);
+        private int maxResponseBytes = 1024 * 1024;
+        private boolean requirePrivacyProcessedContent = true;
+
+        private Builder(URI baseUrl, String model) {
+            this.baseUrl = baseUrl;
+            this.model = model;
+        }
+
+        public Builder apiKey(String apiKey) {
+            this.apiKey = apiKey;
+            return this;
+        }
+
+        public Builder requestTimeout(Duration requestTimeout) {
+            this.requestTimeout = requestTimeout;
+            return this;
+        }
+
+        public Builder maxResponseBytes(int maxResponseBytes) {
+            this.maxResponseBytes = maxResponseBytes;
+            return this;
+        }
+
+        public Builder requirePrivacyProcessedContent(boolean required) {
+            this.requirePrivacyProcessedContent = required;
+            return this;
+        }
+
+        public OpenAiCompatibleInspectionConfig build() {
+            return new OpenAiCompatibleInspectionConfig(baseUrl, model, apiKey, requestTimeout,
+                    maxResponseBytes, requirePrivacyProcessedContent);
+        }
+    }
 }

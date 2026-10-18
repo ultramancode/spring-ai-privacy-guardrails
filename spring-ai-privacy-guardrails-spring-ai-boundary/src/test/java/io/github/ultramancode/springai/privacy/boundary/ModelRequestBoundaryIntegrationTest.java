@@ -31,7 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,7 +44,7 @@ class ModelRequestBoundaryIntegrationTest {
     void stagesExecuteInFixedOrderRegardlessOfRegistrationOrder(boolean streaming) {
         List<String> executedStages = new ArrayList<>();
         RecordingModel model = new RecordingModel();
-        Consumer<ChatClientRequest> inspectionStage = request -> {
+        BiConsumer<ChatClientRequest, Boolean> inspectionStage = (request, streamed) -> {
             executedStages.add("inspection");
             assertThat(request.prompt().getContents()).isEqualTo("authorized");
         };
@@ -120,7 +120,7 @@ class ModelRequestBoundaryIntegrationTest {
                 return ToolCallingChatOptions.builder().build();
             }
         };
-        Consumer<ChatClientRequest> inspectionStage = request -> {
+        BiConsumer<ChatClientRequest, Boolean> inspectionStage = (request, streamed) -> {
             executionOrder.add("inspection");
             inspectedMessages.add(List.copyOf(request.prompt().getInstructions()));
         };
@@ -149,7 +149,7 @@ class ModelRequestBoundaryIntegrationTest {
         RecordingModel model = new RecordingModel();
         AtomicInteger inspectionCount = new AtomicInteger();
         ModelRequestBoundaryConfigurer inspectionConfigurer = (clientBuilder, boundarySpec) -> {
-            boundarySpec.inspection(request -> inspectionCount.incrementAndGet());
+            boundarySpec.inspection((request, streamed) -> inspectionCount.incrementAndGet());
         };
         ChatClient strictClient = inspectionConfigurer.configure(ChatClient.builder(model)).build();
         ChatClient optedInClient = inspectionConfigurer.allowAdvisorsAfterBoundary(true)
@@ -172,7 +172,7 @@ class ModelRequestBoundaryIntegrationTest {
     void lateAdvisorCannotBypassInspectionRejectionEvenWithOptIn(boolean streaming) {
         RecordingModel model = new RecordingModel();
         LateAdvisor lateAdvisor = new LateAdvisor("changed by late advisor");
-        Consumer<ChatClientRequest> inspectionStage = request -> {
+        BiConsumer<ChatClientRequest, Boolean> inspectionStage = (request, streamed) -> {
             if (request.prompt().getContents().equals("blocked")) {
                 throw new IllegalArgumentException("inspection blocked");
             }
@@ -210,7 +210,7 @@ class ModelRequestBoundaryIntegrationTest {
         RecordingModel model = new RecordingModel();
         AtomicInteger inspectionCount = new AtomicInteger();
         ModelRequestBoundaryConfigurer inspectionConfigurer = (clientBuilder, boundarySpec) -> {
-            boundarySpec.inspection(request -> inspectionCount.incrementAndGet());
+            boundarySpec.inspection((request, streamed) -> inspectionCount.incrementAndGet());
         };
         ChatClient.Builder plainBuilder = ChatClient.builder(model);
         ChatClient.Builder inspectedBuilder = inspectionConfigurer.configure(plainBuilder.clone());
@@ -232,7 +232,7 @@ class ModelRequestBoundaryIntegrationTest {
     void duplicateBoundariesAreRejectedEvenWithOptIn(boolean streaming, boolean clonedBuilder) {
         RecordingModel model = new RecordingModel();
         ModelRequestBoundaryConfigurer inspectionConfigurer = (clientBuilder, boundarySpec) -> {
-            boundarySpec.inspection(request -> { });
+            boundarySpec.inspection((request, streamed) -> { });
         };
         ModelRequestBoundaryConfigurer optedInConfigurer = inspectionConfigurer.allowAdvisorsAfterBoundary(true);
         ChatClient.Builder clientBuilder = optedInConfigurer.configure(ChatClient.builder(model));
@@ -253,7 +253,7 @@ class ModelRequestBoundaryIntegrationTest {
     void toolAdvisorsAfterBoundaryAreRejectedEvenWithOptIn(boolean streaming) {
         RecordingModel model = new RecordingModel();
         ModelRequestBoundaryConfigurer inspectionConfigurer = (clientBuilder, boundarySpec) -> {
-            boundarySpec.inspection(request -> { });
+            boundarySpec.inspection((request, streamed) -> { });
         };
         ToolCallingAdvisor lateToolAdvisor = ToolCallingAdvisor.builder()
                 .advisorOrder(ModelRequestBoundaryAdvisor.DEFAULT_ORDER + 1)
@@ -270,7 +270,7 @@ class ModelRequestBoundaryIntegrationTest {
     @Test
     void duplicateInspectionRegistrationsAreRejected() {
         ModelRequestBoundaryConfigurer inspectionConfigurer = (clientBuilder, boundarySpec) -> {
-            boundarySpec.inspection(request -> { });
+            boundarySpec.inspection((request, streamed) -> { });
         };
         ModelRequestBoundaryConfigurer combinedConfigurer = ModelRequestBoundaryConfigurer.compose(
                 inspectionConfigurer, inspectionConfigurer);
@@ -299,7 +299,7 @@ class ModelRequestBoundaryIntegrationTest {
         };
         ModelRequestBoundaryConfigurer configurer = (clientBuilder, boundarySpec) -> {
             if (inspectionEnabled) {
-                boundarySpec.inspection(request -> { });
+                boundarySpec.inspection((request, streamed) -> { });
             } else {
                 boundarySpec.privacy(request -> request);
             }

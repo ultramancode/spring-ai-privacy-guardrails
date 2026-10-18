@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: b8caf79ddd7b72ca8296f2c92b5c73f16d27d481ca905825301808ed6c114399 -->
+<!-- i18n-source-sha256: d728a6e847082b527ec09cc44d88482122104b5396ff98bd2d9ed7e4154b521e -->
 
 ## 책임 범위
 
@@ -36,6 +36,10 @@ flowchart TD
 라이브러리는 지원하는 모델·도구·출력 경계를 통과하는 데이터를 보호합니다.
 필요한 경우 Spring Security를 연동해 모델에 공개할 도구와 실행 가능한 도구도 제한할 수 있습니다.
 
+클라이언트는 `GuardrailsChatClientFactory`와 `GuardrailsPolicy`로 사용할 기능을
+선택합니다. 통합 계층은 기존 엔진을 조립하고, 개인정보 보호를 선택한 요청의 도구를
+권한 검사용 목록을 확보하기 전에 보호합니다. 설정과 사용법은 [클라이언트 정책](clients.md)을 참고하세요.
+
 ## 모듈 구조
 
 이 프로젝트는 Gradle 멀티 모듈 라이브러리이며, 모듈별로 개인정보 보호 정책,
@@ -49,6 +53,12 @@ Spring AI 연동과 분석기 연동의 역할을 분리합니다.
 %%{init: {"flowchart": {"curve": "linear"}}}%%
 flowchart LR
     CORE["core"]
+    CLIENT["Client factory"] --> SAI
+    CLIENT --> INSPECT["Inspection integration"]
+    CLIENTBOOT["Client starter"] --> CLIENT
+    CLIENTBOOT --> BASE
+    CLIENTBOOT --> INSPECTBOOT["Inspection starter"]
+    INSPECTBOOT --> INSPECT
 
     PRES["Presidio 연동"] --> CORE
     SAI["Spring AI 연동"] --> CORE
@@ -94,6 +104,7 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 
 | 역할 | 대표 공개 API |
 | --- | --- |
+| 클라이언트 구성 | `GuardrailsChatClientFactory`, `GuardrailsPolicy` |
 | 애플리케이션 API | `PrivacyService`, `PrivacySession` |
 | 분석기 확장 | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | 도구 정책 | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |

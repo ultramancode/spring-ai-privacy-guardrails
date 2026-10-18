@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 824eff3b12470cdc570a4b6f0ce768403e2940006b8ea242d3e02a9fa7eff9cc -->
+<!-- i18n-source-sha256: 3630289d1e44f1443cea6920a132e0d51cf1999355bbc36d9734e2f680ba949f -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -54,104 +54,45 @@ Guardrails 모듈은 같은 버전을 사용하세요.
 수 있습니다. 인증 정보는 애플리케이션의 기존 Spring Security 설정을 사용합니다.
 
 `AuthorizationManager<ToolAuthorizationContext>` Bean을 등록하고
-`ToolAuthorizationChatClientFactory`로 클라이언트를 생성하세요.
+`spring.ai.guardrails.tool-authorization=true`를 선택한 뒤
+`GuardrailsChatClientFactory`로 클라이언트를 생성하세요.
 
 개인정보 보호와 함께 사용하려면 개인정보 보호 스타터를 추가하고 분석기를 구성한 뒤
-`PrivacySecurityChatClientFactory`를 사용하세요.
+`spring.ai.guardrails.privacy=true`도 선택하세요.
 
 전체 설정은 [Spring Security 도구 권한](security.md)을 참고하세요.
 
 ## ChatClient에 보호 적용
 
-분석기를 구성해도 모든 `ChatClient`에 보호가 자동으로 적용되지는
-않습니다. 개인정보 보호가 필요한 `ChatClient.Builder`에
-`PrivacyChatClientConfigurer`를 적용하세요.
+[클라이언트 스타터](clients.md)를 추가하고 분석기를 구성한 뒤
+`spring.ai.guardrails.privacy=true`를 선택합니다.
 
 ```java
 @Bean
-ChatClient chatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    return privacyConfigurer.configure(builder).build();
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
 }
 ```
 
-`PrivacyChatClientConfigurer`는 입력, 모델 호출, 도구 실행과 요청 수명주기에 필요한
-개인정보 보호 경계를 구성하며, 출력 보호가 활성화되어 있으면 출력 경계도 함께
-적용합니다.
+콘텐츠 검사와 도구 권한도 같은 Factory에서 선택합니다. `clone()`과 `mutate()`는
+기존 보호를 유지하므로 Configurer를 다시 적용하지 마세요.
 
-다른 모델 요청 기능과 함께 사용할 때는 `ModelRequestBoundaryConfigurer.compose(...)`로
-기능별 configurer를 합친 뒤 `configure(builder)`를 한 번 호출하세요. 공통 바운더리는
-개인정보 보호 → 도구 인가 → 모델 입력 콘텐츠 검사 순서로 실행하며, 등록하지 않은 단계는
-건너뜁니다. 각 기능을 따로 구성하면 바운더리가 중복 생성되어 요청 시 거부됩니다.
-
-모델 응답에도 콘텐츠 검사를 적용하려면
-[출력 검사](inspection.md#선택적-모델-출력-검사)를 별도로 활성화하세요.
-
-개인정보 보호와 도구 권한 검사를 함께 적용하려면 `PrivacySecurityChatClientFactory`로
-클라이언트를 생성하세요. 이 Factory는 개인정보 보호도 구성하므로 반환된 builder에
-`PrivacyChatClientConfigurer`를 추가로 적용하지 마세요. 도구 권한 검사만 필요하면
-`ToolAuthorizationChatClientFactory`를 사용합니다. 두 구성의 예시는
-[ChatClient 구성](security.md#chatclient-구성)을 참고하세요.
-
-보호된 클라이언트에서 `mutate()`로 새 클라이언트를 만들면 개인정보 보호 설정도
-이어집니다. `PrivacyChatClientConfigurer`를 다시 적용하지 마세요.
-
-```java
-ChatClient protectedClient = privacyConfigurer.configure(builder).build();
-ChatClient derivedClient = protectedClient.mutate().build();
-```
-
-보호 설정이 적용된 `ChatClient.Builder`를 `clone()`으로 복사할 때도 설정이
-이어지므로 `PrivacyChatClientConfigurer`를 다시 적용하지 마세요.
-
-Spring AI의 표준 `UserMessage`, `SystemMessage`, `AssistantMessage`,
-`ToolResponseMessage`와 `DeepSeekAssistantMessage`를 지원합니다. 그 밖의 모델
-제공자 전용 `Message` 하위 클래스와 애플리케이션이 직접 구현한 `Message`는 오류로
-처리합니다. 알 수 없는 필드의 개인정보가 보호되지 않은 채 전달되는 것을 막기
-위해서입니다.
+Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
+그 밖의 제공자 전용 메시지나 사용자 정의 메시지는 알 수 없는 필드의 개인정보가
+보호되지 않은 채 전달되지 않도록 거부합니다.
 
 ### 사용자 정의 Advisor 순서
 
-이 절은 개인정보 보호만 사용하면서 도구 호출을 담당하는 `ToolCallingAdvisor`의 실행
-순서를 변경하는 경우에 해당합니다. 기본 순서(`ToolCallingAdvisor.DEFAULT_ORDER`)를
-사용한다면 앞의 `configure(builder)` 구성으로 충분합니다.
+[클라이언트 정책](clients.md#사용자-정의-도구-advisor와-boot-없는-구성)에 설명된
+도구 Advisor 빌더를 전달하세요. Factory가 선택한 기능의 순서를 조정합니다.
+별도 Advisor가 보호 경계 밖에서 데이터를 추가하거나 변경하면 그 내용은 보호되지 않을 수 있습니다.
 
-실행 순서를 변경할 때는 `advisorOrder(...)`와 `forToolAdvisorOrder(...)`에
-같은 값을 전달하세요. 아래 예시는 도구 호출 순서를 `100`으로 설정하고, 도구 실행
-전후의 개인정보 보호 처리도 그에 맞춰 배치합니다.
+### 직접 조립하는 고급 연동
 
-```java
-@Bean
-ChatClient privacyClientWithCustomToolOrder(
-        ChatModel chatModel,
-        ToolCallingManager toolCallingManager,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    int toolOrder = 100;
-    ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-            .toolCallingManager(toolCallingManager)
-            .advisorOrder(toolOrder)
-            .build();
-    ChatClient.Builder builder = ChatClient.builder(chatModel)
-            .defaultAdvisors(toolCallingAdvisor);
-
-    return privacyConfigurer.forToolAdvisorOrder(toolOrder)
-            .configure(builder)
-            .build();
-}
-```
-
-도구 권한 검사도 함께 사용한다면 `PrivacySecurityChatClientFactory`에 도구 Advisor의
-builder를 전달하세요. Factory가 실행 순서에 맞춰 개인정보 보호까지 구성하므로
-위처럼 Advisor나 configurer를 별도로 등록할 필요가 없습니다.
-[사용자 정의 도구 Advisor](security.md#사용자-정의-도구-advisor)에서 예시를 확인할 수 있습니다.
-
-다른 Spring AI Advisor와 함께 사용할 수 있습니다. 다만 별도의 Advisor가 개인정보
-보호 경계 밖에서 입력·도구·응답 데이터를 추가하거나 변경하면, 그 내용은 자동으로
-보호되지 않을 수 있습니다. 개인정보 보호 경계의 순서를 유지하려면 개별 구성 요소를
-직접 조립하기보다 `PrivacyChatClientConfigurer`를 사용하세요.
+개별 `PrivacyChatClientConfigurer`와 `ModelRequestBoundaryConfigurer`는
+사용자 정의 조립에 사용할 수 있습니다. 이 경로에서는 도구를
+`PrivacyToolCallbackFactory`로 감싸고, 다른 기능과 조합할 때 Configurer를
+`compose(...)`로 합쳐 한 번 적용해야 합니다. 통합 Factory와 중복 적용하지 마세요.
 
 ## 설정 속성
 
@@ -523,31 +464,12 @@ spring:
 공개하도록 지정하지 않은 엔티티 유형과 `tools.disclosures`에 등록되지 않은 도구에는
 보호된 값이 그대로 전달됩니다.
 
-개인정보 보호가 적용된 `ChatClient`에서 사용하는 `ToolCallback`은
-`PrivacyToolCallbackFactory`로 감싸서 등록하세요. 아래의 `customerLookup`과
-`knowledgeSearch`는 애플리케이션에서 준비한 `ToolCallback`입니다.
+Factory가 도구를 자동으로 보호하므로 원래 콜백이나 제공자를 등록합니다.
+MCP 제공자는 요청마다 현재 도구 목록을 사용합니다.
 
 ```java
-List<ToolCallback> protectedTools = privacyToolCallbackFactory.wrapAll(
-        List.of(customerLookup, knowledgeSearch));
-
-ChatClient chatClient = privacyConfigurer.configure(ChatClient.builder(chatModel)
-        .defaultTools(protectedTools.toArray()))
-        .build();
-```
-
-MCP처럼 실행 중에 도구 목록이 달라질 수 있다면 현재 콜백 목록만 감싸지 말고
-`ToolCallbackProvider` 자체를 감싸세요. 하나는 `wrapProvider(...)`로, 여러 개는
-`wrapProviders(...)`로 감싸 하나의 보호된 `ToolCallbackProvider`로 결합할 수 있습니다.
-
-```java
-ToolCallbackProvider protectedTools = privacyToolCallbackFactory.wrapProviders(
-        mcpTools,
-        localToolProvider
-);
-
-ChatClient mcpClient = privacyConfigurer.configure(builder)
-        .defaultTools(protectedTools)
+ChatClient client = guardrails.builder(chatModel)
+        .defaultTools(customerLookup, knowledgeSearch, mcpTools)
         .build();
 ```
 
@@ -723,13 +645,16 @@ try 블록을 벗어나 세션이 닫히면 그 세션의 불투명 토큰을 �
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.3.0"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0-SNAPSHOT"
 }
 ```
 
 테스트에서는 이 모듈이 제공하는 `PrivacyTestProbe`로 모델과 도구에 전달되는 값을
 기록합니다. 요청 실행 후 `PrivacyTestAssertions.assertThatPrivacy(...)`로 그 기록을
 검증합니다.
+
+다음 프로브 예제는 도구가 받는 값을 기록하기 위해 개별 Configurer와 수동 도구 래핑을
+사용합니다. 통합 Factory와 중복 적용하지 마세요.
 
 아래는 JUnit 테스트 메서드 예시입니다. 이름(`PERSON`)과 이메일(`EMAIL_ADDRESS`)을
 탐지하도록 분석기를 구성하고, `customerLookup` 도구에는 `PERSON`의 원문 공개를

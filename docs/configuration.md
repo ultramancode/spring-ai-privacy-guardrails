@@ -55,108 +55,45 @@ a privacy analyzer and uses the `Authentication` established by the
 application's existing Spring Security configuration.
 
 Register an `AuthorizationManager<ToolAuthorizationContext>` bean and create
-clients with `ToolAuthorizationChatClientFactory`.
+clients with `GuardrailsChatClientFactory` after selecting
+`spring.ai.guardrails.tool-authorization=true`.
 
 To combine authorization with privacy protection, add a privacy starter,
-configure an analyzer, and use `PrivacySecurityChatClientFactory`.
+configure an analyzer, and select `spring.ai.guardrails.privacy=true` too.
 
 See [Spring Security Tool Authorization](security.md) for the complete setup.
 
 ## Apply Privacy Protection to ChatClient
 
-Configuring an analyzer does not automatically apply protection to
-every `ChatClient`. Apply `PrivacyChatClientConfigurer` to each
-`ChatClient.Builder` that needs privacy protection.
+Add the [client starter](clients.md), configure an analyzer and select
+`spring.ai.guardrails.privacy=true`.
 
 ```java
 @Bean
-ChatClient chatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    return privacyConfigurer.configure(builder).build();
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
 }
 ```
 
-`PrivacyChatClientConfigurer` configures the privacy boundaries required for
-input, model calls, tool execution, and request lifecycle handling. When output
-protection is enabled, it also adds the output boundary.
+Select inspection and tool authorization through the same factory. `clone()` and
+`mutate()` preserve protection, so do not reapply configurers.
 
-When combining privacy with another model-request feature, combine the feature
-configurers with `ModelRequestBoundaryConfigurer.compose(...)` before calling
-`configure(builder)` once. The shared boundary runs privacy protection, tool authorization,
-then content inspection of model input, skipping unconfigured stages. Configuring each
-feature separately creates duplicate boundaries, which are rejected at request time.
-
-To apply content inspection to model responses as well, enable
-[output inspection](inspection.md#optional-model-output-inspection) separately.
-
-To combine privacy protection with tool authorization, create clients with
-`PrivacySecurityChatClientFactory`. This factory configures privacy protection,
-so do not also apply `PrivacyChatClientConfigurer` to the returned builder. For tool authorization
-alone, use `ToolAuthorizationChatClientFactory`. See
-[Configure the ChatClient](security.md#configure-the-chatclient) for both examples.
-
-Creating a client from a protected client with `mutate()` preserves its privacy
-configuration. Do not apply `PrivacyChatClientConfigurer` again.
-
-```java
-ChatClient protectedClient = privacyConfigurer.configure(builder).build();
-ChatClient derivedClient = protectedClient.mutate().build();
-```
-
-Copying a protected `ChatClient.Builder` with `clone()` also preserves its
-configuration, so do not reapply `PrivacyChatClientConfigurer` to the copy.
-
-The boundary supports the standard Spring AI `UserMessage`, `SystemMessage`,
-`AssistantMessage`, and `ToolResponseMessage` classes, plus
-`DeepSeekAssistantMessage`. Other provider-specific `Message` subclasses and
-application-defined `Message` implementations are rejected. This prevents PII
-in unknown fields from passing through unprotected.
+Standard Spring AI messages and `DeepSeekAssistantMessage` are supported. Other
+provider-specific or custom messages are rejected to prevent PII in unknown fields
+from passing through unprotected.
 
 ### Custom Advisor Order
 
-This section applies when using privacy protection alone and changing the
-execution order of `ToolCallingAdvisor`, which handles tool calls. With the
-default order (`ToolCallingAdvisor.DEFAULT_ORDER`), the `configure(builder)`
-setup above is sufficient.
+Pass a tool advisor builder as described in [Client policies](clients.md#custom-tool-advisors-and-non-boot-applications).
+The factory positions selected features around that order. Data added or changed
+by a separate advisor outside the protection boundary may remain unprotected.
 
-Pass the same order to `advisorOrder(...)` and
-`forToolAdvisorOrder(...)`. This example sets the tool-calling order to
-`100` and positions privacy processing before and after tool execution accordingly.
+### Advanced manual assembly
 
-```java
-@Bean
-ChatClient privacyClientWithCustomToolOrder(
-        ChatModel chatModel,
-        ToolCallingManager toolCallingManager,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    int toolOrder = 100;
-    ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-            .toolCallingManager(toolCallingManager)
-            .advisorOrder(toolOrder)
-            .build();
-    ChatClient.Builder builder = ChatClient.builder(chatModel)
-            .defaultAdvisors(toolCallingAdvisor);
-
-    return privacyConfigurer.forToolAdvisorOrder(toolOrder)
-            .configure(builder)
-            .build();
-}
-```
-
-When also using tool authorization, pass the tool-advisor builder to
-`PrivacySecurityChatClientFactory`. The factory configures privacy protection
-around that order, so you do not need to register the advisor or configurer
-separately as above. See [Custom Tool Advisor](security.md#custom-tool-advisor)
-for an example.
-
-The privacy boundary can be used with other Spring AI Advisors. However, if a
-separate Advisor adds or changes input, tool, or response data outside the
-privacy boundary, that content may not be protected automatically. Use
-`PrivacyChatClientConfigurer` instead of manually composing its individual
-components so the privacy boundaries remain correctly ordered.
+The individual `PrivacyChatClientConfigurer` and `ModelRequestBoundaryConfigurer`
+remain available for custom assembly. On that path, wrap tools with
+`PrivacyToolCallbackFactory`, compose multiple feature configurers with `compose(...)`
+and apply them once. Do not combine this assembly path with the unified factory.
 
 ## Configuration Properties
 
@@ -551,32 +488,12 @@ original value of `CUSTOMER_ID`. Entity types not listed for disclosure and
 tools not registered under `tools.disclosures` continue to receive protected
 values.
 
-Wrap every `ToolCallback` used by a privacy-enabled `ChatClient` with
-`PrivacyToolCallbackFactory`. In this example, `customerLookup` and
-`knowledgeSearch` are application-provided `ToolCallback` instances.
+The factory protects tools automatically, so register the original callbacks or
+providers. MCP providers supply their current tool list for each request.
 
 ```java
-List<ToolCallback> protectedTools = privacyToolCallbackFactory.wrapAll(
-        List.of(customerLookup, knowledgeSearch));
-
-ChatClient chatClient = privacyConfigurer.configure(ChatClient.builder(chatModel)
-        .defaultTools(protectedTools.toArray()))
-        .build();
-```
-
-When a tool list can change at runtime, as with MCP, wrap the
-`ToolCallbackProvider` itself rather than only its current callbacks. Use
-`wrapProvider(...)` for one provider or `wrapProviders(...)` to combine several
-providers into one protected `ToolCallbackProvider`.
-
-```java
-ToolCallbackProvider protectedTools = privacyToolCallbackFactory.wrapProviders(
-        mcpTools,
-        localToolProvider
-);
-
-ChatClient mcpClient = privacyConfigurer.configure(builder)
-        .defaultTools(protectedTools)
+ChatClient client = guardrails.builder(chatModel)
+        .defaultTools(customerLookup, knowledgeSearch, mcpTools)
         .build();
 ```
 
@@ -764,13 +681,16 @@ cleaned up after the request.
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.3.0"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0-SNAPSHOT"
 }
 ```
 
 In tests, use the module's `PrivacyTestProbe` to record the values passed to the
 model and tools. After executing a request, check those records with
 `PrivacyTestAssertions.assertThatPrivacy(...)`.
+
+The probe example below uses individual configurers and manual tool wrapping to
+record the values received by the delegate. Do not also apply the unified factory.
 
 The following JUnit test method assumes an analyzer configured to detect names
 (`PERSON`) and email addresses (`EMAIL_ADDRESS`), with disclosure of `PERSON`

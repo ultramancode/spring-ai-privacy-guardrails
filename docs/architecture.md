@@ -37,6 +37,10 @@ The library protects data that crosses supported model, tool, and output
 boundaries. The optional Spring Security integration can also authorize tool
 discovery and execution.
 
+Clients select features through `GuardrailsChatClientFactory` and `GuardrailsPolicy`.
+This assembly layer reuses the engines and protects each privacy-enabled request's tools
+before authorization captures the callback list. See [Client policies](clients.md) for setup.
+
 ## Module Structure
 
 This project is a Gradle multi-module library that separates core privacy
@@ -50,6 +54,12 @@ used independently or applied together to the same `ChatClient`.
 %%{init: {"flowchart": {"curve": "linear"}}}%%
 flowchart LR
     CORE["core"]
+    CLIENT["Client factory"] --> SAI
+    CLIENT --> INSPECT["Inspection integration"]
+    CLIENTBOOT["Client starter"] --> CLIENT
+    CLIENTBOOT --> BASE
+    CLIENTBOOT --> INSPECTBOOT["Inspection starter"]
+    INSPECTBOOT --> INSPECT
 
     PRES["Presidio integration"] --> CORE
     SAI["Spring AI integration"] --> CORE
@@ -100,6 +110,7 @@ and are not part of the compatibility contract.
 
 | Role | Representative public APIs |
 | --- | --- |
+| Client assembly | `GuardrailsChatClientFactory`, `GuardrailsPolicy` |
 | Application API | `PrivacyService`, `PrivacySession` |
 | Analyzer extension | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | Tool policy | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |

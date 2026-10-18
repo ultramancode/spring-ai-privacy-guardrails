@@ -1,13 +1,11 @@
 package io.github.ultramancode.springai.privacy.sample.config;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoMcpToolLoop;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoRag;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoSecurityPolicy;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoToolLoop;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
-import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -38,14 +36,14 @@ class PrivacyDemoChatConfiguration {
     @Bean
     ChatClient privacyDemoChatClient(
             @Qualifier("privacyDemoChatModel") ChatModel chatModel,
-            PrivacyChatClientConfigurer privacyConfigurer
+            GuardrailsChatClientFactory guardrails
     ) {
-        return privacyConfigurer.configure(ChatClient.builder(chatModel)).build();
+        return guardrails.builder(chatModel).build();
     }
 
     @Bean
-    PrivacyDemoRag privacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
-        return new PrivacyDemoRag(privacyConfigurer);
+    PrivacyDemoRag privacyDemoRag(GuardrailsChatClientFactory guardrails) {
+        return new PrivacyDemoRag(guardrails);
     }
 
     @Bean
@@ -65,16 +63,14 @@ class PrivacyDemoChatConfiguration {
 
     @Bean
     PrivacyDemoToolLoop privacyDemoToolLoop(
-            PrivacySecurityChatClientFactory privacySecurityFactory,
-            PrivacyToolCallbackFactory toolCallbackFactory,
+            GuardrailsChatClientFactory guardrails,
             ToolDisclosurePolicy toolDisclosurePolicy,
             ToolCallingManager toolCallingManager,
             PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
         return new PrivacyDemoToolLoop(
-                privacySecurityFactory,
-                toolCallbackFactory,
+                guardrails,
                 toolDisclosurePolicy,
                 toolCallingManager,
                 securityPolicy,
@@ -84,16 +80,14 @@ class PrivacyDemoChatConfiguration {
 
     @Bean(destroyMethod = "close")
     PrivacyDemoMcpToolLoop privacyDemoMcpToolLoop(
-            PrivacySecurityChatClientFactory privacySecurityFactory,
-            PrivacyToolCallbackFactory toolCallbackFactory,
+            GuardrailsChatClientFactory guardrails,
             ToolDisclosurePolicy toolDisclosurePolicy,
             ToolCallingManager toolCallingManager,
             PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
         return new PrivacyDemoMcpToolLoop(
-                privacySecurityFactory,
-                toolCallbackFactory,
+                guardrails,
                 toolDisclosurePolicy,
                 toolCallingManager,
                 securityPolicy,

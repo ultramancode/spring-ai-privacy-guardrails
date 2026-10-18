@@ -11,6 +11,8 @@ public final class PrivacyModuleSpec {
 
     private final Set<String> allowedProjectDependencies = new LinkedHashSet<>();
 
+    private final Set<String> compileOnlyProjectDependencies = new LinkedHashSet<>();
+
     private final Set<String> forbiddenExternalGroupPrefixes = new LinkedHashSet<>();
 
     private String automaticModuleName;
@@ -54,6 +56,19 @@ public final class PrivacyModuleSpec {
             }
             this.allowedProjectDependencies.add(":" + moduleName);
         });
+    }
+
+    public void compileOnlyProject(String... moduleNames) {
+        dependsOnProject(moduleNames);
+        for (String moduleName : moduleNames) {
+            this.compileOnlyProjectDependencies.add(":" + moduleName);
+        }
+    }
+
+    public Set<String> getPublishedProjectDependencies() {
+        Set<String> published = new LinkedHashSet<>(this.allowedProjectDependencies);
+        published.removeAll(this.compileOnlyProjectDependencies);
+        return Set.copyOf(published);
     }
 
     public void denyAllExternalMainDependencies() {

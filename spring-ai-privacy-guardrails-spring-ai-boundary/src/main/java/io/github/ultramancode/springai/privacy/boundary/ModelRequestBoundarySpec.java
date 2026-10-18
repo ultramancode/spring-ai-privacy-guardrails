@@ -4,7 +4,7 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 
 import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 /**
@@ -18,7 +18,7 @@ public final class ModelRequestBoundarySpec {
 
     private UnaryOperator<ChatClientRequest> privacy;
     private UnaryOperator<ChatClientRequest> authorization;
-    private Consumer<ChatClientRequest> inspection;
+    private BiConsumer<ChatClientRequest, Boolean> inspection;
     private boolean allowAdvisorsAfterBoundary;
 
     ModelRequestBoundarySpec() {
@@ -42,9 +42,10 @@ public final class ModelRequestBoundarySpec {
 
     /**
      * Registers final inspection of the prepared model request.
+     * The second argument indicates a streaming request.
      * The inspection stage does not return a replacement request.
      */
-    public void inspection(Consumer<ChatClientRequest> stage) {
+    public void inspection(BiConsumer<ChatClientRequest, Boolean> stage) {
         if (inspection != null) {
             throw new IllegalStateException("Inspection stage already configured");
         }

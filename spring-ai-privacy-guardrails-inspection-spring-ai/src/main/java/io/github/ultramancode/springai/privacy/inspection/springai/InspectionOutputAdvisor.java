@@ -115,7 +115,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
 
         inspectOutput(
                 () -> extractOutputSegments(chatClientResponse, privacyProcessingStatus),
-                simplifiedTextsByOriginalText);
+                simplifiedTextsByOriginalText, false);
         return OutputResponseContext.clearPrivacyTracking(chatClientResponse);
     }
 
@@ -130,13 +130,15 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
                         try {
                             buffer.accept(response);
                         } catch (RuntimeException ex) {
-                            throw enforcement.failure(ex);
+                            throw enforcement.failure(ex,
+                                    new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, true));
                         }
                     })
                     .then(Mono.just(buffer));
             Mono<InspectionOutputBuffer> timeoutFailure = Mono.defer(() -> {
                 InspectionException timeout = new InspectionException(InspectionFailureCode.TIMEOUT);
-                return Mono.error(enforcement.failure(timeout));
+                return Mono.error(enforcement.failure(timeout,
+                        new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, true)));
             });
             // Mono timeout bounds total assembly time, not merely the gap between frames.
             return collectedOutput
@@ -161,7 +163,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer buffer) {
         Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
             Map<String, String> simplifiedTextsByOriginalText = buffer.collectSimplifiedTextsByOriginalText();
-            inspectOutput(buffer::buildSegments, simplifiedTextsByOriginalText);
+            inspectOutput(buffer::buildSegments, simplifiedTextsByOriginalText, true);
             return buffer.framesWithoutPrivacyTracking();
         });
         return inspectedFrames
@@ -170,12 +172,13 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     }
 
     private void inspectOutput(Supplier<List<ContentSegment>> outputSegmentsSupplier,
-            Map<String, String> simplifiedTextsByOriginalText) {
+            Map<String, String> simplifiedTextsByOriginalText, boolean streaming) {
         UnaryOperator<String> piiTokenSimplifier = null;
         if (simplifiedTextsByOriginalText != null) {
             piiTokenSimplifier = outputText -> simplifiedTextsByOriginalText.getOrDefault(outputText, outputText);
         }
-        enforcement.inspect(outputSegmentsSupplier, piiTokenSimplifier);
+        enforcement.inspect(outputSegmentsSupplier, piiTokenSimplifier,
+                new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, streaming));
     }
 
     private void validateChain(List<? extends Advisor> advisors) {

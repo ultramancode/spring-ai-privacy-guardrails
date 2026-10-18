@@ -16,6 +16,7 @@ nav = [
   { "English" = [
     { "Home" = "index.md" },
     { "Getting Started" = "getting-started.md" },
+    { "Client Policies" = "clients.md" },
     { "Reference" = [
       { "Sample / Demo Guide" = "sample.md" },
       { "Configuration" = "configuration.md" },
@@ -29,6 +30,7 @@ nav = [
   { "한국어" = [
     { "홈" = "ko/index.md" },
     { "시작하기" = "ko/getting-started.md" },
+    { "클라이언트 정책" = "ko/clients.md" },
     { "참고 문서" = [
       { "샘플 / 데모 가이드" = "ko/sample.md" },
       { "설정과 사용법" = "ko/configuration.md" },
@@ -47,6 +49,7 @@ generator = false
 translated_pages = [
   "",
   "getting-started/",
+  "clients/",
   "sample/",
   "configuration/",
   "security/",

@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 7fec589906b75a0530f9cb47e1416a4ef139910c75a2924d8b36c5d379e552e4 -->
+<!-- i18n-source-sha256: d8b2583e99460a41abfc91dc24f78e3ebf1e1301cf6e9901bca4e1f26a9f300d -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
@@ -56,7 +56,7 @@
 [개인정보 보호 경계 검증 매트릭스](../../docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
 참고하세요.
 
-## 명시적 Privacy Configurer를 사용하는 ChatClient
+## Guardrails Factory를 사용하는 ChatClient
 
 ```bash
 curl "http://127.0.0.1:8080/demo/chat-client"
@@ -159,9 +159,8 @@ curl "http://127.0.0.1:8080/demo/tool-loop" \
 있습니다.
 
 도구에 원문으로 전달할 개인정보 유형은 `spring.ai.privacy.tools.disclosures`에
-설정합니다. 샘플은 `PrivacyToolCallbackFactory`로 도구를 감싸고,
-`PrivacySecurityChatClientFactory`로 클라이언트를 생성해 개인정보 보호와 도구 권한
-검사를 함께 적용합니다.
+설정합니다. 샘플은 `spring.ai.guardrails`에서 개인정보 보호와 도구 권한 검사를 선택하고,
+`GuardrailsChatClientFactory`에 원래 도구를 등록합니다. Factory가 요청마다 보호를 적용합니다.
 
 `/demo/tool-loop`는 샘플에 포함된 로컬 CRM 도구를 호출하므로 외부 CRM 서비스가
 필요하지 않습니다.

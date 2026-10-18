@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: edbbc83bd80df029288ea18731630d0f605d296cc9452bfacec71a9fba9924dc -->
+<!-- i18n-source-sha256: 20cc4cbdc3c0a481e51dc9b1838b94a4c93a0e5892ce3bea2770e5c77832f0aa -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -23,12 +23,16 @@ description: >-
 규칙 기반 검사를 사용하려면 Spring AI `ChatModel`이 구성된 애플리케이션에 다음 모듈을
 추가합니다.
 
-- `spring-ai-privacy-guardrails-inspection-spring-boot-starter`
+- `spring-ai-privacy-guardrails-client-spring-boot-starter`
 - `spring-ai-privacy-guardrails-inspection-rules`
 
 검사 스타터에는 규칙 검사기나 모델 백엔드가 포함되어 있지 않습니다.
 
-Spring 설정에 규칙을 등록하고 클라이언트에 적용합니다.
+기본 정책에서 검사를 선택한 뒤 규칙과 클라이언트를 등록합니다.
+
+```properties
+spring.ai.guardrails.inspection=true
+```
 
 ```java
 @Bean
@@ -39,8 +43,8 @@ ContentInspector applicationRules() {
 }
 
 @Bean
-ChatClient inspectedChatClient(ChatModel chatModel, InspectionChatClientConfigurer inspectionConfigurer) {
-    return inspectionConfigurer.configure(ChatClient.builder(chatModel)).build();
+ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
 }
 ```
 
@@ -48,7 +52,7 @@ ChatClient inspectedChatClient(ChatModel chatModel, InspectionChatClientConfigur
 않고 `InspectionBlockedException`을 던집니다. 검사는 위와 같이 구성한 클라이언트에만
 적용됩니다. 스타터는 `ContentInspector` 빈이 하나 이상 있으면 기본 서비스를 생성합니다.
 직접 구성한 검사기와 정책을 사용하는 `InspectionService` 빈을 제공할 수도 있습니다.
-검사기나 사용자 정의 서비스가 없으면 스타터는 서비스와 configurer를 생성하지 않습니다.
+검사기나 사용자 정의 서비스가 없으면 클라이언트 정책에서 선택할 검사 서비스가 없습니다.
 
 문자열 규칙은 대소문자를 구분합니다. 정규식이 필요하면 RE2/J 패턴을 사용하는
 `InspectionRule.regex(...)`를 사용하세요. 애플리케이션에 맞는 규칙을 설정해야 하며,
@@ -56,20 +60,11 @@ ChatClient inspectedChatClient(ChatModel chatModel, InspectionChatClientConfigur
 
 ### 개인정보 보호 또는 도구 권한 검사와 조합
 
-스타터가 제공하는 각 기능의 configurer를 조합해 클라이언트에 한 번에 적용합니다.
-
-```java
-ChatClient client = ModelRequestBoundaryConfigurer.compose(
-        privacyConfigurer, inspectionConfigurer)
-    .configure(ChatClient.builder(chatModel))
-    .build();
-```
-
-이 기능들을 함께 사용하면 개인정보 처리, 도구 정의 권한 검사, 콘텐츠 검사 순으로 실행합니다.
-개인정보 보호와 권한 검사를 함께 사용한다면
-`privacySecurityFactory.builderWithBoundary(chatModel, inspectionConfigurer).build()`를,
-권한 검사만 사용한다면 `ToolAuthorizationChatClientFactory.builderWithBoundary`를
-사용합니다. 설정 방법은 [도구 권한](security.md)을 참고하세요.
+필요한 구성 요소를 준비하고 `spring.ai.guardrails.privacy` 또는
+`spring.ai.guardrails.tool-authorization`을 선택합니다.
+클라이언트 생성 코드는 `guardrails.builder(chatModel)`로 동일합니다.
+개인정보 처리, 도구 정의 권한 검사, 콘텐츠 검사 순으로 실행합니다.
+클라이언트별 Java 정책은 [클라이언트 정책](clients.md)을 참고하세요.
 
 ### 선택한 검사기의 개인정보 토큰 간결화
 
@@ -98,6 +93,24 @@ InspectionService selectedInspectionService = inspectionService.withPiiTokenSimp
 InspectionReport inspectionReport = selectedInspectionService.inspect(inspectionRequest,
     text -> privacyService.simplifyTokens(privacySession.handle(), text));
 ```
+
+## ChatClient 없이 검사
+
+규칙 모듈만으로 텍스트를 검사할 수 있습니다. 이 예제는 모델, Boot, API 키가 필요하지 않습니다.
+
+```java
+InspectionRule rule = InspectionRule.literal(
+    "blocked-phrase", InspectionFinding.Category.PROMPT_INJECTION, "ignore previous instructions");
+InspectionService service = new InspectionService(
+    List.of(new RuleBasedContentInspector("application-rules", List.of(rule))));
+InspectionRequest request = new InspectionRequest(List.of(new ContentSegment(
+    "input", ContentSegment.Role.USER, ContentSegment.PrivacyProcessingStatus.UNPROCESSED,
+    "ignore previous instructions")), InspectionLimits.defaults());
+InspectionReport report = service.inspect(request);
+```
+
+이 입력의 `report.decision()`은 `BLOCK`입니다. 서비스는 판정을 반환하므로
+호출자가 그에 따라 처리합니다. ChatClient 연동은 차단 판정에서 예외를 던집니다.
 
 ## 선택적 모델 출력 검사
 
@@ -130,12 +143,14 @@ Spring Boot 스타터는 입력과 출력에 같은 검사기와 정책을 적�
 출력에 다른 규칙을 적용하려면 별도의 `InspectionService`를 사용하는 Advisor를 지정합니다.
 
 ```java
-InspectionChatClientConfigurer configurer = inspectionConfigurer
-    .withOutputInspection(new InspectionOutputAdvisor(outputService));
+GuardrailsPolicy inputPolicy = GuardrailsPolicy.builder().inspection().build();
+ChatClient client = guardrails.builder(chatModel, inputPolicy)
+    .defaultAdvisors(new InspectionOutputAdvisor(outputService))
+    .build();
 ```
 
-반환된 configurer로 클라이언트를 구성합니다. 출력 검사만 필요하면
-`InspectionOutputAdvisor`를 직접 등록할 수도 있습니다.
+정책에서는 출력 검사를 끄고 별도 Advisor에 맡깁니다. 같은 서비스로 출력만 검사하려면
+[클라이언트 정책](clients.md#클라이언트별-명시적-정책)을 사용하세요.
 
 ## HTTP guard 모델과 개인정보 처리
 
@@ -143,20 +158,18 @@ InspectionChatClientConfigurer configurer = inspectionConfigurer
 배포한 검사 모델에 맞춰 검사기를 등록합니다. 이 모듈은 공식 OpenAI Java SDK를 사용합니다.
 
 아래 예제는 개인정보 처리가 완료된 콘텐츠를 요구합니다.
-[앞의 조합 예제](#개인정보-보호-또는-도구-권한-검사와-조합)처럼 개인정보 보호와 검사
-configurer를 함께 적용하세요. 출력 검사도 활성화한다면
+[앞의 조합 예제](#개인정보-보호-또는-도구-권한-검사와-조합)처럼 같은 클라이언트에서 개인정보 보호와 검사를 선택하세요. 출력 검사도 활성화한다면
 [출력 정책과 스트리밍](configuration.md#출력-정책과-스트리밍)에 따라 개인정보 출력 보호도 활성화해야 합니다.
 
 ```java
 @Bean
 ContentInspector httpGuard() {
-    OpenAiCompatibleInspectionConfig config = new OpenAiCompatibleInspectionConfig(
-        URI.create("http://127.0.0.1:8000/v1"),
-        "kakaocorp/kanana-safeguard-prompt-2.1b",
-        null,
-        Duration.ofSeconds(10),
-        16_384,
-        true);
+    OpenAiCompatibleInspectionConfig config = OpenAiCompatibleInspectionConfig.builder(
+            URI.create("http://127.0.0.1:8000/v1"), "kakaocorp/kanana-safeguard-prompt-2.1b")
+        .requestTimeout(Duration.ofSeconds(10))
+        .maxResponseBytes(16_384)
+        .requirePrivacyProcessedContent(true)
+        .build();
     return new OpenAiCompatibleContentInspector("primary-guard", config, new KananaSafeguardPromptProtocol());
 }
 ```
@@ -255,11 +268,9 @@ ContentInspector inspector = new OpenAiCompatibleContentInspector(
 
 ### Spring Boot 스타터 없이 구성
 
-Java에서 직접 구성할 때 `InspectionChatClientConfigurer`의 기본 resolver는
-`UNKNOWN`을 반환합니다.
-네 인자 생성자에 `PrivacyProcessingStatusResolver`를 전달하고,
-`PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)`의 반환값이
-`true`이면 `PROCESSED`, `false`이면 `UNKNOWN`으로 매핑합니다.
+[클라이언트 정책](clients.md#사용자-정의-도구-advisor와-boot-없는-구성)에 따라
+서비스와 정책을 Factory에 전달합니다. 같은 정책에서 개인정보 보호를 선택하면
+처리 상태가 검사에 자동으로 연결됩니다.
 
 ## ONNX 기반 로컬 콘텐츠 검사
 
@@ -487,6 +498,11 @@ InspectionObserver inspectionObserver() {
 발생해도 검사 결정은 바뀌지 않습니다. 보고서에는 식별자와 탐지 결과가 담기며,
 프롬프트나 응답 원문은 포함되지 않습니다.
 
+경계와 실행 방식을 구분하려면 `InspectionExecution`을 받는 `onInspection`과
+`onFailure` 오버로드를 구현하세요. `boundary()`는 `MODEL_REQUEST` 또는
+`APPLICATION_OUTPUT`, `streaming()`은 스트리밍 여부를 나타냅니다.
+`inspectorInvoked`는 호출 여부이며 원격 전송이나 검사 성공을 보장하지 않습니다.
+
 ## 검사 범위와 한도
 
 입력 검사는 메시지 본문, 도구 결과, 도구 호출 인자와 지원하는 추론 텍스트를 대상으로 합니다.
@@ -513,7 +529,7 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 
 | 설정 | 기본값 | 적용 범위 |
 | --- | --- | --- |
-| `output.enabled` | `false` | 자동 설정으로 생성한 configurer에 출력 검사 추가 |
+| `output.enabled` | `false` | 기본 클라이언트 정책에서 출력 검사 활성화 |
 | `failure-policy` | `FAIL_CLOSED` | 위 실패 정책 표에 해당하는 오류가 발생했을 때 적용할 기본 정책 |
 | `failure-policy-overrides` | 빈 맵 | 검사기 ID별 실패 정책 |
 | `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 난수 부분 없이 전달받을 검사기 ID |

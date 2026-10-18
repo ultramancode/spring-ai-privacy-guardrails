@@ -54,7 +54,7 @@ input, RAG query and prompt template, and CRM result text.
 These runtime demonstrations complement the reproducible automated coverage in
 the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
 
-## ChatClient With The Explicit Privacy Configurer
+## ChatClient With The Guardrails Factory
 
 ```bash
 curl "http://127.0.0.1:8080/demo/chat-client"
@@ -162,10 +162,9 @@ observed after the call; concurrent requests can make it nonzero without
 showing that this request leaked a session.
 
 Set the PII types each tool may receive as original values in
-`spring.ai.privacy.tools.disclosures`. The sample wraps tools with
-`PrivacyToolCallbackFactory` and creates the client with
-`PrivacySecurityChatClientFactory` to apply both privacy protection and tool
-authorization.
+`spring.ai.privacy.tools.disclosures`. The sample selects privacy and tool authorization under `spring.ai.guardrails`
+and registers raw tools with `GuardrailsChatClientFactory`. The factory applies
+protection for each request.
 
 The `/demo/tool-loop` endpoint calls a local CRM tool included in the sample,
 so no external CRM service is required.

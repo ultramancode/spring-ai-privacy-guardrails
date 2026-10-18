@@ -1,8 +1,7 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosureScope;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -39,28 +38,25 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             OpaquePiiTokenFormat.patternForEntityType("PHONE_NUMBER");
     private static final Pattern CUSTOMER_ID_TOKEN_PATTERN =
             OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID");
-    private final PrivacySecurityChatClientFactory privacySecurityFactory;
-    private final PrivacyToolCallbackFactory toolCallbackFactory;
+    private final GuardrailsChatClientFactory guardrails;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
     private final ToolCallingManager toolCallingManager;
     private final PrivacyDemoSecurityPolicy securityPolicy;
     private final ObjectMapper objectMapper;
     private LocalMcpCrmServer localMcpServer;
     private McpSyncClient mcpClient;
-    private ToolCallbackProvider protectedMcpTools;
+    private ToolCallbackProvider mcpTools;
     private ToolDisclosureScope disclosureScope;
     private Path serverBaseDirectory;
 
     public PrivacyDemoMcpToolLoop(
-            PrivacySecurityChatClientFactory privacySecurityFactory,
-            PrivacyToolCallbackFactory toolCallbackFactory,
+            GuardrailsChatClientFactory guardrails,
             ToolDisclosurePolicy toolDisclosurePolicy,
             ToolCallingManager toolCallingManager,
             PrivacyDemoSecurityPolicy securityPolicy,
             ObjectMapper objectMapper
     ) {
-        this.privacySecurityFactory = privacySecurityFactory;
-        this.toolCallbackFactory = toolCallbackFactory;
+        this.guardrails = guardrails;
         this.toolDisclosurePolicy = toolDisclosurePolicy;
         this.toolCallingManager = toolCallingManager;
         this.securityPolicy = securityPolicy;
@@ -86,7 +82,7 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         Path baseDirectory = this.serverBaseDirectory;
         this.localMcpServer = null;
         this.mcpClient = null;
-        this.protectedMcpTools = null;
+        this.mcpTools = null;
         this.disclosureScope = null;
         this.serverBaseDirectory = null;
 
@@ -136,8 +132,8 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
                         this.toolCallingManager
                 );
 
-        ChatClient.Builder builder = this.privacySecurityFactory.builder(model)
-                .defaultTools(this.protectedMcpTools);
+        ChatClient.Builder builder = this.guardrails.builder(model)
+                .defaultTools(this.mcpTools);
 
         int callsBeforeRequest = server.requestEvidence().calls();
         String finalResponse = builder.build().prompt().user(input).call().content();
@@ -212,10 +208,9 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
                     this.toolDisclosurePolicy.scopeFor(toolDefinition),
                     "tool disclosure policy must return a scope"
             );
-            ToolCallbackProvider protectedTools = this.toolCallbackFactory.wrapProvider(mcpTools);
 
             this.mcpClient = client;
-            this.protectedMcpTools = protectedTools;
+            this.mcpTools = mcpTools;
             this.disclosureScope = scope;
         }
         catch (RuntimeException | Error failure) {

@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: ecb462fcbf93aeae707d60f61714eb75aa5798f650c5e8a1986d4aaf8b27d5fc -->
+<!-- i18n-source-sha256: 40dc130e6eb9c6c1b9f8f0bc3c52bbf5bfaccc42cefe837abab54727ba4b8760 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -22,19 +22,16 @@ description: >-
 JVM 내부에서 자체 NER 모델을 사용하려면 OpenNLP를, 애플리케이션에 특화된
 탐지가 필요하면 사용자 정의 `PiiAnalyzer`를 사용할 수 있습니다.
 
-애플리케이션에는 이미 `ChatModel`과 `ChatClient.Builder`가 구성되어 있다고
-가정합니다.
+애플리케이션은 `ChatModel`을 제공합니다. 클라이언트 스타터는
+`GuardrailsChatClientFactory`를 제공합니다. 기능 조합과 Java 정책은
+[클라이언트 정책](clients.md)을 참고하세요.
 
 외부 모델 API 키 없이 로컬 모델과 고정 예제로 보호 동작을 확인하려면
 [샘플 / 데모 가이드](sample.md)를 참고하세요.
 
 ## 사전 요구 사항
 
-현재 코드는 다음 환경에서 검증됩니다.
-
-- Java 17
-- Spring AI 2.0.1
-- Spring Boot 4.1.1
+최소 버전은 Java 17, Spring AI 2.0.0과 Spring Boot 4.0.0입니다.
 
 ## 1. 개인정보 보호 스타터 선택
 
@@ -61,13 +58,13 @@ Presidio와 OpenNLP 스타터에는 기본 스타터가 이미 포함되어 있�
 외부 분석기 서비스 없이 개인정보 보호 경계를 가장 쉽게 확인하려면 내장
 Regex 분석기를 사용할 수 있습니다.
 
-기본 스타터를 추가합니다.
+클라이언트 스타터를 추가합니다. 필요한 분석기 스타터는 별도로 추가할 수 있습니다.
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -76,8 +73,8 @@ dependencies {
 ```xml
 <dependency>
     <groupId>io.github.ultramancode</groupId>
-    <artifactId>spring-ai-privacy-guardrails-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <artifactId>spring-ai-privacy-guardrails-client-spring-boot-starter</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -86,6 +83,8 @@ Regex를 활성화하고 애플리케이션 전용 식별자 규칙을 정의합
 ```yaml
 spring:
   ai:
+    guardrails:
+      privacy: true
     privacy:
       regex:
         enabled: true
@@ -102,7 +101,7 @@ spring:
 적합하며, 일반적인 PII 전체를 탐지하기 위한 기능은 아닙니다.
 
 `PiiAnalyzer` Bean이 있으면 스타터가 `PrivacyService`와
-`PrivacyChatClientConfigurer`를 제공합니다.
+Factory가 사용할 개인정보 보호 구성 요소를 제공합니다.
 
 형식이 일치한 뒤 체크섬이나 업무 규칙을 추가로 확인해야 한다면
 [사용자 정의 Regex 검증기](configuration.md#regex-분석기)를 연결할 수 있습니다.
@@ -112,16 +111,13 @@ spring:
 분석기를 구성하는 것만으로 모든 `ChatClient`가 자동으로
 보호되지는 않습니다.
 
-보호할 각 `ChatClient.Builder`에 스타터가 제공하는
-`PrivacyChatClientConfigurer`를 적용합니다.
+Factory로 보호된 클라이언트를 생성합니다. 기능 조합과 Java 정책은
+[클라이언트 정책](clients.md)을 참고하세요.
 
 ```java
 @Bean
-ChatClient privacyChatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    return privacyConfigurer.configure(builder).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
 }
 ```
 
@@ -181,46 +177,24 @@ spring:
 
 ### 로컬 ToolCallback
 
-기존 Spring AI `ToolCallback`은 보호된 `ChatClient`에 등록하기 전에
-`PrivacyToolCallbackFactory`로 감쌉니다.
+기존 콜백이나 도구 어노테이션을 가진 객체를 그대로 등록합니다.
 
 ```java
-ToolCallback protectedCustomerLookup =
-        privacyToolCallbackFactory.wrap(customerLookupToolCallback);
+ChatClient toolClient = guardrails.builder(chatModel)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
 
-여기서 `customerLookupToolCallback`은 애플리케이션에 이미 존재하는 Spring AI
-`ToolCallback`입니다.
-
-감싼 `ToolCallback`을 클라이언트의 `defaultTools(...)`에 등록합니다.
-
-```java
-ChatClient toolClient = privacyConfigurer.configure(
-        ChatClient.builder(chatModel)
-                .defaultTools(protectedCustomerLookup)
-).build();
-```
-
-도구 결과에서 탐지된 값은 모델에 다시 전달되거나 애플리케이션으로 직접
-반환되기 전에 다시 보호됩니다.
+도구 결과에서 탐지한 개인정보는 모델이나 애플리케이션에 전달하기 전에 다시 보호합니다.
+요청별 `.tools(...)`로 추가한 도구에도 같은 정책을 적용합니다.
 
 ### MCP와 동적 ToolCallbackProvider
 
-MCP에서 제공하는 도구 목록은 `ToolCallbackProvider`로 등록할 수 있습니다.
-`wrapProvider(...)`로 제공자 자체를 감싸면, 이후 요청에서 새로 제공되는 도구에도
-개인정보 보호가 적용됩니다. 아래의 `mcpToolCallbackProvider`는 애플리케이션의
-MCP 연동에서 제공받은 `ToolCallbackProvider`입니다.
+제공자 자체를 등록하면 Spring AI가 요청마다 최신 도구 목록을 가져옵니다.
 
 ```java
-ToolCallbackProvider protectedMcpTools =
-        privacyToolCallbackFactory.wrapProvider(mcpToolCallbackProvider);
-```
-
-감싼 `ToolCallbackProvider`를 클라이언트의 `defaultTools(...)`에 등록합니다.
-
-```java
-ChatClient mcpClient = privacyConfigurer.configure(builder)
-        .defaultTools(protectedMcpTools)
+ChatClient mcpClient = guardrails.builder(chatModel)
+        .defaultTools(mcpToolCallbackProvider)
         .build();
 ```
 
@@ -240,20 +214,11 @@ MCP 도구 제공자가 이름에 접두사를 추가하는 경우에는 `tools.
 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한 도구를 제한하려면
 Spring Security 스타터를 추가하고, 도구 권한 정책을
 `AuthorizationManager<ToolAuthorizationContext>` Bean으로 등록합니다.
-사용할 기능에 따라 다음 Factory Bean으로 `ChatClient`를 생성하세요.
 
-- **도구 권한 검사만 사용:** `ToolAuthorizationChatClientFactory`를 사용합니다.
-  개인정보 보호 스타터나 분석기는 필요하지 않습니다.
-- **개인정보 보호와 함께 사용:** 개인정보 보호 스타터와 분석기를 구성한 뒤
-  `PrivacySecurityChatClientFactory`를 사용합니다. 앞 단계에서 개인정보 보호를
-  구성했다면 이 Factory로 클라이언트를 생성하세요.
-
-두 Factory 모두 `builder(chatModel).build()`로 클라이언트를 생성합니다.
-두 기능을 함께 사용하면 도구 실행 직전에 권한을 다시 확인한 뒤, 해당 도구에 허용된
-개인정보만 원문으로 복원합니다.
-
-스타터 의존성과 권한 정책, 클라이언트 구성 예시는
-[Spring Security 도구 권한](security.md)을 참고하세요.
+`spring.ai.guardrails.tool-authorization=true`로 선택하고 동일하게
+`guardrails.builder(chatModel)`로 클라이언트를 생성합니다. 개인정보 보호는 별도로 선택합니다.
+권한 검사와 도구별 원문 공개 정책은 각각 유지됩니다.
+자세한 설정은 [도구 권한](security.md)을 참고하세요.
 
 ## 5. Presidio로 다양한 PII 유형 탐지
 
@@ -268,7 +233,7 @@ Presidio를 사용할 때는 기본 스타터를 별도로 추가할 필요가 �
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -278,7 +243,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -321,7 +286,7 @@ OpenNLP 스타터를 사용합니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -331,7 +296,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 

@@ -18,6 +18,11 @@ public interface InspectionObserver {
      */
     void onInspection(InspectionReport report);
 
+    /** Receives a report with its execution boundary and call or stream mode. */
+    default void onInspection(InspectionReport report, InspectionExecution execution) {
+        onInspection(report);
+    }
+
     /**
      * Receives inspection failures reported as {@link InspectionException}.
      * The exception includes an inspection report when available.
@@ -25,6 +30,11 @@ public interface InspectionObserver {
      * @param failure the classified inspection failure
      */
     default void onFailure(InspectionException failure) {}
+
+    /** Receives a failure with its execution boundary and call or stream mode. */
+    default void onFailure(InspectionException failure, InspectionExecution execution) {
+        onFailure(failure);
+    }
 
     /**
      * Creates an observer that ignores all reports and failures.

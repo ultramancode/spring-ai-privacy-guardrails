@@ -83,7 +83,7 @@ public final class ReleasePlugin implements Plugin<Project> {
                     );
                     task.dependsOn(verifyPublished);
                     task.setDir(project.file("samples/published-artifact-consumer"));
-                    task.setTasks(List.of("clean", "run", "securityOnlyRun", "inspectionOnlyRun"));
+                    task.setTasks(List.of("clean", "run", "securityOnlyRun", "inspectionOnlyRun", "clientOnlyRun"));
                     task.getStartParameter().setProjectProperties(Map.of(
                             "privacyRepository",
                             project.getLayout().getBuildDirectory()
@@ -127,7 +127,7 @@ public final class ReleasePlugin implements Plugin<Project> {
                     task.dependsOn(verifyPublished, preparePomOnlyConsumer);
                     task.mustRunAfter(artifactSmokeTest);
                     task.setDir(pomOnlyConsumerDirectory.get().getAsFile());
-                    task.setTasks(List.of("clean", "run", "securityOnlyRun", "inspectionOnlyRun"));
+                    task.setTasks(List.of("clean", "run", "securityOnlyRun", "inspectionOnlyRun", "clientOnlyRun"));
                     task.getStartParameter().setProjectProperties(Map.of(
                             "privacyRepository",
                             project.getLayout().getBuildDirectory()
@@ -277,7 +277,7 @@ public final class ReleasePlugin implements Plugin<Project> {
                         module.getLayout().getBuildDirectory()
                                 .file("publications/mavenJava/pom-default.xml")
                 );
-                String expectedDependencies = String.join(",", spec.getAllowedProjectDependencies().stream()
+                String expectedDependencies = String.join(",", spec.getPublishedProjectDependencies().stream()
                         .map(path -> path.substring(1))
                         .sorted()
                         .toList());

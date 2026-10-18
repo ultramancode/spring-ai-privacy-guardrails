@@ -27,30 +27,30 @@ final class InspectionEnforcement {
     }
 
     void inspect(Supplier<List<ContentSegment>> contentSegmentsSupplier,
-            UnaryOperator<String> piiTokenSimplifier) {
+            UnaryOperator<String> piiTokenSimplifier, InspectionExecution execution) {
         InspectionReport report;
         try {
             InspectionRequest.checkInterrupted();
             report = inspectionService.inspect(
                     new InspectionRequest(contentSegmentsSupplier.get(), limits), piiTokenSimplifier);
         } catch (RuntimeException ex) {
-            throw failure(ex);
+            throw failure(ex, execution);
         }
         try {
-            observer.onInspection(report);
+            observer.onInspection(report, execution);
         } catch (RuntimeException ignored) {
             /* Observability cannot change enforcement. */
         }
         if (Thread.currentThread().isInterrupted()) {
             InspectionReport cancelledReport = new InspectionReport(InspectionDecision.BLOCK, report.outcomes());
-            throw failure(new InspectionException(InspectionFailureCode.CANCELLED, cancelledReport));
+            throw failure(new InspectionException(InspectionFailureCode.CANCELLED, cancelledReport), execution);
         }
         if (report.decision() == InspectionDecision.BLOCK) {
             throw new InspectionBlockedException(report);
         }
     }
 
-    InspectionException failure(RuntimeException ex) {
+    InspectionException failure(RuntimeException ex, InspectionExecution execution) {
         InspectionFailureCode code = InspectionFailureCode.INVALID_RESULT;
         InspectionReport report = null;
         if (ex instanceof InspectionException classified) {
@@ -62,7 +62,7 @@ final class InspectionEnforcement {
         }
         InspectionException failure = new InspectionException(code, report);
         try {
-            observer.onFailure(failure);
+            observer.onFailure(failure, execution);
         } catch (RuntimeException ignored) {
             /* Observability cannot change enforcement. */
         }

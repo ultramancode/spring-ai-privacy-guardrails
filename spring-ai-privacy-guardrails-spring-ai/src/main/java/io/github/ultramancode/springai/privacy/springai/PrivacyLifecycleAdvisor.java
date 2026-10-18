@@ -15,6 +15,9 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.Ordered;
 import reactor.core.publisher.Flux;
 
@@ -36,6 +39,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
     public static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE;
 
     private final PrivacyService privacyService;
+    private final PrivacyToolCallbackFactory automaticToolFactory;
     private final int order;
 
     /**
@@ -55,7 +59,14 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
      */
     public PrivacyLifecycleAdvisor(PrivacyService privacyService, int order) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
+        this.automaticToolFactory = null;
         this.order = order;
+    }
+
+    PrivacyLifecycleAdvisor(PrivacyService privacyService, PrivacyToolCallbackFactory automaticToolFactory) {
+        this.privacyService = Objects.requireNonNull(privacyService, "privacyService");
+        this.automaticToolFactory = automaticToolFactory;
+        this.order = DEFAULT_ORDER;
     }
 
     @Override
@@ -68,7 +79,8 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
         try (PrivacySession privacySession = this.privacyService.openSession()) {
             ChatClientRequest chatClientRequestWithPrivacyContext =
                     prepareRequestContext(chatClientRequest, privacySession);
-            ChatClientResponse chatClientResponse = callAdvisorChain.nextCall(chatClientRequestWithPrivacyContext);
+            ChatClientResponse chatClientResponse = callAdvisorChain.nextCall(
+                    prepareTools(chatClientRequestWithPrivacyContext));
             if (privacyOutputAdvisor != null) {
                 chatClientResponse = privacyOutputAdvisor.protectAtApplicationBoundary(
                         privacySession.handle(),
@@ -96,7 +108,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
                     ChatClientRequest chatClientRequestWithPrivacyContext =
                             prepareRequestContext(chatClientRequest, privacySession);
                     Flux<ChatClientResponse> chatClientResponses =
-                            streamAdvisorChain.nextStream(chatClientRequestWithPrivacyContext);
+                            streamAdvisorChain.nextStream(prepareTools(chatClientRequestWithPrivacyContext));
                     if (privacyOutputAdvisor != null) {
                         chatClientResponses = privacyOutputAdvisor.protectAtApplicationBoundary(
                                 privacySession.handle(),
@@ -176,6 +188,18 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
             return null;
         }
         return text -> this.privacyService.simplifyTokens(privacySession.handle(), text);
+    }
+
+    private ChatClientRequest prepareTools(ChatClientRequest request) {
+        if (automaticToolFactory == null
+                || !(request.prompt().getOptions() instanceof ToolCallingChatOptions options)
+                || options.getToolCallbacks() == null || options.getToolCallbacks().isEmpty()) {
+            return request;
+        }
+        // Authorization must capture the same protected callbacks that the tool loop executes.
+        List<ToolCallback> callbacks = automaticToolFactory.prepareCallbacks(options.getToolCallbacks());
+        ToolCallingChatOptions protectedOptions = options.mutate().toolCallbacks(callbacks).build();
+        return request.mutate().prompt(new Prompt(request.prompt().getInstructions(), protectedOptions)).build();
     }
 
     private PrivacyOutputAdvisor validateBundleAndFindOutputAdvisor(List<? extends Advisor> advisors) {

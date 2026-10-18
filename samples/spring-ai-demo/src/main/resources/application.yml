@@ -6,6 +6,9 @@ spring:
   application:
     name: spring-ai-privacy-guardrails-demo
   ai:
+    guardrails:
+      privacy: true
+      tool-authorization: true
     privacy:
       output:
         enabled: true

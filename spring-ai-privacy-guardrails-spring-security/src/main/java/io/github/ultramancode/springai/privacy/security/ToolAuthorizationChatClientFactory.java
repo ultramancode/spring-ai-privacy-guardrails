@@ -13,6 +13,7 @@ import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.core.PriorityOrdered;
 
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.IntConsumer;
 import java.util.function.UnaryOperator;
 
@@ -119,8 +120,27 @@ public final class ToolAuthorizationChatClientFactory {
                 Objects.requireNonNull(additionalConfigurer, "additionalConfigurer"), ignored -> { });
     }
 
+    /**
+     * Integrates authorization with a client factory that owns observation and customization.
+     * The supplied factory receives the secured tool advisor builder and must use it unchanged.
+     * This authorization factory's own client defaults are not applied on this path.
+     */
+    public ChatClient.Builder builder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
+            ModelRequestBoundaryConfigurer additionalConfigurer,
+            BiFunction<ChatModel, ToolCallingAdvisor.Builder<?>, ChatClient.Builder> clientBuilderFactory) {
+        return createBuilder(model, toolAdvisorBuilder, Objects.requireNonNull(additionalConfigurer, "additionalConfigurer"),
+                ignored -> { }, Objects.requireNonNull(clientBuilderFactory, "clientBuilderFactory"));
+    }
+
     ChatClient.Builder createBuilder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
             ModelRequestBoundaryConfigurer additionalConfigurer, IntConsumer additionalOrderValidator) {
+        return createBuilder(model, toolAdvisorBuilder, additionalConfigurer, additionalOrderValidator,
+                this::createClientBuilder);
+    }
+
+    private ChatClient.Builder createBuilder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
+            ModelRequestBoundaryConfigurer additionalConfigurer, IntConsumer additionalOrderValidator,
+            BiFunction<ChatModel, ToolCallingAdvisor.Builder<?>, ChatClient.Builder> clientBuilderFactory) {
         Objects.requireNonNull(model, "model must not be null");
         Objects.requireNonNull(toolAdvisorBuilder, "toolAdvisorBuilder must not be null");
         IntConsumer orderValidator = order -> {
@@ -134,16 +154,22 @@ public final class ToolAuthorizationChatClientFactory {
         ToolAuthorizationChainAdvisor chainValidator = new ToolAuthorizationChainAdvisor();
         AuthorizedToolCallingAdvisorBuilder authorizedToolAdvisorBuilder = new AuthorizedToolCallingAdvisorBuilder(
                 toolAdvisorBuilder, this.boundary.toolCallingManager(), chainValidator, orderValidator);
+        ChatClient.Builder builder = Objects.requireNonNull(clientBuilderFactory.apply(model, authorizedToolAdvisorBuilder),
+                "clientBuilderFactory must not return null");
+        builder.defaultAdvisors(chainValidator);
+        ModelRequestBoundaryConfigurer composition = ModelRequestBoundaryConfigurer.compose(
+                this.boundary.modelRequestBoundaryConfigurer(), additionalConfigurer);
+        return composition.configure(builder);
+    }
+
+    private ChatClient.Builder createClientBuilder(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder) {
         ChatClient.Builder builder = ChatClient.builder(model, this.observationRegistry,
-                this.chatClientObservationConvention, this.advisorObservationConvention, authorizedToolAdvisorBuilder);
+                this.chatClientObservationConvention, this.advisorObservationConvention, toolAdvisorBuilder);
         if (!this.autoRegisterToolAdvisor) {
             builder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
         }
         builder = Objects.requireNonNull(this.clientBuilderCustomizer.apply(builder),
                 "clientBuilderCustomizer must not return null");
-        builder.defaultAdvisors(chainValidator);
-        ModelRequestBoundaryConfigurer composition = ModelRequestBoundaryConfigurer.compose(
-                this.boundary.modelRequestBoundaryConfigurer(), additionalConfigurer);
-        return composition.configure(builder);
+        return builder;
     }
 }

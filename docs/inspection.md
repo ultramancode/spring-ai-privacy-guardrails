@@ -20,12 +20,16 @@ Use the same version, `0.4.0` or later, for all Privacy Guardrails modules when 
 For a rules-based setup, add these modules to an application that provides a Spring AI
 `ChatModel`:
 
-- `spring-ai-privacy-guardrails-inspection-spring-boot-starter`
+- `spring-ai-privacy-guardrails-client-spring-boot-starter`
 - `spring-ai-privacy-guardrails-inspection-rules`
 
 The inspection starter does not include a rule or model backend.
 
-Add a rule and configure the client in your Spring configuration:
+Select inspection in the default policy, then register a rule and client:
+
+```properties
+spring.ai.guardrails.inspection=true
+```
 
 ```java
 @Bean
@@ -36,8 +40,8 @@ ContentInspector applicationRules() {
 }
 
 @Bean
-ChatClient inspectedChatClient(ChatModel chatModel, InspectionChatClientConfigurer inspectionConfigurer) {
-    return inspectionConfigurer.configure(ChatClient.builder(chatModel)).build();
+ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
 }
 ```
 
@@ -46,7 +50,7 @@ The example blocks input containing `ignore previous instructions` by throwing
 are inspected. The starter creates a default service when at least one
 `ContentInspector` bean is available.
 You can instead provide an `InspectionService` bean with your own inspectors and policies.
-Without inspectors or a custom service, the starter creates neither a service nor a configurer.
+Without inspectors or a custom service, there is no inspection service to select in a client policy.
 
 Literal rules are case-sensitive. Use `InspectionRule.regex(...)` for RE2/J patterns.
 Choose rules that fit your application. This example alone is not a general
@@ -54,20 +58,10 @@ prompt-injection detector.
 
 ### Combine with privacy or tool authorization
 
-Compose the starter-provided configurers and apply the composition once:
-
-```java
-ChatClient client = ModelRequestBoundaryConfigurer.compose(
-        privacyConfigurer, inspectionConfigurer)
-    .configure(ChatClient.builder(chatModel))
-    .build();
-```
-
-When these features are combined, privacy processing runs first, followed by
-tool-definition authorization and content inspection. For privacy with authorization, use
-`privacySecurityFactory.builderWithBoundary(chatModel, inspectionConfigurer).build()`.
-For authorization alone, use `ToolAuthorizationChatClientFactory.builderWithBoundary`.
-See [tool authorization](security.md) for setup.
+Prepare the required components and select `spring.ai.guardrails.privacy` or
+`spring.ai.guardrails.tool-authorization`. Keep using `guardrails.builder(chatModel)`.
+Privacy processing runs first, followed by tool-definition authorization and content
+inspection. See [Client policies](clients.md) for per-client Java policies.
 
 ### Simplify PII tokens for selected inspectors
 
@@ -96,6 +90,24 @@ InspectionService selectedInspectionService = inspectionService.withPiiTokenSimp
 InspectionReport inspectionReport = selectedInspectionService.inspect(inspectionRequest,
     text -> privacyService.simplifyTokens(privacySession.handle(), text));
 ```
+
+## Inspect without a ChatClient
+
+Use the rules module to inspect text directly. This example needs no model, Boot application or API key.
+
+```java
+InspectionRule rule = InspectionRule.literal(
+    "blocked-phrase", InspectionFinding.Category.PROMPT_INJECTION, "ignore previous instructions");
+InspectionService service = new InspectionService(
+    List.of(new RuleBasedContentInspector("application-rules", List.of(rule))));
+InspectionRequest request = new InspectionRequest(List.of(new ContentSegment(
+    "input", ContentSegment.Role.USER, ContentSegment.PrivacyProcessingStatus.UNPROCESSED,
+    "ignore previous instructions")), InspectionLimits.defaults());
+InspectionReport report = service.inspect(request);
+```
+
+For this input, `report.decision()` is `BLOCK`. The service returns a decision for
+the caller to enforce. The ChatClient integration throws an exception for a block decision.
 
 ## Optional model-output inspection
 
@@ -130,33 +142,33 @@ The Spring Boot starter uses the same inspectors and policy for input and output
 To apply different rules to output, supply an advisor with a separate `InspectionService`:
 
 ```java
-InspectionChatClientConfigurer configurer = inspectionConfigurer
-    .withOutputInspection(new InspectionOutputAdvisor(outputService));
+GuardrailsPolicy inputPolicy = GuardrailsPolicy.builder().inspection().build();
+ChatClient client = guardrails.builder(chatModel, inputPolicy)
+    .defaultAdvisors(new InspectionOutputAdvisor(outputService))
+    .build();
 ```
 
-Use the returned configurer when building the client. You can also register
-`InspectionOutputAdvisor` directly for output-only inspection.
+The policy leaves output inspection disabled so the separate advisor owns it.
+For output-only inspection with the same service, use a [client policy](clients.md#explicit-policy-per-client).
 
 ## HTTP guard models and privacy
 
 Add `spring-ai-privacy-guardrails-inspection-openai-compatible` and register an
 inspector for your deployed guard model. This module uses the official OpenAI Java SDK.
 
-The example below requires privacy-processed content. Apply the privacy and inspection
-configurers together as shown [above](#combine-with-privacy-or-tool-authorization).
+The example below requires privacy-processed content. Select privacy and inspection together as shown [above](#combine-with-privacy-or-tool-authorization).
 If output inspection is enabled too, also enable privacy output protection as described
 in [Output Policy and Streaming](configuration.md#output-policy-and-streaming).
 
 ```java
 @Bean
 ContentInspector httpGuard() {
-    OpenAiCompatibleInspectionConfig config = new OpenAiCompatibleInspectionConfig(
-        URI.create("http://127.0.0.1:8000/v1"),
-        "kakaocorp/kanana-safeguard-prompt-2.1b",
-        null,
-        Duration.ofSeconds(10),
-        16_384,
-        true);
+    OpenAiCompatibleInspectionConfig config = OpenAiCompatibleInspectionConfig.builder(
+            URI.create("http://127.0.0.1:8000/v1"), "kakaocorp/kanana-safeguard-prompt-2.1b")
+        .requestTimeout(Duration.ofSeconds(10))
+        .maxResponseBytes(16_384)
+        .requirePrivacyProcessedContent(true)
+        .build();
     return new OpenAiCompatibleContentInspector("primary-guard", config, new KananaSafeguardPromptProtocol());
 }
 ```
@@ -256,11 +268,8 @@ Failures preserve findings already collected and IDs of fully inspected segments
 
 ### Configure without the Spring Boot starter
 
-For direct Java configuration, the default resolver in `InspectionChatClientConfigurer`
-returns `UNKNOWN`. Supply a
-`PrivacyProcessingStatusResolver` to the four-argument configurer constructor and
-use `PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)` to map
-`true` to `PROCESSED` and `false` to `UNKNOWN`.
+Supply services and a policy to the factory as described in [Client policies](clients.md#custom-tool-advisors-and-non-boot-applications).
+Selecting privacy in the same policy automatically connects its processing status to inspection.
 
 ## Local content inspection with ONNX
 
@@ -490,6 +499,11 @@ Callbacks may run concurrently and should return promptly. A runtime exception i
 callback does not change the inspection decision. Reports contain identifiers and
 findings without prompt or response text.
 
+To distinguish boundaries and execution modes, implement the `onInspection` and
+`onFailure` overloads that accept `InspectionExecution`. Its `boundary()` is
+`MODEL_REQUEST` or `APPLICATION_OUTPUT`, and `streaming()` identifies streaming.
+`inspectorInvoked` indicates invocation, not confirmed remote delivery or success.
+
 ## Scope and limits
 
 Input inspection covers message bodies, tool results, tool-call arguments and
@@ -517,7 +531,7 @@ The following properties use the `spring.ai.inspection` prefix:
 
 | Setting | Default | Scope |
 | --- | --- | --- |
-| `output.enabled` | `false` | Adds output inspection to the auto-configured configurer |
+| `output.enabled` | `false` | Enables output inspection in the default client policy |
 | `failure-policy` | `FAIL_CLOSED` | Default handling of eligible operational inspection failures |
 | `failure-policy-overrides` | Empty map | Failure policies keyed by inspector ID |
 | `pii-token-simplification-inspectors` | Empty set | Inspector IDs that receive session-issued PII tokens without their random part |

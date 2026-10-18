@@ -20,19 +20,16 @@ de-identification, as an external analyzer service.
 Use OpenNLP when you want to run your own NER models inside the JVM, or a
 custom `PiiAnalyzer` when you need detection tailored to your application.
 
-The application is expected to already provide a `ChatModel` and
-`ChatClient.Builder`.
+The application provides a `ChatModel`. The client starter supplies
+`GuardrailsChatClientFactory`. See [Client policies](clients.md) to combine features
+or define a policy in Java.
 
 To check protection with a local model and fixed examples, without an external model API key, see
 the [Sample / Demo Guide](sample.md).
 
 ## Prerequisites
 
-The current code is verified with:
-
-- Java 17
-- Spring AI 2.0.1
-- Spring Boot 4.1.1
+Minimum versions: Java 17, Spring AI 2.0.0 and Spring Boot 4.0.0.
 
 ## 1. Choose a Privacy Starter
 
@@ -58,13 +55,13 @@ its own or together with a privacy starter. See
 The built-in Regex analyzer is the easiest way to verify the privacy boundary
 without an external analyzer service.
 
-Add the base starter.
+Add the client starter. Analyzer-specific starters can be added as needed.
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -73,8 +70,8 @@ dependencies {
 ```xml
 <dependency>
     <groupId>io.github.ultramancode</groupId>
-    <artifactId>spring-ai-privacy-guardrails-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <artifactId>spring-ai-privacy-guardrails-client-spring-boot-starter</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -83,6 +80,8 @@ Enable Regex and define application-specific identifiers:
 ```yaml
 spring:
   ai:
+    guardrails:
+      privacy: true
     privacy:
       regex:
         enabled: true
@@ -100,7 +99,7 @@ structured application identifiers; they are not intended to provide complete
 general-purpose PII detection.
 
 Once a `PiiAnalyzer` bean is available, the starter provides `PrivacyService`
-and `PrivacyChatClientConfigurer`.
+and the components used by `GuardrailsChatClientFactory`.
 
 If a format match also needs a checksum or business-rule check, add a
 [custom Regex validator](configuration.md#regex-analyzer).
@@ -110,16 +109,12 @@ If a format match also needs a checksum or business-rule check, add a
 Configuring an analyzer does not automatically protect every
 `ChatClient`.
 
-Apply the starter-provided `PrivacyChatClientConfigurer` to each builder that
-should be inside the privacy boundary:
+Create the protected client through the factory:
 
 ```java
 @Bean
-ChatClient privacyChatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    return privacyConfigurer.configure(builder).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
+    return guardrails.builder(chatModel).build();
 }
 ```
 
@@ -180,46 +175,24 @@ original values. Other detected PII is passed as opaque tokens.
 
 ### Local ToolCallback
 
-Wrap an existing Spring AI `ToolCallback` before registering it with a protected
-`ChatClient`:
+Register existing callbacks or objects with annotated tools directly:
 
 ```java
-ToolCallback protectedCustomerLookup =
-        privacyToolCallbackFactory.wrap(customerLookupToolCallback);
+ChatClient toolClient = guardrails.builder(chatModel)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
 
-Here, `customerLookupToolCallback` is the application's existing Spring AI
-`ToolCallback`.
-
-Register the wrapped `ToolCallback` with the client's `defaultTools(...)`:
-
-```java
-ChatClient toolClient = privacyConfigurer.configure(
-        ChatClient.builder(chatModel)
-                .defaultTools(protectedCustomerLookup)
-).build();
-```
-
-Detected values in tool results are protected again before being sent back to
-the model or returned directly to the application.
+Detected values in tool results are protected before being returned to the model
+or application. Request-specific tools passed to `.tools(...)` follow the same policy.
 
 ### MCP and Dynamic ToolCallbackProvider
 
-MCP tool lists can be registered through a `ToolCallbackProvider`. Wrap the
-provider itself with `wrapProvider(...)` so protection also applies to tools it
-supplies in later requests. In this example, `mcpToolCallbackProvider` is the
-`ToolCallbackProvider` supplied by the application's MCP integration.
+Register the provider itself so Spring AI resolves its current tools for every request:
 
 ```java
-ToolCallbackProvider protectedMcpTools =
-        privacyToolCallbackFactory.wrapProvider(mcpToolCallbackProvider);
-```
-
-Register the wrapped `ToolCallbackProvider` with the client's `defaultTools(...)`:
-
-```java
-ChatClient mcpClient = privacyConfigurer.configure(builder)
-        .defaultTools(protectedMcpTools)
+ChatClient mcpClient = guardrails.builder(chatModel)
+        .defaultTools(mcpToolCallbackProvider)
         .build();
 ```
 
@@ -239,16 +212,9 @@ tool-result re-protection, see the
 To limit which tools the model can discover and execute based on the current
 user's permissions, add the Spring Security starter and register a tool
 authorization policy as an `AuthorizationManager<ToolAuthorizationContext>`
-bean. Create the `ChatClient` with the factory bean for the features you need:
-
-- **Tool authorization alone:** Use `ToolAuthorizationChatClientFactory`.
-  No privacy starter or analyzer is required.
-- **Combined with privacy protection:** Configure a privacy starter and an
-  analyzer, then use `PrivacySecurityChatClientFactory`. If you configured
-  privacy protection in the preceding steps, use this factory to create the
-  client.
-
-Both factories create clients with `builder(chatModel).build()`. When both
+bean. Enable `spring.ai.guardrails.tool-authorization=true` and keep using
+`guardrails.builder(chatModel)`. Privacy is selected independently.
+When both
 features are used, permission is checked again immediately before tool
 execution, and only then are the original PII values allowed for that tool
 restored.
@@ -270,7 +236,7 @@ starter only when that analyzer is also needed.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -280,7 +246,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -323,7 +289,7 @@ with application-supplied compatible OpenNLP models.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -333,7 +299,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 

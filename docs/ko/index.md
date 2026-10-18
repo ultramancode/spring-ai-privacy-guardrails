@@ -11,7 +11,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: 5464a454853c77b456590f72976e9557440252393ce7221c552e4e5e386f5ebb -->
+<!-- i18n-source-sha256: ed74653521c10f728fceee4d03d750c232863ee72493df810a3d443f155acf8a -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -45,6 +45,7 @@ Privacy Boundary Inspector에서 Local Tool, RAG 및 MCP 시나리오의 모델�
 
 | 가이드 | 다루는 내용 |
 | --- | --- |
+| [클라이언트 정책](clients.md) | 기능 선택, 클라이언트별 정책과 자동 도구 보호. |
 | [시작하기](getting-started.md) | 스타터 선택, 기본 설정과 모델·도구·MCP·출력 보호 |
 | [샘플 / 데모 가이드](sample.md) | Inspector 시나리오, 예상 결과, 엔드포인트와 언어 선택 |
 | [설정과 사용법](configuration.md) | 스타터, 분석기, 출력 정책, 도구 공개와 처리 제한 |

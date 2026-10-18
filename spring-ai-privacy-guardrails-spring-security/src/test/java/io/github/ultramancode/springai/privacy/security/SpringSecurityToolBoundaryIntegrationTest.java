@@ -63,7 +63,7 @@ class SpringSecurityToolBoundaryIntegrationTest {
         DefinitionResolvingModel model = new DefinitionResolvingModel(ToolCallingManager.builder().build());
         AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
         ModelRequestBoundaryConfigurer inspectionConfigurer =
-                (clientBuilder, boundarySpec) -> boundarySpec.inspection(inspectedRequest::set);
+                (clientBuilder, boundarySpec) -> boundarySpec.inspection((request, streamed) -> inspectedRequest.set(request));
 
         ChatClient.Builder clientBuilder;
         if (customToolOrder) {

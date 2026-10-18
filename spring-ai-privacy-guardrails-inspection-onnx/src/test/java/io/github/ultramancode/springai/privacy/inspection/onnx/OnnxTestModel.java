@@ -5,6 +5,11 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * Test defaults for Xenova/toxic-bert, pinned in scripts/inspection/test-model.properties.
+ * Its config.json maps indices 0 through 5 to six classes, with insult at index 4.
+ * The ONNX model exposes those logits in the output named "logits".
+ */
 final class OnnxTestModel {
 
     static final String SAFE = "Thank you for your help. ";
@@ -21,9 +26,9 @@ final class OnnxTestModel {
         return directory().resolve("model.onnx");
     }
 
-    static OnnxClassificationConfig.Builder classificationBuilder(Path tokenizer, Path tokenizerConfigPath) {
+    static OnnxClassificationConfig.Builder classificationBuilder(Path tokenizerPath, Path tokenizerConfigPath) {
         return OnnxClassificationConfig.builder()
-                .tokenizer(tokenizer)
+                .tokenizer(tokenizerPath)
                 .tokenizerConfig(tokenizerConfigPath)
                 .windowSize(128)
                 .overlapSize(32)

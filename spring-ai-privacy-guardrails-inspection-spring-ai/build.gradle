@@ -9,17 +9,10 @@ dependencies {
     testImplementation 'org.springframework.ai:spring-ai-openai'
     testImplementation project(':spring-ai-privacy-guardrails-inspection-rules')
     testImplementation project(':spring-ai-privacy-guardrails-inspection-openai-compatible')
-    testImplementation project(':spring-ai-privacy-guardrails-inspection-onnx')
     testImplementation project(':spring-ai-privacy-guardrails-spring-boot-starter')
     testImplementation 'org.springframework.boot:spring-boot-test'
     testImplementation project(':spring-ai-privacy-guardrails-spring-security-spring-boot-starter')
     testImplementation 'org.springframework.ai:spring-ai-tool-search-advisor'
     testImplementation "io.projectreactor:reactor-test:${providers.gradleProperty('reactorTestVersion').get()}"
     testImplementation "org.mockito:mockito-core:${providers.gradleProperty('mockitoVersion').get()}"
-}
-
-tasks.withType(Test).configureEach {
-    dependsOn rootProject.tasks.named('prepareOnnxTestModel')
-    inputs.dir(rootProject.inspectionTestModelDirectory)
-    systemProperty 'inspection.test.model', rootProject.inspectionTestModelDirectory.absolutePath
 }

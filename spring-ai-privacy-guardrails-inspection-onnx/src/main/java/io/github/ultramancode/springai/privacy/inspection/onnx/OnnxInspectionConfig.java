@@ -22,7 +22,7 @@ public record OnnxInspectionConfig(Path model, int intraOpThreads, int maxWindow
         }
     }
 
-    /** Creates settings with two CPU threads and at most 256 inference windows per request. */
+    /** Creates settings with two threads per model operation and at most 256 inference windows per request. */
     public static OnnxInspectionConfig defaults(Path model) {
         return new OnnxInspectionConfig(model, 2, 256);
     }

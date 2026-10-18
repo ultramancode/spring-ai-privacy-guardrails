@@ -24,6 +24,7 @@ module rules. Update the declared module policy when a change intentionally
 alters that graph.
 
 ONNX tests download and cache a public model on first run.
+See the [ONNX test setup](scripts/inspection/README.md) for cache and reference-data instructions.
 
 To reproduce another compatibility lane locally, install that JDK and override
 the build/test toolchain, for example with `-PtestJavaVersion=21`.

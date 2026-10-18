@@ -13,6 +13,8 @@ An inspection policy decides whether the request can proceed based on the findin
 Inspection runs before each model call, including calls made after a tool returns.
 You can also inspect responses before they reach your application.
 
+Use the same version, `0.4.0` or later, for all Privacy Guardrails modules when enabling content inspection.
+
 ## Set up input inspection
 
 For a rules-based setup, add these modules to an application that provides a Spring AI
@@ -242,9 +244,10 @@ Prepare `model.onnx` and its matching `tokenizer.json` and `tokenizer_config.jso
 in `models/guard`, relative to the application's working directory. If the model's
 weights are stored in separate files, provision those files as well.
 
-The registration example below assumes two outputs, `SAFE` at index 0 and
-`INJECTION` at index 1, with `SOFTMAX` scoring. Adjust the classification settings
-to match your model and choose a threshold for your application.
+The example assumes a model that outputs raw scores (logits) for two classes,
+`SAFE` at index 0 and `INJECTION` at index 1. It uses `SOFTMAX` to convert logits
+to scores. Adjust the classification settings to match your model and choose a
+threshold for your application.
 
 ```java
 @Bean(destroyMethod = "close")
@@ -276,10 +279,10 @@ managing its lifetime directly.
 | --- | --- |
 | Inputs | `input_ids`, optional `attention_mask` and `token_type_ids`, shaped `[1, windowSize]` |
 | Token type | INT64 or INT32, shared by all token inputs |
-| Output | FLOAT raw logits shaped `[1, logitCount]` |
+| Output tensor | FLOAT logits shaped `[1, logitCount]` |
 
 Model-loading failures and incompatible model metadata raise `InspectionException`
-with `CONFIGURATION`. Unexpected output shapes and nonfinite logits during inspection
+with `CONFIGURATION`. Unexpected output tensor shapes and nonfinite logits during inspection
 produce `MODEL_ERROR`.
 
 ### Classification settings
@@ -291,39 +294,38 @@ application. Supply these values through `OnnxClassificationConfig`.
 | Setting | How to set it |
 | --- | --- |
 | `tokenizer`, `tokenizerConfig` | Supply local tokenizer files matching the model. |
-| `modelOutputName` | Use the raw logits output name defined in the ONNX model. Defaults to `logits`. |
-| `logitCount` | Use N from the output shape `[1, N]`, including outputs without a finding mapping. |
+| `modelOutputName` | Use the name of the output tensor containing logits. Defaults to `logits`. |
+| `logitCount` | Use N from the output tensor shape `[1, N]`, including classes without a finding mapping. |
 | `activation` | Choose `SOFTMAX` or `SIGMOID` to match the model. See [Choosing `activation`](#choosing-activation). |
-| `Label.index` | Use the position of the selected output, starting from zero. |
+| `Label.index` | Use the selected class's position in the model output, starting from zero. |
 | `tokenInputType` | Match the integer type of every token input in the ONNX model. Defaults to INT64. |
 | `windowSize` | Tokens per window, including special tokens and padding. Use the model's fixed input length or stay within its supported maximum. |
 | `overlapSize` | Choose the number of content tokens repeated between windows. It must be smaller than `windowSize` minus the number of special tokens. Defaults to zero. |
 | `Label.category`, `Label.code` | Map each detected condition to a category and finding code. |
 | `Label.threshold` | Set the minimum score after activation that emits a finding, including equality. |
 
-`labels` maps selected outputs to findings. Outputs without a mapping do not produce
-findings. Labels may share an output index with distinct codes and independent
+`labels` maps selected classes to findings. Classes without a mapping do not produce
+findings. Labels may share a class index with distinct codes and independent
 thresholds. Each qualifying mapping produces a finding.
 
 ### Choosing `activation`
 
-`OnnxClassificationConfig.activation` specifies how the inspector converts raw model
-outputs (logits) to scores between zero and one. The inspector performs the conversion
-and compares the scores with `Label.threshold`. Select the value documented for your model:
+`OnnxClassificationConfig.activation` specifies how the inspector converts logits to
+scores between zero and one. It compares the scores with `Label.threshold`.
+Select the value documented for your model:
 
 | `activation` | When to use it |
 | --- | --- |
 | `SOFTMAX` | A model that chooses one of mutually exclusive categories. Requires at least two logits. |
 | `SIGMOID` | A model that evaluates labels independently, or a binary classifier that returns one logit. |
 
-A single-logit binary classifier uses `logitCount=1`. Model outputs must be raw logits
+A single-logit binary classifier uses `logitCount=1`. Model outputs must be logits
 before activation.
 
 ### Tokenizer files
 
-Supply a `tokenizer.json` that matches the model. It must use the Hugging Face
-Tokenizers JSON format supported by DJL and preserve the model's tokenization settings.
-See [DJL's tokenizer loading](https://github.com/deepjavalibrary/djl/blob/v0.38.0/extensions/tokenizers/README.md#from-huggingface-pipeline).
+Use the model's Hugging Face `tokenizer.json` and `tokenizer_config.json` files
+to preserve its tokenization settings.
 
 Padding direction (`padding_side`) and truncation direction (`truncation_side`)
 specified in `tokenizer_config.json` take precedence over those in `tokenizer.json`.

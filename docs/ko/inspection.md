@@ -8,13 +8,15 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 810f76856beb048e595a609ff574700c1c8434ff807b8eb43c46e7612eb595b6 -->
+<!-- i18n-source-sha256: 03f1f2ac41d7695564a04dca3faa70b818b8f1556228af73457550b4f242a52e -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
 도구 실행 후 모델을 다시 호출하는 경우를 포함해 매 모델 호출 전에 검사하며,
 애플리케이션에 전달할 응답도 검사하도록 설정할 수 있습니다.
+
+콘텐츠 검사를 사용하려면 모든 Privacy Guardrails 모듈을 `0.4.0` 이상의 같은 버전으로 맞춥니다.
 
 ## 입력 검사 설정
 
@@ -242,9 +244,9 @@ ONNX 텍스트 분류 모델을 로컬에서 실행해 콘텐츠를 검사할 �
 애플리케이션 작업 디렉터리 기준 `models/guard`에 준비합니다.
 모델 가중치가 별도 파일로 분리되어 있다면 해당 파일도 함께 준비합니다.
 
-아래 등록 예시는 인덱스 0이 `SAFE`, 인덱스 1이 `INJECTION`인 두 출력에
-`SOFTMAX`를 적용하는 모델을 가정합니다. 분류 설정은 실제 모델에 맞추고,
-임계값은 애플리케이션에 맞게 선택합니다.
+아래 예시는 `SAFE`와 `INJECTION` 두 클래스의 원시 점수(로짓)를 출력하는 모델을 가정합니다.
+인덱스는 각각 0과 1이며, `SOFTMAX`로 로짓을 점수로 변환합니다.
+분류 설정은 실제 모델에 맞추고, 임계값은 애플리케이션에 맞게 선택합니다.
 
 ```java
 @Bean(destroyMethod = "close")
@@ -276,10 +278,10 @@ Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 | --- | --- |
 | 입력 | `input_ids`, 선택적 `attention_mask`와 `token_type_ids`. 각각 `[1, windowSize]` 형태 |
 | 토큰 타입 | 모든 토큰 입력에 동일한 INT64 또는 INT32 |
-| 출력 | `[1, logitCount]` 형태의 FLOAT 원시 로짓 |
+| 출력 텐서 | `[1, logitCount]` 형태의 FLOAT 로짓 |
 
 모델 로딩 실패와 모델 메타정보 불일치는 `CONFIGURATION`을 담은
-`InspectionException`을 발생시킵니다. 검사 중 예상과 다른 출력 형태나
+`InspectionException`을 발생시킵니다. 검사 중 예상과 다른 출력 텐서 형태나
 유한하지 않은 로짓은 `MODEL_ERROR`로 처리합니다.
 
 ### 분류 설정
@@ -291,25 +293,25 @@ Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 | 설정 | 지정 방법 |
 | --- | --- |
 | `tokenizer`, `tokenizerConfig` | 모델과 일치하는 로컬 토크나이저 파일을 지정합니다. |
-| `modelOutputName` | ONNX 모델에 정의된 원시 로짓 출력 이름을 지정합니다. 기본값은 `logits`입니다. |
-| `logitCount` | 출력 형태가 `[1, N]`이면 N을 지정합니다. 탐지 결과에 매핑하지 않는 출력도 포함합니다. |
+| `modelOutputName` | 로짓을 담은 출력 텐서의 이름을 지정합니다. 기본값은 `logits`입니다. |
+| `logitCount` | 출력 텐서의 형태가 `[1, N]`이면 N을 지정합니다. 탐지 결과에 매핑하지 않는 클래스도 포함합니다. |
 | `activation` | 모델에 맞게 `SOFTMAX` 또는 `SIGMOID`를 선택합니다. 선택 기준은 아래의 [`activation` 선택](#activation-선택)을 참고하세요. |
-| `Label.index` | 탐지할 출력의 위치를 0부터 세어 지정합니다. |
+| `Label.index` | 모델 출력에서 탐지할 클래스의 위치를 0부터 세어 지정합니다. |
 | `tokenInputType` | ONNX 모델 파일에 정의된 모든 토큰 입력의 정수 타입에 맞춥니다. 기본값은 INT64입니다. |
 | `windowSize` | 특수 토큰과 패딩을 포함한 윈도우 하나의 토큰 수입니다. 입력 길이가 고정된 모델은 해당 길이를 사용하고, 가변 길이 모델은 지원하는 최대 길이 이내로 설정합니다. |
 | `overlapSize` | 윈도우 사이에 반복할 본문 토큰 수를 정합니다. `windowSize`에서 특수 토큰 수를 뺀 값보다 작아야 합니다. 기본값은 0입니다. |
 | `Label.category`, `Label.code` | 탐지 조건마다 범주와 탐지 유형 코드를 지정합니다. |
 | `Label.threshold` | 활성화 함수 적용 후 점수가 이 값 이상이면 탐지 결과를 생성합니다. |
 
-`labels`는 선택한 모델 출력을 탐지 결과에 연결합니다. 매핑하지 않은 출력에서는
-탐지 결과를 생성하지 않습니다. 서로 다른 코드를 가진 여러 레이블이 같은 출력 인덱스를
+`labels`는 선택한 클래스를 탐지 결과에 연결합니다. 매핑하지 않은 클래스에서는
+탐지 결과를 생성하지 않습니다. 서로 다른 코드를 가진 여러 레이블이 같은 클래스 인덱스를
 사용할 수 있습니다. 임계값은 각각 독립적으로 적용되며, 조건을 충족한 매핑마다 탐지 결과가 생성됩니다.
 
 ### `activation` 선택
 
-`OnnxClassificationConfig.activation`은 모델의 원시 출력(로짓)을 0에서 1 사이의
-점수로 변환하는 방식을 지정합니다. 검사기가 변환을 수행하고 그 점수를 `Label.threshold`와
-비교합니다. 모델 문서에 맞는 값을 선택하세요.
+`OnnxClassificationConfig.activation`은 로짓을 0에서 1 사이의 점수로 변환하는 방식을
+지정합니다. 검사기는 그 점수를 `Label.threshold`와 비교합니다.
+모델 문서에 맞는 값을 선택하세요.
 
 | `activation` | 사용하는 모델 |
 | --- | --- |
@@ -317,13 +319,12 @@ Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 | `SIGMOID` | 항목별로 독립적으로 판단하는 모델 또는 로짓 하나를 반환하는 이진 분류 모델 |
 
 로짓 하나를 반환하는 이진 분류 모델은 `logitCount=1`을 사용합니다.
-모델 출력은 활성화 함수를 적용하기 전의 원시 로짓이어야 합니다.
+모델 출력은 활성화 함수를 적용하기 전의 로짓이어야 합니다.
 
 ### 토크나이저 파일
 
-모델에 맞는 `tokenizer.json`을 준비합니다. DJL이 지원하는 Hugging Face Tokenizers JSON
-형식이어야 하며, 모델의 토큰화 설정이 그대로 포함되어야 합니다.
-[DJL의 토크나이저 로딩](https://github.com/deepjavalibrary/djl/blob/v0.38.0/extensions/tokenizers/README.md#from-huggingface-pipeline)을 참고하세요.
+모델의 토큰화 설정을 유지하도록 해당 모델의 Hugging Face `tokenizer.json`과
+`tokenizer_config.json` 파일을 사용합니다.
 
 `tokenizer_config.json`에 지정한 패딩 방향(`padding_side`)과 잘림 방향(`truncation_side`)을
 `tokenizer.json`의 설정보다 우선 적용합니다. 패딩 토큰은 `tokenizer.json`의 어휘나

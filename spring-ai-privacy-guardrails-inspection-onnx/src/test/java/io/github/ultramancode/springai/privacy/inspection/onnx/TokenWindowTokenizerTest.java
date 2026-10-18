@@ -25,27 +25,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TokenWindowTokenizerTest {
 
-    @TempDir Path temp;
-    private Path tokenizer;
+    @TempDir Path tempPath;
+    private Path tokenizerPath;
     private Path tokenizerConfigPath;
 
     @BeforeEach
     void prepareTokenizer() throws Exception {
-        tokenizer = temp.resolve("tokenizer.json");
-        tokenizerConfigPath = temp.resolve("tokenizer_config.json");
-        Files.copy(OnnxTestModel.directory().resolve("tokenizer.json"), tokenizer);
+        tokenizerPath = tempPath.resolve("tokenizer.json");
+        tokenizerConfigPath = tempPath.resolve("tokenizer_config.json");
+        Files.copy(OnnxTestModel.directory().resolve("tokenizer.json"), tokenizerPath);
         Files.writeString(tokenizerConfigPath, "{\"pad_token\":\"[PAD]\"}");
     }
 
     private OnnxClassificationConfig classification() {
-        return OnnxTestModel.classificationBuilder(tokenizer, tokenizerConfigPath)
+        return OnnxTestModel.classificationBuilder(tokenizerPath, tokenizerConfigPath)
                 .windowSize(8)
                 .overlapSize(1)
                 .build();
     }
 
     private JsonObject readTokenizerJson() throws Exception {
-        return JsonUtils.GSON.fromJson(Files.readString(tokenizer), JsonObject.class);
+        return JsonUtils.GSON.fromJson(Files.readString(tokenizerPath), JsonObject.class);
     }
 
     private void savedPadding(String direction, String token, int id, int typeId) throws Exception {
@@ -59,7 +59,7 @@ class TokenWindowTokenizerTest {
         padding.addProperty("pad_id", id);
         padding.addProperty("pad_type_id", typeId);
         tokenizerJson.add("padding", padding);
-        Files.writeString(tokenizer, tokenizerJson.toString());
+        Files.writeString(tokenizerPath, tokenizerJson.toString());
     }
 
     @Test
@@ -131,7 +131,7 @@ class TokenWindowTokenizerTest {
         model.addProperty("byte_fallback", false);
         model.add("vocab", vocabulary);
         tokenizerJson.getAsJsonArray("added_tokens").remove(0);
-        Files.writeString(tokenizer, tokenizerJson.toString());
+        Files.writeString(tokenizerPath, tokenizerJson.toString());
         try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(classification())) {
             assertThat(windowTokenizer.encodeWindows("Hello").get(0).getIds()).containsExactly(101, 7592, 102, 0, 0, 0, 0, 0);
         }
@@ -150,7 +150,7 @@ class TokenWindowTokenizerTest {
         assertThatThrownBy(() -> new TokenWindowTokenizer(classification()))
                 .isInstanceOfSatisfying(InspectionException.class,
                         failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION))
-                .hasNoCause().hasMessageNotContaining(temp.toString());
+                .hasNoCause().hasMessageNotContaining(tempPath.toString());
     }
 
     static Stream<Arguments> specialTokenBoundaries() {
@@ -175,13 +175,13 @@ class TokenWindowTokenizerTest {
     void specialTokensLeaveRoomForContentAndOverlap(String name, String processor, int specialTokens) throws Exception {
         JsonObject tokenizerJson = readTokenizerJson();
         tokenizerJson.add("post_processor", JsonUtils.GSON.fromJson(processor, JsonObject.class));
-        Files.writeString(tokenizer, tokenizerJson.toString());
-        OnnxClassificationConfig invalid = OnnxTestModel.classificationBuilder(tokenizer, tokenizerConfigPath)
+        Files.writeString(tokenizerPath, tokenizerJson.toString());
+        OnnxClassificationConfig invalid = OnnxTestModel.classificationBuilder(tokenizerPath, tokenizerConfigPath)
                 .windowSize(specialTokens + 2).overlapSize(2).build();
         assertThatThrownBy(() -> new TokenWindowTokenizer(invalid)).as(name)
                 .isInstanceOfSatisfying(InspectionException.class,
                         failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION));
-        OnnxClassificationConfig valid = OnnxTestModel.classificationBuilder(tokenizer, tokenizerConfigPath)
+        OnnxClassificationConfig valid = OnnxTestModel.classificationBuilder(tokenizerPath, tokenizerConfigPath)
                 .windowSize(specialTokens + 2).overlapSize(1).build();
         try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(valid)) {
             assertThat(windowTokenizer.encodeWindows("Hello world Hello")).as(name).hasSize(2)
@@ -196,8 +196,8 @@ class TokenWindowTokenizerTest {
         tokenizerJson.add("post_processor", byteLevel ? JsonUtils.GSON.fromJson("""
                 {"type":"ByteLevel","add_prefix_space":true,"trim_offsets":true,"use_regex":true}
                 """, JsonObject.class) : null);
-        Files.writeString(tokenizer, tokenizerJson.toString());
-        OnnxClassificationConfig config = OnnxTestModel.classificationBuilder(tokenizer, tokenizerConfigPath)
+        Files.writeString(tokenizerPath, tokenizerJson.toString());
+        OnnxClassificationConfig config = OnnxTestModel.classificationBuilder(tokenizerPath, tokenizerConfigPath)
                 .windowSize(1).overlapSize(0).build();
         try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(config)) {
             List<Encoding> windows = windowTokenizer.encodeWindows("Hello world");

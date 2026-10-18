@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: e627f51325db9e53a69b1c967aa9e5157ebc678f59a04db37323b00fe19784c6 -->
+<!-- i18n-source-sha256: 6b110eaa74c0ea54cf44c39856818c691f3e9cd30e30f4233f23bf0138946509 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -141,7 +141,7 @@ Presidio와 OpenNLP 스타터에는 기본 Privacy Guardrails 스타터가 이�
 별도로 추가하지 마세요. 도구 권한 검사만 사용하려면 Spring Security 스타터만 추가하고,
 개인정보 보호도 필요하면 개인정보 보호 스타터를 함께 추가하세요.
 
-콘텐츠 검사는 검사기 구현도 선택해야 합니다.
+콘텐츠 검사는 `0.4.0` 이상에서 사용할 수 있으며, 검사기 구현도 선택해야 합니다.
 [검사 설정 안내](docs/ko/inspection.md#입력-검사-설정)에서 설정 방법을 확인하세요.
 
 스타터 의존성을 추가하는 것만으로는 보호 기능이 적용되지 않습니다. 아래 예제와 각

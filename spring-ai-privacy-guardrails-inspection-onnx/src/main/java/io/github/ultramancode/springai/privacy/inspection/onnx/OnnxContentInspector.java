@@ -42,6 +42,14 @@ public final class OnnxContentInspector implements ContentInspector, AutoCloseab
     private final ReentrantLock lock = new ReentrantLock();
     private boolean closed;
 
+    /**
+     * Loads the local model and tokenizer for inspection.
+     *
+     * @param inspectorId identifier used in inspection reports
+     * @param onnxInspectionConfig local model and execution limits
+     * @param onnxClassificationConfig tokenizer settings and class-to-finding mappings
+     * @throws InspectionException if the model or tokenizer cannot be loaded with the supplied settings
+     */
     public OnnxContentInspector(
             String inspectorId, OnnxInspectionConfig onnxInspectionConfig,
             OnnxClassificationConfig onnxClassificationConfig) {

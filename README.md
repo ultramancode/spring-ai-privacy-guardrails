@@ -142,7 +142,7 @@ starter, so do not add it separately. Add the Spring Security starter by itself
 for tool authorization alone, or add it alongside a privacy starter to use both
 capabilities.
 
-For content inspection, also choose an inspector implementation and follow the
+Content inspection requires version `0.4.0` or later. Choose an inspector implementation and follow the
 [inspection setup](docs/inspection.md#set-up-input-inspection).
 
 Adding a starter dependency alone does not apply its protection. Follow the

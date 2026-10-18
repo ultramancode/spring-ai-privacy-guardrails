@@ -11,7 +11,8 @@ import java.util.Set;
 
 /**
  * Tokenization and finding mappings for an ONNX text classification model.
- * The selected model output must contain raw FLOAT logits with shape {@code [1, logitCount]}.
+ * The selected model output must contain raw class scores (logits).
+ * The output tensor must have FLOAT values and shape {@code [1, logitCount]}.
  *
  * <p>Use matching {@code tokenizer.json} and {@code tokenizer_config.json} files.
  * The padding token, padding type ID and padding/truncation directions in {@code tokenizer_config.json}
@@ -22,11 +23,11 @@ import java.util.Set;
  * @param tokenizerConfig path to the model's {@code tokenizer_config.json}
  * @param windowSize number of tokens per inference window, including special tokens and padding
  * @param overlapSize number of content tokens repeated between adjacent windows
- * @param logitCount expected number of raw scores in the model's [1, logitCount] logits output
- * @param activation conversion from raw logits to scores, as specified by the model
- * @param labels finding mappings for selected output indexes, with distinct finding codes
+ * @param logitCount number of class logits in the model's {@code [1, logitCount]} output tensor
+ * @param activation conversion from logits to scores, as specified by the model
+ * @param labels finding mappings for selected class indexes, with distinct finding codes
  * @param tokenInputType integer type shared by the model's token inputs, normally INT64
- * @param modelOutputName name of the raw logits output in the ONNX model
+ * @param modelOutputName name of the output tensor containing logits
  */
 public record OnnxClassificationConfig(
         Path tokenizer, Path tokenizerConfig, int windowSize, int overlapSize,
@@ -37,7 +38,7 @@ public record OnnxClassificationConfig(
         INT64, INT32
     }
 
-    /** Built-in conversions of raw logits to scores. Select the conversion required by the model. */
+    /** Conversions from logits to scores between zero and one. Select the conversion required by the model. */
     public enum Activation {
         /** SOFTMAX for a model trained with mutually exclusive class logits. Requires at least two logits. */
         SOFTMAX,
@@ -46,10 +47,10 @@ public record OnnxClassificationConfig(
     }
 
     /**
-     * Maps a zero-based model output index to a category and finding code.
+     * Maps a zero-based class index in the model output to a category and finding code.
      * A finding is emitted when the score after activation is greater than or equal to the threshold.
      * The threshold must be greater than 0 and less than or equal to 1.
-     * Multiple labels can use the same output index.
+     * Multiple labels can use the same class index.
      * Each label has its own threshold and must use a distinct finding code.
      */
     public record Label(int index, InspectionFinding.Category category, String code, double threshold) {
@@ -105,7 +106,7 @@ public record OnnxClassificationConfig(
     }
 
     /**
-     * Creates a builder with no overlap, INT64 token inputs and the output name {@code logits}.
+     * Creates a builder with no overlap, INT64 token inputs and the output tensor name {@code logits}.
      * Tokenizer files, window size, logit count, activation and labels are required.
      *
      * @return a new builder
@@ -154,20 +155,20 @@ public record OnnxClassificationConfig(
             return this;
         }
 
-        /** Sets the number of raw scores in the model's output, including unmapped outputs. */
+        /** Sets the number of class logits, including classes without a finding mapping. */
         public Builder logitCount(int logitCount) {
             this.logitCount = logitCount;
             return this;
         }
 
-        /** Sets the model's conversion from raw logits to scores. */
+        /** Sets the conversion from logits to scores. */
         public Builder activation(Activation activation) {
             this.activation = activation;
             return this;
         }
 
         /**
-         * Sets the finding mappings for selected output indexes.
+         * Sets the finding mappings for selected class indexes.
          * SOFTMAX scores are calculated using all logits.
          */
         public Builder labels(List<Label> labels) {
@@ -181,7 +182,7 @@ public record OnnxClassificationConfig(
             return this;
         }
 
-        /** Sets the raw logits output name in the ONNX model. Defaults to {@code logits}. */
+        /** Sets the name of the output tensor containing logits. Defaults to {@code logits}. */
         public Builder modelOutputName(String modelOutputName) {
             this.modelOutputName = modelOutputName;
             return this;

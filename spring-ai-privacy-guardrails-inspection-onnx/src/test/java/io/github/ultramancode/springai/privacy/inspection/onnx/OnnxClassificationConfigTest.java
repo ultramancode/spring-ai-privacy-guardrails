@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OnnxClassificationConfigTest {
 
-    private final Path tokenizer = Path.of("tokenizer.json");
+    private final Path tokenizerPath = Path.of("tokenizer.json");
     private final Path tokenizerConfigPath = Path.of("tokenizer_config.json");
 
     private OnnxClassificationConfig.Label label(int index, String code, double threshold) {
@@ -26,7 +26,7 @@ class OnnxClassificationConfigTest {
 
     private OnnxClassificationConfig.Builder builder() {
         return OnnxClassificationConfig.builder()
-                .tokenizer(tokenizer)
+                .tokenizer(tokenizerPath)
                 .tokenizerConfig(tokenizerConfigPath)
                 .windowSize(256)
                 .logitCount(3)

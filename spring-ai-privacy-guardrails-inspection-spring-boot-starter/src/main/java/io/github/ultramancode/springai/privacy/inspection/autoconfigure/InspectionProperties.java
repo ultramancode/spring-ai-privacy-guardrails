@@ -32,7 +32,11 @@ public class InspectionProperties {
     /** Failure policy overrides keyed by inspector ID. Unspecified inspectors use the default policy. */
     private Map<String, InspectionFailurePolicy> failurePolicyOverrides = new LinkedHashMap<>();
 
-    /** Inspector IDs that receive session-issued PII tokens without their random part. Empty by default. */
+    /**
+     * IDs of inspectors that receive text with simplified PII tokens.
+     * Simplification removes the random part only from tokens issued by the current privacy session.
+     * No inspectors are selected by default.
+     */
     private Set<String> piiTokenSimplificationInspectors = Set.of();
 
     private final Output output = new Output();
@@ -50,24 +54,24 @@ public class InspectionProperties {
             return enabled;
         }
 
-        public void setEnabled(boolean value) {
-            enabled = value;
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
 
         public int getMaxFrames() {
             return maxFrames;
         }
 
-        public void setMaxFrames(int value) {
-            maxFrames = value;
+        public void setMaxFrames(int maxFrames) {
+            this.maxFrames = maxFrames;
         }
 
         public Duration getStreamTimeout() {
             return streamTimeout;
         }
 
-        public void setStreamTimeout(Duration value) {
-            streamTimeout = value;
+        public void setStreamTimeout(Duration streamTimeout) {
+            this.streamTimeout = streamTimeout;
         }
     }
 
@@ -79,8 +83,8 @@ public class InspectionProperties {
         return piiTokenSimplificationInspectors;
     }
 
-    public void setPiiTokenSimplificationInspectors(Set<String> value) {
-        piiTokenSimplificationInspectors = value;
+    public void setPiiTokenSimplificationInspectors(Set<String> piiTokenSimplificationInspectors) {
+        this.piiTokenSimplificationInspectors = piiTokenSimplificationInspectors;
     }
 
     /**
@@ -97,39 +101,39 @@ public class InspectionProperties {
         return maxSegments;
     }
 
-    public void setMaxSegments(int value) {
-        maxSegments = value;
+    public void setMaxSegments(int maxSegments) {
+        this.maxSegments = maxSegments;
     }
 
     public int getMaxCharacters() {
         return maxCharacters;
     }
 
-    public void setMaxCharacters(int value) {
-        maxCharacters = value;
+    public void setMaxCharacters(int maxCharacters) {
+        this.maxCharacters = maxCharacters;
     }
 
     public Duration getTimeout() {
         return timeout;
     }
 
-    public void setTimeout(Duration value) {
-        timeout = value;
+    public void setTimeout(Duration timeout) {
+        this.timeout = timeout;
     }
 
     public InspectionFailurePolicy getFailurePolicy() {
         return failurePolicy;
     }
 
-    public void setFailurePolicy(InspectionFailurePolicy value) {
-        failurePolicy = value;
+    public void setFailurePolicy(InspectionFailurePolicy failurePolicy) {
+        this.failurePolicy = failurePolicy;
     }
 
     public Map<String, InspectionFailurePolicy> getFailurePolicyOverrides() {
         return failurePolicyOverrides;
     }
 
-    public void setFailurePolicyOverrides(Map<String, InspectionFailurePolicy> value) {
-        failurePolicyOverrides = value;
+    public void setFailurePolicyOverrides(Map<String, InspectionFailurePolicy> failurePolicyOverrides) {
+        this.failurePolicyOverrides = failurePolicyOverrides;
     }
 }

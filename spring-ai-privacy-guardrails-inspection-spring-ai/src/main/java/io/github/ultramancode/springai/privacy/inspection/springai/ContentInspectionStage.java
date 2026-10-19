@@ -6,30 +6,37 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import org.springframework.ai.chat.client.ChatClientRequest;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 /** Inspects input text before each model call, including calls made after tool execution. */
 final class ContentInspectionStage implements Consumer<ChatClientRequest> {
     private final InspectionEnforcement enforcement;
     private final InspectionLimits limits;
-    private final PrivacyProcessingStatusResolver resolver;
+    private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
 
     ContentInspectionStage(InspectionService inspectionService, InspectionLimits limits,
-            PrivacyProcessingStatusResolver resolver, InspectionObserver observer) {
+            PrivacyProcessingStatusResolver privacyProcessingStatusResolver, InspectionObserver observer) {
         this.enforcement = new InspectionEnforcement(inspectionService, limits, observer);
         this.limits = limits;
-        this.resolver = Objects.requireNonNull(resolver, "privacyProcessingStatusResolver");
+        this.privacyProcessingStatusResolver =
+                Objects.requireNonNull(privacyProcessingStatusResolver, "privacyProcessingStatusResolver");
     }
 
     @Override
-    public void accept(ChatClientRequest request) {
-        enforcement.inspect(() -> {
-            ContentSegment.PrivacyProcessingStatus status =
-                    Objects.requireNonNull(resolver.resolve(request), "privacyProcessingStatus");
-            InspectionTextExtractor extractor = new InspectionTextExtractor(limits, status, "segment-");
-            request.prompt().getInstructions().forEach(extractor::addMessage);
-            return extractor.buildSegments();
-        }, PiiTokenSimplifierContext.findSimplifier(request));
+    public void accept(ChatClientRequest chatClientRequest) {
+        UnaryOperator<String> piiTokenSimplifier = PiiTokenSimplifierContext.findSimplifier(chatClientRequest);
+        enforcement.inspect(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier);
+    }
+
+    private List<ContentSegment> extractInputSegments(ChatClientRequest chatClientRequest) {
+        ContentSegment.PrivacyProcessingStatus privacyProcessingStatus = Objects.requireNonNull(
+                privacyProcessingStatusResolver.resolve(chatClientRequest), "privacyProcessingStatus");
+        InspectionTextExtractor inspectionTextExtractor =
+                new InspectionTextExtractor(limits, privacyProcessingStatus, "segment-");
+        chatClientRequest.prompt().getInstructions().forEach(inspectionTextExtractor::addMessage);
+        return inspectionTextExtractor.buildSegments();
     }
 }

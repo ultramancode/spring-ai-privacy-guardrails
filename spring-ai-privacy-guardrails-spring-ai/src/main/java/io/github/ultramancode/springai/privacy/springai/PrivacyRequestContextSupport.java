@@ -82,7 +82,7 @@ final class PrivacyRequestContextSupport {
         if (!response.context().containsKey(CONTEXT_HANDLE)
                 && !response.context().containsKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION)
                 && !response.context().containsKey(CONTEXT_LIFECYCLE_MARKER)
-                && !PiiTokenSimplifierContext.hasInternalEntries(response.context())
+                && !PiiTokenSimplifierContext.containsSimplifierEntry(response.context())
                 && !PrivacyOutputContextSupport.hasInternalEntries(response.context())
                 && !PrivacyToolExecutionContextSupport.hasInternalEntries(response.context())) {
             return response;
@@ -99,7 +99,7 @@ final class PrivacyRequestContextSupport {
         applicationContext.remove(CONTEXT_HANDLE);
         applicationContext.remove(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
         applicationContext.remove(CONTEXT_LIFECYCLE_MARKER);
-        PiiTokenSimplifierContext.removeInternalEntries(applicationContext);
+        PiiTokenSimplifierContext.removeSimplifierEntry(applicationContext);
         PrivacyOutputContextSupport.removeInternalEntries(applicationContext);
         PrivacyToolExecutionContextSupport.removeInternalEntries(applicationContext);
         return applicationContext;

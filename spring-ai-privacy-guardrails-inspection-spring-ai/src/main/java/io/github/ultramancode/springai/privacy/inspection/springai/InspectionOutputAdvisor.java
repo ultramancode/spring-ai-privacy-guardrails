@@ -24,6 +24,7 @@ import reactor.core.scheduler.Schedulers;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
@@ -99,27 +100,23 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     }
 
     @Override
-    public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        validateChain(chain.getCallAdvisors());
-        ChatClientResponse response = chain.nextCall(OutputResponseContext.requestPrivacyTracking(request, simplifyPiiTokens));
-        ContentSegment.PrivacyProcessingStatus status = OutputResponseContext.isPrivacyProcessed(response)
-                ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
-        Map<String, String> simplifiedTexts = OutputResponseContext.simplifiedPiiTexts(response);
-        UnaryOperator<String> simplifier = null;
-        if (simplifiedTexts != null) {
-            simplifier = text -> simplifiedTexts.getOrDefault(text, text);
-        }
-        enforcement.inspect(() -> {
-            InspectionTextExtractor extractor = new InspectionTextExtractor(limits, status, "output-");
-            if (response.chatResponse() != null) {
-                for (Generation generation : response.chatResponse().getResults()) {
-                    InspectionTextExtractor.requireSupportedAssistant(generation.getOutput());
-                    extractor.addOutputPayload(generation.getOutput().getText(), status);
-                }
-            }
-            return extractor.buildSegments();
-        }, simplifier);
-        return OutputResponseContext.clearPrivacyTracking(response);
+    public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
+        validateChain(callAdvisorChain.getCallAdvisors());
+        ChatClientRequest chatClientRequestWithPrivacyTracking =
+                OutputResponseContext.requestPrivacyTracking(chatClientRequest, simplifyPiiTokens);
+        ChatClientResponse chatClientResponse = callAdvisorChain.nextCall(chatClientRequestWithPrivacyTracking);
+
+        ContentSegment.PrivacyProcessingStatus privacyProcessingStatus =
+                OutputResponseContext.isPrivacyProcessed(chatClientResponse)
+                        ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                        : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
+        Map<String, String> simplifiedTextsByOriginalText =
+                OutputResponseContext.findSimplifiedTextsByOriginalText(chatClientResponse);
+
+        inspectOutput(
+                () -> extractOutputSegments(chatClientResponse, privacyProcessingStatus),
+                simplifiedTextsByOriginalText);
+        return OutputResponseContext.clearPrivacyTracking(chatClientResponse);
     }
 
     @Override
@@ -148,14 +145,37 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         });
     }
 
+    private List<ContentSegment> extractOutputSegments(ChatClientResponse chatClientResponse,
+            ContentSegment.PrivacyProcessingStatus privacyProcessingStatus) {
+        InspectionTextExtractor inspectionTextExtractor =
+                new InspectionTextExtractor(limits, privacyProcessingStatus, "output-");
+        if (chatClientResponse.chatResponse() != null) {
+            for (Generation generation : chatClientResponse.chatResponse().getResults()) {
+                InspectionTextExtractor.requireSupportedAssistant(generation.getOutput());
+                inspectionTextExtractor.addOutputPayload(generation.getOutput().getText(), privacyProcessingStatus);
+            }
+        }
+        return inspectionTextExtractor.buildSegments();
+    }
+
     private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer buffer) {
         Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
-            enforcement.inspect(buffer::buildSegments, buffer.piiTokenSimplifier());
+            Map<String, String> simplifiedTextsByOriginalText = buffer.collectSimplifiedTextsByOriginalText();
+            inspectOutput(buffer::buildSegments, simplifiedTextsByOriginalText);
             return buffer.framesWithoutPrivacyTracking();
         });
         return inspectedFrames
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMapMany(Flux::fromIterable);
+    }
+
+    private void inspectOutput(Supplier<List<ContentSegment>> outputSegmentsSupplier,
+            Map<String, String> simplifiedTextsByOriginalText) {
+        UnaryOperator<String> piiTokenSimplifier = null;
+        if (simplifiedTextsByOriginalText != null) {
+            piiTokenSimplifier = outputText -> simplifiedTextsByOriginalText.getOrDefault(outputText, outputText);
+        }
+        enforcement.inspect(outputSegmentsSupplier, piiTokenSimplifier);
     }
 
     private void validateChain(List<? extends Advisor> advisors) {

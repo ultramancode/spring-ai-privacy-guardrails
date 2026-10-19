@@ -107,7 +107,8 @@ class PiiTokenSimplificationIntegrationTest {
         String personTokenPattern = OpaquePiiTokenFormat.patternForEntityType("PERSON").pattern();
         assertThat(outputText).matches(personTokenPattern + " " + personTokenPattern);
         assertThat(unchangedInspectionTexts).containsExactly(modelInputText.get(), outputText);
-        assertThat(chatClientResponses).allSatisfy(chatClientResponse -> assertThat(PiiTokenSimplifierContext.hasInternalEntries(chatClientResponse.context())).isFalse());
+        assertThat(chatClientResponses).allSatisfy(chatClientResponse ->
+                assertThat(PiiTokenSimplifierContext.containsSimplifierEntry(chatClientResponse.context())).isFalse());
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 

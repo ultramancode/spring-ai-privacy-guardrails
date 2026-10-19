@@ -17,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.UnaryOperator;
 
 /** Buffers streamed response frames and assembles their text for inspection. */
 final class InspectionOutputBuffer {
@@ -134,20 +133,21 @@ final class InspectionOutputBuffer {
         return frames.stream().map(OutputResponseContext::clearPrivacyTracking).toList();
     }
 
-    UnaryOperator<String> piiTokenSimplifier() {
-        Map<String, String> simplifiedTexts = new HashMap<>();
-        boolean prepared = false;
-        for (ChatClientResponse frame : frames) {
-            Map<String, String> frameTexts = OutputResponseContext.simplifiedPiiTexts(frame);
-            if (frameTexts != null) {
-                simplifiedTexts.putAll(frameTexts);
-                prepared = true;
+    Map<String, String> collectSimplifiedTextsByOriginalText() {
+        Map<String, String> simplifiedTextsByOriginalText = new HashMap<>();
+        boolean simplificationPrepared = false;
+        for (ChatClientResponse responseFrame : frames) {
+            Map<String, String> frameSimplifiedTextsByOriginalText =
+                    OutputResponseContext.findSimplifiedTextsByOriginalText(responseFrame);
+            if (frameSimplifiedTextsByOriginalText != null) {
+                simplifiedTextsByOriginalText.putAll(frameSimplifiedTextsByOriginalText);
+                simplificationPrepared = true;
             }
         }
-        if (!prepared) {
+        if (!simplificationPrepared) {
             return null;
         }
-        return text -> simplifiedTexts.getOrDefault(text, text);
+        return simplifiedTextsByOriginalText;
     }
 
     private static InspectionException limit() {

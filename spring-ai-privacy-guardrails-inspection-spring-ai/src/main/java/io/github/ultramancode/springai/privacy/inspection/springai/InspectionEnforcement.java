@@ -26,11 +26,13 @@ final class InspectionEnforcement {
         this.observer = Objects.requireNonNull(observer, "observer");
     }
 
-    void inspect(Supplier<List<ContentSegment>> segments, UnaryOperator<String> piiTokenSimplifier) {
+    void inspect(Supplier<List<ContentSegment>> contentSegmentsSupplier,
+            UnaryOperator<String> piiTokenSimplifier) {
         InspectionReport report;
         try {
             InspectionRequest.checkInterrupted();
-            report = inspectionService.inspect(new InspectionRequest(segments.get(), limits), piiTokenSimplifier);
+            report = inspectionService.inspect(
+                    new InspectionRequest(contentSegmentsSupplier.get(), limits), piiTokenSimplifier);
         } catch (RuntimeException ex) {
             throw failure(ex);
         }

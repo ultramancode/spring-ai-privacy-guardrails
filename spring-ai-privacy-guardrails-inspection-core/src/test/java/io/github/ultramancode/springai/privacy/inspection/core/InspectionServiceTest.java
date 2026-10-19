@@ -15,9 +15,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class InspectionServiceTest {
 
@@ -77,66 +79,107 @@ class InspectionServiceTest {
 
     @Test
     void simplifiesTokensOnlyForSelectedInspectors() {
-        AtomicReference<InspectionRequest> simplifiedInspectionRequest = new AtomicReference<>();
-        AtomicReference<InspectionRequest> unchangedInspectionRequest = new AtomicReference<>();
-        InspectionService defaultInspectionService = new InspectionService(List.of(
-                inspector("simplified", inspectionRequest -> {
-                    simplifiedInspectionRequest.set(inspectionRequest);
-                    return completedWithoutFindings();
-                }),
-                inspector("unchanged", inspectionRequest -> {
-                    unchangedInspectionRequest.set(inspectionRequest);
-                    return completedWithoutFindings();
-                })));
         InspectionRequest originalInspectionRequest = request();
-        InspectionService selectedInspectionService = defaultInspectionService.withPiiTokenSimplification(Set.of("simplified"));
-
-        selectedInspectionService.inspect(originalInspectionRequest, text -> "[PII_PERSON_1]");
-
-        assertThat(unchangedInspectionRequest.get()).isSameAs(originalInspectionRequest);
         ContentSegment originalContentSegment = originalInspectionRequest.segments().get(0);
-        assertThat(simplifiedInspectionRequest.get().segments()).containsExactly(new ContentSegment(
-                originalContentSegment.id(), originalContentSegment.role(), originalContentSegment.privacyProcessingStatus(), "[PII_PERSON_1]"));
-        assertThat(simplifiedInspectionRequest.get().limits()).isSameAs(originalInspectionRequest.limits());
-        assertThat(originalContentSegment.text()).isEqualTo("private raw text");
-        defaultInspectionService.inspect(originalInspectionRequest);
-        assertThat(simplifiedInspectionRequest.get()).isSameAs(originalInspectionRequest);
+        UnaryOperator<String> piiTokenSimplifier = ignoredText -> "[PII_PERSON_1]";
+
+        AtomicReference<InspectionRequest> requestReceivedByTargetInspector = new AtomicReference<>();
+        ContentInspector simplificationTargetInspector = inspector("target", receivedInspectionRequest -> {
+            requestReceivedByTargetInspector.set(receivedInspectionRequest);
+            return completedWithoutFindings();
+        });
+
+        AtomicReference<InspectionRequest> requestReceivedByOtherInspector = new AtomicReference<>();
+        ContentInspector otherInspector = inspector("other", receivedInspectionRequest -> {
+            requestReceivedByOtherInspector.set(receivedInspectionRequest);
+            return completedWithoutFindings();
+        });
+
+        InspectionService inspectionService = new InspectionService(
+                List.of(simplificationTargetInspector, otherInspector))
+                .withPiiTokenSimplification(Set.of("target"));
+
+        inspectionService.inspect(originalInspectionRequest, piiTokenSimplifier);
+
+        assertThat(requestReceivedByTargetInspector.get().segments()).containsExactly(new ContentSegment(
+                originalContentSegment.id(),
+                originalContentSegment.role(),
+                originalContentSegment.privacyProcessingStatus(),
+                "[PII_PERSON_1]"));
+        assertThat(requestReceivedByOtherInspector.get().segments())
+                .extracting(ContentSegment::text)
+                .containsExactly("private raw text");
     }
 
     @Test
-    void simplifiedRequestSharesTheOriginalDeadline() {
-        InspectionRequest originalInspectionRequest = new InspectionRequest(request().segments(),
-                new InspectionLimits(1, 100, Duration.ofMillis(400)));
-        InspectionService inspectionService = new InspectionService(List.of(inspector("one", inspectionRequest -> {
-            waitUntilDeadlineExpires(originalInspectionRequest);
-            assertThatThrownBy(inspectionRequest::checkActive)
-                    .isInstanceOfSatisfying(InspectionException.class,
-                            failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT));
-            return completedWithoutFindings();
-        }))).withPiiTokenSimplification(Set.of("one"));
+    void selectingTokenSimplificationDoesNotChangeTheOriginalService() {
+        ContentInspector contentInspector = inspector("one", ignoredInspectionRequest -> completedWithoutFindings());
+        InspectionService defaultInspectionService = new InspectionService(List.of(contentInspector));
 
-        inspectionService.inspect(originalInspectionRequest, text -> {
+        InspectionService selectedInspectionService =
+                defaultInspectionService.withPiiTokenSimplification(Set.of("one"));
+
+        assertThat(defaultInspectionService.requiresPiiTokenSimplifier()).isFalse();
+        assertThat(selectedInspectionService.requiresPiiTokenSimplifier()).isTrue();
+    }
+
+    @Test
+    void simplifiedRequestPreservesOriginalLimitsAndDeadline() {
+        InspectionLimits inspectionLimits = new InspectionLimits(1, 100, Duration.ofMillis(400));
+        InspectionRequest originalInspectionRequest = new InspectionRequest(request().segments(), inspectionLimits);
+        UnaryOperator<String> delayedPiiTokenSimplifier = ignoredText -> {
             LockSupport.parkNanos(originalInspectionRequest.remaining().toNanos() / 2);
             return "[PII_PERSON_1]";
+        };
+
+        AtomicReference<InspectionRequest> requestReceivedByInspector = new AtomicReference<>();
+        ContentInspector contentInspector = inspector("one", receivedInspectionRequest -> {
+            requestReceivedByInspector.set(receivedInspectionRequest);
+            return completedWithoutFindings();
         });
+
+        InspectionService inspectionService = new InspectionService(List.of(contentInspector))
+                .withPiiTokenSimplification(Set.of("one"));
+
+        inspectionService.inspect(originalInspectionRequest, delayedPiiTokenSimplifier);
+
+        InspectionRequest simplifiedInspectionRequest = requestReceivedByInspector.get();
+        assertThat(simplifiedInspectionRequest).isNotNull();
+        assertThat(simplifiedInspectionRequest.limits()).isEqualTo(inspectionLimits);
+
+        waitUntilDeadlineExpires(originalInspectionRequest);
+        // The copy was created after roughly half of the original remaining time was spent.
+        // It must expire at the original deadline. Restarting its timeout would leave it active here.
+        assertThatThrownBy(simplifiedInspectionRequest::checkActive)
+                .isInstanceOfSatisfying(InspectionException.class,
+                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT));
     }
 
     @Test
     void simplificationFailureCannotFailOpenOrInvokeTheInspector() {
+        InspectionRequest originalInspectionRequest = request();
+        UnaryOperator<String> failingPiiTokenSimplifier = ignoredText -> {
+            throw new IllegalStateException("private text must not escape");
+        };
+
         AtomicInteger inspectorCallCount = new AtomicInteger();
-        InspectionService inspectionService = new InspectionService(List.of(inspector("one", inspectionRequest -> {
+        ContentInspector contentInspector = inspector("one", ignoredInspectionRequest -> {
             inspectorCallCount.incrementAndGet();
             return completedWithoutFindings();
-        })), InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN)
+        });
+
+        InspectionService inspectionService = new InspectionService(
+                List.of(contentInspector), InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN)
                 .withPiiTokenSimplification(Set.of("one"));
 
-        assertThatThrownBy(() -> inspectionService.inspect(request(), text -> {
-            throw new IllegalStateException("private text must not escape");
-        })).isInstanceOfSatisfying(InspectionException.class, failure -> {
-            assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION);
-            assertThat(failure).hasNoCause().hasMessageNotContaining("private text");
-            assertThat(failure.report().orElseThrow().outcomes().get(0).inspectorInvoked()).isFalse();
-        });
+        InspectionException inspectionException = assertThrows(InspectionException.class,
+                () -> inspectionService.inspect(originalInspectionRequest, failingPiiTokenSimplifier));
+
+        assertThat(inspectionException.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION);
+        assertThat(inspectionException).hasNoCause().hasMessageNotContaining("private text");
+
+        InspectionReport inspectionReport = inspectionException.report().orElseThrow();
+        assertThat(inspectionReport.outcomes().get(0).inspectorInvoked()).isFalse();
         assertThat(inspectorCallCount).hasValue(0);
     }
 

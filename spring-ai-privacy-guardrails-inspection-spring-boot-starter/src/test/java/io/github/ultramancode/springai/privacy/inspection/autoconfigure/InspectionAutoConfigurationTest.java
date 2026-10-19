@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -264,24 +265,50 @@ class InspectionAutoConfigurationTest {
     }
 
     @Test
-    void selectsTokenSimplificationByInspectorId() {
-        String token = "[PII_PERSON_1:a7Kp2xQ9mR4vT8zB]";
-        ContentInspector inspector = new RuleBasedContentInspector("application-rules", List.of(
-                InspectionRule.literal("person-marker", InspectionFinding.Category.POLICY_VIOLATION, "[PII_PERSON_1]")));
-        runner.withPropertyValues("spring.ai.inspection.pii-token-simplification-inspectors=application-rules")
-                .withBean(ContentInspector.class, () -> inspector)
+    void appliesPiiTokenSimplificationFromProperties() {
+        String originalText = "BEFORE_SIMPLIFICATION";
+        String simplifiedText = "AFTER_SIMPLIFICATION";
+        InspectionRule simplifiedTextRule = InspectionRule.literal(
+                "simplified-text-detected", InspectionFinding.Category.POLICY_VIOLATION, simplifiedText);
+        ContentInspector simplifiedTextInspector = new RuleBasedContentInspector(
+                "simplified-text-inspector", List.of(simplifiedTextRule));
+        UnaryOperator<String> piiTokenSimplifier =
+                text -> text.replace(originalText, simplifiedText);
+
+        runner.withPropertyValues(
+                        "spring.ai.inspection.pii-token-simplification-inspectors=simplified-text-inspector")
+                .withBean(ContentInspector.class, () -> simplifiedTextInspector)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    InspectionRequest request = new InspectionRequest(List.of(new ContentSegment(
+                    ContentSegment inputSegment = new ContentSegment(
                             "s1", ContentSegment.Role.USER, ContentSegment.PrivacyProcessingStatus.PROCESSED,
-                            token)), InspectionLimits.defaults());
-                    InspectionReport report = context.getBean(InspectionService.class)
-                            .inspect(request, text -> text.replace(token, "[PII_PERSON_1]"));
-                    assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
+                            originalText);
+                    InspectionRequest inspectionRequest = new InspectionRequest(
+                            List.of(inputSegment), InspectionLimits.defaults());
+                    InspectionService inspectionService = context.getBean(InspectionService.class);
+
+                    InspectionReport inspectionReport = inspectionService.inspect(
+                            inspectionRequest, piiTokenSimplifier);
+
+                    assertThat(inspectionReport.decision()).isEqualTo(InspectionDecision.BLOCK);
+                    InspectionResult inspectionResult = inspectionReport.outcomes().get(0).result();
+                    assertThat(inspectionResult.status()).isEqualTo(InspectionResult.Status.COMPLETED);
+                    assertThat(inspectionResult.findings())
+                            .extracting(InspectionFinding::code)
+                            .containsExactly("simplified-text-detected");
                 });
+    }
+
+    @Test
+    void unknownPiiTokenSimplificationInspectorFailsStartup() {
         runner.withPropertyValues("spring.ai.inspection.pii-token-simplification-inspectors=unknown")
-                .withBean(ContentInspector.class, () -> inspector)
-                .run(context -> assertThat(context).hasFailed());
+                .withBean(ContentInspector.class, this::rules)
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                            .hasRootCauseMessage("PII token simplification must reference configured inspector IDs");
+                });
     }
 
     @ParameterizedTest(name = "{0}")

@@ -49,7 +49,7 @@ public final class InspectionService {
             throw new IllegalArgumentException("At least one inspector must be configured");
         }
         Set<String> ids = new HashSet<>();
-        List<RegisteredInspector> registered = new ArrayList<>();
+        List<RegisteredInspector> registeredInspectors = new ArrayList<>();
         for (ContentInspector inspector : configured) {
             String id = InspectionIdentifiers.requireValid(inspector.inspectorId());
             if (!ids.add(id)) {
@@ -57,12 +57,12 @@ public final class InspectionService {
             }
             InspectionFailurePolicy inspectorFailurePolicy =
                     failurePolicyOverrides.getOrDefault(id, defaultFailurePolicy);
-            registered.add(new RegisteredInspector(id, inspector, inspectorFailurePolicy));
+            registeredInspectors.add(new RegisteredInspector(id, inspector, inspectorFailurePolicy));
         }
         if (!ids.containsAll(failurePolicyOverrides.keySet())) {
             throw new IllegalArgumentException("Failure policy overrides must reference configured inspector IDs");
         }
-        this.inspectors = List.copyOf(registered);
+        this.inspectors = List.copyOf(registeredInspectors);
         this.piiTokenSimplificationInspectorIds = Set.of();
     }
 
@@ -82,7 +82,8 @@ public final class InspectionService {
     }
 
     /**
-     * Returns a new service that simplifies PII tokens in copies sent to the selected inspectors.
+     * Returns a new service that simplifies PII tokens in copies of the inspection request
+     * sent to the selected inspectors. The original request remains unchanged.
      * The supplied inspector IDs replace the previous selection.
      * Other inspectors receive the original request text. No inspectors are selected by default.
      * The Spring AI privacy integration supplies the simplifier. Direct callers supply it
@@ -118,15 +119,15 @@ public final class InspectionService {
      * <p>The request's timeout limits further work and response waits. Results and policy
      * decisions already produced remain valid after the timeout expires.
      *
-     * @param request content and execution limits
+     * @param inspectionRequest content and execution limits
      * @return final decision and inspector outcomes in configured order
      * @throws InspectionException on cancellation, exceeded limits, unmet privacy-processing
      *         requirements, configuration errors, closed inspectors, unsupported content,
      *         invalid inspector results or content policy errors. The exception includes
      *         the results collected so far
      */
-    public InspectionReport inspect(InspectionRequest request) {
-        return inspect(request, null);
+    public InspectionReport inspect(InspectionRequest inspectionRequest) {
+        return inspect(inspectionRequest, null);
     }
 
     /**
@@ -134,39 +135,41 @@ public final class InspectionService {
      * The simplifier must replace only tokens issued by that session and preserve other text.
      * Transformed copies retain segment metadata and share the original request's time budget.
      *
-     * @param request content and execution limits
+     * @param inspectionRequest content and execution limits
      * @param piiTokenSimplifier token simplifier, required when inspectors are selected for PII token simplification
      * @return the inspection report
      * @throws InspectionException if inspection fails or the required simplifier is unavailable
      */
-    public InspectionReport inspect(InspectionRequest request, UnaryOperator<String> piiTokenSimplifier) {
-        Objects.requireNonNull(request, "request");
+    public InspectionReport inspect(
+            InspectionRequest inspectionRequest, UnaryOperator<String> piiTokenSimplifier) {
+        Objects.requireNonNull(inspectionRequest, "inspectionRequest");
         List<InspectionReport.Outcome> outcomes = new ArrayList<>();
         try {
             InspectionRequest.checkInterrupted();
             if (requiresPiiTokenSimplifier() && piiTokenSimplifier == null) {
                 throw new InspectionException(InspectionFailureCode.CONFIGURATION);
             }
-            for (RegisteredInspector registered : inspectors) {
-                if (registered.inspector().requiresPrivacyProcessedContent()) {
+            for (RegisteredInspector registeredInspector : inspectors) {
+                if (registeredInspector.inspector().requiresPrivacyProcessedContent()) {
                     try {
-                        request.requirePrivacyProcessed();
+                        inspectionRequest.requirePrivacyProcessed();
                     } catch (InspectionException ex) {
                         InspectionResult result = InspectionResult.failed(ex.failureCode());
-                        outcomes.add(new InspectionReport.Outcome(registered.id(), false, result));
+                        outcomes.add(new InspectionReport.Outcome(registeredInspector.id(), false, result));
                         throw ex;
                     }
                 }
             }
-            Set<String> expectedSegmentIds = request.segments().stream()
+            Set<String> expectedSegmentIds = inspectionRequest.segments().stream()
                     .map(ContentSegment::id).collect(Collectors.toSet());
-            for (RegisteredInspector registered : inspectors) {
+            for (RegisteredInspector registeredInspector : inspectors) {
                 InspectionRequest.checkInterrupted();
                 UnaryOperator<String> inspectorPiiTokenSimplifier = null;
-                if (piiTokenSimplificationInspectorIds.contains(registered.id())) {
+                if (piiTokenSimplificationInspectorIds.contains(registeredInspector.id())) {
                     inspectorPiiTokenSimplifier = piiTokenSimplifier;
                 }
-                InspectionReport.Outcome outcome = executeInspector(registered, request, expectedSegmentIds, inspectorPiiTokenSimplifier);
+                InspectionReport.Outcome outcome = executeInspector(
+                        registeredInspector, inspectionRequest, expectedSegmentIds, inspectorPiiTokenSimplifier);
                 outcomes.add(outcome);
                 InspectionResult result = outcome.result();
                 InspectionRequest.checkInterrupted();
@@ -174,11 +177,11 @@ public final class InspectionService {
                     throw new InspectionException(result.failureCode());
                 }
                 InspectionDecision decision = Objects.requireNonNull(
-                        contentPolicy.evaluate(registered.id(), result.findings()), "policy decision");
+                        contentPolicy.evaluate(registeredInspector.id(), result.findings()), "policy decision");
                 InspectionRequest.checkInterrupted();
                 if (decision == InspectionDecision.BLOCK
                         || (result.status() == InspectionResult.Status.FAILED
-                                && registered.failurePolicy() == InspectionFailurePolicy.FAIL_CLOSED)) {
+                                && registeredInspector.failurePolicy() == InspectionFailurePolicy.FAIL_CLOSED)) {
                     return new InspectionReport(InspectionDecision.BLOCK, outcomes);
                 }
             }
@@ -197,30 +200,32 @@ public final class InspectionService {
     }
 
     private static InspectionReport.Outcome executeInspector(
-            RegisteredInspector registered, InspectionRequest request, Set<String> expectedSegmentIds,
+            RegisteredInspector registeredInspector,
+            InspectionRequest inspectionRequest,
+            Set<String> expectedSegmentIds,
             UnaryOperator<String> piiTokenSimplifier) {
         boolean inspectorInvoked = false;
         InspectionResult result;
         try {
-            request.checkActive();
+            inspectionRequest.checkActive();
             if (piiTokenSimplifier != null) {
-                request = simplifyPiiTokens(request, piiTokenSimplifier);
+                inspectionRequest = simplifyPiiTokens(inspectionRequest, piiTokenSimplifier);
             }
             inspectorInvoked = true;
-            result = registered.inspector().inspect(request);
+            result = registeredInspector.inspector().inspect(inspectionRequest);
         } catch (InspectionException ex) {
             result = InspectionResult.failed(ex.failureCode());
         } catch (RuntimeException ex) {
             result = InspectionResult.failed(InspectionFailureCode.INVALID_RESULT);
         }
         InspectionResult validatedResult = validateResult(result, expectedSegmentIds);
-        return new InspectionReport.Outcome(registered.id(), inspectorInvoked, validatedResult);
+        return new InspectionReport.Outcome(registeredInspector.id(), inspectorInvoked, validatedResult);
     }
 
     private static InspectionRequest simplifyPiiTokens(
-            InspectionRequest request, UnaryOperator<String> piiTokenSimplifier) {
+            InspectionRequest inspectionRequest, UnaryOperator<String> piiTokenSimplifier) {
         try {
-            return request.withSimplifiedPiiTokens(piiTokenSimplifier);
+            return inspectionRequest.withSimplifiedPiiTokens(piiTokenSimplifier);
         } catch (InspectionException ex) {
             throw ex;
         } catch (RuntimeException ex) {

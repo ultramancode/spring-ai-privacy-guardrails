@@ -64,8 +64,10 @@ class PrivacyMessageTransformerTest {
                     .doesNotContain("Alice")
                     .contains("\"revision\":" + scientific);
             assertThat(protectedToolResponse.getResponses().get(0).responseData())
-                    .doesNotContain("Bob", "alice@example.com", "alice\\u0040example.com")
+                    .doesNotContain("alice@example.com", "alice\\u0040example.com")
                     .contains("\"precise\":" + precise);
+            assertThat(TestPrivacyServices.containsRawName(protectedToolResponse.getResponses().get(0).responseData()))
+                    .isFalse();
         }
     }
 
@@ -159,9 +161,10 @@ class PrivacyMessageTransformerTest {
 
             assertThat(protectedResponse.getResponses())
                     .extracting(ToolResponseMessage.ToolResponse::responseData)
-                    .allSatisfy(responseData -> assertThat(responseData)
-                            .doesNotContain("Alice", "Bob")
-                            .contains("[PII_PERSON_"));
+                    .allSatisfy(responseData -> {
+                        assertThat(responseData).contains("[PII_PERSON_");
+                        assertThat(TestPrivacyServices.containsRawName(responseData)).isFalse();
+                    });
         }
     }
 

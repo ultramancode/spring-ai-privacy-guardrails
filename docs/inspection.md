@@ -69,6 +69,34 @@ tool-definition authorization and content inspection. For privacy with authoriza
 For authorization alone, use `ToolAuthorizationChatClientFactory.builderWithBoundary`.
 See [tool authorization](security.md) for setup.
 
+### Simplify PII tokens for selected inspectors
+
+Some content inspection models may incorrectly flag random strings in PII tokens as unsafe input.
+If this occurs, configure the affected inspector IDs to receive tokens without the random part:
+
+```properties
+spring.ai.inspection.pii-token-simplification-inspectors=primary-guard
+```
+
+With privacy protection configured on the same client, session-issued tokens become
+markers such as `[PII_EMAIL_ADDRESS_1]`, retaining the entity type and index.
+Only the copies sent to selected inspectors are simplified. Other text, including tokens
+not issued by the current session, is preserved.
+
+The selection is empty by default and applies to input and enabled output inspection.
+Output simplification requires privacy output protection on the same client.
+Unknown inspector IDs are rejected during configuration.
+Inspection fails with `CONFIGURATION` if the required privacy integration is missing.
+
+When calling `InspectionService` directly, select the inspectors and pass a function
+that simplifies tokens using the active session:
+
+```java
+InspectionService selectedInspectionService = inspectionService.withPiiTokenSimplification(Set.of("primary-guard"));
+InspectionReport inspectionReport = selectedInspectionService.inspect(inspectionRequest,
+    text -> privacyService.simplifyTokens(privacySession.handle(), text));
+```
+
 ## Optional model-output inspection
 
 Output inspection is disabled by default. Enable it on the configured client with:
@@ -492,6 +520,7 @@ The following properties use the `spring.ai.inspection` prefix:
 | `output.enabled` | `false` | Adds output inspection to the auto-configured configurer |
 | `failure-policy` | `FAIL_CLOSED` | Default handling of eligible operational inspection failures |
 | `failure-policy-overrides` | Empty map | Failure policies keyed by inspector ID |
+| `pii-token-simplification-inspectors` | Empty set | Inspector IDs that receive session-issued PII tokens without their random part |
 | `max-segments` | 64 | Extracted text segments, including empty bodies |
 | `max-characters` | 131072 | Maximum combined text length per inspection |
 | `timeout` | 10s | Time available to all inspectors in one request, including policy evaluation |

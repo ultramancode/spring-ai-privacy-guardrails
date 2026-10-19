@@ -925,6 +925,7 @@ The available error types and their detailed meaning are documented in the
 | --- | --- |
 | `ANALYSIS` | PII detection and analysis |
 | `TOKENIZATION` | PII tokenization |
+| `TOKEN_SIMPLIFICATION` | Remove the random part from session-issued PII tokens |
 | `REDACTION` | Replace PII with redaction markers |
 | `DETOKENIZATION` | Restore authorized original values |
 | `SESSION` | Privacy-session processing |

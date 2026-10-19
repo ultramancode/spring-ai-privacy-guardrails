@@ -12,6 +12,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionExcepti
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailurePolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFinding;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
@@ -76,6 +77,7 @@ class InspectionAutoConfigurationTest {
                             "spring.ai.inspection.timeout",
                             "spring.ai.inspection.failure-policy",
                             "spring.ai.inspection.failure-policy-overrides",
+                            "spring.ai.inspection.pii-token-simplification-inspectors",
                             "spring.ai.inspection.output.enabled",
                             "spring.ai.inspection.output.max-frames",
                             "spring.ai.inspection.output.stream-timeout");
@@ -259,6 +261,27 @@ class InspectionAutoConfigurationTest {
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .hasSingleBean(InspectionChatClientConfigurer.class));
+    }
+
+    @Test
+    void selectsTokenSimplificationByInspectorId() {
+        String token = "[PII_PERSON_1:a7Kp2xQ9mR4vT8zB]";
+        ContentInspector inspector = new RuleBasedContentInspector("application-rules", List.of(
+                InspectionRule.literal("person-marker", InspectionFinding.Category.POLICY_VIOLATION, "[PII_PERSON_1]")));
+        runner.withPropertyValues("spring.ai.inspection.pii-token-simplification-inspectors=application-rules")
+                .withBean(ContentInspector.class, () -> inspector)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    InspectionRequest request = new InspectionRequest(List.of(new ContentSegment(
+                            "s1", ContentSegment.Role.USER, ContentSegment.PrivacyProcessingStatus.PROCESSED,
+                            token)), InspectionLimits.defaults());
+                    InspectionReport report = context.getBean(InspectionService.class)
+                            .inspect(request, text -> text.replace(token, "[PII_PERSON_1]"));
+                    assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
+                });
+        runner.withPropertyValues("spring.ai.inspection.pii-token-simplification-inspectors=unknown")
+                .withBean(ContentInspector.class, () -> inspector)
+                .run(context -> assertThat(context).hasFailed());
     }
 
     @ParameterizedTest(name = "{0}")

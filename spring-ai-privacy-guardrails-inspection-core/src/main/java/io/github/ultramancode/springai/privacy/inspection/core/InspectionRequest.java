@@ -1,10 +1,12 @@
 package io.github.ultramancode.springai.privacy.inspection.core;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 /**
  * The text segments and limits for one inspection.
@@ -15,9 +17,14 @@ public final class InspectionRequest {
 
     private final List<ContentSegment> segments;
     private final InspectionLimits limits;
-    private final long startedNanos = System.nanoTime();
+    private final long startedNanos;
 
     public InspectionRequest(List<ContentSegment> segments, InspectionLimits limits) {
+        this(segments, limits, System.nanoTime());
+    }
+
+    private InspectionRequest(List<ContentSegment> segments, InspectionLimits limits, long startedNanos) {
+        this.startedNanos = startedNanos;
         this.limits = Objects.requireNonNull(limits, "limits");
         Objects.requireNonNull(segments, "segments");
         if (segments.isEmpty() || segments.size() > limits.maxSegments()) {
@@ -43,6 +50,18 @@ public final class InspectionRequest {
 
     public InspectionLimits limits() {
         return limits;
+    }
+
+    InspectionRequest withSimplifiedPiiTokens(UnaryOperator<String> piiTokenSimplifier) {
+        List<ContentSegment> simplifiedSegments = new ArrayList<>(segments.size());
+        for (ContentSegment segment : segments) {
+            checkActive();
+            String simplifiedText = piiTokenSimplifier.apply(segment.text());
+            Objects.requireNonNull(simplifiedText, "simplified text");
+            simplifiedSegments.add(new ContentSegment(segment.id(), segment.role(), segment.privacyProcessingStatus(), simplifiedText));
+        }
+        checkActive();
+        return new InspectionRequest(simplifiedSegments, limits, startedNanos);
     }
 
     /** Returns the time remaining for inspection. Throws if the timeout expired or the thread was interrupted. */

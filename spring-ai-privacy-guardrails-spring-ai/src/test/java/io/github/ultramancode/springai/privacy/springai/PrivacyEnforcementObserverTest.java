@@ -77,7 +77,7 @@ class PrivacyEnforcementObserverTest {
                     "{\"name\":\"" + personToken + "\"}",
                     toolContext(session.handle())
             );
-            assertThat(protectedResult).doesNotContain("Bob");
+            assertThat(TestPrivacyServices.containsRawName(protectedResult)).isFalse();
 
             outputBoundary.protectAtApplicationBoundary(
                     session.handle(),

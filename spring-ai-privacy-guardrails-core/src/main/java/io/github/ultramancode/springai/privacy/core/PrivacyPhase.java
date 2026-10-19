@@ -9,6 +9,9 @@ public enum PrivacyPhase {
     /** Replacement of detected original values with opaque tokens. */
     TOKENIZATION,
 
+    /** Removal of the random part from session-issued PII tokens. */
+    TOKEN_SIMPLIFICATION,
+
     /** Replacement of detected original values with typed redaction markers. */
     REDACTION,
 

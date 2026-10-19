@@ -75,7 +75,7 @@ class InspectionEnforcementTest {
                 List.of(new InspectionReport.Outcome(inspector.inspectorId(), true, inspectorResult));
 
         try {
-            assertThatThrownBy(() -> enforcement.inspect(() -> List.of(segment)))
+            assertThatThrownBy(() -> enforcement.inspect(() -> List.of(segment), null))
                     .isInstanceOfSatisfying(InspectionException.class, failure -> {
                         assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
                         assertThat(failure).hasNoCause();

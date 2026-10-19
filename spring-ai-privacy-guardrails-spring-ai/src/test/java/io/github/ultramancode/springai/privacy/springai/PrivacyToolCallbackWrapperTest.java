@@ -94,7 +94,7 @@ class PrivacyToolCallbackWrapperTest {
 
             String result = wrapper.call("{\"name\":\"" + token + "\"}", toolContext(session.handle()));
 
-            assertThat(result).doesNotContain("Alice", "Bob");
+            assertThat(TestPrivacyServices.containsRawName(result)).isFalse();
             assertThat(service.detokenize(session.handle(), result)).isEqualTo("Bob found Alice");
         }
     }
@@ -207,7 +207,7 @@ class PrivacyToolCallbackWrapperTest {
                 delegateResult.set(plainText);
                 String protectedPlainText = wrapper.call("{}", toolContext(session.handle()));
 
-                assertThat(protectedPlainText).doesNotContain("Alice", "Bob");
+                assertThat(TestPrivacyServices.containsRawName(protectedPlainText)).isFalse();
                 assertThat(service.detokenize(session.handle(), protectedPlainText))
                         .isEqualTo(plainText);
             }
@@ -468,7 +468,7 @@ class PrivacyToolCallbackWrapperTest {
                     toolContext(session.handle())
             );
 
-            assertThat(received.get()).doesNotContain("Alice", "Bob");
+            assertThat(TestPrivacyServices.containsRawName(received.get())).isFalse();
             assertThat(service.detokenize(session.handle(), received.get())).isEqualTo(rawInput);
         }
     }

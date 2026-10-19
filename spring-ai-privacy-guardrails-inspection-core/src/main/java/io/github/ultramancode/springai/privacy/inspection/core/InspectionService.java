@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 /** Runs inspectors in the supplied order and decides whether the request may proceed. */
@@ -16,6 +17,7 @@ public final class InspectionService {
 
     private final List<RegisteredInspector> inspectors;
     private final InspectionPolicy contentPolicy;
+    private final Set<String> piiTokenSimplificationInspectorIds;
 
     public InspectionService(List<ContentInspector> inspectors) {
         this(inspectors, InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_CLOSED);
@@ -61,6 +63,47 @@ public final class InspectionService {
             throw new IllegalArgumentException("Failure policy overrides must reference configured inspector IDs");
         }
         this.inspectors = List.copyOf(registered);
+        this.piiTokenSimplificationInspectorIds = Set.of();
+    }
+
+    /**
+     * Creates the new service returned by {@link #withPiiTokenSimplification(Set)}.
+     * Reuses the existing registered inspectors and content policy.
+     * Each registered inspector already contains its final failure policy after applying
+     * the default failure policy and any inspector-specific override.
+     * The supplied inspector IDs replace the PII token simplification selection in the new service.
+     * The existing service remains unchanged.
+     */
+    private InspectionService(List<RegisteredInspector> inspectors, InspectionPolicy contentPolicy,
+            Set<String> piiTokenSimplificationInspectorIds) {
+        this.inspectors = inspectors;
+        this.contentPolicy = contentPolicy;
+        this.piiTokenSimplificationInspectorIds = piiTokenSimplificationInspectorIds;
+    }
+
+    /**
+     * Returns a new service that simplifies PII tokens in copies sent to the selected inspectors.
+     * The supplied inspector IDs replace the previous selection.
+     * Other inspectors receive the original request text. No inspectors are selected by default.
+     * The Spring AI privacy integration supplies the simplifier. Direct callers supply it
+     * through {@link #inspect(InspectionRequest, UnaryOperator)}.
+     *
+     * @param inspectorIds configured inspector IDs that should receive simplified PII tokens
+     * @return a service using the supplied selection and the same inspectors and policies
+     * @throws IllegalArgumentException if an ID does not match a configured inspector
+     */
+    public InspectionService withPiiTokenSimplification(Set<String> inspectorIds) {
+        Set<String> selectedInspectorIds = Set.copyOf(inspectorIds);
+        Set<String> configuredInspectorIds = inspectors.stream().map(RegisteredInspector::id).collect(Collectors.toSet());
+        if (!configuredInspectorIds.containsAll(selectedInspectorIds)) {
+            throw new IllegalArgumentException("PII token simplification must reference configured inspector IDs");
+        }
+        return new InspectionService(inspectors, contentPolicy, selectedInspectorIds);
+    }
+
+    /** Whether any configured inspector requires a session-bound PII token simplifier. */
+    public boolean requiresPiiTokenSimplifier() {
+        return !piiTokenSimplificationInspectorIds.isEmpty();
     }
 
     /**
@@ -83,10 +126,27 @@ public final class InspectionService {
      *         the results collected so far
      */
     public InspectionReport inspect(InspectionRequest request) {
+        return inspect(request, null);
+    }
+
+    /**
+     * Inspects content with an optional session-bound PII token simplifier.
+     * The simplifier must replace only tokens issued by that session and preserve other text.
+     * Transformed copies retain segment metadata and share the original request's time budget.
+     *
+     * @param request content and execution limits
+     * @param piiTokenSimplifier token simplifier, required when inspectors are selected for PII token simplification
+     * @return the inspection report
+     * @throws InspectionException if inspection fails or the required simplifier is unavailable
+     */
+    public InspectionReport inspect(InspectionRequest request, UnaryOperator<String> piiTokenSimplifier) {
         Objects.requireNonNull(request, "request");
         List<InspectionReport.Outcome> outcomes = new ArrayList<>();
         try {
             InspectionRequest.checkInterrupted();
+            if (requiresPiiTokenSimplifier() && piiTokenSimplifier == null) {
+                throw new InspectionException(InspectionFailureCode.CONFIGURATION);
+            }
             for (RegisteredInspector registered : inspectors) {
                 if (registered.inspector().requiresPrivacyProcessedContent()) {
                     try {
@@ -102,7 +162,11 @@ public final class InspectionService {
                     .map(ContentSegment::id).collect(Collectors.toSet());
             for (RegisteredInspector registered : inspectors) {
                 InspectionRequest.checkInterrupted();
-                InspectionReport.Outcome outcome = executeInspector(registered, request, expectedSegmentIds);
+                UnaryOperator<String> inspectorPiiTokenSimplifier = null;
+                if (piiTokenSimplificationInspectorIds.contains(registered.id())) {
+                    inspectorPiiTokenSimplifier = piiTokenSimplifier;
+                }
+                InspectionReport.Outcome outcome = executeInspector(registered, request, expectedSegmentIds, inspectorPiiTokenSimplifier);
                 outcomes.add(outcome);
                 InspectionResult result = outcome.result();
                 InspectionRequest.checkInterrupted();
@@ -133,11 +197,15 @@ public final class InspectionService {
     }
 
     private static InspectionReport.Outcome executeInspector(
-            RegisteredInspector registered, InspectionRequest request, Set<String> expectedSegmentIds) {
+            RegisteredInspector registered, InspectionRequest request, Set<String> expectedSegmentIds,
+            UnaryOperator<String> piiTokenSimplifier) {
         boolean inspectorInvoked = false;
         InspectionResult result;
         try {
             request.checkActive();
+            if (piiTokenSimplifier != null) {
+                request = simplifyPiiTokens(request, piiTokenSimplifier);
+            }
             inspectorInvoked = true;
             result = registered.inspector().inspect(request);
         } catch (InspectionException ex) {
@@ -147,6 +215,17 @@ public final class InspectionService {
         }
         InspectionResult validatedResult = validateResult(result, expectedSegmentIds);
         return new InspectionReport.Outcome(registered.id(), inspectorInvoked, validatedResult);
+    }
+
+    private static InspectionRequest simplifyPiiTokens(
+            InspectionRequest request, UnaryOperator<String> piiTokenSimplifier) {
+        try {
+            return request.withSimplifiedPiiTokens(piiTokenSimplifier);
+        } catch (InspectionException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new InspectionException(InspectionFailureCode.CONFIGURATION);
+        }
     }
 
     private static InspectionResult validateResult(InspectionResult result, Set<String> expectedSegmentIds) {

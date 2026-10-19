@@ -76,6 +76,71 @@ class InspectionServiceTest {
     }
 
     @Test
+    void simplifiesTokensOnlyForSelectedInspectors() {
+        AtomicReference<InspectionRequest> simplifiedInspectionRequest = new AtomicReference<>();
+        AtomicReference<InspectionRequest> unchangedInspectionRequest = new AtomicReference<>();
+        InspectionService defaultInspectionService = new InspectionService(List.of(
+                inspector("simplified", inspectionRequest -> {
+                    simplifiedInspectionRequest.set(inspectionRequest);
+                    return completedWithoutFindings();
+                }),
+                inspector("unchanged", inspectionRequest -> {
+                    unchangedInspectionRequest.set(inspectionRequest);
+                    return completedWithoutFindings();
+                })));
+        InspectionRequest originalInspectionRequest = request();
+        InspectionService selectedInspectionService = defaultInspectionService.withPiiTokenSimplification(Set.of("simplified"));
+
+        selectedInspectionService.inspect(originalInspectionRequest, text -> "[PII_PERSON_1]");
+
+        assertThat(unchangedInspectionRequest.get()).isSameAs(originalInspectionRequest);
+        ContentSegment originalContentSegment = originalInspectionRequest.segments().get(0);
+        assertThat(simplifiedInspectionRequest.get().segments()).containsExactly(new ContentSegment(
+                originalContentSegment.id(), originalContentSegment.role(), originalContentSegment.privacyProcessingStatus(), "[PII_PERSON_1]"));
+        assertThat(simplifiedInspectionRequest.get().limits()).isSameAs(originalInspectionRequest.limits());
+        assertThat(originalContentSegment.text()).isEqualTo("private raw text");
+        defaultInspectionService.inspect(originalInspectionRequest);
+        assertThat(simplifiedInspectionRequest.get()).isSameAs(originalInspectionRequest);
+    }
+
+    @Test
+    void simplifiedRequestSharesTheOriginalDeadline() {
+        InspectionRequest originalInspectionRequest = new InspectionRequest(request().segments(),
+                new InspectionLimits(1, 100, Duration.ofMillis(400)));
+        InspectionService inspectionService = new InspectionService(List.of(inspector("one", inspectionRequest -> {
+            waitUntilDeadlineExpires(originalInspectionRequest);
+            assertThatThrownBy(inspectionRequest::checkActive)
+                    .isInstanceOfSatisfying(InspectionException.class,
+                            failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT));
+            return completedWithoutFindings();
+        }))).withPiiTokenSimplification(Set.of("one"));
+
+        inspectionService.inspect(originalInspectionRequest, text -> {
+            LockSupport.parkNanos(originalInspectionRequest.remaining().toNanos() / 2);
+            return "[PII_PERSON_1]";
+        });
+    }
+
+    @Test
+    void simplificationFailureCannotFailOpenOrInvokeTheInspector() {
+        AtomicInteger inspectorCallCount = new AtomicInteger();
+        InspectionService inspectionService = new InspectionService(List.of(inspector("one", inspectionRequest -> {
+            inspectorCallCount.incrementAndGet();
+            return completedWithoutFindings();
+        })), InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN)
+                .withPiiTokenSimplification(Set.of("one"));
+
+        assertThatThrownBy(() -> inspectionService.inspect(request(), text -> {
+            throw new IllegalStateException("private text must not escape");
+        })).isInstanceOfSatisfying(InspectionException.class, failure -> {
+            assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION);
+            assertThat(failure).hasNoCause().hasMessageNotContaining("private text");
+            assertThat(failure.report().orElseThrow().outcomes().get(0).inspectorInvoked()).isFalse();
+        });
+        assertThat(inspectorCallCount).hasValue(0);
+    }
+
+    @Test
     void contentPolicyReceivesInspectorIdAndPartialFindings() {
         InspectionFinding finding =
                 new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);

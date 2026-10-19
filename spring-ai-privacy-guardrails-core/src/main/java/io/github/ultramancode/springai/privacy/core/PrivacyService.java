@@ -371,6 +371,21 @@ public final class PrivacyService {
     }
 
     /**
+     * Replaces tokens issued by this session with markers such as {@code [PII_EMAIL_ADDRESS_1]}.
+     * Markers retain the entity type and index and cannot be used to restore original values.
+     * Other text is preserved.
+     *
+     * @param privacyContextHandle active session handle
+     * @param text text containing zero or more opaque tokens
+     * @return text with session-issued tokens simplified, or {@code null} if the input is null
+     * @throws PrivacyGuardrailException if the session is not active or the result exceeds the output limit
+     */
+    public String simplifyTokens(PrivacyContextHandle privacyContextHandle, String text) {
+        PrivacyContext privacyContext = this.contextRegistry.requireActiveContext(privacyContextHandle);
+        return this.textTransformer.simplifyTokens(text, privacyContext);
+    }
+
+    /**
      * Restores every current-session opaque token found in text.
      *
      * @param handle active session handle

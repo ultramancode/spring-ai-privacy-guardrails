@@ -40,7 +40,7 @@ final class PrivacyContext {
     }
 
     private String tokenFor(String entityType, String text, Object valueTreeValue) {
-        ensureActive();
+        requireActive();
         String canonicalType = EntityTypeRegistry.requireValidEntityType(entityType);
         OriginalValue key = new OriginalValue(canonicalType, text, valueTreeValue);
         String existing = this.originalToToken.get(key);
@@ -56,21 +56,27 @@ final class PrivacyContext {
     }
 
     synchronized boolean hasTokens() {
-        ensureActive();
+        requireActive();
         return !this.originalValuesByToken.isEmpty();
     }
 
     synchronized void requireActive() {
-        ensureActive();
+        if (this.closed) {
+            throw new PrivacyGuardrailException(
+                    PrivacyFailureCode.CONTEXT_NOT_ACTIVE,
+                    PrivacyPhase.SESSION,
+                    "Privacy context is already closed"
+            );
+        }
     }
 
     synchronized PiiAnalysisCoordinator.AnalysisEvidence cachedAnalysisFor(String source) {
-        ensureActive();
+        requireActive();
         return this.analysisBySource.get(source);
     }
 
     synchronized void retainAnalysis(String source, PiiAnalysisCoordinator.AnalysisEvidence evidence) {
-        ensureActive();
+        requireActive();
         if (!evidence.result().failures().isEmpty()
                 || source.length() > MAX_RETAINED_CHARACTERS
                 || evidence.evidenceCount() > MAX_RETAINED_EVIDENCE) {
@@ -97,12 +103,12 @@ final class PrivacyContext {
     }
 
     synchronized boolean isCompletedTokenization(String protectedText) {
-        ensureActive();
+        requireActive();
         return this.completedTokenizations.get(protectedText) != null;
     }
 
     synchronized void retainCompletedTokenization(String protectedText) {
-        ensureActive();
+        requireActive();
         if (protectedText.length() > MAX_RETAINED_CHARACTERS) {
             return;
         }
@@ -121,12 +127,12 @@ final class PrivacyContext {
     }
 
     synchronized boolean ownsToken(String token) {
-        ensureActive();
+        requireActive();
         return this.originalValuesByToken.containsKey(token);
     }
 
     synchronized String originalTextForToken(String token, Set<String> allowedEntityTypes) {
-        ensureActive();
+        requireActive();
         OriginalValue original = allowedOriginalValue(token, allowedEntityTypes);
         return original == null ? null : original.text();
     }
@@ -135,7 +141,7 @@ final class PrivacyContext {
             String token,
             Set<String> allowedEntityTypes
     ) {
-        ensureActive();
+        requireActive();
         OriginalValue original = allowedOriginalValue(token, allowedEntityTypes);
         return original == null ? null : original.valueTreeValue();
     }
@@ -150,16 +156,6 @@ final class PrivacyContext {
         this.retainedCharacters = 0;
         this.retainedEvidence = 0;
         this.completedCharacters = 0;
-    }
-
-    private void ensureActive() {
-        if (this.closed) {
-            throw new PrivacyGuardrailException(
-                    PrivacyFailureCode.CONTEXT_NOT_ACTIVE,
-                    PrivacyPhase.SESSION,
-                    "Privacy context is already closed"
-            );
-        }
     }
 
     private OriginalValue allowedOriginalValue(String token, Set<String> allowedEntityTypes) {

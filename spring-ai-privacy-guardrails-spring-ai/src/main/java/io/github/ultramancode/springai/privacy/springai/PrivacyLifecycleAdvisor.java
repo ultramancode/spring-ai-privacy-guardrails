@@ -2,6 +2,7 @@ package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.boundary.OutputResponseContext;
+import io.github.ultramancode.springai.privacy.boundary.PiiTokenSimplifierContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
@@ -19,6 +20,7 @@ import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /**
  * Owns the privacy session around the advisors that execute inside its configured position
@@ -57,18 +59,20 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
         PrivacyOutputAdvisor outputAdvisor = validateBundleAndFindOutputAdvisor(chain.getCallAdvisors());
-        try (PrivacySession session = this.privacyService.openSession()) {
+        try (PrivacySession privacySession = this.privacyService.openSession()) {
             ChatClientRequest activeRequest = PrivacyRequestContextSupport.attachLifecycle(
                     request,
-                    session.handle()
+                    privacySession.handle()
             );
+            activeRequest = PiiTokenSimplifierContext.attach(activeRequest,
+                    text -> this.privacyService.simplifyTokens(privacySession.handle(), text));
             ChatClientResponse response = chain.nextCall(activeRequest);
             if (outputAdvisor != null) {
-                response = outputAdvisor.protectAtApplicationBoundary(session.handle(), response);
+                response = outputAdvisor.protectAtApplicationBoundary(privacySession.handle(), response);
             }
             boolean shouldMarkPrivacyProcessed = outputAdvisor != null
                     && OutputResponseContext.isPrivacyTrackingRequested(request);
-            return prepareResponseContext(response, shouldMarkPrivacyProcessed);
+            return prepareResponseContext(response, shouldMarkPrivacyProcessed, outputTokenSimplifier(request, privacySession));
         }
     }
 
@@ -77,18 +81,21 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
         PrivacyOutputAdvisor outputAdvisor = validateBundleAndFindOutputAdvisor(chain.getStreamAdvisors());
         return Flux.using(
                 this.privacyService::openSession,
-                session -> {
+                privacySession -> {
                     ChatClientRequest activeRequest = PrivacyRequestContextSupport.attachLifecycle(
                             request,
-                            session.handle()
+                            privacySession.handle()
                     );
+                    activeRequest = PiiTokenSimplifierContext.attach(activeRequest,
+                            text -> this.privacyService.simplifyTokens(privacySession.handle(), text));
                     Flux<ChatClientResponse> responses = chain.nextStream(activeRequest);
                     if (outputAdvisor != null) {
-                        responses = outputAdvisor.protectAtApplicationBoundary(session.handle(), responses);
+                        responses = outputAdvisor.protectAtApplicationBoundary(privacySession.handle(), responses);
                     }
                     boolean shouldMarkPrivacyProcessed = outputAdvisor != null
                             && OutputResponseContext.isPrivacyTrackingRequested(request);
-                    return responses.map(response -> prepareResponseContext(response, shouldMarkPrivacyProcessed));
+                    UnaryOperator<String> piiTokenSimplifier = outputTokenSimplifier(request, privacySession);
+                    return responses.map(response -> prepareResponseContext(response, shouldMarkPrivacyProcessed, piiTokenSimplifier));
                 },
                 PrivacySession::close
         );
@@ -106,14 +113,22 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
 
     private ChatClientResponse prepareResponseContext(
             ChatClientResponse response,
-            boolean shouldMarkPrivacyProcessed
+            boolean shouldMarkPrivacyProcessed,
+            UnaryOperator<String> piiTokenSimplifier
     ) {
         ChatClientResponse cleanedResponse = PrivacyRequestContextSupport.withoutInternalPrivacyContext(response);
         cleanedResponse = OutputResponseContext.clearPrivacyTracking(cleanedResponse);
         if (shouldMarkPrivacyProcessed) {
-            return OutputResponseContext.markPrivacyProcessed(cleanedResponse);
+            return OutputResponseContext.markPrivacyProcessed(cleanedResponse, piiTokenSimplifier);
         }
         return cleanedResponse;
+    }
+
+    private UnaryOperator<String> outputTokenSimplifier(ChatClientRequest request, PrivacySession privacySession) {
+        if (!OutputResponseContext.isPiiTokenSimplificationRequested(request)) {
+            return null;
+        }
+        return text -> this.privacyService.simplifyTokens(privacySession.handle(), text);
     }
 
     private PrivacyOutputAdvisor validateBundleAndFindOutputAdvisor(List<? extends Advisor> advisors) {

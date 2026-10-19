@@ -9,6 +9,7 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
  * Internal response support shared by Privacy output protection and output inspection.
@@ -22,17 +23,27 @@ public final class OutputResponseContext {
     // ToolCallLimitExceededException is unavailable in the supported Spring AI 2.0.0 baseline.
     private static final String TOOL_CALL_LIMIT_EXCEEDED = "toolCallLimitExceeded";
     private static final Object PRIVACY_TRACKING_REQUESTED = new Object();
+    private static final Object PII_TOKEN_SIMPLIFICATION_REQUESTED = new Object();
 
     private OutputResponseContext() {
     }
 
     /** Requests tracking of Privacy output processing. */
-    public static ChatClientRequest requestPrivacyTracking(ChatClientRequest request) {
-        return request.mutate().context(PRIVACY_PROCESSING_KEY, PRIVACY_TRACKING_REQUESTED).build();
+    public static ChatClientRequest requestPrivacyTracking(ChatClientRequest request, boolean simplifyPiiTokens) {
+        Object marker = PRIVACY_TRACKING_REQUESTED;
+        if (simplifyPiiTokens) {
+            marker = PII_TOKEN_SIMPLIFICATION_REQUESTED;
+        }
+        return request.mutate().context(PRIVACY_PROCESSING_KEY, marker).build();
     }
 
     public static boolean isPrivacyTrackingRequested(ChatClientRequest request) {
-        return request.context().get(PRIVACY_PROCESSING_KEY) == PRIVACY_TRACKING_REQUESTED;
+        Object marker = request.context().get(PRIVACY_PROCESSING_KEY);
+        return marker == PRIVACY_TRACKING_REQUESTED || marker == PII_TOKEN_SIMPLIFICATION_REQUESTED;
+    }
+
+    public static boolean isPiiTokenSimplificationRequested(ChatClientRequest request) {
+        return request.context().get(PRIVACY_PROCESSING_KEY) == PII_TOKEN_SIMPLIFICATION_REQUESTED;
     }
 
     /** Complete tool responses are separate text units from preceding model fragments. */
@@ -42,11 +53,37 @@ public final class OutputResponseContext {
                 || TOOL_CALL_LIMIT_EXCEEDED.equals(finishReason);
     }
 
-    /** Marks the response after its configured Privacy output policy succeeds. */
-    public static ChatClientResponse markPrivacyProcessed(ChatClientResponse response) {
+    /**
+     * Marks the response after its configured Privacy output policy succeeds.
+     * Prepares inspection copies when requested, while the owning privacy session is still active.
+     */
+    public static ChatClientResponse markPrivacyProcessed(
+            ChatClientResponse response, UnaryOperator<String> piiTokenSimplifier) {
+        Map<String, String> simplifiedTexts = null;
+        if (piiTokenSimplifier != null) {
+            Map<String, String> texts = new HashMap<>();
+            if (response.chatResponse() != null) {
+                for (Generation generation : response.chatResponse().getResults()) {
+                    String text = generation.getOutput().getText();
+                    if (text != null) {
+                        texts.put(text, piiTokenSimplifier.apply(text));
+                    }
+                }
+            }
+            simplifiedTexts = Map.copyOf(texts);
+        }
         return response.mutate()
-                .context(PRIVACY_PROCESSING_KEY, new PrivacyProcessingMarker(response.chatResponse()))
+                .context(PRIVACY_PROCESSING_KEY, new PrivacyProcessingMarker(response.chatResponse(), simplifiedTexts))
                 .build();
+    }
+
+    /** Returns prepared text copies only when the marker still belongs to this response. */
+    public static Map<String, String> simplifiedPiiTexts(ChatClientResponse response) {
+        if (!isPrivacyProcessed(response)) {
+            return null;
+        }
+        PrivacyProcessingMarker marker = (PrivacyProcessingMarker) response.context().get(PRIVACY_PROCESSING_KEY);
+        return marker.simplifiedTexts();
     }
 
     /** Checks whether the Privacy processing marker belongs to this response. */
@@ -80,7 +117,7 @@ public final class OutputResponseContext {
                 || Boolean.TRUE.equals(message.getMetadata().get("thinking"));
     }
 
-    private record PrivacyProcessingMarker(ChatResponse response) {
+    private record PrivacyProcessingMarker(ChatResponse response, Map<String, String> simplifiedTexts) {
         @Override
         public String toString() {
             return "PrivacyProcessingMarker[content=<redacted>]";

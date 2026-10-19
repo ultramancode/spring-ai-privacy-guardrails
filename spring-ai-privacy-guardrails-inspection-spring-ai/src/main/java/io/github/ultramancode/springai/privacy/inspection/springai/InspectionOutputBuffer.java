@@ -11,11 +11,13 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.Generation;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 /** Buffers streamed response frames and assembles their text for inspection. */
 final class InspectionOutputBuffer {
@@ -130,6 +132,22 @@ final class InspectionOutputBuffer {
 
     List<ChatClientResponse> framesWithoutPrivacyTracking() {
         return frames.stream().map(OutputResponseContext::clearPrivacyTracking).toList();
+    }
+
+    UnaryOperator<String> piiTokenSimplifier() {
+        Map<String, String> simplifiedTexts = new HashMap<>();
+        boolean prepared = false;
+        for (ChatClientResponse frame : frames) {
+            Map<String, String> frameTexts = OutputResponseContext.simplifiedPiiTexts(frame);
+            if (frameTexts != null) {
+                simplifiedTexts.putAll(frameTexts);
+                prepared = true;
+            }
+        }
+        if (!prepared) {
+            return null;
+        }
+        return text -> simplifiedTexts.getOrDefault(text, text);
     }
 
     private static InspectionException limit() {

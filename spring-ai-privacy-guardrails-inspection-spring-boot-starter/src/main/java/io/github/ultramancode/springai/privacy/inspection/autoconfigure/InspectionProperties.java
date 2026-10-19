@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Inspection policies and execution limits under {@code spring.ai.inspection}.
@@ -30,6 +31,9 @@ public class InspectionProperties {
 
     /** Failure policy overrides keyed by inspector ID. Unspecified inspectors use the default policy. */
     private Map<String, InspectionFailurePolicy> failurePolicyOverrides = new LinkedHashMap<>();
+
+    /** Inspector IDs that receive session-issued PII tokens without their random part. Empty by default. */
+    private Set<String> piiTokenSimplificationInspectors = Set.of();
 
     private final Output output = new Output();
 
@@ -69,6 +73,14 @@ public class InspectionProperties {
 
     public Output getOutput() {
         return output;
+    }
+
+    public Set<String> getPiiTokenSimplificationInspectors() {
+        return piiTokenSimplificationInspectors;
+    }
+
+    public void setPiiTokenSimplificationInspectors(Set<String> value) {
+        piiTokenSimplificationInspectors = value;
     }
 
     /**

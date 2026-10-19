@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: ee003c76726a5924b3fdd1289a1bcc879f79762bdc8f18cdb48b6b67a0798a07 -->
+<!-- i18n-source-sha256: 824eff3b12470cdc570a4b6f0ce768403e2940006b8ea242d3e02a9fa7eff9cc -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -874,6 +874,7 @@ Spring Boot 스타터를 사용하면 등록한 옵저버 빈이 자동으로 �
 | --- | --- |
 | `ANALYSIS` | 개인정보 탐지 및 분석 |
 | `TOKENIZATION` | 개인정보 토큰화 |
+| `TOKEN_SIMPLIFICATION` | 세션에서 발급한 개인정보 토큰의 난수 부분 제거 |
 | `REDACTION` | 개인정보를 마스킹 |
 | `DETOKENIZATION` | 허용된 원문 복원 |
 | `SESSION` | 개인정보 보호 세션 처리 |

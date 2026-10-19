@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.inspection.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.PiiTokenSimplifierContext;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
@@ -14,9 +15,9 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
     private final InspectionLimits limits;
     private final PrivacyProcessingStatusResolver resolver;
 
-    ContentInspectionStage(InspectionService service, InspectionLimits limits,
+    ContentInspectionStage(InspectionService inspectionService, InspectionLimits limits,
             PrivacyProcessingStatusResolver resolver, InspectionObserver observer) {
-        this.enforcement = new InspectionEnforcement(service, limits, observer);
+        this.enforcement = new InspectionEnforcement(inspectionService, limits, observer);
         this.limits = limits;
         this.resolver = Objects.requireNonNull(resolver, "privacyProcessingStatusResolver");
     }
@@ -29,6 +30,6 @@ final class ContentInspectionStage implements Consumer<ChatClientRequest> {
             InspectionTextExtractor extractor = new InspectionTextExtractor(limits, status, "segment-");
             request.prompt().getInstructions().forEach(extractor::addMessage);
             return extractor.buildSegments();
-        });
+        }, PiiTokenSimplifierContext.findSimplifier(request));
     }
 }

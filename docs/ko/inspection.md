@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 03f1f2ac41d7695564a04dca3faa70b818b8f1556228af73457550b4f242a52e -->
+<!-- i18n-source-sha256: edbbc83bd80df029288ea18731630d0f605d296cc9452bfacec71a9fba9924dc -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -70,6 +70,34 @@ ChatClient client = ModelRequestBoundaryConfigurer.compose(
 `privacySecurityFactory.builderWithBoundary(chatModel, inspectionConfigurer).build()`를,
 권한 검사만 사용한다면 `ToolAuthorizationChatClientFactory.builderWithBoundary`를
 사용합니다. 설정 방법은 [도구 권한](security.md)을 참고하세요.
+
+### 선택한 검사기의 개인정보 토큰 간결화
+
+일부 콘텐츠 검사 모델은 개인정보 토큰에 포함된 난수 문자열을 위험한 입력으로 오탐할 수 있습니다.
+이 경우 해당 검사기 ID를 지정해 토큰의 난수 부분을 제외하고 전달할 수 있습니다.
+
+```properties
+spring.ai.inspection.pii-token-simplification-inspectors=primary-guard
+```
+
+같은 클라이언트에 개인정보 보호를 구성하면, 현재 세션에서 발급한 토큰을
+유형과 인덱스를 유지하는 `[PII_EMAIL_ADDRESS_1]` 같은 표기로 바꿉니다.
+선택한 검사기에 전달하는 복사본만 간결화합니다.
+현재 세션에서 발급하지 않은 토큰을 포함한 나머지 텍스트는 유지합니다.
+
+기본값은 빈 집합이며, 입력 검사와 활성화된 출력 검사에 적용됩니다.
+출력 토큰을 간결화하려면 같은 클라이언트에 개인정보 출력 보호도 구성해야 합니다.
+등록되지 않은 검사기 ID를 지정하면 설정이 실패합니다.
+필요한 개인정보 보호 연동 없이 검사하면 `CONFIGURATION`으로 실패합니다.
+
+`InspectionService`를 직접 호출할 때는 검사기를 선택하고,
+활성 세션의 토큰을 간결화하는 함수를 전달합니다.
+
+```java
+InspectionService selectedInspectionService = inspectionService.withPiiTokenSimplification(Set.of("primary-guard"));
+InspectionReport inspectionReport = selectedInspectionService.inspect(inspectionRequest,
+    text -> privacyService.simplifyTokens(privacySession.handle(), text));
+```
 
 ## 선택적 모델 출력 검사
 
@@ -488,6 +516,7 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 | `output.enabled` | `false` | 자동 설정으로 생성한 configurer에 출력 검사 추가 |
 | `failure-policy` | `FAIL_CLOSED` | 위 실패 정책 표에 해당하는 오류가 발생했을 때 적용할 기본 정책 |
 | `failure-policy-overrides` | 빈 맵 | 검사기 ID별 실패 정책 |
+| `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 난수 부분 없이 전달받을 검사기 ID |
 | `max-segments` | 64 | 빈 본문을 포함한 최대 텍스트 구간 수 |
 | `max-characters` | 131072 | 한 번의 검사에서 처리하는 텍스트의 최대 합산 길이 |
 | `timeout` | 10s | 정책 평가를 포함해 한 요청의 모든 검사기가 함께 사용하는 제한 시간 |

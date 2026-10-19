@@ -86,7 +86,7 @@
     <circle cx="714" cy="28" r="17" fill="#38d6d0"/>
     <text x="714" y="34" text-anchor="middle" class="sans step">3</text>
     <text x="746" y="35" class="sans card-title">Tokenize values</text>
-    <text x="706" y="83" class="mono small">[[PII_TYPE_nonce_1]]</text>
+    <text x="706" y="83" class="mono small">[PII_TYPE_1:&lt;opaque&gt;]</text>
 
     <rect x="1020" width="334" height="126" rx="20" fill="#0b3840"/>
     <circle cx="1054" cy="28" r="17" fill="#38d6d0"/>
@@ -112,7 +112,7 @@
     <rect x="338" width="250" height="142" rx="20" fill="#171d39" stroke="#af8cff"/>
     <text x="463" y="34" text-anchor="middle" class="sans card-title">Model call</text>
     <text x="463" y="68" text-anchor="middle" class="sans small">call · stream · recursion</text>
-    <text x="463" y="101" text-anchor="middle" class="mono small" fill="#c9b6ff">[[PII_*]]</text>
+    <text x="463" y="101" text-anchor="middle" class="mono small" fill="#c9b6ff">[PII_*]</text>
 
     <path d="M600 71H664" stroke="#38d6d0" stroke-width="3" marker-end="url(#cyanArrow)"/>
 

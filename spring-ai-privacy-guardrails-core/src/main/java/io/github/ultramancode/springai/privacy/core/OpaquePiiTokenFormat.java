@@ -1,22 +1,26 @@
 package io.github.ultramancode.springai.privacy.core;
 
-import java.util.UUID;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.regex.Pattern;
 
-/** Defines the canonical opaque token grammar shared by runtime and test-support modules. */
+/** Provides syntax checks for opaque PII tokens. */
 public final class OpaquePiiTokenFormat {
 
-    private static final int NONCE_HEX_CHARACTER_COUNT = 32;
-    private static final String NONCE_REGEX = "[a-f0-9]{" + NONCE_HEX_CHARACTER_COUNT + "}";
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final Base64.Encoder NONCE_ENCODER = Base64.getUrlEncoder().withoutPadding();
+    private static final int NONCE_BYTE_COUNT = 12;
+    private static final int NONCE_CHARACTER_COUNT = 16;
+    private static final String NONCE_REGEX = "[A-Za-z0-9_-]{" + NONCE_CHARACTER_COUNT + "}";
     private static final String INDEX_REGEX = "[1-9]\\d*";
-    private static final Pattern NONCE_PATTERN = Pattern.compile(NONCE_REGEX);
-    // The entity grammar has no length bound. This lookahead limits the type before the fixed-width nonce.
+    // Bound the entity type length before the index and colon.
     private static final Pattern CANONICAL_TOKEN_PATTERN = Pattern.compile(
-            "\\[\\[PII_(?=[A-Z0-9_]{1," + EntityTypeRegistry.MAX_ENTITY_TYPE_LENGTH
-                    + "}_" + NONCE_REGEX + "_)"
+            "\\[PII_(?=[A-Z0-9_]{1," + EntityTypeRegistry.MAX_ENTITY_TYPE_LENGTH
+                    + "}_" + INDEX_REGEX + ":)"
                     + EntityTypeRegistry.ENTITY_TYPE_REGEX
-                    + "_" + NONCE_REGEX + "_" + INDEX_REGEX + "]]"
+                    + "_" + INDEX_REGEX + ":" + NONCE_REGEX + "]"
     );
+
     private OpaquePiiTokenFormat() {
     }
 
@@ -28,8 +32,8 @@ public final class OpaquePiiTokenFormat {
      */
     public static Pattern patternForEntityType(String entityType) {
         String canonicalType = EntityTypeRegistry.requireValidEntityType(entityType);
-        return Pattern.compile("\\[\\[PII_" + Pattern.quote(canonicalType)
-                + "_" + NONCE_REGEX + "_" + INDEX_REGEX + "]]");
+        return Pattern.compile("\\[PII_" + Pattern.quote(canonicalType)
+                + "_" + INDEX_REGEX + ":" + NONCE_REGEX + "]");
     }
 
     /**
@@ -49,31 +53,25 @@ public final class OpaquePiiTokenFormat {
     static int minimumGeneratedTokenLength(String entityType) {
         String canonicalType = EntityTypeRegistry.requireValidEntityType(entityType);
         // The shortest generated token has a one-digit index.
-        return "[[PII_".length()
+        return "[PII_".length()
                 + canonicalType.length()
-                + 1
-                + NONCE_HEX_CHARACTER_COUNT
-                + 1
-                + 1
-                + "]]".length();
+                + "_1:".length()
+                + NONCE_CHARACTER_COUNT
+                + "]".length();
     }
 
     static String format(String entityType, String nonce, int index) {
-        if (nonce == null || !NONCE_PATTERN.matcher(nonce).matches()) {
-            throw new IllegalArgumentException(
-                    "nonce must contain " + NONCE_HEX_CHARACTER_COUNT
-                            + " lowercase hexadecimal characters"
-            );
-        }
         if (index <= 0) {
             throw new IllegalArgumentException("index must be positive");
         }
-        return "[[PII_" + EntityTypeRegistry.requireValidEntityType(entityType)
-                + "_" + nonce + "_" + index + "]]";
+        return "[PII_" + EntityTypeRegistry.requireValidEntityType(entityType)
+                + "_" + index + ":" + nonce + "]";
     }
 
     static String randomNonce() {
-        return UUID.randomUUID().toString().replace("-", "");
+        byte[] bytes = new byte[NONCE_BYTE_COUNT];
+        RANDOM.nextBytes(bytes);
+        return NONCE_ENCODER.encodeToString(bytes);
     }
 
 }

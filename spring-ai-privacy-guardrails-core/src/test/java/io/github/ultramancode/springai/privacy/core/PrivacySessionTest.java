@@ -38,22 +38,6 @@ class PrivacySessionTest {
     }
 
     @Test
-    void sessionDoesNotTreatForgedNamespaceAsASecret() {
-        PrivacyService service = privacyService();
-
-        try (PrivacySession session = service.openSession()) {
-            service.tokenize(session.handle(), "Alice");
-
-            String forged = OpaquePiiTokenFormat.format(
-                    "PERSON",
-                    "00000000000000000000000000000000",
-                    1
-            );
-            assertThat(service.detokenize(session.handle(), forged)).isEqualTo(forged);
-        }
-    }
-
-    @Test
     void detokenizeCanRevealOnlyExplicitlyAllowedEntityTypes() {
         PrivacyService service = privacyService();
 
@@ -74,6 +58,47 @@ class PrivacySessionTest {
                     .contains("alice@example.com")
                     .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"))
                     .doesNotContain("Alice ");
+        }
+    }
+
+    @Test
+    void tokensKeepDistinctIndexesAndReuseTheNonceWithinOneSession() {
+        PrivacyService service = privacyService();
+
+        try (PrivacySession session = service.openSession()) {
+            PrivacyContextHandle handle = session.handle();
+            String aliceToken = service.tokenize(handle, "Alice");
+            String bobToken = service.tokenize(handle, "Bob");
+            String emailToken = service.tokenize(handle, "alice@example.com",
+                    List.of(new PiiSpan("EMAIL_ADDRESS", 0, 17, 0.95)));
+            // Take the nonce after ':' and before the closing ']'.
+            String sessionNonce = aliceToken.substring(aliceToken.indexOf(':') + 1, aliceToken.length() - 1);
+
+            assertThat(aliceToken).isEqualTo("[PII_PERSON_1:" + sessionNonce + "]");
+            assertThat(bobToken).isEqualTo("[PII_PERSON_2:" + sessionNonce + "]");
+            assertThat(emailToken).isEqualTo("[PII_EMAIL_ADDRESS_1:" + sessionNonce + "]");
+            assertThat(service.detokenize(handle, aliceToken + " " + bobToken + " " + emailToken))
+                    .isEqualTo("Alice Bob alice@example.com");
+        }
+    }
+
+    @Test
+    void detokenizationLeavesUnissuedTokensUnchanged() {
+        PrivacyService service = privacyService();
+
+        try (PrivacySession session = service.openSession()) {
+            String token = service.tokenize(session.handle(), "Alice");
+            int nonceStart = token.indexOf(':') + 1;
+            char changed = token.charAt(nonceStart) == 'A' ? 'B' : 'A';
+            String tokenWithChangedNonce = token.substring(0, nonceStart) + changed + token.substring(nonceStart + 1);
+            for (String unissued : List.of(
+                    "[PII_PERSON_1]",
+                    token.replace("PERSON_1:", "PERSON_2:"),
+                    token.replace("PERSON", "EMAIL_ADDRESS"),
+                    tokenWithChangedNonce
+            )) {
+                assertThat(service.detokenize(session.handle(), unissued)).isEqualTo(unissued);
+            }
         }
     }
 

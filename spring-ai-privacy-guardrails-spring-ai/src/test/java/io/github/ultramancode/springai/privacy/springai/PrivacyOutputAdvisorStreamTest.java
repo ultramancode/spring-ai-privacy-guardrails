@@ -114,7 +114,7 @@ class PrivacyOutputAdvisorStreamTest {
 
             assertThat(streamText(results, 0))
                     .contains("[REDACTED_PERSON]")
-                    .doesNotContain("Alice", "[[PII_");
+                    .doesNotContain("Alice", "[PII_");
         }
     }
 
@@ -603,7 +603,7 @@ class PrivacyOutputAdvisorStreamTest {
                     .singleElement()
                     .extracting(AssistantMessage.ToolCall::arguments)
                     .asString()
-                    .contains("[[PII_PERSON_")
+                    .contains("[PII_PERSON_")
                     .doesNotContain("Alice");
         }
     }
@@ -668,7 +668,7 @@ class PrivacyOutputAdvisorStreamTest {
             assertThat(toolCalls).hasSize(2)
                     .allSatisfy(toolCall -> assertThat(toolCall.arguments())
                             .doesNotContain("Alice")
-                            .contains("[[PII_PERSON_"));
+                            .contains("[PII_PERSON_"));
             assertThat(toolCalls).extracting(AssistantMessage.ToolCall::name)
                     .containsExactly("lookup", "audit");
         }

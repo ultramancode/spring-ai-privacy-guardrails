@@ -70,7 +70,7 @@ class PrivacyEnforcementObserverTest {
 
             String personToken = service.tokenize(session.handle(), "Alice");
             ToolCallback protectedTool = toolFactory.wrap(tool(input -> {
-                assertThat(input).contains("Alice").doesNotContain("[[PII_");
+                assertThat(input).contains("Alice").doesNotContain("[PII_");
                 return "Bob";
             }));
             String protectedResult = protectedTool.call(
@@ -103,7 +103,7 @@ class PrivacyEnforcementObserverTest {
                         PrivacyEnforcementOutcome.PROTECTED
                 )
         );
-        assertThat(events.toString()).doesNotContain("Alice", "Bob", "PERSON", "[[PII_");
+        assertThat(events.toString()).doesNotContain("Alice", "Bob", "PERSON", "[PII_");
     }
 
     @Test
@@ -229,7 +229,7 @@ class PrivacyEnforcementObserverTest {
 
             assertThat(protectedResponse.chatResponse().getResult().getOutput().getText())
                     .contains("[REDACTED_PERSON]")
-                    .doesNotContain("Alice", "[[PII_");
+                    .doesNotContain("Alice", "[PII_");
         }
 
         assertThat(events).containsExactly(new PrivacyEnforcementEvent(

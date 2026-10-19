@@ -20,7 +20,7 @@ class SensitiveRecordToStringTest {
         );
         PiiAnalysisResult result = new PiiAnalysisResult(List.of(resolved), Set.of("REMOTE"), List.of());
         PiiTokenizationResult tokenization = new PiiTokenizationResult(
-                "public-prefix [[PII_PERSON_opaque_1]] public-suffix",
+                "public-prefix [PII_PERSON_1:a7Kp2xQ9mR4vT8zB] public-suffix",
                 result
         );
 
@@ -34,7 +34,7 @@ class SensitiveRecordToStringTest {
                         "ALICE_SMITH",
                         "public-prefix",
                         "public-suffix",
-                        "[[PII_PERSON"
+                        "[PII_PERSON"
                 );
     }
 }

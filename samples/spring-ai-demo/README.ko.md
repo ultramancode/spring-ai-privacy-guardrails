@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 9c0b32a91079aba485af1b2657f54466c83c19bb1adf81c20fa037b83ba62814 -->
+<!-- i18n-source-sha256: 7fec589906b75a0530f9cb47e1416a4ef139910c75a2924d8b36c5d379e552e4 -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
@@ -99,7 +99,7 @@ curl "http://127.0.0.1:8080/demo/protect" \
 
 ```json
 {
-  "protectedPrompt": "직원번호는 [[PII_EMPLOYEE_ID_<32-hex-session-nonce>_1]]이고, 이메일은 [[PII_EMAIL_ADDRESS_<32-hex-session-nonce>_1]], 전화번호는 [[PII_PHONE_NUMBER_<32-hex-session-nonce>_1]], 고객번호는 [[PII_CUSTOMER_ID_<32-hex-session-nonce>_1]]입니다.",
+  "protectedPrompt": "직원번호는 [PII_EMPLOYEE_ID_1:<opaque>]이고, 이메일은 [PII_EMAIL_ADDRESS_1:<opaque>], 전화번호는 [PII_PHONE_NUMBER_1:<opaque>], 고객번호는 [PII_CUSTOMER_ID_1:<opaque>]입니다.",
   "detectedSpans": [
     {"type":"EMPLOYEE_ID","start":6,"end":14,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
     {"type":"EMAIL_ADDRESS","start":23,"end":39,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
@@ -110,10 +110,9 @@ curl "http://127.0.0.1:8080/demo/protect" \
 }
 ```
 
-예시의 불투명 토큰 문자열 형식은 변경될 수 있습니다. 애플리케이션에서는 불투명 토큰의 내부 문자열을
-해석하거나 특정 형식에 의존하지 마세요.
+애플리케이션 코드에서 불투명 토큰을 직접 다룬다면 토큰 문자열 전체를 그대로 유지하세요.
 
-불투명 토큰은 요청별로 생성됩니다. 같은 입력으로 엔드포인트를 두 번 호출해도 서로 다른
+`<opaque>`는 개인정보 보호 세션마다 생성됩니다. 같은 입력으로 엔드포인트를 두 번 호출해도 서로 다른
 불투명 토큰이 생성됩니다. 각 탐지 범위의 `providers`에는 해당 탐지 결과에 사용된
 분석기의 ID가 표시됩니다. `successfulProviders`는 분석에 성공한 분석기 목록이며, 개인정보를
 찾지 못한 분석기도 포함됩니다.

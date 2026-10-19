@@ -215,7 +215,7 @@ class OpenAiCompatibleLiveIntegrationTest {
             assertThat(response)
                     .isNotBlank()
                     .doesNotContain(EMPLOYEE_ID, EMAIL)
-                    .contains("[[PII_EMPLOYEE_ID_", "[[PII_EMAIL_ADDRESS_");
+                    .contains("[PII_EMPLOYEE_ID_", "[PII_EMAIL_ADDRESS_");
             assertThatPrivacy(probe)
                     .hasModelRequestCount(1)
                     .hasToolCallCount(1)

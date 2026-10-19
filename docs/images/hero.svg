@@ -101,9 +101,9 @@
     <text x="28" y="108" class="sans node-body">Scoped disclosure</text>
 
     <rect x="26" y="132" width="304" height="48" rx="13" fill="#0a3940"/>
-    <text x="178" y="162" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_PHONE_a2da9429…_1]]</text>
+    <text x="178" y="162" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[PII_PHONE_NUMBER_1:a7Kp…]</text>
     <rect x="26" y="193" width="304" height="48" rx="13" fill="#0a3940"/>
-    <text x="178" y="223" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[[PII_CUSTOMER_ID_a2da…_1]]</text>
+    <text x="178" y="223" text-anchor="middle" class="mono" font-size="15" fill="#7bf2e5">[PII_CUSTOMER_ID_1:a7Kp…]</text>
 
     <text x="28" y="274" class="sans tiny" font-weight="700" fill="#38d6d0">GUARDRAILS ENFORCE “WHERE”</text>
   </g>
@@ -146,7 +146,7 @@
     <rect x="424" y="142" width="128" height="22" rx="11" fill="#174f3d"/>
     <text x="488" y="157" text-anchor="middle" class="sans label" fill="#73f0ad">RESTORED</text>
 
-    <text x="56" y="184" class="mono" font-size="15" fill="#d7fff1">"phone": "[[PII_PHONE_...]]"</text>
+    <text x="56" y="184" class="mono" font-size="15" fill="#d7fff1">"phone": "[PII_PHONE_NUMBER_1:...]"</text>
     <rect x="424" y="168" width="128" height="22" rx="11" fill="#163f4c"/>
     <text x="488" y="183" text-anchor="middle" class="sans label" fill="#6be9e0">OPAQUE TOKEN</text>
 

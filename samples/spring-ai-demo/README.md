@@ -99,7 +99,7 @@ Expected shape:
 
 ```json
 {
-  "protectedPrompt": "Employee ID is [[PII_EMPLOYEE_ID_<32-hex-session-nonce>_1]], email is [[PII_EMAIL_ADDRESS_<32-hex-session-nonce>_1]], phone is [[PII_PHONE_NUMBER_<32-hex-session-nonce>_1]], and customer ID is [[PII_CUSTOMER_ID_<32-hex-session-nonce>_1]].",
+  "protectedPrompt": "Employee ID is [PII_EMPLOYEE_ID_1:<opaque>], email is [PII_EMAIL_ADDRESS_1:<opaque>], phone is [PII_PHONE_NUMBER_1:<opaque>], and customer ID is [PII_CUSTOMER_ID_1:<opaque>].",
   "detectedSpans": [
     {"type":"EMPLOYEE_ID","start":15,"end":23,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
     {"type":"EMAIL_ADDRESS","start":34,"end":50,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
@@ -110,10 +110,9 @@ Expected shape:
 }
 ```
 
-The opaque token format shown in this example may change. Application logic must not
-parse opaque token internals or depend on a specific format.
+If your application code handles opaque tokens directly, preserve the complete token string.
 
-Opaque tokens are unique to each request. Calling the endpoint twice with the same
+`<opaque>` is generated for each privacy session. Calling the endpoint twice with the same
 input produces different opaque tokens.
 Each span's `providers` list identifies analyzers whose findings contributed to that result.
 `successfulProviders` lists analyzers that completed successfully, including

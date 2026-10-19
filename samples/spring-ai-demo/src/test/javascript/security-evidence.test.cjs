@@ -14,15 +14,21 @@ function createView(language = "en") {
   const elements = new Map();
   function node() {
     const classes = new Set();
+    let ownText = "";
     return {
-      dataset: {}, style: {}, textContent: "",
+      dataset: {}, style: {}, children: [],
+      get textContent() {
+        return ownText + this.children.map(child => typeof child === "string" ? child : child.textContent).join("");
+      },
+      set textContent(value) { ownText = String(value); this.children = []; },
       classList: {
         add: (...names) => names.forEach(name => classes.add(name)),
         remove: (...names) => names.forEach(name => classes.delete(name)),
         contains: name => classes.has(name),
         toggle: (name, force) => force ? classes.add(name) : classes.delete(name)
       },
-      replaceChildren(...children) { this.textContent = children.map(child => child.textContent).join(""); },
+      append(...children) { this.children.push(...children); },
+      replaceChildren(...children) { ownText = ""; this.children = children; },
       querySelector() { return this.small ??= node(); }
     };
   }
@@ -35,7 +41,8 @@ function createView(language = "en") {
     getElementById: element,
     querySelectorAll: selector => selector === "[data-i18n]"
       ? [...elements.values()].filter(target => target.dataset.i18n) : [],
-    createTextNode: textContent => ({textContent})
+    createTextNode: textContent => ({textContent}),
+    createElement: () => node()
   };
   element("scenarioSelector").value = "security";
   const page = runInNewContext(script.slice(0, startup) + `
@@ -88,6 +95,41 @@ test("renders the allowed response as formatted JSON", () => {
   assert.equal(view.element("securityAuthorizationStatus").textContent, "PASS");
   assert.match(view.element("securitySupportOutcome").textContent, /protected CRM result/);
   assert.equal(view.element("securityFinalResponse").textContent, '{\n  "status": "found"\n}');
+});
+
+test("highlights compact tokens without changing the protected response", () => {
+  const nonce = "_-0123456789aBcD";
+  const payload = {
+    employeeId: `[PII_EMPLOYEE_ID_1:${nonce}]`,
+    email: `[PII_EMAIL_ADDRESS_12:${nonce}]`,
+    phone: `[PII_PHONE_NUMBER_3:${nonce}]`,
+    customerId: `[PII_CUSTOMER_ID_1:${nonce}]`
+  };
+  const view = createView();
+  view.render({...allowedSupport, finalResponse: JSON.stringify(payload)});
+
+  const response = view.element("securityFinalResponse");
+  assert.equal(response.textContent, JSON.stringify(payload, null, 2));
+  const tokens = response.children.filter(child => child.className === "opaque-token");
+  assert.deepEqual(tokens.map(token => token.textContent), Object.values(payload));
+  assert.equal(tokens[1].children[1].textContent, "PII_EMAIL_ADDRESS");
+  assert.equal(tokens[1].children[2].textContent, `_12:${nonce}`);
+});
+
+test("leaves malformed token text unhighlighted", () => {
+  const nonce = "_-0123456789aBcD";
+  const text = [
+    "[PII_EMAIL_ADDRESS_1]",
+    `[PII_EMAIL_ADDRESS_1:${nonce.slice(1)}]`,
+    `[PII_EMAIL_ADDRESS_1:${nonce}A]`,
+    `[PII_EMAIL_ADDRESS_0:${nonce}]`
+  ].join(" ");
+  const view = createView();
+  view.render({...allowedSupport, finalResponse: text});
+
+  const response = view.element("securityFinalResponse");
+  assert.equal(response.textContent, text);
+  assert.equal(response.children.filter(child => child.className === "opaque-token").length, 0);
 });
 
 test("clears the previous response when a later support request is denied", () => {

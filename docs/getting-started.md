@@ -136,18 +136,21 @@ In this library, **PII tokenization** replaces detected PII with request-scoped
 **opaque tokens** before the model call. These replacement strings do not directly
 reveal the original values.
 
-The example below shows what the model receives. The `<opaque>` part represents
-a value generated for each request.
+The example below shows what the model receives. `<opaque>` represents a random
+value generated for each privacy session.
 
 ```text
-Employee [[PII_EMPLOYEE_ID_<opaque>]] requested customer
-[[PII_CUSTOMER_ID_<opaque>]].
+Employee [PII_EMPLOYEE_ID_1:<opaque>] requested customer
+[PII_CUSTOMER_ID_1:<opaque>].
 ```
 
 In this example, the detected employee and customer IDs are not sent to the
 model as original values. The library manages mappings between opaque tokens
 and original values for each request. Application logic must not parse opaque
 token internals or depend on a specific opaque token format.
+
+Within one session, different values of the same type receive separate indexes,
+and repeated values reuse their token. Mappings are discarded when the session closes.
 
 Direct calls to a `ChatModel` are outside this automatic boundary.
 

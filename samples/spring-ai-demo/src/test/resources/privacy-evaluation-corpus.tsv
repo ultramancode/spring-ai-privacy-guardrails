@@ -65,5 +65,5 @@ customer-ascii-word-adjacency	-	-	ACUST-123456B
 person-five-syllables	-	-	제 이름은 가나다라마입니다.
 person-unrelated-label	-	-	사용자 이름은 홍길동입니다.
 json-ordinary	-	-	{"status":"public","count":1234}
-token-shaped-text	-	-	문서에는 [[PII_PERSON_not-a-token_1]] 예시만 있습니다.
+token-shaped-text	-	-	문서에는 [PII_PERSON_1:not-a-token] 예시만 있습니다.
 ordinary-network-and-date	-	-	공개 주소 192.0.2.1과 날짜 2026-07-12를 기록합니다.

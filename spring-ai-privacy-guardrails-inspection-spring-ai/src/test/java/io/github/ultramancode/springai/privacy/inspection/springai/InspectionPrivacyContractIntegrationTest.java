@@ -1,6 +1,7 @@
 package io.github.ultramancode.springai.privacy.inspection.springai;
 
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
+import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
@@ -40,8 +41,10 @@ import reactor.core.publisher.Flux;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,10 +53,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Verifies Privacy processing and input inspection at each model request boundary. */
 class InspectionPrivacyContractIntegrationTest {
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final Pattern PERSON_TOKEN = OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void privacyReusesScalarAnalysisWhileInspectionRunsOnEveryModelRequest(boolean streaming) {
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void privacyReusesScalarAnalysisWhileInspectionRunsOnEveryModelRequest(boolean streaming, boolean simplifyPiiTokens) {
         // Repeated values share analysis within one session.
         String userJson = """
                 {"key@example.com":"Alice",\
@@ -71,7 +75,7 @@ class InspectionPrivacyContractIntegrationTest {
         ContentInspector inspector = privacyRequiredRecordingInspector(inspectionRequests);
         ChatModel model = lookupThenDoneModel(modelCallCount);
         InspectionChatClientConfigurer inspectionChatClientConfigurer =
-                inspectionChatClientConfigurer(inspector, InspectionLimits.defaults());
+                inspectionChatClientConfigurer(inspector, InspectionLimits.defaults(), simplifyPiiTokens);
         ChatClient client = ModelRequestBoundaryConfigurer.compose(
                         inspectionChatClientConfigurer, new PrivacyChatClientConfigurer(privacyService))
                 .configure(ChatClient.builder(model))
@@ -99,7 +103,11 @@ class InspectionPrivacyContractIntegrationTest {
         // Each session analyzes Alice and 42 once. The tool result reuses that analysis.
         // JSON keys and tool metadata are outside the analysis scope.
         assertThat(privacyAnalyzedTexts).containsExactly("Alice", "42", "Alice", "42");
-        assertThat(protectedUserJsonByInvocation).doesNotHaveDuplicates();
+        if (simplifyPiiTokens) {
+            assertThat(protectedUserJsonByInvocation).containsOnly(userJson.replace("Alice", "[PII_PERSON_1]"));
+        } else {
+            assertThat(protectedUserJsonByInvocation).doesNotHaveDuplicates();
+        }
     }
 
     @ParameterizedTest
@@ -141,7 +149,7 @@ class InspectionPrivacyContractIntegrationTest {
         RecordingChatModel model = new RecordingChatModel();
         InspectionLimits inspectionLimits = new InspectionLimits(4, inspectionCharacterLimit, TEST_TIMEOUT);
         ChatClient client = ModelRequestBoundaryConfigurer.compose(new PrivacyChatClientConfigurer(privacyService),
-                inspectionChatClientConfigurer(inspector, inspectionLimits)).configure(ChatClient.builder(model)).build();
+                inspectionChatClientConfigurer(inspector, inspectionLimits, false)).configure(ChatClient.builder(model)).build();
 
         if (exceedsPrivacyLimit) {
             assertThatThrownBy(() -> invoke(client, inputText, streaming))
@@ -184,7 +192,7 @@ class InspectionPrivacyContractIntegrationTest {
         ModelRequestBoundaryConfigurer messageChangingConfigurer = replaceUserMessageAfterPrivacy("changed");
         RecordingChatModel model = new RecordingChatModel();
         ChatClient client = ModelRequestBoundaryConfigurer.compose(new PrivacyChatClientConfigurer(privacyService),
-                messageChangingConfigurer, inspectionChatClientConfigurer(inspector, InspectionLimits.defaults()))
+                messageChangingConfigurer, inspectionChatClientConfigurer(inspector, InspectionLimits.defaults(), false))
                 .configure(ChatClient.builder(model)).build();
 
         assertThatThrownBy(() -> invoke(client, "hello", streaming))
@@ -246,7 +254,8 @@ class InspectionPrivacyContractIntegrationTest {
                 inspectionRequests.add(request);
                 assertThat(request.segments()).allSatisfy(segment -> {
                     assertThat(segment.privacyProcessingStatus()).isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED);
-                    assertThat(segment.text()).doesNotContain("Alice", "static-contact", "schema@example.com");
+                    assertThat(PERSON_TOKEN.matcher(segment.text()).replaceAll(" "))
+                            .doesNotContain("Alice", "static-contact", "schema@example.com");
                 });
                 return InspectionResult.completed(request.segments().stream()
                         .map(ContentSegment::id).collect(Collectors.toSet()), List.of());
@@ -262,6 +271,9 @@ class InspectionPrivacyContractIntegrationTest {
 
             public ChatResponse call(Prompt prompt) {
                 modelCallCount.incrementAndGet();
+                String userText = prompt.getUserMessage().getText();
+                assertThat(userText).containsPattern(PERSON_TOKEN).doesNotContain("[PII_PERSON_1]");
+                assertThat(PERSON_TOKEN.matcher(userText).replaceAll(" ")).doesNotContain("Alice");
                 // Request lookup first. Return done once its result appears in the conversation.
                 if (prompt.getInstructions().stream().noneMatch(ToolResponseMessage.class::isInstance)) {
                     return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("")
@@ -301,9 +313,14 @@ class InspectionPrivacyContractIntegrationTest {
         });
     }
 
-    private InspectionChatClientConfigurer inspectionChatClientConfigurer(ContentInspector inspector, InspectionLimits limits) {
+    private InspectionChatClientConfigurer inspectionChatClientConfigurer(
+            ContentInspector inspector, InspectionLimits limits, boolean simplifyPiiTokens) {
+        InspectionService inspectionService = new InspectionService(List.of(inspector));
+        if (simplifyPiiTokens) {
+            inspectionService = inspectionService.withPiiTokenSimplification(Set.of(inspector.inspectorId()));
+        }
         // Only the marker matching the current model input establishes completed Privacy processing.
-        return new InspectionChatClientConfigurer(new InspectionService(List.of(inspector)), limits,
+        return new InspectionChatClientConfigurer(inspectionService, limits,
                 request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
                         ? ContentSegment.PrivacyProcessingStatus.PROCESSED : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
                 InspectionObserver.noop());

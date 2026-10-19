@@ -12,24 +12,27 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionService
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /** Shared ALLOW/BLOCK enforcement and payload-free observer notifications. */
 final class InspectionEnforcement {
-    private final InspectionService service;
+    private final InspectionService inspectionService;
     private final InspectionLimits limits;
     private final InspectionObserver observer;
 
-    InspectionEnforcement(InspectionService service, InspectionLimits limits, InspectionObserver observer) {
-        this.service = Objects.requireNonNull(service, "service");
+    InspectionEnforcement(InspectionService inspectionService, InspectionLimits limits, InspectionObserver observer) {
+        this.inspectionService = Objects.requireNonNull(inspectionService, "inspectionService");
         this.limits = Objects.requireNonNull(limits, "limits");
         this.observer = Objects.requireNonNull(observer, "observer");
     }
 
-    void inspect(Supplier<List<ContentSegment>> segments) {
+    void inspect(Supplier<List<ContentSegment>> contentSegmentsSupplier,
+            UnaryOperator<String> piiTokenSimplifier) {
         InspectionReport report;
         try {
             InspectionRequest.checkInterrupted();
-            report = service.inspect(new InspectionRequest(segments.get(), limits));
+            report = inspectionService.inspect(
+                    new InspectionRequest(contentSegmentsSupplier.get(), limits), piiTokenSimplifier);
         } catch (RuntimeException ex) {
             throw failure(ex);
         }

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.PiiTokenSimplifierContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -81,6 +82,7 @@ final class PrivacyRequestContextSupport {
         if (!response.context().containsKey(CONTEXT_HANDLE)
                 && !response.context().containsKey(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION)
                 && !response.context().containsKey(CONTEXT_LIFECYCLE_MARKER)
+                && !PiiTokenSimplifierContext.containsSimplifierEntry(response.context())
                 && !PrivacyOutputContextSupport.hasInternalEntries(response.context())
                 && !PrivacyToolExecutionContextSupport.hasInternalEntries(response.context())) {
             return response;
@@ -97,6 +99,7 @@ final class PrivacyRequestContextSupport {
         applicationContext.remove(CONTEXT_HANDLE);
         applicationContext.remove(PrivacyModelRequestStage.MODEL_CONTENT_PROTECTION);
         applicationContext.remove(CONTEXT_LIFECYCLE_MARKER);
+        PiiTokenSimplifierContext.removeSimplifierEntry(applicationContext);
         PrivacyOutputContextSupport.removeInternalEntries(applicationContext);
         PrivacyToolExecutionContextSupport.removeInternalEntries(applicationContext);
         return applicationContext;

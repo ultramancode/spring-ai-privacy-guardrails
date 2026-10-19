@@ -64,8 +64,7 @@ class PrivacyReturnDirectIntegrationTest {
         String result = returnDirectChatClient(service, PrivacyOutputAction.TOKENIZE)
                 .prompt().user("Find Alice").call().content();
 
-        assertThat(result).matches(PERSON_TOKEN.pattern() + " direct result")
-                .doesNotContain("Alice");
+        assertThat(result).matches(PERSON_TOKEN.pattern() + " direct result");
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -330,7 +329,7 @@ class PrivacyReturnDirectIntegrationTest {
             int call = this.calls.incrementAndGet();
             this.rawPiiSeenByModel = this.rawPiiSeenByModel || prompt.getInstructions().stream()
                     .map(Message::getText)
-                    .anyMatch(text -> text != null && (text.contains("Alice") || text.contains("Bob")));
+                    .anyMatch(TestPrivacyServices::containsRawName);
             if (call == 1) {
                 String token = prompt.getInstructions().stream()
                         .map(Message::getText)
@@ -357,7 +356,7 @@ class PrivacyReturnDirectIntegrationTest {
                     .findFirst()
                     .orElseThrow();
             String responseData = toolResponse.getResponses().get(0).responseData();
-            if (responseData.contains("Bob")) {
+            if (TestPrivacyServices.containsRawName(responseData)) {
                 this.rawPiiSeenByModel = true;
             }
             return new ChatResponse(List.of(new Generation(new AssistantMessage("Customer Bob is active"))));
@@ -421,8 +420,7 @@ class PrivacyReturnDirectIntegrationTest {
                     && toolResponse.getResponses().stream()
                     .map(ToolResponseMessage.ToolResponse::responseData)
                     .allMatch(responseData -> PERSON_TOKEN.matcher(responseData).find()
-                            && !responseData.contains("Alice")
-                            && !responseData.contains("Bob")
+                            && !TestPrivacyServices.containsRawName(responseData)
                             && !responseData.contains("[REDACTED_"));
             return new ChatResponse(List.of(new Generation(new AssistantMessage("Completed"))));
         }

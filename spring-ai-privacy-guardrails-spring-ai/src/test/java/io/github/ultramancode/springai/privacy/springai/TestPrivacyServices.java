@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
@@ -16,10 +17,23 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 final class TestPrivacyServices {
 
+    private static final Pattern BRACKETED_TEXT = Pattern.compile("\\[[^\\[\\]]*]");
+
     private TestPrivacyServices() {
+    }
+
+    static boolean containsRawName(String text) {
+        if (text == null) {
+            return false;
+        }
+        String textOutsideTokens = BRACKETED_TEXT.matcher(text).replaceAll(match ->
+                OpaquePiiTokenFormat.isCanonicalToken(match.group()) ? " " : Matcher.quoteReplacement(match.group()));
+        return textOutsideTokens.contains("Alice") || textOutsideTokens.contains("Bob");
     }
 
     static PrivacyService privacyService() {

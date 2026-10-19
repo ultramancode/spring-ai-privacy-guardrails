@@ -57,7 +57,8 @@ public class InspectionAutoConfiguration {
             InspectionProperties properties) {
         return new InspectionService(
                 inspectors.orderedStream().toList(), policy,
-                properties.getFailurePolicy(), properties.getFailurePolicyOverrides());
+                properties.getFailurePolicy(), properties.getFailurePolicyOverrides())
+                .withPiiTokenSimplification(properties.getPiiTokenSimplificationInspectors());
     }
 
     @Bean

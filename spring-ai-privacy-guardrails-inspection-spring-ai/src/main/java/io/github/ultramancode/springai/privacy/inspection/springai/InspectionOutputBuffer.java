@@ -11,6 +11,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.Generation;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -130,6 +131,23 @@ final class InspectionOutputBuffer {
 
     List<ChatClientResponse> framesWithoutPrivacyTracking() {
         return frames.stream().map(OutputResponseContext::clearPrivacyTracking).toList();
+    }
+
+    Map<String, String> collectSimplifiedTextsByOriginalText() {
+        Map<String, String> simplifiedTextsByOriginalText = new HashMap<>();
+        boolean simplificationPrepared = false;
+        for (ChatClientResponse responseFrame : frames) {
+            Map<String, String> frameSimplifiedTextsByOriginalText =
+                    OutputResponseContext.findSimplifiedTextsByOriginalText(responseFrame);
+            if (frameSimplifiedTextsByOriginalText != null) {
+                simplifiedTextsByOriginalText.putAll(frameSimplifiedTextsByOriginalText);
+                simplificationPrepared = true;
+            }
+        }
+        if (!simplificationPrepared) {
+            return null;
+        }
+        return simplifiedTextsByOriginalText;
     }
 
     private static InspectionException limit() {

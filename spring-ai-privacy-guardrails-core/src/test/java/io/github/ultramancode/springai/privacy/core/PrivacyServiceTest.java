@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -252,7 +253,9 @@ class PrivacyServiceTest {
                     "nested", List.of(Map.of("owner", "Alice"), 7)
             ));
 
-            assertThat(protectedInput.toString()).doesNotContain("Alice");
+            String textOutsideTokens = OpaquePiiTokenFormat.patternForEntityType("PERSON")
+                    .matcher(protectedInput.toString()).replaceAll(" ");
+            assertThat(textOutsideTokens).doesNotContain("Alice");
             assertThat(service.detokenizeValueTree(session.handle(), protectedInput)).isEqualTo(Map.of(
                     "name", "Alice",
                     "nested", List.of(Map.of("owner", "Alice"), 7)
@@ -439,56 +442,56 @@ class PrivacyServiceTest {
             analysisCalls.incrementAndGet();
             return List.of(new PiiSpan("PII", 0, text.length(), 0.95));
         };
-        PrivacyService service = new PrivacyService(
+        PrivacyService privacyService = new PrivacyService(
                 List.of(broadAnalyzer),
                 PiiAnalysisOptions.defaults()
         );
 
-        try (PrivacySession session = service.openSession()) {
-            String first = service.tokenize(session.handle(), "Alice");
+        try (PrivacySession privacySession = privacyService.openSession()) {
+            String firstTokenizedText = privacyService.tokenize(privacySession.handle(), "Alice");
             assertThat(analysisCalls).hasValue(1);
 
-            String unchanged = service.tokenize(session.handle(), first);
+            String reusedTokenizedText = privacyService.tokenize(privacySession.handle(), firstTokenizedText);
             assertThat(analysisCalls).hasValue(1);
 
-            String second = service.tokenize(session.handle(), first + " Bob");
+            String secondTokenizedText = privacyService.tokenize(privacySession.handle(), firstTokenizedText + " Bob");
             assertThat(analysisCalls).hasValue(2);
 
-            assertThat(unchanged).isEqualTo(first);
-            assertThat(second).startsWith(first).isNotEqualTo(first + " Bob");
-            assertThat(second).doesNotContain("Alice", "Bob");
-            assertThat(service.detokenize(session.handle(), second)).isEqualTo("Alice Bob");
+            assertThat(reusedTokenizedText).isEqualTo(firstTokenizedText);
+            assertThat(secondTokenizedText).matches(Pattern.quote(firstTokenizedText) + OpaquePiiTokenFormat.patternForEntityType("PII").pattern());
+            assertThat(privacyService.detokenize(privacySession.handle(), secondTokenizedText)).isEqualTo("Alice Bob");
         }
     }
 
     @Test
     void tokenizeAppliesNewExplicitSpanToPartiallyProtectedText() {
-        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        PrivacyService privacyService = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
 
-        try (PrivacySession session = service.openSession()) {
-            String partlyProtected = service.tokenize(
-                    session.handle(),
+        try (PrivacySession privacySession = privacyService.openSession()) {
+            String partlyProtected = privacyService.tokenize(
+                    privacySession.handle(),
                     "Alice Bob",
                     List.of(new PiiSpan("PERSON", 0, 5, 1.0))
             );
-            int bobStart = partlyProtected.indexOf("Bob");
-            String fullyProtected = service.tokenize(
-                    session.handle(),
+            int bobStart = partlyProtected.lastIndexOf("Bob");
+            String fullyProtected = privacyService.tokenize(
+                    privacySession.handle(),
                     partlyProtected,
                     List.of(new PiiSpan("PERSON", bobStart, bobStart + 3, 1.0))
             );
 
-            assertThat(fullyProtected).doesNotContain("Alice", "Bob");
-            assertThat(service.detokenize(session.handle(), fullyProtected)).isEqualTo("Alice Bob");
+            String personTokenPattern = OpaquePiiTokenFormat.patternForEntityType("PERSON").pattern();
+            assertThat(fullyProtected).matches(personTokenPattern + " " + personTokenPattern);
+            assertThat(privacyService.detokenize(privacySession.handle(), fullyProtected)).isEqualTo("Alice Bob");
         }
     }
 
     @Test
     void transformsUnorderedSuppliedSpansAroundAnOwnedToken() {
-        PrivacyService service = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
+        PrivacyService privacyService = new PrivacyService(List.of(), PiiAnalysisOptions.defaults());
 
-        try (PrivacySession session = service.openSession()) {
-            String aliceToken = service.tokenize(session.handle(), "Alice",
+        try (PrivacySession privacySession = privacyService.openSession()) {
+            String aliceToken = privacyService.tokenize(privacySession.handle(), "Alice",
                     List.of(new PiiSpan("PERSON", 0, 5, 1.0)));
             String input = "Bob " + aliceToken + " Carol|Dave";
             int separator = input.indexOf('|');
@@ -497,11 +500,13 @@ class PrivacyServiceTest {
                     new PiiSpan("PII", 0, separator, 1.0)
             );
 
-            String tokenized = service.tokenize(session.handle(), input, spans);
+            String tokenized = privacyService.tokenize(privacySession.handle(), input, spans);
 
-            assertThat(tokenized).contains(aliceToken).doesNotContain("Alice", "Bob", "Carol", "Dave");
-            assertThat(service.detokenize(session.handle(), tokenized)).isEqualTo("Bob Alice Carol|Dave");
-            assertThat(service.redact(session.handle(), input, spans))
+            String piiTokenPattern = OpaquePiiTokenFormat.patternForEntityType("PII").pattern();
+            assertThat(tokenized).matches(piiTokenPattern + Pattern.quote(aliceToken) + piiTokenPattern
+                    + "\\|" + OpaquePiiTokenFormat.patternForEntityType("PERSON").pattern());
+            assertThat(privacyService.detokenize(privacySession.handle(), tokenized)).isEqualTo("Bob Alice Carol|Dave");
+            assertThat(privacyService.redact(privacySession.handle(), input, spans))
                     .isEqualTo("[REDACTED_PII]" + aliceToken + "[REDACTED_PII]|[REDACTED_PERSON]");
         }
     }
@@ -509,17 +514,16 @@ class PrivacyServiceTest {
     @Test
     void sessionAwareInspectionIgnoresKnownTokensButFindsAdjacentPii() {
         PiiAnalyzer broadAnalyzer = (text, options, processingLimits) -> List.of(new PiiSpan("PII", 0, text.length(), 0.95));
-        PrivacyService service = new PrivacyService(List.of(broadAnalyzer), PiiAnalysisOptions.defaults());
+        PrivacyService privacyService = new PrivacyService(List.of(broadAnalyzer), PiiAnalysisOptions.defaults());
 
-        try (PrivacySession session = service.openSession()) {
-            String token = service.tokenize(session.handle(), "Alice");
+        try (PrivacySession privacySession = privacyService.openSession()) {
+            String token = privacyService.tokenize(privacySession.handle(), "Alice");
 
-            assertThat(service.containsPii(session.handle(), token)).isFalse();
-            assertThat(service.redact(session.handle(), token)).isEqualTo(token);
-            assertThat(service.containsPii(session.handle(), token + " Bob")).isTrue();
-            assertThat(service.redact(session.handle(), token + " Bob"))
-                    .isEqualTo(token + "[REDACTED_PII]")
-                    .doesNotContain("Bob");
+            assertThat(privacyService.containsPii(privacySession.handle(), token)).isFalse();
+            assertThat(privacyService.redact(privacySession.handle(), token)).isEqualTo(token);
+            assertThat(privacyService.containsPii(privacySession.handle(), token + " Bob")).isTrue();
+            assertThat(privacyService.redact(privacySession.handle(), token + " Bob"))
+                    .isEqualTo(token + "[REDACTED_PII]");
         }
     }
 

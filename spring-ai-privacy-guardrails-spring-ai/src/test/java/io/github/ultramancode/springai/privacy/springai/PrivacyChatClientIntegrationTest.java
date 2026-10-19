@@ -124,8 +124,8 @@ class PrivacyChatClientIntegrationTest {
 
         assertThat(result).isEqualTo("ok");
         assertThat(model.lastPrompt())
-                .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"))
-                .doesNotContain("Alice");
+                .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+        assertThat(TestPrivacyServices.containsRawName(model.lastPrompt())).isFalse();
         assertThat(analysisCalls.get()).isEqualTo(1);
         assertThat(service.activeSessionCount()).isZero();
     }
@@ -161,8 +161,8 @@ class PrivacyChatClientIntegrationTest {
 
         assertThat(request.call().entity(converter)).isEqualTo("ok");
         assertThat(model.lastPrompt())
-                .containsPattern(PERSON_TOKEN)
-                .doesNotContain("Alice");
+                .containsPattern(PERSON_TOKEN);
+        assertThat(TestPrivacyServices.containsRawName(model.lastPrompt())).isFalse();
         if (nativeOutput) {
             assertThat(model.lastOptions()).isInstanceOfSatisfying(StructuredOutputChatOptions.class,
                     options -> assertThat(options.getOutputSchema()).isEqualTo(converter.getJsonSchema()));
@@ -216,8 +216,7 @@ class PrivacyChatClientIntegrationTest {
         assertThat(model.calls()).isEqualTo(2);
         assertThat(toolInput.get()).isEqualTo("{\"name\":\"Alice\"}");
         assertThat(model.rawPiiSeenByModel()).isFalse();
-        assertThat(result).matches("Customer " + PERSON_TOKEN.pattern() + " is active")
-                .doesNotContain("Bob");
+        assertThat(result).matches("Customer " + PERSON_TOKEN.pattern() + " is active");
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -263,8 +262,8 @@ class PrivacyChatClientIntegrationTest {
         );
         assertThat(customerInput.get()).isEqualTo("{\"name\":\"Alice\"}");
         assertThat(searchInput.get())
-                .containsPattern(PERSON_TOKEN)
-                .doesNotContain("Alice");
+                .containsPattern(PERSON_TOKEN);
+        assertThat(TestPrivacyServices.containsRawName(searchInput.get())).isFalse();
         assertThat(auditInput.get()).isNull();
         assertThat(model.rawPiiSeenByModel()).isFalse();
         assertThat(service.activeSessionCount()).isZero();
@@ -327,9 +326,24 @@ class PrivacyChatClientIntegrationTest {
         assertThat(model.calls()).isEqualTo(2);
         assertThat(toolInput.get()).isEqualTo("{\"name\":\"Alice\"}");
         assertThat(model.rawPiiSeenByModel()).isFalse();
-        assertThat(result).matches("Customer " + PERSON_TOKEN.pattern() + " is active")
-                .doesNotContain("Bob");
+        assertThat(result).matches("Customer " + PERSON_TOKEN.pattern() + " is active");
         assertThat(service.activeSessionCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a7KBobQ9mR4vT8zB", "a7KAlice9mR4vT8z"})
+    void modelPiiCheckDistinguishesOpaqueTokensFromRawNames(String nonce) {
+        String protectedText = "[PII_PERSON_1:" + nonce + "] [PII_EMAIL_ADDRESS_1:" + nonce + "]";
+        VerifyingToolLoopModel protectedModel = new VerifyingToolLoopModel();
+        protectedModel.call(new Prompt(protectedText));
+        assertThat(protectedModel.rawPiiSeenByModel()).isFalse();
+
+        for (String text : List.of("Alice " + protectedText, protectedText + " Bob",
+                protectedText + " [PII_PERSON_1:Bob]")) {
+            VerifyingToolLoopModel rawModel = new VerifyingToolLoopModel();
+            rawModel.call(new Prompt(text));
+            assertThat(rawModel.rawPiiSeenByModel()).isTrue();
+        }
     }
 
     @Test
@@ -411,8 +425,7 @@ class PrivacyChatClientIntegrationTest {
         String result = chatClient.prompt().user("hello").call().content();
 
         assertThat(result)
-                .matches(PERSON_TOKEN.pattern() + " added after output")
-                .doesNotContain("Alice");
+                .matches(PERSON_TOKEN.pattern() + " added after output");
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -431,8 +444,7 @@ class PrivacyChatClientIntegrationTest {
                 .block();
 
         assertThat(result)
-                .matches(PERSON_TOKEN.pattern() + " added after output")
-                .doesNotContain("Alice");
+                .matches(PERSON_TOKEN.pattern() + " added after output");
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -657,7 +669,7 @@ class PrivacyChatClientIntegrationTest {
             this.optionsType = prompt.getOptions() == null ? "null" : prompt.getOptions().getClass().getName();
             this.rawPiiSeenByModel = this.rawPiiSeenByModel || prompt.getInstructions().stream()
                     .map(Message::getText)
-                    .anyMatch(text -> text != null && (text.contains("Alice") || text.contains("Bob")));
+                    .anyMatch(TestPrivacyServices::containsRawName);
             if (call == 1) {
                 String token = prompt.getInstructions().stream()
                         .map(Message::getText)
@@ -684,7 +696,7 @@ class PrivacyChatClientIntegrationTest {
                     .findFirst()
                     .orElseThrow();
             String responseData = toolResponse.getResponses().get(0).responseData();
-            if (responseData.contains("Bob")) {
+            if (TestPrivacyServices.containsRawName(responseData)) {
                 this.rawPiiSeenByModel = true;
             }
             return new ChatResponse(List.of(new Generation(new AssistantMessage("Customer Bob is active"))));
@@ -724,7 +736,7 @@ class PrivacyChatClientIntegrationTest {
         public ChatResponse call(Prompt prompt) {
             this.rawPiiSeenByModel = this.rawPiiSeenByModel || prompt.getInstructions().stream()
                     .map(Message::getText)
-                    .anyMatch(text -> text != null && (text.contains("Alice") || text.contains("Bob")));
+                    .anyMatch(TestPrivacyServices::containsRawName);
             Optional<ToolResponseMessage> toolResponse = prompt.getInstructions().stream()
                     .filter(ToolResponseMessage.class::isInstance)
                     .map(ToolResponseMessage.class::cast)
@@ -733,7 +745,7 @@ class PrivacyChatClientIntegrationTest {
                 this.rawPiiSeenByModel = this.rawPiiSeenByModel
                         || toolResponse.get().getResponses().stream()
                         .map(ToolResponseMessage.ToolResponse::responseData)
-                        .anyMatch(value -> value.contains("Alice") || value.contains("Bob"));
+                        .anyMatch(TestPrivacyServices::containsRawName);
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("ok"))));
             }
 

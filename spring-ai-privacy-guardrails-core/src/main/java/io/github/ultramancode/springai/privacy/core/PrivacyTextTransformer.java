@@ -117,6 +117,19 @@ final class PrivacyTextTransformer {
         return !excludeKnownTokenRanges(text, toProtectionSpans(resolvedSpans), context).isEmpty();
     }
 
+    String simplifyTokens(String text, PrivacyContext privacyContext) {
+        privacyContext.requireActive();
+        if (text == null || text.isBlank() || !privacyContext.hasTokens()) {
+            return requireOutputWithinLimit(text, PrivacyPhase.TOKEN_SIMPLIFICATION);
+        }
+
+        String simplifiedText = OpaquePiiTokenFormat.canonicalTokenPattern().matcher(text).replaceAll(match -> {
+            String token = match.group();
+            return privacyContext.ownsToken(token) ? token.substring(0, token.indexOf(':')) + "]" : token;
+        });
+        return requireOutputWithinLimit(simplifiedText, PrivacyPhase.TOKEN_SIMPLIFICATION);
+    }
+
     String detokenize(String text, PrivacyContext context, Set<String> allowedEntityTypes) {
         if (text == null || text.isBlank()) {
             return requireOutputWithinLimit(text, PrivacyPhase.DETOKENIZATION);

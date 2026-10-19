@@ -638,7 +638,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             "user@example.test",
                             "CUSTOMER_ID",
                             "EMAIL_ADDRESS",
-                            "[[PII_"
+                            "[PII_"
                     );
                     assertThat(context.getBean(PrivacyService.class).activeSessionCount()).isZero();
                 });

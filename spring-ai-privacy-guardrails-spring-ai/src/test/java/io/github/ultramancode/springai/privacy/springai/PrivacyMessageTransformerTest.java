@@ -92,10 +92,10 @@ class PrivacyMessageTransformerTest {
 
             assertThat(protectedAssistant.getMetadata().get("reasoningContent").toString())
                     .doesNotContain("Alice")
-                    .contains("[[PII_PERSON_");
+                    .contains("[PII_PERSON_");
             assertThat(protectedAssistant.getMetadata().get("thinking").toString())
                     .doesNotContain("alice@example.com")
-                    .contains("[[PII_EMAIL_ADDRESS_");
+                    .contains("[PII_EMAIL_ADDRESS_");
             assertThat(protectedAssistant.getMetadata().get("thoughtSignatures"))
                     .isSameAs(thoughtSignatures);
             assertThat(protectedAssistant.getMetadata().get("signature"))
@@ -161,7 +161,7 @@ class PrivacyMessageTransformerTest {
                     .extracting(ToolResponseMessage.ToolResponse::responseData)
                     .allSatisfy(responseData -> assertThat(responseData)
                             .doesNotContain("Alice", "Bob")
-                            .contains("[[PII_PERSON_"));
+                            .contains("[PII_PERSON_"));
         }
     }
 
@@ -302,12 +302,12 @@ class PrivacyMessageTransformerTest {
             assertThat(protectedMessage.getText()).isEqualTo("safe");
             assertThat(protectedMessage.getReasoningContent())
                     .doesNotContain("Alice")
-                    .contains("[[PII_PERSON_");
+                    .contains("[PII_PERSON_");
             assertThat(protectedMessage.getPrefix()).isTrue();
             assertThat(protectedMessage.getMetadata()).containsEntry("provider", "deepseek");
             assertThat(protectedMessage.getToolCalls().get(0).arguments())
                     .doesNotContain("Alice")
-                    .contains("[[PII_PERSON_");
+                    .contains("[PII_PERSON_");
         }
     }
 

@@ -26,19 +26,22 @@ class PrivacyServicePropertyTest {
 
         for (int index = 0; index < 750; index++) {
             String original = "synthetic-" + index + '-' + randomUnicode(random, 96);
-            try (PrivacySession owner = service.openSession();
-                    PrivacySession foreign = service.openSession()) {
-                String tokenized = service.tokenize(owner.handle(), original);
+            try (PrivacySession firstSession = service.openSession();
+                    PrivacySession secondSession = service.openSession()) {
+                String firstToken = service.tokenize(firstSession.handle(), original);
+                String secondToken = service.tokenize(secondSession.handle(), original);
 
-                assertThat(tokenized)
+                assertThat(secondToken).isNotEqualTo(firstToken);
+                assertThat(firstToken)
                         .as("tokenized case %s with seed %s", index, UNICODE_SEED)
                         .matches(OpaquePiiTokenFormat.patternForEntityType("SYNTHETIC"));
-                assertThat(service.detokenize(owner.handle(), tokenized))
-                        .as("owner round trip for case %s", index)
+                assertThat(service.detokenize(firstSession.handle(), firstToken))
+                        .as("first session round trip for case %s", index)
                         .isEqualTo(original);
-                assertThat(service.detokenize(foreign.handle(), tokenized))
+                // The second session must not restore the original value from the first session's token.
+                assertThat(service.detokenize(secondSession.handle(), firstToken))
                         .as("cross-session isolation for case %s", index)
-                        .isEqualTo(tokenized);
+                        .isEqualTo(firstToken);
             }
             assertThat(service.activeSessionCount())
                     .as("session cleanup for case %s", index)
@@ -56,19 +59,20 @@ class PrivacyServicePropertyTest {
             long phone = 821_000_000_000L + index;
             Object original = nestedValue(random, identifier, phone, 0);
 
-            try (PrivacySession owner = service.openSession();
-                    PrivacySession foreign = service.openSession()) {
-                Object tokenized = service.tokenizeValueTree(owner.handle(), original);
+            try (PrivacySession firstSession = service.openSession();
+                    PrivacySession secondSession = service.openSession()) {
+                Object tokenizedValueTree = service.tokenizeValueTree(firstSession.handle(), original);
 
-                assertThat(tokenized.toString())
+                assertThat(tokenizedValueTree.toString())
                         .as("protected recursive case %s with seed %s", index, STRUCTURE_SEED)
                         .doesNotContain(identifier, Long.toString(phone));
-                assertThat(service.detokenizeValueTree(owner.handle(), tokenized))
+                assertThat(service.detokenizeValueTree(firstSession.handle(), tokenizedValueTree))
                         .as("recursive round trip for case %s", index)
                         .isEqualTo(original);
-                assertThat(service.detokenizeValueTree(foreign.handle(), tokenized))
+                // The second session must not restore the original values from the first session's tokens.
+                assertThat(service.detokenizeValueTree(secondSession.handle(), tokenizedValueTree))
                         .as("recursive cross-session isolation for case %s", index)
-                        .isEqualTo(tokenized);
+                        .isEqualTo(tokenizedValueTree);
             }
             assertThat(service.activeSessionCount())
                     .as("recursive session cleanup for case %s", index)
@@ -133,7 +137,7 @@ class PrivacyServicePropertyTest {
                 case 2 -> value.appendCodePoint(0x1F300 + random.nextInt(0x500));
                 case 3 -> value.append((char) (0x0300 + random.nextInt(0x70)));
                 case 4 -> value.append((char) (0xD800 + random.nextInt(0x800)));
-                case 5 -> value.append("[[PII_PERSON_00000000000000000000000000000000_1]]");
+                case 5 -> value.append("[PII_PERSON_1:0000000000000000]");
                 default -> value.append((char) (0x2000 + random.nextInt(0x70)));
             }
         }

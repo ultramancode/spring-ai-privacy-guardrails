@@ -79,7 +79,7 @@ class PrivacyProcessingLimitsTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void tokenizationEnforcesTheOutputLimitForNewAndReusedTokens(boolean numericScalar) {
-        int singleDigitTokenLength = OpaquePiiTokenFormat.format("PERSON", "0".repeat(32), 1).length();
+        int singleDigitTokenLength = OpaquePiiTokenFormat.format("PERSON", "0".repeat(16), 1).length();
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder()
                 .maxOutputCharacters(singleDigitTokenLength)
                 .build();

@@ -904,7 +904,7 @@
 
 <script>
   const element = id => document.getElementById(id);
-  const opaqueTokenEvidencePattern = /(\[\[)(PII_(?:EMPLOYEE_ID|EMAIL_ADDRESS|PHONE_NUMBER|CUSTOMER_ID))(_[a-f0-9]{32}_[1-9]\d*)(]])/g;
+  const opaqueTokenEvidencePattern = /(\[)(PII_(?:EMPLOYEE_ID|EMAIL_ADDRESS|PHONE_NUMBER|CUSTOMER_ID))(_[1-9]\d*:[A-Za-z0-9_-]{16})(\])/g;
 
   const translations = {
     en: {

@@ -37,7 +37,7 @@ class OpenNlpProfileLiveIntegrationTest {
                         Matchers.containsString("John Smith")
                 )))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.startsWith(
-                        "[[PII_PERSON_"
+                        "[PII_PERSON_"
                 )))
                 .andExpect(jsonPath("$.detectedSpans[0].type").value("PERSON"))
                 .andExpect(jsonPath("$.detectedSpans[0].start").value(0))

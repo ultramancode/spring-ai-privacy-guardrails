@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: efc5164e2cb3cea0c3600060c9d6f6947d39e50d11c8191df78e90442914aeda -->
+<!-- i18n-source-sha256: ecb462fcbf93aeae707d60f61714eb75aa5798f650c5e8a1986d4aaf8b27d5fc -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -138,17 +138,20 @@ String response = privacyChatClient.prompt()
 **불투명 토큰(opaque token)**으로 바꾸는 처리입니다. 모델 호출 전에 적용되며,
 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.
 
-아래는 모델에 전달되는 내용을 보여주는 예시입니다. `<opaque>` 부분은 실제 요청에서
-생성되는 값이며 요청마다 달라집니다.
+아래는 모델에 전달되는 내용을 보여주는 예시입니다. `<opaque>`는 개인정보 보호 세션마다
+생성되는 난수입니다.
 
 ```text
-Employee [[PII_EMPLOYEE_ID_<opaque>]] requested customer
-[[PII_CUSTOMER_ID_<opaque>]].
+Employee [PII_EMPLOYEE_ID_1:<opaque>] requested customer
+[PII_CUSTOMER_ID_1:<opaque>].
 ```
 
 위 예시에서 탐지된 사번과 고객번호는 원문으로 모델에 전달되지 않습니다.
 불투명 토큰과 원문의 대응 관계는 라이브러리가 요청별로 관리합니다. 애플리케이션에서는
 불투명 토큰의 내부 문자열을 해석하거나 특정 형식에 의존하지 마세요.
+
+한 세션에서 같은 유형의 서로 다른 값에는 별도의 인덱스를 부여하고,
+같은 값은 토큰을 재사용합니다. 세션이 닫히면 매핑을 폐기합니다.
 
 `ChatModel`을 직접 호출하는 경로는 이 자동 보호 경계 밖에 있습니다.
 

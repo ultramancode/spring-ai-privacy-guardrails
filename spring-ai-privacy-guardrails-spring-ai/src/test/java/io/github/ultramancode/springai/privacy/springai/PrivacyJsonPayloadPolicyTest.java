@@ -222,9 +222,9 @@ class PrivacyJsonPayloadPolicyTest {
             // Unquoted token-like text must not bypass strict JSON validation.
             for (String invalidJson : List.of(
                     "not-json",
-                    "[[PII_EMAIL_ADDRESS_0123456789abcdef0123456789abcdef_3]]",
-                    "[[PII_not-a-complete-token",
-                    "[[PII_PERSON__NAME_0123456789abcdef0123456789abcdef_1]]"
+                    "[PII_EMAIL_ADDRESS_3:0123456789abcdef]",
+                    "[PII_not-a-complete-token",
+                    "[PII_PERSON__NAME_1:0123456789abcdef]"
             )) {
                 assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.discloseWithOutcome(
                         service, session.handle(), invalidJson, Set.of(), PrivacyPhase.TOOL_INPUT, true

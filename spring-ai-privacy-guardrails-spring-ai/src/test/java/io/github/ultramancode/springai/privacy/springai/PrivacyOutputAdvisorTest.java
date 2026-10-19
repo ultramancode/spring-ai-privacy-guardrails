@@ -135,12 +135,12 @@ class PrivacyOutputAdvisorTest {
 
             assertThat(generation.getOutput().getMetadata().get("reasoningContent").toString())
                     .doesNotContain("Alice")
-                    .contains("[[PII_PERSON_");
+                    .contains("[PII_PERSON_");
             assertThat(generation.getOutput().getMetadata().get("thoughtSignatures"))
                     .isSameAs(thoughtSignatures);
             assertThat(generation.getMetadata().get("thinking").toString())
                     .doesNotContain("Alice")
-                    .contains("[[PII_PERSON_");
+                    .contains("[PII_PERSON_");
             assertThat((Object) generation.getMetadata().get("provider-count")).isEqualTo(7);
             assertThat(generation.getMetadata().getFinishReason()).isEqualTo("stop");
         }
@@ -203,7 +203,7 @@ class PrivacyOutputAdvisorTest {
             assertThat(OBJECT_MAPPER.readValue(result, Object.class)).isNotNull();
             assertThat(result)
                     .contains("[REDACTED_PHONE_NUMBER]", "[REDACTED_PERSON]")
-                    .doesNotContain("821012345678", "Alice", "[[PII_");
+                    .doesNotContain("821012345678", "Alice", "[PII_");
         }
     }
 
@@ -242,7 +242,7 @@ class PrivacyOutputAdvisorTest {
 
                 assertThat(protectedResponse.chatResponse().getResult().getOutput().getText())
                         .contains("[REDACTED_PERSON]")
-                        .doesNotContain("Alice", "Bob", "[[PII_");
+                        .doesNotContain("Alice", "Bob", "[PII_");
             }
         }
     }

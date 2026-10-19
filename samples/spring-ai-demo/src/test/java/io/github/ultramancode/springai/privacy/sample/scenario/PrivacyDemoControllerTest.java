@@ -356,20 +356,20 @@ class PrivacyDemoControllerTest {
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
                         Matchers.containsString("EMP-1234"))))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "Employee ID is [[PII_EMPLOYEE_ID_"
+                        "Employee ID is [PII_EMPLOYEE_ID_"
                 )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString("]], email is")))
+                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString("], email is")))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_EMAIL_ADDRESS_"
-                )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_PHONE_NUMBER_"
+                        "[PII_EMAIL_ADDRESS_"
                 )))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_CUSTOMER_ID_"
+                        "[PII_PHONE_NUMBER_"
+                )))
+                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
+                        "[PII_CUSTOMER_ID_"
                 )))
                 .andExpect(jsonPath("$.detectedSpans[0].text").doesNotExist())
                 .andExpect(jsonPath("$.detectedSpans[0].recognizer").doesNotExist())
@@ -389,9 +389,9 @@ class PrivacyDemoControllerTest {
                         .header(HttpHeaders.ACCEPT_LANGUAGE, "ko"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "직원번호는 [[PII_EMPLOYEE_ID_"
+                        "직원번호는 [PII_EMPLOYEE_ID_"
                 )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString("]]이고, 이메일은")))
+                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString("]이고, 이메일은")))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
                         Matchers.containsString("EMP-1234"))))
                 .andExpect(jsonPath("$.detectedSpans[0].start").value(6))
@@ -416,13 +416,13 @@ class PrivacyDemoControllerTest {
                         "Local model received:"
                 )))
                 .andExpect(jsonPath("$.modelResponse").value(Matchers.containsString(
-                        "Employee ID is [[PII_EMPLOYEE_ID_"
+                        "Employee ID is [PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.modelResponse").value(Matchers.not(
                         Matchers.containsString("직원번호는")
                 )))
                 .andExpect(jsonPath("$.modelResponse").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.modelResponse").value(Matchers.not(
                         Matchers.containsString("EMP-1234")
@@ -441,7 +441,7 @@ class PrivacyDemoControllerTest {
                         "Customer account owner email: alice@example.com"
                 ))
                 .andExpect(jsonPath("$.modelVisibleContext").value(Matchers.containsString(
-                        "Customer account owner email: [[PII_EMAIL_ADDRESS_"
+                        "Customer account owner email: [PII_EMAIL_ADDRESS_"
                 )))
                 .andExpect(jsonPath("$.modelVisibleContext").value(Matchers.containsString(
                         "Which email owns the customer account?"
@@ -465,7 +465,7 @@ class PrivacyDemoControllerTest {
                         "고객 계정 소유자의 이메일은 무엇인가요?"
                 )))
                 .andExpect(jsonPath("$.modelVisibleContext").value(Matchers.containsString(
-                        "고객 계정 소유자 이메일: [[PII_EMAIL_ADDRESS_"
+                        "고객 계정 소유자 이메일: [PII_EMAIL_ADDRESS_"
                 )))
                 .andExpect(jsonPath("$.modelVisibleContext").value(Matchers.containsString(
                         "사전 지식이 아니라 주어진 컨텍스트와 대화 이력을 사용해 답하세요."
@@ -491,16 +491,16 @@ class PrivacyDemoControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_EMAIL_ADDRESS_"
+                        "[PII_EMAIL_ADDRESS_"
                 )))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_PHONE_NUMBER_"
+                        "[PII_PHONE_NUMBER_"
                 )))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_CUSTOMER_ID_"
+                        "[PII_CUSTOMER_ID_"
                 )))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
                         Matchers.containsString("alice@example.com")
@@ -533,25 +533,25 @@ class PrivacyDemoControllerTest {
                 .andExpect(jsonPath("$.modelCalls").value(2))
                 .andExpect(jsonPath("$.modelSawOnlyTokens").value(true))
                 .andExpect(jsonPath("$.protectedModelInput").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.protectedModelInput").value(Matchers.containsString(
-                        "Employee ID is [[PII_EMPLOYEE_ID_"
+                        "Employee ID is [PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.protectedModelInput").value(Matchers.not(
                         Matchers.containsString("EMP-1234")
                 )))
                 .andExpect(jsonPath("$.tokenizedToolArguments").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.tokenizedToolArguments").value(Matchers.containsString(
-                        "[[PII_EMAIL_ADDRESS_"
+                        "[PII_EMAIL_ADDRESS_"
                 )))
                 .andExpect(jsonPath("$.tokenizedToolArguments").value(Matchers.containsString(
-                        "[[PII_PHONE_NUMBER_"
+                        "[PII_PHONE_NUMBER_"
                 )))
                 .andExpect(jsonPath("$.tokenizedToolArguments").value(Matchers.containsString(
-                        "[[PII_CUSTOMER_ID_"
+                        "[PII_CUSTOMER_ID_"
                 )))
                 .andExpect(jsonPath("$.tokenizedToolArguments").value(Matchers.not(
                         Matchers.containsString("EMP-1234"))))
@@ -572,7 +572,7 @@ class PrivacyDemoControllerTest {
                 .andExpect(jsonPath("$.boundaryEvidence.rawToolResultValuesAtModel.total").value(4))
                 .andExpect(jsonPath("$.boundaryEvidence.rawToolResultValuesAtModel.passed").value(true))
                 .andExpect(jsonPath("$.finalResponse").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.finalResponse").value(Matchers.startsWith(
                         "Local model received protected CRM result: "
@@ -598,10 +598,10 @@ class PrivacyDemoControllerTest {
                         .header(HttpHeaders.ACCEPT_LANGUAGE, "ko"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.protectedModelInput").value(Matchers.containsString(
-                        "직원번호는 [[PII_EMPLOYEE_ID_"
+                        "직원번호는 [PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.protectedModelInput").value(Matchers.containsString(
-                        "]]이고, 이메일은 [[PII_EMAIL_ADDRESS_"
+                        "]이고, 이메일은 [PII_EMAIL_ADDRESS_"
                 )))
                 .andExpect(jsonPath("$.modelSawOnlyTokens").value(true))
                 .andExpect(jsonPath("$.toolReceivedOnlyAllowedOriginals").value(true))
@@ -658,7 +658,7 @@ class PrivacyDemoControllerTest {
                 .andExpect(jsonPath("$.customerSupport.toolResultRetokenizedBeforeModel")
                         .value(true))
                 .andExpect(jsonPath("$.customerSupport.finalResponse").value(Matchers.containsString(
-                        "[[PII_CUSTOMER_ID_"
+                        "[PII_CUSTOMER_ID_"
                 )))
                 .andExpect(jsonPath("$.activeSessionsAfterCall").value(0))
                 .andExpect(content().string(Matchers.not(Matchers.containsString("EMP-1234"))))
@@ -681,7 +681,7 @@ class PrivacyDemoControllerTest {
         assertMcpToolLoopEvidence(
                 "en",
                 "Local model received protected MCP result: ",
-                "CRM result: Employee ID is [[PII_EMPLOYEE_ID_"
+                "CRM result: Employee ID is [PII_EMPLOYEE_ID_"
         );
         assertThat(this.privacyService.activeSessionCount()).isZero();
 
@@ -701,7 +701,7 @@ class PrivacyDemoControllerTest {
         assertMcpToolLoopEvidence(
                 "ko",
                 "로컬 모델이 보호된 MCP 결과를 수신했습니다: ",
-                "CRM 결과: 직원번호는 [[PII_EMPLOYEE_ID_"
+                "CRM 결과: 직원번호는 [PII_EMPLOYEE_ID_"
         );
         assertThat(this.privacyService.activeSessionCount()).isZero();
 
@@ -724,10 +724,10 @@ class PrivacyDemoControllerTest {
                 .andExpect(jsonPath("$.modelCalls").value(2))
                 .andExpect(jsonPath("$.modelSawOnlyTokens").value(true))
                 .andExpect(jsonPath("$.protectedModelInput").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.tokenizedToolArguments").value(Matchers.containsString(
-                        "[[PII_CUSTOMER_ID_"
+                        "[PII_CUSTOMER_ID_"
                 )))
                 .andExpect(jsonPath("$.allowedOriginalEntityTypes[0]").value("CUSTOMER_ID"))
                 .andExpect(jsonPath("$.toolReceivedOnlyAllowedOriginals").value(true))
@@ -746,7 +746,7 @@ class PrivacyDemoControllerTest {
                 .andExpect(jsonPath("$.boundaryEvidence.rawToolResultValuesAtModel.total").value(4))
                 .andExpect(jsonPath("$.boundaryEvidence.rawToolResultValuesAtModel.passed").value(true))
                 .andExpect(jsonPath("$.finalResponse").value(Matchers.containsString(
-                        "[[PII_EMPLOYEE_ID_"
+                        "[PII_EMPLOYEE_ID_"
                 )))
                 .andExpect(jsonPath("$.finalResponse").value(Matchers.containsString(
                         protectedCrmResult

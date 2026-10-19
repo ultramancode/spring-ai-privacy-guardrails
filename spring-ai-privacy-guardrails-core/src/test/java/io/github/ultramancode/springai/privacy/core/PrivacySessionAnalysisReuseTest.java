@@ -60,7 +60,7 @@ class PrivacySessionAnalysisReuseTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicInteger protectedTextAnalyses = new AtomicInteger();
         PiiAnalyzer analyzer = (text, options, limits) -> {
-            if (text.startsWith("[[")) {
+            if (OpaquePiiTokenFormat.isCanonicalToken(text)) {
                 protectedTextAnalyses.incrementAndGet();
             }
             if (text.equals("Bob")) {

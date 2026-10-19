@@ -332,7 +332,7 @@ class PrivacyToolCallbackWrapperTest {
         try (PrivacySession session = service.openSession()) {
             String ownedToken = service.tokenize(session.handle(), "Alice");
             String callerSuppliedLookalike =
-                    "[[PII_PERSON_0123456789abcdef0123456789abcdef_1]]";
+                    "[PII_PERSON_1:0123456789abcdef]";
             for (String invalidJson : List.of(
                     "{\"owner\":\"Alice\"",
                     "not-json",

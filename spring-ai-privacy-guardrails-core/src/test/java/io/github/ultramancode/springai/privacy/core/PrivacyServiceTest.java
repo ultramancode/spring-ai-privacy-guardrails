@@ -253,7 +253,9 @@ class PrivacyServiceTest {
                     "nested", List.of(Map.of("owner", "Alice"), 7)
             ));
 
-            assertThat(protectedInput.toString()).doesNotContain("Alice");
+            String textOutsideTokens = OpaquePiiTokenFormat.patternForEntityType("PERSON")
+                    .matcher(protectedInput.toString()).replaceAll(" ");
+            assertThat(textOutsideTokens).doesNotContain("Alice");
             assertThat(service.detokenizeValueTree(session.handle(), protectedInput)).isEqualTo(Map.of(
                     "name", "Alice",
                     "nested", List.of(Map.of("owner", "Alice"), 7)

@@ -61,16 +61,18 @@ class PrivacyToolCallbackWrapperTest {
             return "Alice";
         }), service, ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON"))));
         String toolInput = "{\"name\":\"Alice\"}";
+        Pattern personTokenPattern = OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
         try (PrivacySession session = service.openSession()) {
             String deniedResult = deniedWrapper.call(toolInput, toolContext(session.handle()));
-            assertThat(deniedDelegateInput.get()).doesNotContain("Alice");
-            assertThat(deniedResult).doesNotContain("Alice");
+            assertThat(deniedDelegateInput.get()).containsPattern(personTokenPattern);
+            assertThat(TestPrivacyServices.containsRawName(deniedDelegateInput.get())).isFalse();
+            assertThat(deniedResult).matches(personTokenPattern.pattern());
             assertThat(aliceAnalysisCalls).hasValue(1);
 
             String allowedResult = allowedWrapper.call(toolInput, toolContext(session.handle()));
             assertThat(allowedDelegateInput.get()).contains("Alice");
-            assertThat(allowedResult).doesNotContain("Alice");
+            assertThat(allowedResult).matches(personTokenPattern.pattern());
             assertThat(aliceAnalysisCalls).hasValue(1);
         }
     }
@@ -411,14 +413,15 @@ class PrivacyToolCallbackWrapperTest {
 
             assertThat(received.get())
                     .contains(email)
-                    .contains(personToken)
-                    .doesNotContain("Alice");
+                    .contains(personToken);
+            assertThat(TestPrivacyServices.containsRawName(received.get())).isFalse();
             assertThat(result)
-                    .doesNotContain("Alice", email)
+                    .doesNotContain(email)
                     .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("PERSON"))
                     .containsPattern(OpaquePiiTokenFormat
                             .patternForEntityType("EMAIL_ADDRESS"));
+            assertThat(TestPrivacyServices.containsRawName(result)).isFalse();
         }
     }
 
@@ -447,8 +450,8 @@ class PrivacyToolCallbackWrapperTest {
             assertThat(received.get())
                     .contains("alice@example.com")
                     .containsPattern(OpaquePiiTokenFormat
-                            .patternForEntityType("PERSON"))
-                    .doesNotContain("Alice");
+                            .patternForEntityType("PERSON"));
+            assertThat(TestPrivacyServices.containsRawName(received.get())).isFalse();
         }
     }
 
@@ -530,7 +533,7 @@ class PrivacyToolCallbackWrapperTest {
 
             wrapper.call("{\"query\":\"lookup Alice\"}", toolContext(session.handle()));
 
-            assertThat(received.get()).doesNotContain("Alice");
+            assertThat(TestPrivacyServices.containsRawName(received.get())).isFalse();
             assertThat(service.detokenize(session.handle(), received.get()))
                     .isEqualTo("{\"query\":\"lookup Alice\"}");
         }

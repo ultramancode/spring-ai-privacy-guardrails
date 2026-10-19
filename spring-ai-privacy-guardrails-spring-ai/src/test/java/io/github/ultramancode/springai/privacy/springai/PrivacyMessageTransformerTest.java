@@ -61,8 +61,9 @@ class PrivacyMessageTransformerTest {
             assertThat(service.detokenize(session.handle(), protectedAssistant.getText()))
                     .contains("alice@example.com");
             assertThat(protectedAssistant.getToolCalls().get(0).arguments())
-                    .doesNotContain("Alice")
                     .contains("\"revision\":" + scientific);
+            assertThat(TestPrivacyServices.containsRawName(protectedAssistant.getToolCalls().get(0).arguments()))
+                    .isFalse();
             assertThat(protectedToolResponse.getResponses().get(0).responseData())
                     .doesNotContain("alice@example.com", "alice\\u0040example.com")
                     .contains("\"precise\":" + precise);
@@ -93,8 +94,9 @@ class PrivacyMessageTransformerTest {
             ).get(0);
 
             assertThat(protectedAssistant.getMetadata().get("reasoningContent").toString())
-                    .doesNotContain("Alice")
                     .contains("[PII_PERSON_");
+            assertThat(TestPrivacyServices.containsRawName(
+                    protectedAssistant.getMetadata().get("reasoningContent").toString())).isFalse();
             assertThat(protectedAssistant.getMetadata().get("thinking").toString())
                     .doesNotContain("alice@example.com")
                     .contains("[PII_EMAIL_ADDRESS_");
@@ -304,13 +306,14 @@ class PrivacyMessageTransformerTest {
 
             assertThat(protectedMessage.getText()).isEqualTo("safe");
             assertThat(protectedMessage.getReasoningContent())
-                    .doesNotContain("Alice")
                     .contains("[PII_PERSON_");
+            assertThat(TestPrivacyServices.containsRawName(protectedMessage.getReasoningContent())).isFalse();
             assertThat(protectedMessage.getPrefix()).isTrue();
             assertThat(protectedMessage.getMetadata()).containsEntry("provider", "deepseek");
             assertThat(protectedMessage.getToolCalls().get(0).arguments())
-                    .doesNotContain("Alice")
                     .contains("[PII_PERSON_");
+            assertThat(TestPrivacyServices.containsRawName(protectedMessage.getToolCalls().get(0).arguments()))
+                    .isFalse();
         }
     }
 

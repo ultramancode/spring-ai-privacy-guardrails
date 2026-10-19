@@ -64,8 +64,7 @@ class PrivacyReturnDirectIntegrationTest {
         String result = returnDirectChatClient(service, PrivacyOutputAction.TOKENIZE)
                 .prompt().user("Find Alice").call().content();
 
-        assertThat(result).matches(PERSON_TOKEN.pattern() + " direct result")
-                .doesNotContain("Alice");
+        assertThat(result).matches(PERSON_TOKEN.pattern() + " direct result");
         assertThat(service.activeSessionCount()).isZero();
     }
 

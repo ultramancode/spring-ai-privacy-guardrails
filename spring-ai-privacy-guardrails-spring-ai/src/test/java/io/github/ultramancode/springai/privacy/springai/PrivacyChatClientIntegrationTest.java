@@ -124,8 +124,8 @@ class PrivacyChatClientIntegrationTest {
 
         assertThat(result).isEqualTo("ok");
         assertThat(model.lastPrompt())
-                .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"))
-                .doesNotContain("Alice");
+                .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+        assertThat(TestPrivacyServices.containsRawName(model.lastPrompt())).isFalse();
         assertThat(analysisCalls.get()).isEqualTo(1);
         assertThat(service.activeSessionCount()).isZero();
     }
@@ -161,8 +161,8 @@ class PrivacyChatClientIntegrationTest {
 
         assertThat(request.call().entity(converter)).isEqualTo("ok");
         assertThat(model.lastPrompt())
-                .containsPattern(PERSON_TOKEN)
-                .doesNotContain("Alice");
+                .containsPattern(PERSON_TOKEN);
+        assertThat(TestPrivacyServices.containsRawName(model.lastPrompt())).isFalse();
         if (nativeOutput) {
             assertThat(model.lastOptions()).isInstanceOfSatisfying(StructuredOutputChatOptions.class,
                     options -> assertThat(options.getOutputSchema()).isEqualTo(converter.getJsonSchema()));
@@ -262,8 +262,8 @@ class PrivacyChatClientIntegrationTest {
         );
         assertThat(customerInput.get()).isEqualTo("{\"name\":\"Alice\"}");
         assertThat(searchInput.get())
-                .containsPattern(PERSON_TOKEN)
-                .doesNotContain("Alice");
+                .containsPattern(PERSON_TOKEN);
+        assertThat(TestPrivacyServices.containsRawName(searchInput.get())).isFalse();
         assertThat(auditInput.get()).isNull();
         assertThat(model.rawPiiSeenByModel()).isFalse();
         assertThat(service.activeSessionCount()).isZero();
@@ -425,8 +425,7 @@ class PrivacyChatClientIntegrationTest {
         String result = chatClient.prompt().user("hello").call().content();
 
         assertThat(result)
-                .matches(PERSON_TOKEN.pattern() + " added after output")
-                .doesNotContain("Alice");
+                .matches(PERSON_TOKEN.pattern() + " added after output");
         assertThat(service.activeSessionCount()).isZero();
     }
 
@@ -445,8 +444,7 @@ class PrivacyChatClientIntegrationTest {
                 .block();
 
         assertThat(result)
-                .matches(PERSON_TOKEN.pattern() + " added after output")
-                .doesNotContain("Alice");
+                .matches(PERSON_TOKEN.pattern() + " added after output");
         assertThat(service.activeSessionCount()).isZero();
     }
 

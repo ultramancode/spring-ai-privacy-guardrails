@@ -176,7 +176,8 @@ class PrivacyEnforcementObserverTest {
         try (PrivacySession session = service.openSession()) {
             String personToken = service.tokenize(session.handle(), "Alice");
             ToolCallback protectedTool = toolFactory.wrap(tool(input -> {
-                assertThat(input).contains(personToken).doesNotContain("Alice");
+                assertThat(input).contains(personToken);
+                assertThat(TestPrivacyServices.containsRawName(input)).isFalse();
                 return "safe result";
             }));
 

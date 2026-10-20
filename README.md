@@ -130,7 +130,7 @@ Start with the client starter and add analyzer or authorization starters as need
 
 | Need | Starter |
 | --- | --- |
-| Policy-based clients with privacy and optional inspection | `spring-ai-privacy-guardrails-client-spring-boot-starter` |
+| Policy-based clients with privacy and optional inspection | `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` |
 | Presidio integration | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
 | Apache OpenNLP integration | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | Principal-aware tool discovery and execution | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
@@ -154,7 +154,7 @@ application-specific regex rule.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -181,18 +181,17 @@ Use the factory for clients that should follow the configured policy.
 
 ```java
 @Bean
-ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
-    return guardrails.builder(chatModel, policy).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
 The same factory supports inspection and tool authorization. See
-[Client policies](docs/clients.md) for feature selection and explicit Java policies.
+[Configuration](docs/configuration.md) for feature selection and client policies.
 
 Direct calls to a `ChatModel` are outside the automatic protection boundary.
-See [Configuration](docs/configuration.md) for derived clients, analyzer
-combinations, and failure policies.
+See [Privacy Protection](docs/privacy.md) for analyzer combinations and failure policies.
 
 ## Per-Tool Original Disclosure
 
@@ -211,7 +210,7 @@ GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
 Register application tools and MCP providers directly:
 
 ```java
-ChatClient client = guardrails.builder(chatModel, toolPolicy)
+ChatClient chatClient = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
         .build();
 ```
@@ -222,7 +221,7 @@ before reaching the model or application.
 
 Custom tool-execution paths outside Spring AI's standard registration flow
 require separate protection. See
-[Per-Tool Original Disclosure](docs/configuration.md#per-tool-original-disclosure)
+[Per-Tool Original Disclosure](docs/privacy.md#per-tool-original-disclosure)
 for the complete rules.
 
 ## Optional Spring Security Tool Authorization
@@ -240,7 +239,7 @@ dependencies {
 
 Provide an `AuthorizationManager<ToolAuthorizationContext>` bean and select
 `toolAuthorization(true)` in `GuardrailsPolicy`. Pass the policy to
-`guardrails.builder(chatModel, policy)`. Select privacy separately when needed.
+`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)`. Select privacy separately when needed.
 Authentication remains the application's responsibility.
 
 When combined with privacy protection, tool authorization and original-value
@@ -268,7 +267,7 @@ required APIs, and supported paths.
   completed responses. Streaming responses are buffered for inspection, and
   managed session mappings are cleared on completion, failure, or cancellation.
 
-See [Configuration](docs/configuration.md) for detailed behavior and
+See [Privacy Protection](docs/privacy.md) for detailed behavior and
 [Architecture](docs/architecture.md) for request flow and module
 responsibilities.
 
@@ -280,7 +279,7 @@ application-output boundaries. Each event contains only `boundary`, identifying
 where it occurred, and `outcome`, describing the result at that boundary. It does
 not include PII, opaque tokens, payloads, tool names, or request identifiers.
 
-See [Privacy-Safe Runtime Observation](docs/configuration.md#privacy-safe-runtime-observation)
+See [Privacy-Safe Runtime Observation](docs/privacy.md#privacy-safe-runtime-observation)
 for registration, outcome semantics, and callback execution guidance.
 
 ## Library Modules
@@ -307,8 +306,8 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | Calls guard models through OpenAI-compatible HTTP APIs |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | Model-input inspection and optional output inspection |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | Spring Boot configuration for inspecting selected clients |
-| `spring-ai-privacy-guardrails-client` | Policy-based client assembly and automatic tool protection |
-| `spring-ai-privacy-guardrails-client-spring-boot-starter` | Default client policy and component wiring |
+| `spring-ai-privacy-guardrails-chat-client` | Policy-based client assembly and automatic tool protection |
+| `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` | Spring Boot configuration for policy-based clients |
 | `spring-ai-privacy-guardrails-test` | Optional model and tool probes with AssertJ assertions |
 
 See [Architecture](docs/architecture.md) for module responsibilities and the
@@ -326,9 +325,7 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 | Spring Security | 7.0.0 |
 
 Use Spring AI 2.0.x, Spring Boot 4.x and Spring Security 7.x. The Boot starter
-uses the Security version selected by the Spring Boot BOM. Standalone Security
-integration compiles against 7.0.0. Repository dependency versions are configured
-in [gradle.properties](gradle.properties).
+uses the Security version selected by the Spring Boot BOM.
 
 Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
 
@@ -336,8 +333,9 @@ Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
 
 - [Getting Started](docs/getting-started.md): step-by-step starter selection and
   privacy-boundary setup
-- [Configuration](docs/configuration.md): starters, analyzers, tool policies,
-  and output policies
+- [Configuration](docs/configuration.md): dependencies, client creation and reusable policies
+- [Privacy Protection](docs/privacy.md): analyzers, tokenization, tool disclosure,
+  output protection and processing limits
 - [Spring Security Tool Authorization](docs/security.md): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
 - [Content Inspection](docs/inspection.md): opt-in rules, local ONNX classifiers and HTTP guard models

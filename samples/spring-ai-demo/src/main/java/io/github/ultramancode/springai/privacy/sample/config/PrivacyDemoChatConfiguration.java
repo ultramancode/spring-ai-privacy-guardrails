@@ -1,7 +1,7 @@
 package io.github.ultramancode.springai.privacy.sample.config;
 
-import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
-import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoMcpToolLoop;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoRag;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoSecurityPolicy;
@@ -36,11 +36,12 @@ class PrivacyDemoChatConfiguration {
     }
 
     @Bean
-    GuardrailsPolicy guardrailsPolicy(ToolDisclosurePolicy disclosurePolicy) {
+    GuardrailsPolicy guardrailsPolicy(ToolDisclosurePolicy toolDisclosurePolicy) {
         return GuardrailsPolicy.builder()
-                .privacy(privacy -> privacy.toolDisclosurePolicy(disclosurePolicy).outputProtection(true))
-                .toolAuthorization(true)
-                .build();
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder
+                .toolDisclosurePolicy(toolDisclosurePolicy).outputProtection(true))
+            .toolAuthorization(true)
+            .build();
     }
 
     @Bean("privacyDemoChatModel")
@@ -50,15 +51,15 @@ class PrivacyDemoChatConfiguration {
 
     @Bean
     ChatClient privacyDemoChatClient(
-            @Qualifier("privacyDemoChatModel") ChatModel chatModel,
-            GuardrailsChatClientFactory guardrails
+        @Qualifier("privacyDemoChatModel") ChatModel chatModel,
+        GuardrailsChatClientFactory guardrailsChatClientFactory
     ) {
-        return guardrails.builder(chatModel).build();
+        return guardrailsChatClientFactory.builder(chatModel).build();
     }
 
     @Bean
-    PrivacyDemoRag privacyDemoRag(GuardrailsChatClientFactory guardrails) {
-        return new PrivacyDemoRag(guardrails);
+    PrivacyDemoRag privacyDemoRag(GuardrailsChatClientFactory guardrailsChatClientFactory) {
+        return new PrivacyDemoRag(guardrailsChatClientFactory);
     }
 
     @Bean
@@ -78,35 +79,35 @@ class PrivacyDemoChatConfiguration {
 
     @Bean
     PrivacyDemoToolLoop privacyDemoToolLoop(
-            GuardrailsChatClientFactory guardrails,
-            ToolDisclosurePolicy toolDisclosurePolicy,
-            ToolCallingManager toolCallingManager,
-            PrivacyDemoSecurityPolicy securityPolicy,
-            ObjectMapper objectMapper
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolDisclosurePolicy toolDisclosurePolicy,
+        ToolCallingManager toolCallingManager,
+        PrivacyDemoSecurityPolicy securityPolicy,
+        ObjectMapper objectMapper
     ) {
         return new PrivacyDemoToolLoop(
-                guardrails,
-                toolDisclosurePolicy,
-                toolCallingManager,
-                securityPolicy,
-                objectMapper
+            guardrailsChatClientFactory,
+            toolDisclosurePolicy,
+            toolCallingManager,
+            securityPolicy,
+            objectMapper
         );
     }
 
     @Bean(destroyMethod = "close")
     PrivacyDemoMcpToolLoop privacyDemoMcpToolLoop(
-            GuardrailsChatClientFactory guardrails,
-            ToolDisclosurePolicy toolDisclosurePolicy,
-            ToolCallingManager toolCallingManager,
-            PrivacyDemoSecurityPolicy securityPolicy,
-            ObjectMapper objectMapper
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolDisclosurePolicy toolDisclosurePolicy,
+        ToolCallingManager toolCallingManager,
+        PrivacyDemoSecurityPolicy securityPolicy,
+        ObjectMapper objectMapper
     ) {
         return new PrivacyDemoMcpToolLoop(
-                guardrails,
-                toolDisclosurePolicy,
-                toolCallingManager,
-                securityPolicy,
-                objectMapper
+            guardrailsChatClientFactory,
+            toolDisclosurePolicy,
+            toolCallingManager,
+            securityPolicy,
+            objectMapper
         );
     }
 

@@ -85,8 +85,8 @@ class OpenAiCompatibleLiveIntegrationTest {
     @Test
     void blockingCallProtectsTheActualModelBoundary() {
         long startedAt = System.nanoTime();
-        try (PrivacyTestProbe probe = PrivacyTestProbe.create(this.privacyService)) {
-            ChatClient chatClient = protectedClient(probe);
+        try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(this.privacyService)) {
+            ChatClient chatClient = protectedClient(privacyTestProbe);
             String response = chatClient.prompt()
                     .system("Reply briefly without repeating identifiers.")
                     .user("Acknowledge employee EMP-9001 and email live-e2e@example.test.")
@@ -96,22 +96,22 @@ class OpenAiCompatibleLiveIntegrationTest {
             assertThat(response)
                     .isNotBlank()
                     .doesNotContain("EMP-9001", "live-e2e@example.test");
-            assertThatPrivacy(probe)
-                    .hasModelRequestCount(1)
-                    .hasToolCallCount(0)
-                    .modelRequestsDoNotContainRawValues("EMP-9001", "live-e2e@example.test")
-                    .modelRequestsContainOpaqueToken("EMPLOYEE_ID")
-                    .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
-                    .hasNoActivePrivacySessions();
-            report("blocking", probe, startedAt);
+            assertThatPrivacy(privacyTestProbe)
+                .hasModelRequestCount(1)
+                .hasToolCallCount(0)
+                .modelRequestsDoNotContainRawValues("EMP-9001", "live-e2e@example.test")
+                .modelRequestsContainOpaqueToken("EMPLOYEE_ID")
+                .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
+                .hasNoActivePrivacySessions();
+            report("blocking", privacyTestProbe, startedAt);
         }
     }
 
     @Test
     void streamingCallProtectsTheActualModelBoundary() {
         long startedAt = System.nanoTime();
-        try (PrivacyTestProbe probe = PrivacyTestProbe.create(this.privacyService)) {
-            ChatClient chatClient = protectedClient(probe);
+        try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(this.privacyService)) {
+            ChatClient chatClient = protectedClient(privacyTestProbe);
             String response = chatClient.prompt()
                     .system("Reply briefly without repeating identifiers.")
                     .user("Acknowledge email stream-e2e@example.test.")
@@ -124,23 +124,23 @@ class OpenAiCompatibleLiveIntegrationTest {
             assertThat(response)
                     .isNotBlank()
                     .doesNotContain("stream-e2e@example.test");
-            assertThatPrivacy(probe)
-                    .hasModelRequestCount(1)
-                    .hasToolCallCount(0)
-                    .modelRequestsDoNotContainRawValues("stream-e2e@example.test")
-                    .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
-                    .hasNoActivePrivacySessions();
-            report("streaming", probe, startedAt);
+            assertThatPrivacy(privacyTestProbe)
+                .hasModelRequestCount(1)
+                .hasToolCallCount(0)
+                .modelRequestsDoNotContainRawValues("stream-e2e@example.test")
+                .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
+                .hasNoActivePrivacySessions();
+            report("streaming", privacyTestProbe, startedAt);
         }
     }
 
     @Test
     void toolLoopScopesDisclosureAndRetokenizesTheActualToolResult() {
         long startedAt = System.nanoTime();
-        try (PrivacyTestProbe probe = PrivacyTestProbe.create(this.privacyService)) {
+        try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(this.privacyService)) {
             PrivacyDemoCrmTool delegate = new PrivacyDemoCrmTool(this.objectMapper);
-            ToolCallback protectedTool = this.toolCallbackFactory.wrap(probe.wrapTool(delegate));
-            ChatClient chatClient = protectedClient(probe, protectedTool);
+            ToolCallback protectedTool = this.toolCallbackFactory.wrap(privacyTestProbe.wrapTool(delegate));
+            ChatClient chatClient = protectedClient(privacyTestProbe, protectedTool);
 
             String response = chatClient.prompt()
                     .system("""
@@ -160,46 +160,46 @@ class OpenAiCompatibleLiveIntegrationTest {
             assertThat(response)
                     .isNotBlank()
                     .doesNotContain(TOOL_LOOP_RAW_VALUES.toArray(String[]::new));
-            assertThatPrivacy(probe)
-                    .hasModelRequestCount(2)
-                    .hasToolCallCount(1)
-                    .modelRequestsDoNotContainRawValues(TOOL_LOOP_RAW_VALUES.toArray(String[]::new))
-                    .modelRequestsContainOpaqueToken("EMPLOYEE_ID")
-                    .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
-                    .modelRequestsContainOpaqueToken("PHONE_NUMBER")
-                    .modelRequestsContainOpaqueToken("CUSTOMER_ID")
-                    .modelRequestHasDistinctOpaqueTokenCount(0, "EMAIL_ADDRESS", 1)
-                    .modelRequestHasDistinctOpaqueTokenCount(1, "EMAIL_ADDRESS", 2)
-                    .toolInputsContain("customerLookup", CUSTOMER_ID)
-                    .toolInputsDoNotContainRawValues(
-                            "customerLookup",
-                            EMPLOYEE_ID,
-                            LOOKUP_REQUEST_EMAIL,
-                            PHONE
-                    )
-                    .toolInputsContainOpaqueToken("customerLookup", "EMPLOYEE_ID")
-                    .toolInputsContainOpaqueToken("customerLookup", "EMAIL_ADDRESS")
-                    .toolInputsContainOpaqueToken("customerLookup", "PHONE_NUMBER")
-                    .toolOutputsContain(
-                            "customerLookup",
-                            EMPLOYEE_ID,
-                            EMAIL,
-                            PHONE,
-                            CUSTOMER_ID
-                    )
-                    .hasNoActivePrivacySessions();
+            assertThatPrivacy(privacyTestProbe)
+                .hasModelRequestCount(2)
+                .hasToolCallCount(1)
+                .modelRequestsDoNotContainRawValues(TOOL_LOOP_RAW_VALUES.toArray(String[]::new))
+                .modelRequestsContainOpaqueToken("EMPLOYEE_ID")
+                .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
+                .modelRequestsContainOpaqueToken("PHONE_NUMBER")
+                .modelRequestsContainOpaqueToken("CUSTOMER_ID")
+                .modelRequestHasDistinctOpaqueTokenCount(0, "EMAIL_ADDRESS", 1)
+                .modelRequestHasDistinctOpaqueTokenCount(1, "EMAIL_ADDRESS", 2)
+                .toolInputsContain("customerLookup", CUSTOMER_ID)
+                .toolInputsDoNotContainRawValues(
+                    "customerLookup",
+                    EMPLOYEE_ID,
+                    LOOKUP_REQUEST_EMAIL,
+                    PHONE
+                )
+                .toolInputsContainOpaqueToken("customerLookup", "EMPLOYEE_ID")
+                .toolInputsContainOpaqueToken("customerLookup", "EMAIL_ADDRESS")
+                .toolInputsContainOpaqueToken("customerLookup", "PHONE_NUMBER")
+                .toolOutputsContain(
+                    "customerLookup",
+                    EMPLOYEE_ID,
+                    EMAIL,
+                    PHONE,
+                    CUSTOMER_ID
+                )
+                .hasNoActivePrivacySessions();
             assertThat(delegate.receivedOnlyAllowedOriginals()).isTrue();
             assertThat(delegate.lookupSucceededWithRestoredCustomerId()).isTrue();
-            report("tool-loop", probe, startedAt);
+            report("tool-loop", privacyTestProbe, startedAt);
         }
     }
 
     @Test
     void returnDirectToolResultStillPassesTheProtectedApplicationBoundary() {
         long startedAt = System.nanoTime();
-        try (PrivacyTestProbe probe = PrivacyTestProbe.create(this.privacyService)) {
-            ToolCallback protectedTool = this.toolCallbackFactory.wrap(probe.wrapTool(returnDirectTool()));
-            ChatClient chatClient = protectedClient(probe, protectedTool);
+        try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(this.privacyService)) {
+            ToolCallback protectedTool = this.toolCallbackFactory.wrap(privacyTestProbe.wrapTool(returnDirectTool()));
+            ChatClient chatClient = protectedClient(privacyTestProbe, protectedTool);
 
             String response = chatClient.prompt()
                     .system("""
@@ -216,25 +216,25 @@ class OpenAiCompatibleLiveIntegrationTest {
                     .isNotBlank()
                     .doesNotContain(EMPLOYEE_ID, EMAIL)
                     .contains("[PII_EMPLOYEE_ID_", "[PII_EMAIL_ADDRESS_");
-            assertThatPrivacy(probe)
-                    .hasModelRequestCount(1)
-                    .hasToolCallCount(1)
-                    .modelRequestsDoNotContainRawValues(EMPLOYEE_ID, EMAIL)
-                    .modelRequestsContainOpaqueToken("EMPLOYEE_ID")
-                    .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
-                    .toolInputsDoNotContainRawValues("directReceipt", EMPLOYEE_ID, EMAIL)
-                    .toolOutputsContain("directReceipt", EMPLOYEE_ID, EMAIL)
-                    .hasNoActivePrivacySessions();
-            report("return-direct", probe, startedAt);
+            assertThatPrivacy(privacyTestProbe)
+                .hasModelRequestCount(1)
+                .hasToolCallCount(1)
+                .modelRequestsDoNotContainRawValues(EMPLOYEE_ID, EMAIL)
+                .modelRequestsContainOpaqueToken("EMPLOYEE_ID")
+                .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
+                .toolInputsDoNotContainRawValues("directReceipt", EMPLOYEE_ID, EMAIL)
+                .toolOutputsContain("directReceipt", EMPLOYEE_ID, EMAIL)
+                .hasNoActivePrivacySessions();
+            report("return-direct", privacyTestProbe, startedAt);
         }
     }
 
-    private ChatClient protectedClient(PrivacyTestProbe probe, ToolCallback... tools) {
-        ChatClient.Builder builder = ChatClient.builder(probe.wrapModel(this.chatModel));
+    private ChatClient protectedClient(PrivacyTestProbe privacyTestProbe, ToolCallback... tools) {
+        ChatClient.Builder chatClientBuilder = ChatClient.builder(privacyTestProbe.wrapModel(this.chatModel));
         if (tools.length > 0) {
-            builder.defaultTools((Object[]) tools);
+            chatClientBuilder.defaultTools((Object[]) tools);
         }
-        return this.privacyConfigurer.configure(builder).build();
+        return this.privacyConfigurer.configure(chatClientBuilder).build();
     }
 
     private ToolCallback returnDirectTool() {
@@ -249,17 +249,17 @@ class OpenAiCompatibleLiveIntegrationTest {
                 .build();
     }
 
-    private void report(String scenario, PrivacyTestProbe probe, long startedAt) {
+    private void report(String scenario, PrivacyTestProbe privacyTestProbe, long startedAt) {
         long elapsedMillis = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
         System.out.printf(
-                "LIVE_LLM_RESULT adapter=openai-compatible scenario=%s status=PASS "
-                        + "modelRequests=%d toolCalls=%d "
-                        + "activeSessions=%d elapsedMs=%d%n",
-                scenario,
-                probe.modelRequests().size(),
-                probe.toolCalls().size(),
-                this.privacyService.activeSessionCount(),
-                elapsedMillis
+            "LIVE_LLM_RESULT adapter=openai-compatible scenario=%s status=PASS "
+                + "modelRequests=%d toolCalls=%d "
+                + "activeSessions=%d elapsedMs=%d%n",
+            scenario,
+            privacyTestProbe.modelRequests().size(),
+            privacyTestProbe.toolCalls().size(),
+            this.privacyService.activeSessionCount(),
+            elapsedMillis
         );
     }
 

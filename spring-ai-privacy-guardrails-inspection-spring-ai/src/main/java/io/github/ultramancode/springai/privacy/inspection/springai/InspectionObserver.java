@@ -14,19 +14,19 @@ public interface InspectionObserver {
     /**
      * Receives ALLOW and BLOCK reports, including requests allowed by FAIL_OPEN after an inspector failed.
      *
-     * @param report completed inspector outcomes and the resulting decision
-     * @param execution inspection boundary and call or stream mode
+     * @param inspectionReport completed inspector outcomes and the resulting decision
+     * @param inspectionExecution inspection boundary and call or stream mode
      */
-    void onInspection(InspectionReport report, InspectionExecution execution);
+    void onInspection(InspectionReport inspectionReport, InspectionExecution inspectionExecution);
 
     /**
      * Receives inspection failures reported as {@link InspectionException}.
      * The exception includes an inspection report when available.
      *
-     * @param failure the classified inspection failure
-     * @param execution inspection boundary and call or stream mode
+     * @param inspectionFailure the classified inspection failure
+     * @param inspectionExecution inspection boundary and call or stream mode
      */
-    default void onFailure(InspectionException failure, InspectionExecution execution) {}
+    default void onFailure(InspectionException inspectionFailure, InspectionExecution inspectionExecution) {}
 
     /**
      * Creates an observer that ignores all reports and failures.
@@ -34,6 +34,6 @@ public interface InspectionObserver {
      * @return a no-op observer
      */
     static InspectionObserver noop() {
-        return (report, execution) -> {};
+        return (inspectionReport, inspectionExecution) -> {};
     }
 }

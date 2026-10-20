@@ -4,7 +4,7 @@ dependencies {
     api project(':spring-ai-privacy-guardrails-spring-ai')
     api "org.assertj:assertj-core:${providers.gradleProperty('assertjVersion').get()}"
 
-    testImplementation project(':spring-ai-privacy-guardrails-client')
+    testImplementation project(':spring-ai-privacy-guardrails-chat-client')
     testImplementation 'org.springframework.ai:spring-ai-deepseek'
     testImplementation "tools.jackson.core:jackson-databind:${providers.gradleProperty('jacksonVersion').get()}"
 }

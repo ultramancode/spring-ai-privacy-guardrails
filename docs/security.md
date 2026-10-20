@@ -68,7 +68,7 @@ that uses tools begins.
 
 ### Tool Authorization Only
 
-Add the [client starter](clients.md) and an `AuthorizationManager<ToolAuthorizationContext>`
+Add the [client starter](configuration.md) and an `AuthorizationManager<ToolAuthorizationContext>`
 bean, then select `toolAuthorization(true)` in `GuardrailsPolicy`. No privacy analyzer is required.
 
 ### With Privacy Protection
@@ -143,10 +143,10 @@ After preparing dependencies and the authorization policy, create the client thr
 
 ```java
 @Bean
-ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails,
+ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().toolAuthorization(true).build();
-    return guardrails.builder(chatModel, policy)
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
@@ -156,12 +156,12 @@ When privacy is also selected, the factory protects tools automatically.
 Select the permitted original-value disclosure in the client policy:
 
 ```java
-GuardrailsPolicy policy = GuardrailsPolicy.builder()
+GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
         .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
                 Map.of("customerLookup", List.of("CUSTOMER_ID")))))
         .toolAuthorization(true)
         .build();
-ChatClient client = guardrails.builder(chatModel, policy)
+ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -176,7 +176,7 @@ results back to it. `ToolCallingAdvisor` and the search-enabled
 Factory-created clients can also use ordinary advisors, such as conversation
 memory or RAG advisors, registered through `defaultAdvisors(...)` or request-level
 `advisors(...)`. When combining them with privacy protection, follow the
-[advisor ordering guidance](configuration.md#custom-advisor-order) so added data
+[advisor ordering guidance](configuration.md#advisor-configuration) so added data
 passes through privacy inspection.
 
 The factory configures the tool-calling advisor with authorization checks.
@@ -192,7 +192,7 @@ For clients that use tools:
 ### Custom Tool Advisor
 
 Pass the builder for your chosen tool-calling advisor to
-`guardrails.builder(chatModel, policy, toolAdvisorBuilder)`. The factory connects tool
+`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)`. The factory connects tool
 authorization checks when configuring the client.
 
 The following example sets the tool-calling advisor's execution order to `100`
@@ -202,12 +202,12 @@ on a client using tool authorization alone:
 @Bean
 ChatClient customToolAdvisorClient(
         ChatModel chatModel,
-        GuardrailsChatClientFactory guardrails,
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback
 ) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
     ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
-    return guardrails.builder(chatModel, policy, toolAdvisorBuilder)
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
@@ -299,7 +299,7 @@ copy. As shown above, `newCopy()` is responsible for creating the new builder.
 Pass this builder to the factory when creating the client:
 
 ```java
-ChatClient client = authorizationFactory
+ChatClient chatClient = authorizationFactory
         .builder(chatModel, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
         .defaultTools(customerLookupToolCallback)
         .build();
@@ -378,18 +378,18 @@ client.
 
 ## Without the Spring Boot Starter
 
-Depend on `spring-ai-privacy-guardrails-client` and the Security module, then connect
+Depend on `spring-ai-privacy-guardrails-chat-client` and the Security module, then connect
 the authorization boundary to `GuardrailsChatClientFactory`. This example selects authorization only:
 
 ```java
 SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
         ToolCallingManager.builder().build(), authorizationManager).build();
 ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
-GuardrailsChatClientFactory guardrails = GuardrailsChatClientFactory.builder()
-        .toolAuthorization(authorizationFactory::builder)
+GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
+        .toolAuthorization(authorizationFactory::prepareToolAuthorization)
         .defaultPolicy(GuardrailsPolicy.builder().toolAuthorization(true).build())
         .build();
-ChatClient client = guardrails.builder(chatModel).defaultTools(customerLookupToolCallback).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel).defaultTools(customerLookupToolCallback).build();
 ```
 
 To add privacy or inspection, supply its service and select the feature in the policy.
@@ -410,11 +410,11 @@ protection by passing the tool-search advisor's builder to the factory.
 @Bean
 ChatClient toolSearchClient(
         ChatModel chatModel,
-        GuardrailsChatClientFactory guardrails,
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolIndex toolIndex
 ) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().toolAuthorization(true).build();
-    return guardrails.builder(chatModel, policy,
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().toolAuthorization(true).build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy,
                     ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();
 }
@@ -422,7 +422,7 @@ ChatClient toolSearchClient(
 
 For authorization alone, omit `.privacy()` from the policy. Register tools directly
 with `defaultTools(...)` or request-specific `tools(...)`. If tools need original PII,
-set `toolDisclosurePolicy(...)` in this explicit policy.
+set `toolDisclosurePolicy(...)` in the privacy settings.
 
 Tool Search also requires a conversation ID on each request. The following example
 registers a tool and passes the application's `conversationId` to a client that

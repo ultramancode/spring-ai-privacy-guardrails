@@ -66,8 +66,8 @@ class OpenAiCompatibleInspectionConfigTest {
     void toStringRedactsApiKeyAndQuery(String url, String displayedUrl) {
         URI baseUrl = URI.create(url);
         OpenAiCompatibleInspectionConfig config = OpenAiCompatibleInspectionConfig.builder(baseUrl, "test-model")
-                .apiKey("test-key").requestTimeout(Duration.ofSeconds(2)).maxResponseBytes(4096)
-                .requirePrivacyProcessedContent(true).build();
+            .apiKey("test-key").requestTimeout(Duration.ofSeconds(2)).maxResponseBytes(4096)
+            .requirePrivacyProcessedContent(true).build();
 
         assertThat(config.toString())
                 .contains("baseUrl=" + displayedUrl + ",")

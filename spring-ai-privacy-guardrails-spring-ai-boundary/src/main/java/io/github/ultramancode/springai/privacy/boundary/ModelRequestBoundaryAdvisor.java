@@ -59,7 +59,7 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
         // Cancellation requests interruption. Inspectors must cooperate to stop promptly.
         return Mono.fromCallable(() -> {
                     validateAdvisorChain(chain.getStreamAdvisors(), true);
-                    return plan.prepare(request, true);
+            return plan.prepare(request, true);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMapMany(prepared -> {

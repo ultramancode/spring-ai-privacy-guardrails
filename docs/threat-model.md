@@ -63,7 +63,7 @@ opaque tokens for each tool.
 - **Encoded or compressed content:** Encoded or compressed content whose original text
   cannot be read directly must be converted by the application into text or supported
   JSON before inspection.
-- **Metadata and media:** Apart from [supported reasoning text](configuration.md#reasoning-text-protection),
+- **Metadata and media:** Apart from [supported reasoning text](privacy.md#reasoning-text-protection),
   response metadata and non-text content such as images and audio must be protected
   separately. Media limits check data size only; they do not detect PII in media content.
 
@@ -123,7 +123,7 @@ opaque tokens for each tool.
   cannot forcibly stop synchronous analyzer or tool code that is already running.
 
 Exact policies and processing bounds are documented in
-[Configuration](configuration.md).
+[Privacy Protection](privacy.md).
 
 ## Important Limitations
 
@@ -131,7 +131,7 @@ Privacy protection applies to content detected by the configured analyzers. It
 does not guarantee detection or classification of every sensitive value. Coverage
 depends on the analyzers and score thresholds. Allowing some analyzer failures
 lets processing continue with successful results, which may reduce coverage. See
-[Detection and Resolution](configuration.md#detection-and-resolution) for details.
+[Detection and Resolution](privacy.md#detection-and-resolution) for details.
 
 Replacing PII with opaque tokens does not guarantee anonymization. Opaque tokens and session handles
 (`PrivacyContextHandle`) must not be used as proof of user identity or permission.
@@ -141,8 +141,8 @@ data already saved in storage or strings and copies retained by other components
 
 Spring Security integration controls which tools the model may discover and
 execute. When combined with privacy protection, the `ToolDisclosurePolicy`
-still apply per tool and entity type; enabling authorization does not make those
-settings user-specific.
+still applies per tool and entity type. Enabling authorization does not make the
+disclosure policy user-specific.
 
 ## Areas Managed Separately
 

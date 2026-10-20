@@ -107,11 +107,11 @@ class OpenAiCompatibleContentInspectorTest {
     private OpenAiCompatibleInspectionConfig config(
             boolean requirePrivacyProcessedContent, Duration timeout, int maxResponseBytes) {
         return OpenAiCompatibleInspectionConfig.builder(baseUrl, "test-model")
-                .apiKey("test-key")
-                .requestTimeout(timeout)
-                .maxResponseBytes(maxResponseBytes)
-                .requirePrivacyProcessedContent(requirePrivacyProcessedContent)
-                .build();
+            .apiKey("test-key")
+            .requestTimeout(timeout)
+            .maxResponseBytes(maxResponseBytes)
+            .requirePrivacyProcessedContent(requirePrivacyProcessedContent)
+            .build();
     }
 
     private InspectionRequest request(ContentSegment.PrivacyProcessingStatus status, String text) {

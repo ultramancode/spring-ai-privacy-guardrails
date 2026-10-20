@@ -76,14 +76,14 @@ class InspectionEnforcementTest {
 
         try {
             assertThatThrownBy(() -> enforcement.inspect(() -> List.of(segment), null,
-                    new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, false)))
-                    .isInstanceOfSatisfying(InspectionException.class, failure -> {
-                        assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
-                        assertThat(failure).hasNoCause();
-                        assertThat(failure.report()).contains(
-                                new InspectionReport(InspectionDecision.BLOCK, expectedOutcomes));
-                        assertThat(observedFailures).containsExactly(failure);
-                    });
+                new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, false)))
+                .isInstanceOfSatisfying(InspectionException.class, failure -> {
+                    assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+                    assertThat(failure).hasNoCause();
+                    assertThat(failure.report()).contains(
+                        new InspectionReport(InspectionDecision.BLOCK, expectedOutcomes));
+                    assertThat(observedFailures).containsExactly(failure);
+                });
             assertThat(observedReports).containsExactly(
                     new InspectionReport(InspectionDecision.ALLOW, expectedOutcomes));
             assertThat(Thread.currentThread().isInterrupted()).isTrue();

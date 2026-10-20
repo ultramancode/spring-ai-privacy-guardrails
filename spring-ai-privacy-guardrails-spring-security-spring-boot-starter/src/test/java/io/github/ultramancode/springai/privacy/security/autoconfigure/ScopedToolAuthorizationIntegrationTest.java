@@ -310,18 +310,18 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
         startModelServer(toolResponse("customerLookup", "{\\\"payload\\\":\\\"" + "x".repeat(200) + "\\\"}"), finalResponse());
         AtomicInteger calls = new AtomicInteger();
         privacyContextRunner(false, new PrivacyResponseInspectionLimits(1024, 64, 16_777_216, Duration.ofSeconds(60)))
-                .run(context -> {
-                    PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
-                    ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
-                            .builder(context.getBean(OpenAiChatModel.class))
-                            .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
-                    authenticate();
+            .run(context -> {
+                PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
+                ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
+                    .builder(context.getBean(OpenAiChatModel.class))
+                    .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
+                authenticate();
 
-                    assertThatThrownBy(() -> client.prompt().user("Run lookup").call().content())
-                            .hasMessageContaining("inspection limit");
-                    assertThat(calls).hasValue(0);
-                    assertThat(this.modelRequests).hasSize(1);
-                });
+                assertThatThrownBy(() -> client.prompt().user("Run lookup").call().content())
+                    .hasMessageContaining("inspection limit");
+                assertThat(calls).hasValue(0);
+                assertThat(this.modelRequests).hasSize(1);
+            });
     }
 
     private void verifyToolSearchWithPrivacyAndAuthorization(boolean streaming) throws IOException {

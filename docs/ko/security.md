@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: 0afca49e23eb81c5e3283a1db7cfb46669a0e43d6c6fd99caaf937a36ab5158e -->
+<!-- i18n-source-sha256: 35de7d21f52120e37afdd90bca1389e9dd7385f9fd12d00ed64d9c45a6041a21 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -66,7 +66,7 @@ Security 스타터는 기본 Privacy Guardrails 스타터 없이도 사용할 �
 
 ### 도구 권한 검사만 사용
 
-[클라이언트 스타터](clients.md)와 `AuthorizationManager<ToolAuthorizationContext>` 빈을
+[클라이언트 스타터](configuration.md)와 `AuthorizationManager<ToolAuthorizationContext>` 빈을
 추가하고 `GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택합니다.
 개인정보 분석기는 필요하지 않습니다.
 
@@ -137,10 +137,10 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 
 ```java
 @Bean
-ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails,
+ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().toolAuthorization(true).build();
-    return guardrails.builder(chatModel, policy)
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
@@ -150,12 +150,12 @@ ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory
 허용할 원문 공개 범위는 클라이언트 정책에 지정합니다.
 
 ```java
-GuardrailsPolicy policy = GuardrailsPolicy.builder()
+GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
         .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
                 Map.of("customerLookup", List.of("CUSTOMER_ID")))))
         .toolAuthorization(true)
         .build();
-ChatClient client = guardrails.builder(chatModel, policy)
+ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -168,7 +168,7 @@ ChatClient client = guardrails.builder(chatModel, policy)
 
 Factory로 생성한 클라이언트에도 대화 메모리나 RAG 같은 일반 Advisor를
 `defaultAdvisors(...)`나 요청의 `advisors(...)`로 추가할 수 있습니다. 개인정보 보호도
-함께 사용한다면 [Advisor 순서](configuration.md#사용자-정의-advisor-순서)를 참고해
+함께 사용한다면 [Advisor 순서](configuration.md#advisor-구성)를 참고해
 추가한 데이터가 보호 검사를 거치도록 구성하세요.
 
 도구 호출 Advisor는 Factory가 권한 검사를 연결해 구성합니다. 도구를 사용하는
@@ -183,7 +183,7 @@ Factory로 생성한 클라이언트에도 대화 메모리나 RAG 같은 일반
 
 ### 사용자 정의 도구 Advisor
 
-사용할 도구 호출 Advisor의 builder를 `guardrails.builder(chatModel, policy, toolAdvisorBuilder)`에
+사용할 도구 호출 Advisor의 builder를 `guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)`에
 전달하세요. Factory가 도구 권한 검사를 연결해 클라이언트를 구성합니다.
 
 다음은 도구 권한 검사만 사용하는 클라이언트에서 도구 호출 Advisor의 실행 순서를
@@ -193,12 +193,12 @@ Factory로 생성한 클라이언트에도 대화 메모리나 RAG 같은 일반
 @Bean
 ChatClient customToolAdvisorClient(
         ChatModel chatModel,
-        GuardrailsChatClientFactory guardrails,
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback
 ) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
     ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
-    return guardrails.builder(chatModel, policy, toolAdvisorBuilder)
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
@@ -289,7 +289,7 @@ builder에 별도 설정 필드를 추가했다면, `copy()`에서 `super.copy()
 클라이언트를 만들 때는 이 builder를 Factory에 전달합니다.
 
 ```java
-ChatClient client = authorizationFactory
+ChatClient chatClient = authorizationFactory
         .builder(chatModel, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
         .defaultTools(customerLookupToolCallback)
         .build();
@@ -362,18 +362,18 @@ SpringSecurityToolBoundary springSecurityToolBoundary(
 
 ## Spring Boot 스타터 없이 구성
 
-`spring-ai-privacy-guardrails-client`와 Security 모듈에 의존하고 권한 바운더리를
+`spring-ai-privacy-guardrails-chat-client`와 Security 모듈에 의존하고 권한 바운더리를
 `GuardrailsChatClientFactory`에 연결합니다. 다음은 도구 권한 검사만 적용하는 예제입니다.
 
 ```java
 SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
         ToolCallingManager.builder().build(), authorizationManager).build();
 ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
-GuardrailsChatClientFactory guardrails = GuardrailsChatClientFactory.builder()
-        .toolAuthorization(authorizationFactory::builder)
+GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
+        .toolAuthorization(authorizationFactory::prepareToolAuthorization)
         .defaultPolicy(GuardrailsPolicy.builder().toolAuthorization(true).build())
         .build();
-ChatClient client = guardrails.builder(chatModel).defaultTools(customerLookupToolCallback).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel).defaultTools(customerLookupToolCallback).build();
 ```
 
 개인정보 보호나 콘텐츠 검사를 추가하려면 해당 서비스를 전달하고 정책에서 선택하세요.
@@ -393,11 +393,11 @@ Bean으로 제공하는 도구 검색 인덱스입니다.
 @Bean
 ChatClient toolSearchClient(
         ChatModel chatModel,
-        GuardrailsChatClientFactory guardrails,
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolIndex toolIndex
 ) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().toolAuthorization(true).build();
-    return guardrails.builder(chatModel, policy,
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().toolAuthorization(true).build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy,
                     ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();
 }
@@ -405,7 +405,7 @@ ChatClient toolSearchClient(
 
 도구 권한 검사만 필요하면 정책의 `.privacy()`를 생략하세요.
 도구는 `defaultTools(...)` 또는 요청별 `tools(...)`로 직접 등록합니다.
-원문 공개가 필요하면 명시적 정책의 `toolDisclosurePolicy(...)`에 지정하세요.
+원문 공개가 필요하면 개인정보 보호 설정의 `toolDisclosurePolicy(...)`에 지정하세요.
 
 Tool Search에는 요청마다 대화 ID도 필요합니다. 아래는 개인정보 보호를 함께 사용하는
 클라이언트에 도구를 등록하고, 애플리케이션의 `conversationId`를 전달하는 예시입니다.

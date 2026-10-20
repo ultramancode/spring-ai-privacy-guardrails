@@ -1,798 +1,190 @@
 ---
 description: >-
-  Spring AI Privacy Guardrails의 분석기, 토큰화, 도구별 원문 공개 정책, 출력 보호, 처리 제한과 ChatClient 연동을
-  설정하는 방법을 설명합니다.
+  의존성, 공통 서비스와 ChatClient별 보호 정책을 구성합니다.
 ---
 
-# 설정과 사용법
+# 설정
 
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 8b86bdfa73386df0ef8b1921a350f98190164b9a93d0a2680762d5bd0e07dd88 -->
+<!-- i18n-source-sha256: 3675a94549d64f6501c489b10399e2e9f8d23f1d58dfb0a6055320af1b2f6ff0 -->
 
-이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
-참고 문서입니다.
+`GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
+도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
+도구를 보호합니다. 요청별 도구와 MCP 도구에도 같은 정책을 적용합니다.
 
-클라이언트 스타터는 클라이언트별 보호를 구성하는 `GuardrailsChatClientFactory`를
-제공합니다. Presidio와 OpenNLP 스타터는 분석기 연동을 추가하며 같은 개인정보 보호
-설정을 사용합니다. Spring Security 스타터를 추가하면 사용자별 도구 권한 검사도
-사용할 수 있습니다.
+## 의존성과 구성 요소
 
-## 스타터 선택
+Spring AI 모델 연동 모듈과 함께 클라이언트 스타터를 추가합니다.
 
-클라이언트 스타터를 추가한 뒤 필요한 분석기와 권한 검사 스타터를 추가하세요.
+```gradle
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+```
 
-스타터 이름을 누르면 Gradle·Maven 의존성 예제로 이동합니다.
+Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인정보 보호와 검사 연동을
+포함하지만 Spring Security, ONNX Runtime, Presidio와 검사 백엔드는 포함하지 않습니다.
 
-| 스타터 | 용도 |
-| --- | --- |
-| [클라이언트](getting-started.md#2-regex로-빠르게-시작) | Factory로 클라이언트를 구성합니다. Regex가 포함되어 있으며 사용자 정의 분석기도 지원합니다. |
-| [Presidio](getting-started.md#5-presidio로-다양한-pii-유형-탐지) | 외부 Presidio 서비스를 연동해 다양한 유형의 개인정보를 탐지합니다. |
-| [OpenNLP](getting-started.md#6-jvm-내부-탐지에-opennlp-사용) | 직접 준비한 OpenNLP 모델로 애플리케이션 내부에서 개인정보를 탐지합니다. 외부 분석 서비스가 필요하지 않습니다. |
-| [Spring Security](security.md#spring-boot-스타터-추가) | 애플리케이션의 기존 Spring Security 인증 정보로 도구 권한을 검사합니다. 단독으로 사용하거나 개인정보 보호와 함께 사용할 수 있습니다. |
+추가 분석기로 개인정보를 탐지하려면 [Presidio](getting-started.md#5-presidio로-다양한-pii-유형-탐지)나
+[OpenNLP](getting-started.md#6-jvm-내부-탐지에-opennlp-사용) 스타터를 추가합니다.
 
-함께 사용하는 Privacy Guardrails 모듈은 같은 버전을 사용하세요.
+| 선택한 기능 | 필수 구성 요소 | 설정 |
+| --- | --- | --- |
+| 개인정보 보호 | `PrivacyService` | [분석기](privacy.md)를 구성합니다. |
+| 콘텐츠 검사 | `InspectionService` | `ContentInspector` 또는 직접 구성한 서비스를 등록합니다. [콘텐츠 검사](inspection.md)를 참고하세요. |
+| 도구 권한 검사 | 권한 연동 | [Security 스타터](security.md)와 `AuthorizationManager<ToolAuthorizationContext>` 빈을 추가합니다. |
 
-개인정보 보호는 다음 순서로 설정하세요.
+구성 요소가 있다는 이유만으로 기능을 활성화하지 않습니다. 선택한 기능의 필수
+구성 요소가 없으면 클라이언트 빌더를 생성할 때 오류가 발생합니다.
 
-1. **분석기 설정:** 사용할 [Regex](#regex-분석기), [Presidio](#presidio-분석기),
-   [OpenNLP](#opennlp-분석기-jvm-전용-선택-사항)를 설정하거나
-   [사용자 정의 분석기](#사용자-정의-분석기)를 `PiiAnalyzer` Bean으로 등록합니다.
-2. **클라이언트에 보호 적용:** [ChatClient에 보호 적용](#chatclient에-보호-적용)의
-   코드 예제를 따라 보호할 클라이언트를 구성합니다.
+## 클라이언트별 정책
 
-여러 분석기를 함께 사용할 때의 설정과 동작은 [탐지와 해석](#탐지와-해석)을 참고하세요.
+`GuardrailsPolicy`에서 사용할 기능과 출력 처리, 도구 원문 공개 범위를 선택합니다.
+분석기는 스타터의 설정 프로퍼티로 구성합니다. HTTP·ONNX 검사기는 빈을 만들 때
+모델 경로와 연결 설정을 전달합니다.
 
-### Spring Security 스타터
+```java
+GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy
+                .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .outputAction(PrivacyOutputAction.REDACT))
+        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(true))
+        .toolAuthorization(true)
+        .build();
 
-현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한 도구를 제한하려면
-`spring-ai-privacy-guardrails-spring-security-spring-boot-starter`를 추가합니다.
-이 스타터는 기본 Privacy Guardrails 스타터와 독립적이고 개인정보 분석기 없이 사용할
-수 있습니다. 인증 정보는 애플리케이션의 기존 Spring Security 설정을 사용합니다.
+ChatClient chatClient = guardrails.builder(chatModel, supportPolicy)
+        .defaultTools(customerLookup, mcpTools)
+        .build();
+```
 
-`AuthorizationManager<ToolAuthorizationContext>` Bean을 등록하고
-`GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택한 뒤
-`GuardrailsChatClientFactory`로 클라이언트를 생성하세요.
+이 예제는 위 표의 세 구성 요소가 모두 필요합니다. 개인정보 보호는 모델 요청과
+도구에 적용합니다. 고객 ID 원문은 `customerLookup`에만 공개하고, 최종 출력에서
+탐지한 개인정보는 가립니다. 콘텐츠 검사는 모든 모델 요청과 최종 출력에 적용합니다.
+도구 권한 검사는 애플리케이션의 현재 인증 정보와 권한 정책을 사용합니다.
 
-개인정보 보호와 함께 사용하려면 분석기를 구성하고
-같은 정책에서 `privacy()`도 선택하세요.
+원래 콜백, 도구 어노테이션이 있는 객체 또는 제공자를 등록합니다.
+이 Factory에 전달하기 전에 `PrivacyToolCallbackFactory`로 감싸지 마세요.
+제공자는 요청마다 해석하므로 이후 MCP 도구 목록 변경도 반영합니다.
+`chatClient.prompt().tools(...)`로 전달한 도구도 같은 보호를 받습니다.
+허용 목록에 없는 도구·유형 조합에는 원문 대신 불투명 토큰을 전달합니다.
 
-전체 설정은 [Spring Security 도구 권한](security.md)을 참고하세요.
+도구 실행 권한과 원문 공개 범위는 별도로 결정합니다.
 
-## ChatClient에 보호 적용
+`privacy()`만 선택하면 모델 요청과 도구를 보호합니다. `inspection()`만 선택하면
+모델 요청을 검사합니다. 최종 출력 보호와 검사는 별도로 활성화합니다.
+출력만 검사하려면 다음과 같이 설정합니다.
 
-[클라이언트 스타터](clients.md)를 추가하고 분석기를 구성한 뒤
-클라이언트 정책에서 개인정보 보호를 선택합니다.
+```java
+.inspection(inspection -> inspection
+        .modelRequestInspectionEnabled(false)
+        .applicationOutputInspectionEnabled(true))
+```
+
+## 정책 재사용
+
+여러 클라이언트에서 정책을 재사용할 수 있습니다. 일부 설정을 바꾸려면 `mutate()`로
+정책의 설정값을 가진 새 빌더를 만드세요. 빌더를 변경해도 원래 정책은 유지됩니다.
+
+```java
+GuardrailsPolicy inputPolicy = supportPolicy.mutate()
+        .privacy(privacy -> privacy.outputProtection(false))
+        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(false))
+        .build();
+
+GuardrailsPolicy privacyOnly = supportPolicy.mutate()
+        .inspection(false)
+        .toolAuthorization(false)
+        .build();
+
+ChatClient inputClient = guardrails.builder(chatModel, inputPolicy).build();
+ChatClient privacyClient = guardrails.builder(chatModel, privacyOnly).build();
+```
+
+`privacy(false)`와 `inspection(false)`는 해당 기능 전체를 제외합니다.
+정책은 기능을 하나 이상 선택해야 합니다.
+
+`chatClientBuilder.clone()`과 `chatClient.mutate()`는 이미 구성한 보호를 유지합니다.
+보호 범위를 바꾸려면 정책을 수정하고 Factory로 새 클라이언트를 만드세요.
+
+## Spring Boot 기본 정책
+
+공통 기본값이 필요하면 `GuardrailsPolicy` 빈을 등록합니다.
 
 ```java
 @Bean
-ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
-    return guardrails.builder(chatModel, policy).build();
+GuardrailsPolicy defaultGuardrailsPolicy() {
+    return GuardrailsPolicy.builder().privacy().build();
+}
+
+@Bean
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    return guardrailsChatClientFactory.builder(chatModel).build();
 }
 ```
 
-콘텐츠 검사와 도구 권한도 같은 Factory에서 선택합니다. `clone()`과 `mutate()`는
-기존 보호를 유지하므로 Configurer를 다시 적용하지 마세요.
+`builder(chatModel)`은 Factory의 기본 정책을 사용합니다. `builder(chatModel, policy)`는
+해당 호출에 전달한 정책만 사용합니다. Factory에 기본 정책이 없으면 정책을 직접 전달하세요.
 
-Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
-그 밖의 제공자 전용 메시지나 사용자 정의 메시지는 알 수 없는 필드의 개인정보가
-보호되지 않은 채 전달되지 않도록 거부합니다.
+## Advisor 구성
 
-### 사용자 정의 Advisor 순서
+도구 실행 순서를 바꾸거나 Tool Search를 사용하려면 도구 Advisor 빌더를 전달합니다.
 
-[클라이언트 정책](clients.md#사용자-정의-도구-advisor와-boot-없는-구성)에 설명된
-도구 Advisor 빌더를 전달하세요. Factory가 선택한 기능의 순서를 조정합니다.
-별도 Advisor가 보호 경계 밖에서 데이터를 추가하거나 변경하면 그 내용은 보호되지 않을 수 있습니다.
+```java
+ChatClient chatClient = guardrails.builder(chatModel, supportPolicy,
+        ToolCallingAdvisor.builder().advisorOrder(100))
+    .defaultTools(customerLookup)
+    .build();
+```
 
-### 직접 조립하는 고급 연동
+Factory는 빌더를 복사하면서 Tool Search를 포함한 Advisor 타입을 유지합니다.
+클라이언트에 다른 도구 Advisor를 별도로 등록하지 마세요.
+
+메모리나 RAG 같은 일반 Advisor는 `defaultAdvisors(...)`나 요청별 `advisors(...)`로
+등록합니다. 모델 요청의 보호 경계 밖에서 추가하거나 변경한 내용은 보호되지 않을 수 있습니다.
+
+## Spring Boot 없이 구성
+
+`spring-ai-privacy-guardrails-chat-client`에 의존하고 서비스를 전달합니다.
+
+```java
+GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
+        .privacyService(privacyService)
+        .inspectionService(inspectionService)
+        .defaultPolicy(GuardrailsPolicy.builder().privacy().inspection().build())
+        .build();
+```
+
+권한 검사에는 Security 모듈을 추가하고 `SpringSecurityToolBoundary`와
+`ToolAuthorizationChatClientFactory`를 구성합니다. 통합 Factory 빌더에
+`.toolAuthorization(authorizationFactory::prepareToolAuthorization)`를 전달하세요.
+`GuardrailsChatClientFactory.builder()`의 `observationRegistry(...)`로 관측을,
+`clientCustomizer(...)`로 클라이언트 사용자 정의 설정을 구성합니다.
+
+## 실행과 진단
+
+모델 호출 전에는 선택한 기능에 따라 개인정보 처리, 도구 정의 권한 검사,
+콘텐츠 검사 순서로 실행합니다. 도구 권한을 확인한 뒤 허용한 원문만 복원합니다.
+개인정보 보호를 선택하면 도구 결과도 모델이나 애플리케이션에 전달하기 전에 보호합니다.
+콘텐츠 검사는 새로 생성된 도구 인자를 실행 직전에 검사하지 않습니다.
+
+개인정보 출력 보호와 출력 검사는 스트리밍 응답을 끝까지 모으므로 전달이 늦어집니다.
+정책의 `privacy.responseLimits(...)`와 `inspection.maxOutputFrames(...)`,
+`outputStreamTimeout(...)`을 [검사 한도](inspection.md#검사-범위와-한도)와 함께 설정하세요.
+수집 중 오류, 시간 초과 또는 취소가 발생하면 모은 출력을 전달하지 않습니다.
+최종 출력 차단은 이미 실행한 도구의 부작용을 되돌리지 않습니다.
+
+`InspectionObserver`로 검사 보고서와 실패를 기록할 수 있습니다. 콜백에는
+검사 경계와 call 또는 stream 실행 여부도 전달됩니다.
+[검사 결과 기록](inspection.md#검사-결과-기록)을 참고하세요.
+
+`ChatModel`을 직접 호출하면 이 클라이언트를 거치지 않습니다.
+탐지 범위는 구성한 분석기와 검사기에 따라 달라집니다.
+[검사 범위와 한도](inspection.md#검사-범위와-한도)와 [위협 모델](threat-model.md)을 참고하세요.
+
+## 직접 조립하는 고급 연동
 
 Spring AI 빌더에 기능을 직접 구성하려면 `PrivacyToolCallbackFactory`로 도구를 감싸고
 `PrivacyChatClientConfigurer`로 개인정보 보호를 적용합니다.
 여러 기능의 Configurer는 `ModelRequestBoundaryConfigurer.compose(...)`로 합쳐
 빌더에 한 번 적용합니다.
-
-## 설정 속성
-
-아래 표에서 전체 경로를 따로 적지 않은 속성은 모두 `spring.ai.privacy` 아래에
-설정합니다.
-
-| 속성 | 기본값 | 의미 |
-| --- | --- | --- |
-| `analysis.language` | `en` | 대소문자를 구분하지 않는 ASCII 언어 코드입니다. 소문자 정규형으로 분석기에 전달합니다. |
-| `analysis.included-entity-types` | 비어 있음 | 탐지 허용 목록입니다. 신뢰할 수 있는 유형을 등록하는 설정은 아닙니다. |
-| `analysis.minimum-score` | `0.0` | 탐지 결과를 채택할 최소 신뢰도입니다. 모든 분석기에 적용합니다. |
-| `analysis.mode` | `UNION` | 여러 분석기를 실행하고 결과를 조합하는 방식입니다. [탐지와 해석](#탐지와-해석)을 참고하세요. |
-| `analysis.primary-provider` | 미설정 | `PRIMARY` 및 `PRIMARY_WITH_FALLBACK` 모드와 `REQUIRE_PRIMARY` 실패 정책에서 사용할 주 분석기의 ID입니다. 대소문자를 구분하지 않습니다. |
-| `analysis.supplemental-providers` | 비어 있음 | 주 분석기와 함께 실행해 탐지를 보완할 보조 분석기의 ID 목록입니다. |
-| `analysis.failure-policy` | `REQUIRE_ALL` | 분석기 가용성에 대한 실패 정책입니다. |
-| `analysis.provider-minimum-scores` | 비어 있음 | 분석기 ID별 최소 신뢰도입니다. 전체 최소 신뢰도와 비교해 더 큰 값을 적용합니다. |
-| `analysis.entity-aliases` | 비어 있음 | 분석기 엔티티 레이블을 정규 유형에 연결하는 명시적 매핑입니다. |
-| `analysis.type-conflict-fallback` | `PII` | 해석하지 못한 중첩 유형 충돌에 사용할 유형입니다. |
-| `processing.max-text-characters` | `1000000` | 텍스트나 JSON 문서 하나의 최대 길이입니다. 배치 분석에서는 모든 텍스트의 길이를 합산합니다. |
-| `processing.max-output-characters` | `8000000` | 변환 결과의 최대 길이입니다. 원문을 그대로 반환할 때도 적용합니다. |
-| `processing.max-value-tree-characters` | `1000000` | 값 트리나 JSON 문서 하나에서 문자열 값·맵 키·숫자 표현의 길이를 합산한 상한입니다. 직접 값 트리를 토큰화할 때는 `BigDecimal` 분석 텍스트의 누적 길이에도 적용합니다. |
-| `processing.max-value-tree-nodes` | `100000` | 값 트리나 JSON 문서 하나의 최대 노드 수입니다. 컨테이너·스칼라 값·맵 키를 포함합니다. |
-| `processing.max-depth` | `128` | 값 트리나 JSON 문서 하나의 최대 중첩 깊이입니다. |
-| `processing.max-analysis-segments` | `100000` | 한 번의 배치 분석에 전달하는 텍스트의 최대 개수입니다. |
-| `processing.max-result-spans` | `100000` | 한 번의 분석에서 분석기나 호출자로부터 받는 원시 탐지 범위의 최대 개수입니다. 세션 배치에서 새로 생성된 결과는 합산하고 재사용한 결과는 다시 세지 않습니다. |
-| `regex.enabled` | `false` | 애플리케이션이 제공한 Regex 규칙을 활성화합니다. |
-| `regex.rules[].entity-type` | 규칙마다 필수 | 규칙의 일치 결과에 부여할 정규 엔티티 유형입니다. |
-| `regex.rules[].pattern` | 규칙마다 필수 | 원문 텍스트에 적용할 Java 정규식입니다. |
-| `regex.rules[].score` | `0.85` | 각 일치 결과에 부여할 신뢰도입니다. |
-| `regex.rules[].capture-group` | `0` | 탐지 범위(span)로 사용할 정규식 캡처 그룹 번호입니다. `0`은 전체 일치를 의미합니다. |
-| `regex.rules[].validator-id` | 미설정 | 일치 후보를 추가로 검사할 선택적 `RegexPiiMatchValidator`의 ID입니다. Spring Bean 이름이 아닙니다. |
-| `presidio.enabled` | `false` | Presidio 분석기를 활성화합니다. |
-| `presidio.analyzer-url` | `http://localhost:5002` | 분석기의 기본 URI입니다. |
-| `presidio.timeout` | `5s` | 응답 본문 수신 완료까지 포함해 각 HTTP 요청 시도와 상태 확인에 적용되는 제한 시간입니다. |
-| `presidio.max-retries` | `1` | 첫 시도 이후의 재시도 횟수입니다. |
-| `presidio.retry-backoff` | `300ms` | 시도 사이의 대기 시간입니다. |
-| `presidio.max-response-bytes` | `8388608` | Presidio 응답 본문의 최대 바이트 수입니다. |
-| `presidio.max-response-depth` | `64` | Presidio 응답의 최대 JSON 중첩 깊이입니다. |
-| `presidio.headers` | 비어 있음 | Presidio 요청에 추가할 HTTP 헤더입니다. `Content-Type`은 라이브러리가 관리하므로 설정할 수 없습니다. |
-| `opennlp.enabled` | `false` | 사용자가 제공한 로컬 OpenNLP 모델을 활성화합니다. |
-| `opennlp.tokenizer-model` | 미설정 | 선택적인 tokenizer 모델 리소스입니다. 설정하지 않으면 `SimpleTokenizer`를 사용합니다. |
-| `opennlp.entity-models` | 비어 있음 | 정규 엔티티 유형을 필수 name-finder 모델 리소스에 연결합니다. |
-
-Regex `rules`, Presidio `headers`, OpenNLP `entity-models`의 기본값은 비어 있습니다.
-Spring Boot 설정 메타데이터는 IDE 자동 완성을 제공합니다.
-`analysis.language`는 영숫자 단어를 하나의 하이픈 또는 밑줄로 구분한
-1~64자 ASCII 식별자를 받습니다. 대소문자를 구분하지 않으며 `core`는
-소문자 정규형을 모든 분석기에 전달합니다. 공백, 문법에 없는 문장부호,
-빈 구분자와 반복된 구분자는 자동으로 잘라내거나 보정하지 않고 거부합니다.
-
-스타터는 `PiiAnalyzer` Bean이 하나 이상 있으면 `PrivacyService`를 생성합니다.
-자동 구성되거나 애플리케이션이 직접 등록한 `PrivacyService` Bean이 있으면
-직접 연동할 때 사용할 `PrivacyChatClientConfigurer`와 `PrivacyToolCallbackFactory`
-Bean도 제공합니다.
-이 서비스가 없으면 두 연동 Bean을 생성하지 않으며, 이를 주입받지 않는 애플리케이션은
-정상적으로 시작할 수 있습니다.
-
-### 설정 오타 진단
-
-기본 Spring Boot 스타터는 이 라이브러리가 정의한 고정 `spring.ai.privacy` 설정에서
-알 수 없는 프로퍼티 이름을 발견하면 경고합니다. 이 경고는 애플리케이션 시작을
-막지 않으며, 분석기를 구성하지 않아도 진단은 실행됩니다.
-
-예를 들어 다음처럼 `regex.enabled`를 잘못 입력하면 애플리케이션은 계속 시작되지만
-올바른 프로퍼티 이름을 제안하는 경고가 기록됩니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      regex:
-        enabledd: true
-```
-
-진단 대상은 `processing`, `analysis`, `regex` 안의
-프로퍼티 이름입니다. 알 수 없는 최상위 영역과 분석기별 설정은 검사하지 않습니다.
-
-`analysis.provider-minimum-scores`, `analysis.entity-aliases`
-아래의 동적 키와 `analysis.included-entity-types`,
-`analysis.supplemental-providers`의 목록 항목은 진단 대상이 아닙니다. Presidio의
-`headers`와 OpenNLP의 `entity-models`처럼 분석기별 설정에서 사용하는 동적 맵도
-검사하지 않습니다.
-
-올바른 프로퍼티 이름으로 보이는 후보가 하나뿐이면 경고 메시지에 해당 이름을
-제안합니다. 진단 메시지에는 설정값, 자격 증명 또는 동적 맵 키를 포함하지 않습니다.
-
-## 탐지와 해석
-
-분석기는 원문에서 개인정보를 찾은 위치와 유형, 신뢰도를 반환합니다. 개인정보 유형은
-`PERSON`, `EMAIL_ADDRESS`처럼 구분하며, 설정과 API에서는 이를 엔티티 유형이라고
-부릅니다. 라이브러리는 분석 결과에 엔티티 별칭, 탐지 허용 목록, 신뢰도 하한,
-분석기 선택과 겹치는 범위의 처리 규칙을 적용합니다. 탐지 위치는 항상 원문 텍스트를
-기준으로 합니다. Regex, Presidio, OpenNLP와 Spring Bean으로 등록한 사용자 정의
-`PiiAnalyzer`를 함께 사용할 수도 있습니다.
-
-`UNION` 모드에서는 설정한 모든 분석기를 실행하고 탐지 결과를 병합합니다. 겹치는
-범위 중 하나가 다른 범위를 완전히 포함하면 해당 범위의 유형을 유지합니다. 일부만
-겹치는 경우 개인정보의 일부가 노출되지 않도록 범위를 하나로 합치며, 유형 충돌을
-해결할 수 없으면 범용 개인정보 유형인 `PII`로 처리합니다.
-
-분석기 실행 실패는 `analysis.failure-policy` 설정에 따라 처리합니다. `REQUIRE_ALL`은
-분석기 하나라도 실패하면 요청 처리도 실패합니다. `REQUIRE_PRIMARY`는 주 분석기의 성공을
-요구하지만 다른 분석기의 실패는 허용합니다. `ALLOW_PARTIAL`은 성공한 분석기의 탐지
-결과만 사용하므로 보호 범위가 줄어들 수 있으며, 모든 분석기가 실패하면 요청도
-실패합니다.
-
-다음 설정은 Presidio와 애플리케이션 전용 Regex 분석기를 함께 실행하고, 기본 `UNION`
-모드로 탐지 결과를 병합합니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      analysis:
-        entity-aliases:
-          US_SSN: NATIONAL_ID
-      presidio:
-        enabled: true
-      regex:
-        enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
-```
-
-`PRIMARY` 모드에서는 주 분석기와 보조 분석기만 실행하며, 그 외의 분석기가
-구성되어 있으면 설정 오류로 처리합니다.
-
-`PRIMARY_WITH_FALLBACK` 모드를 사용하려면 실패 정책을 `ALLOW_PARTIAL`로 설정하고,
-주 분석기 외에 분석기를 하나 이상 구성해야 합니다. 보조 분석기는 주 분석기와 항상
-함께 실행하고, 대체 분석기는 주 분석기가 실패한 경우에만 실행합니다.
-
-`analysis.provider-minimum-scores`에 분석기 ID를 추가해도 해당 분석기가 자동으로
-등록되거나 활성화되지는 않습니다. 이 설정은 이미 등록된 분석기의 탐지 결과에
-적용할 신뢰도 하한만 지정합니다. 분석기를 사용하려면 앞의 예시처럼
-`presidio.enabled` 또는 `regex.enabled`를 설정하거나 직접 분석기 Bean을 등록해야 합니다.
-
-분석기 ID(provider ID)는 `REGEX`, `PRESIDIO`, `OPENNLP`처럼 각 분석기를 구분하는
-이름입니다. 영문자와 숫자로 이루어진 구간을 단일 하이픈(`-`) 또는 밑줄(`_`)로
-연결한 1~128자의 ASCII 식별자이며, 라이브러리는 분석기 ID의 대소문자를
-구분하지 않고 대문자 형태로 정규화합니다. 허용되지 않은 문장부호나 공백,
-잘못되거나 연속된 구분자, 중복된 분석기 ID는 거부합니다.
-
-엔티티 레이블은 대문자 영문자와 숫자로 이루어진 구간을 단일 밑줄(`_`)로 연결한
-1~128자의 ASCII 식별자입니다. 소문자, 공백, 하이픈(`-`), 허용되지 않은 문장부호와
-빈 구간은 자동으로 보정하지 않고 거부합니다. 잘못된 설정값이나 분석기가 반환한
-유효하지 않은 레이블은 오류로 처리합니다.
-
-기본으로 인정하는 정규 엔티티 유형은 `PII`, `PERSON`,
-`ORGANIZATION`, `LOCATION`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `NATIONAL_ID`,
-`CREDIT_CARD`, `DATE_TIME`, `IP_ADDRESS`, `URL`, `IBAN_CODE`, `CRYPTO`, `NRP`,
-`MEDICAL_LICENSE`입니다. 분석기별 별칭은 자동으로 등록되지 않습니다. 따라서
-Presidio의 `US_SSN`처럼 특정 분석기, 모델, 국가 또는 애플리케이션에 종속된 레이블을
-공통 정책 유형으로 사용하려면 `entity-aliases`를 통해 명시적으로 매핑해야 합니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      analysis:
-        entity-aliases:
-          US_SSN: NATIONAL_ID
-          KR_RRN: NATIONAL_ID
-```
-
-형식은 올바르지만 기본 정규 엔티티 유형 목록에 없는 레이블은 `PII`로 처리됩니다. 탐지 허용 목록에서
-`PII`를 제외했다면 해당 결과도 제거됩니다. 필요하면 허용된 정규 유형으로
-매핑하세요. `PiiAnalyzer.trustedEntityTypes()`를 사용하면 로컬 분석기가 자신의 탐지
-결과에서 신뢰할 엔티티 유형을 선언할 수 있습니다.
-
-탐지 허용 목록에 엔티티 유형을 추가해도 해당 유형이 자동으로 신뢰 유형으로
-등록되지는 않습니다. 또한 한 분석기가 선언한 신뢰 유형은 다른 분석기의 엔티티
-레이블에 적용되지 않습니다. 엔티티 별칭 매핑과 명시적으로 등록한 신뢰 정규 유형은
-특정 분석기에 한정되지 않고 모든 분석기 결과에 공통으로 적용됩니다.
-
-### 구조화된 JSON
-
-일반 메시지나 도구 결과가 JSON 형식이 아니더라도 평문으로 개인정보 보호를 적용할 수
-있습니다. 구조화된 JSON이 반드시 필요한 경계에서만 잘못된 JSON을 거부합니다.
-
-구조화된 JSON에서는 속성 이름을 보존하고 문자열 값과 숫자 값을 분석합니다.
-비어 있거나 공백으로만 이루어진 문자열 값은 분석하지 않습니다. 탐지한 문자열의
-시작·끝 위치는 해당 값의 텍스트를 기준으로 계산합니다.
-
-예를 들어 `{"name":"Alice","city":"Seoul"}`에서는 `Alice`와 `Seoul`이
-각각 분석 대상이 됩니다. 외부 요청 횟수와 처리 비용은 선택한 분석기와
-분석할 텍스트의 양에 따라 달라집니다.
-
-### 사용자 정의 분석기
-
-`PiiAnalyzer`의 `analyze(text, options, limits)`를 구현해 텍스트 하나의 탐지 범위를
-반환합니다.
-
-사용자 정의 분석기는 여러 요청에서 공유될 수 있으므로 스레드 안전(thread-safe)하고
-재진입 가능하게 구현해야 합니다. 각 분석기는 고유한 분석기 ID를 제공해야 하며,
-블로킹 작업에는 유한한 제한 시간을 적용하고 스레드 중단 요청도 적절히 처리해야 합니다.
-
-`PiiAnalyzer.analyzeSegments(texts, options, limits)`의 기본 구현은 각 텍스트에 대해
-`analyze(...)`를 호출합니다. 외부 서비스의 배치 API를 사용하려면 이 메서드를
-재정의할 수 있습니다. 결과는 입력 순서에 맞춰 텍스트별로 반환하고, 탐지 범위의
-시작·끝 위치는 해당 텍스트를 기준으로 계산해야 합니다.
-
-결과를 수집할 때는 전달받은 `limits`를 준수해야 합니다. 배치 분석에서는 결과 수 제한을
-배치 전체에 적용합니다.
-
-## Regex 분석기
-
-Regex 분석기는 모든 개인정보를 탐지하기 위한 용도가 아니라, 사번이나 고객번호처럼
-형식이 명확한 애플리케이션 고유 식별자를 탐지하는 데 적합합니다. 정규식 패턴은
-애플리케이션이 관리하는 신뢰된 설정으로 사용하고, 불필요하게 복잡한 패턴은 피하세요.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      regex:
-        enabled: true
-        rules:
-          - entity-type: CUSTOMER_ID
-            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
-            score: 0.90
-            capture-group: 0
-            validator-id: customer-id-check
-```
-
-각 규칙에는 `entity-type`과 `pattern`이 필요합니다. `score` 기본값은 `0.85`,
-`capture-group` 기본값은 `0`입니다. `validator-id`는 선택 사항이며 Spring Bean 이름이
-아니라 애플리케이션이 제공한 `RegexPiiMatchValidator`의 `id()`가 반환하는 고정 ID를
-참조합니다.
-
-```java
-@Bean
-RegexPiiMatchValidator customerIdMatchValidator() {
-    return new RegexPiiMatchValidator() {
-        @Override
-        public String id() {
-            return "customer-id-check";
-        }
-
-        @Override
-        public boolean isValid(String candidate) {
-            return CustomerIds.hasValidChecksum(candidate);
-        }
-    };
-}
-```
-
-`CustomerIds.hasValidChecksum(...)`은 애플리케이션의 검증 로직을 나타내는 예시입니다.
-실제 사용할 검증 로직은 애플리케이션에서 구현해야 합니다.
-
-ID는 소문자 ASCII 영문자와 숫자로 이루어진 구간을 하나의 하이픈으로 연결합니다.
-애플리케이션을 시작할 때 ID를 확인하며, 빈 값이나 잘못된 형식, 알 수 없는 ID가
-있거나 둘 이상의 검증기 Bean이 같은 ID를 사용하면 시작에 실패합니다. 여러 규칙이
-같은 ID를 참조하는 것은 허용됩니다.
-
-`isValid()`에는 `capture-group`이 선택한 일치 후보만 전달됩니다. `true`를 반환하면
-기존 탐지 범위와 점수를 유지하고, `false`를 반환하면 해당 후보를 제외합니다. 실행 중
-발생한 예외는 설정한 분석기 실패 정책에 따라 처리합니다.
-
-`RegexPiiMatchValidator` 구현체는 여러 요청에서 공유되므로 스레드 안전하게 작성해야
-합니다. 검증 대상 문자열에는 개인정보 원문이 포함될 수 있으니 로그나 예외 메시지에
-남기거나 장기간 보관하지 마세요. `validator-id`를 설정하지 않으면 정규식에 일치한 후보를
-별도의 검증 없이 사용합니다.
-
-## Presidio 분석기
-
-Presidio는 분석할 원문 텍스트를 설정한 Presidio 서버로 전송합니다. Presidio 스타터를
-추가한 뒤 분석기를 활성화하고 서버 접속 정보를 설정합니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      analysis:
-        language: en
-      presidio:
-        enabled: true
-        analyzer-url: https://presidio.internal
-        timeout: 5s
-        max-retries: 1
-        retry-backoff: 300ms
-        max-response-bytes: 8388608
-        max-response-depth: 64
-        headers:
-          X-API-Key: ${PRESIDIO_API_KEY}
-```
-
-`analyzer-url`에는 Presidio 서버의 HTTP(S) 주소를 설정합니다. 기본값은
-`http://localhost:5002`이며, 서버가 다른 주소에서 실행된다면 해당 주소로 변경하세요.
-인증 정보가 필요한 경우 URL에 포함하지 말고 `headers`와 애플리케이션의 비밀값 관리
-기능을 사용하세요.
-
-구조화된 JSON을 Presidio로 분석하려면 Presidio Analyzer 2.2.361 이상을 사용하세요.
-네트워크 요청을 줄이기 위해 여러 텍스트를 묶어서 전송하며, 입력이 크면 여러 요청으로
-나누어 처리합니다. 각 텍스트는 독립적으로 분석합니다.
-
-`timeout`은 Presidio 응답 본문을 모두 받을 때까지의 HTTP 요청 시간에 적용됩니다.
-전송 실패, `timeout` 초과, HTTP 408/429와 5xx 응답은 `max-retries` 설정에 따라
-재시도하며, 그 밖의 4xx 응답은 즉시 실패합니다.
-
-`max-response-depth`는 Presidio 응답에 적용합니다. 애플리케이션의 값 트리나
-JSON 문서에는 `processing.max-depth`를 적용합니다.
-Presidio 응답이 크기나 깊이 제한을 초과하면 `ANALYZER_RESPONSE_INVALID`로 처리하고
-설정된 분석기 실패 정책을 따릅니다.
-
-Spring Boot의 상태 점검 기능을 사용하는 경우 Presidio 서비스의 상태도 함께 확인할
-수 있습니다.
-
-로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/main/samples/presidio)에
-있습니다.
-
-## OpenNLP 분석기 (JVM 전용, 선택 사항)
-
-이 구성은 호환되는 OpenNLP NER 모델을 사용해 별도의 외부 분석 서비스 없이
-애플리케이션과 같은 JVM에서 개인정보를 분석하려는 경우에 적합합니다. OpenNLP NER
-모델은 라이브러리에 포함되지 않으므로 사용할 모델 파일을 별도로 준비해야 합니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      analysis:
-        language: en
-      opennlp:
-        enabled: true
-        tokenizer-model: classpath:/models/en-token.bin
-        entity-models:
-          PERSON: classpath:/models/en-ner-person.bin
-          ORGANIZATION: classpath:/models/en-ner-organization.bin
-```
-
-`tokenizer-model`을 지정하지 않으면 OpenNLP `SimpleTokenizer`를 사용합니다.
-`entity-models`에는 각 엔티티 유형에 사용할 NER 모델 파일의 위치를 설정합니다.
-사용하는 NER 모델과 토큰화 방식이 맞지 않으면 탐지 품질이 달라질 수 있으므로 실제
-데이터에 맞게 검증해야 합니다.
-
-OpenNLP 연동은 기존 NER 모델을 활용하려는 애플리케이션을 위한 선택적 구성으로,
-범용 개인정보 탐지의 기본 방식으로 권장하지는 않습니다.
-
-[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md#선택적-jvm-전용-opennlp-adapter)에서
-모델 준비, 설정 및 실제 연동 테스트 방법을 확인할 수 있습니다.
-
-## 도구별 원문 공개
-
-개인정보 보호가 적용된 도구에는 탐지된 값을 기본적으로 **불투명 토큰(opaque token)**으로 전달합니다.
-불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.
-특정 도구가 원문을 받아야 한다면 `ToolDisclosurePolicy`에 해당 도구에 공개할
-엔티티 유형을 지정하세요.
-
-```java
-GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
-        .build();
-```
-
-위 설정에서는 `customerLookup` 도구에만 `CUSTOMER_ID`의 원문을 전달합니다.
-공개하도록 지정하지 않은 엔티티 유형과 `ToolDisclosurePolicy`에 등록되지 않은 도구에는
-보호된 값이 그대로 전달됩니다.
-
-Factory가 도구를 자동으로 보호하므로 원래 콜백이나 제공자를 등록합니다.
-MCP 제공자는 요청마다 현재 도구 목록을 사용합니다.
-
-```java
-ChatClient client = guardrails.builder(chatModel, toolPolicy)
-        .defaultTools(customerLookup, knowledgeSearch, mcpTools)
-        .build();
-```
-
-`ToolDisclosurePolicy`의 도구 이름은 대소문자를 구분하며 최종
-`ToolDefinition.name()`과 일치해야 합니다. 동적 provider가 도구 이름에 접두사를
-추가한다면 변경된 최종 이름을 사용하세요. 와일드카드는 지원하지 않으며 `PII`를 포함해
-원문 공개가 필요한 엔티티 유형은 모두 명시적으로 지정해야 합니다. 공개할 유형이
-없다면 해당 도구를 `ToolDisclosurePolicy`에 등록하지 마세요.
-
-원문 공개 허용 여부는 병합 후 확정된 엔티티 유형을 기준으로 판단합니다.
-예를 들어 `PERSON`과 `ORGANIZATION`의 탐지 결과가 하나의 `PII` 구간으로 병합되면,
-해당 도구에 `PERSON`과 `ORGANIZATION`을 모두 허용해도 원문은 복원되지 않습니다.
-`PII`를 명시적으로 허용하면 병합된 구간 전체의 원문이 복원됩니다.
-
-도구가 호출되기 전에 입력을 검사하고, 해당 도구에 허용된 엔티티 유형만 원문으로
-복원합니다. 도구 실행 결과도 다시 검사하여 모델에 전달되기 전에 개인정보를
-보호합니다.
-
-원문 공개가 허용된 도구는 실제 개인정보를 전달받을 수 있으므로 도구 구현의 예외
-메시지나 로그에 개인정보가 남지 않도록 주의하세요.
-
-Spring Security 연동을 활성화하면 원문 공개 정책을 적용하기 전에 도구 사용 권한을
-확인합니다. 권한 정책은 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행 가능한
-도구를 결정합니다. `ToolDisclosurePolicy`는 권한 검사를 통과한 도구에 어떤 개인정보
-유형의 값을 원문으로 제공할지 결정합니다. 자세한 내용은
-[Spring Security 도구 권한](security.md#보장-범위)을 참고하세요.
-
-이 기능은 Spring AI의 표준 `ToolCallback`과 `ToolCallbackProvider` 등록 경로를
-대상으로 합니다. 사용자 정의 도구 실행 경로는 자동 개인정보 보호 경계에 포함되지
-않으므로 별도의 보호 구성이 필요합니다. Spring Security 연동에서 사용자 정의
-`ToolCallingManager`를 사용하는 방법은
-[사용자 정의 ToolCallingManager](security.md#사용자-정의-toolcallingmanager)를 참고하세요.
-
-## 출력 정책과 스트리밍
-
-```java
-GuardrailsPolicy policy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.outputAction(PrivacyOutputAction.TOKENIZE))
-        .build();
-ChatClient client = guardrails.builder(chatModel, policy).build();
-```
-
-`outputAction(...)`을 지정하면 해당 방식으로 출력 보호를 활성화합니다.
-`outputProtection(true)`는 지정한 방식이 없으면 `TOKENIZE`로 활성화합니다.
-모델이나 도구에서 애플리케이션으로 반환되는 개인정보에 이 정책을 적용합니다.
-`BLOCK` 예외의 안전한 메시지는 `outputBlockMessage(...)`로 지정합니다.
-
-- `TOKENIZE`는 같은 요청 안에서 동일한 개인정보를 일관된 불투명 토큰으로 치환합니다.
-- `REDACT`는 개인정보를 원문으로 복원할 수 없는 유형 마커로 대체합니다.
-- `BLOCK`은 개인정보가 포함된 출력을 차단하고 `PrivacyOutputBlockedException`을
-  발생시킵니다.
-
-출력 보호는 일반 모델 응답, 도구 호출 인자와 `returnDirect` 결과에 적용됩니다.
-
-### `returnDirect` 도구 흐름
-
-`returnDirect`는 Spring AI에서 도구 실행 후 모델을 다시 호출할지 결정하는
-설정입니다. `returnDirect=true`인 도구는 실행 결과를 모델에 다시 전달하지 않고
-최종 응답으로 직접 반환할 수 있습니다. 개인정보 보호 기능 자체를 켜거나 끄는
-설정은 아닙니다.
-
-| `returnDirect` | 동작 | 사용 시점 |
-| --- | --- | --- |
-| `false` | 도구 결과를 보호한 뒤 모델에 다시 전달합니다. 모델은 결과를 바탕으로 답변을 생성하거나 다른 도구를 호출할 수 있습니다. | 모델이 도구 결과를 계속 처리해야 할 때 |
-| `true` | 도구 결과를 보호한 뒤 최종 응답으로 직접 반환할 수 있습니다. | 도구 결과 자체를 최종 응답으로 사용할 때 |
-
-한 `ChatClient`에 두 종류의 도구를 함께 등록할 수 있습니다. 한 번의 모델 응답에서
-선택된 도구가 모두 `returnDirect = true`인 경우에만 Spring AI가 모델을 다시
-호출하지 않고 결과를 직접 반환합니다. 그렇지 않으면 도구 결과는 모델로 다시
-전달됩니다.
-
-`outputProtection(false)`인 경우에도 `returnDirect`로 직접 반환되는 도구 결과의
-개인정보는 불투명 토큰 상태를 유지합니다. 출력 보호를 활성화하면 최종 결과에
-`TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용합니다.
-
-### 최종 모델 출력 보호
-
-`outputProtection(...)`는 모델이 생성한 최종 응답에 출력 정책을 적용할지를 결정합니다.
-이 설정을 비활성화해도 입력, 모델 호출 경계와 도구 결과에 대한 개인정보 보호는 계속
-적용됩니다.
-
-| 출력 보호 | 최종 모델 출력의 개인정보 분석 | 전달 방식 |
-| --- | --- | --- |
-| `false` | 하지 않음 | 최종 모델 출력을 별도로 검사하지 않습니다. 스트리밍 호출에서는 모델이 생성하는 텍스트를 실시간으로 전달할 수 있습니다. 다른 개인정보 보호 경계는 계속 적용되며, `returnDirect` 결과의 개인정보도 불투명 토큰으로 바뀝니다. |
-| `true` | 적용 | 완성된 응답을 검사한 뒤 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용하여 전달합니다. |
-
-콘텐츠 검사는 정책의 `inspection.applicationOutput(...)`에서 별도로 설정합니다.
-규칙이나 검사 모델을 사용하는 방법은 [모델 출력 검사](inspection.md#선택적-모델-출력-검사)를 참고하세요.
-
-출력 보호가 활성화되어도 Spring AI의 스트리밍 API를 사용할 수 있지만, 개인정보를
-검사하기 위해 완성된 응답을 먼저 버퍼링합니다. 따라서 모델 응답이 생성되는 즉시
-전달되는 실시간 스트리밍은 사용할 수 없습니다. 실시간 스트리밍이 반드시 필요하다면
-`outputProtection(false)`로 두고 최종 모델 출력의 개인정보 보호를 애플리케이션에서
-처리해야 합니다.
-
-### 추론 텍스트 보호
-
-출력 보호를 활성화하면 응답 본문뿐 아니라, 아래에 명시된 추론 텍스트에도 같은 보호
-정책을 적용합니다.
-
-**보호 대상 필드**
-
-- `DeepSeekAssistantMessage.getReasoningContent()`가 반환하는 텍스트
-- 메시지(`AssistantMessage`)와 생성 결과(`Generation`) 메타데이터의 최상위
-  `reasoningContent`, `thinking` 필드에 담긴 문자열
-
-다른 이름의 메타데이터 필드나 중첩된 값은 자동으로 검사하지 않습니다.
-
-## 입력·응답 처리 제한
-
-클라이언트 정책의 `privacy.responseLimits(...)`에 `PrivacyResponseInspectionLimits`를 지정합니다.
-기본값은 스트림 1,024프레임, 텍스트 1,000,000자, 미디어 16,777,216바이트,
-프레임 간 대기 시간 60초입니다. 최종 출력 보호를 꺼도 도구 호출 과정의 중간 응답에는
-이 한도를 적용합니다. 출력 보호를 켜면 최종 응답에도 텍스트와 미디어 한도를 적용합니다.
-미디어 한도는 데이터 크기만 확인하며 이미지나 오디오 내용에서 개인정보를 탐지하지는 않습니다.
-
-`processing.*`는 개인정보를 분석하거나 변환할 때 적용하는 제한입니다.
-`outputProtection(false)`여도 적용되며, 각 설정에는 양의 정수를 지정합니다.
-
-문자열 길이는 Java `String.length()` 기준인 UTF-16 코드 단위로 계산합니다.
-JSON의 출력 길이에는 JSON 구문과 이스케이프 문자도 포함합니다. 값 트리의 출력 길이는
-결과에 포함된 문자열 값과 맵 키의 길이를 합산합니다.
-
-JSON에서 추출한 텍스트는 최대 `processing.max-analysis-segments`개씩 묶어
-분석합니다.
-
-처리 제한을 초과하면 `ALLOW_PARTIAL`이나 fallback 정책과 관계없이
-`PAYLOAD_LIMIT_EXCEEDED`로 작업을 중단합니다.
-
-## `core` 모듈 직접 사용
-
-이 절은 Spring AI 스타터를 통한 일반적인 사용이 아니라 `core` 모듈의
-`PrivacyService` 메서드를 직접 호출하는 경우에만 해당합니다. 스타터를 사용하는
-경우에는 아래의 세션이나 값 구조를 직접 관리할 필요가 없습니다.
-
-`PrivacyService`를 직접 사용하는 경우에는 먼저 `PrivacySession`을 엽니다.
-`session.handle()`은 사용할 세션을 지정하는 값으로, 개인정보 분석·토큰화·원문 복원 메서드에
-전달합니다. 아래는 탐지된 개인정보를 불투명 토큰으로 바꾼 뒤, 애플리케이션이 공개를 허용한 고객번호
-(`CUSTOMER_ID`)만 같은 세션에서 복원하는 예시입니다.
-
-```java
-try (PrivacySession session = privacyService.openSession()) {
-    PiiTokenizationResult result = privacyService.analyzeAndTokenize(
-            session.handle(), sourceText);
-    String protectedText = result.tokenizedText();
-
-    String disclosedText = privacyService.detokenize(
-            session.handle(), protectedText, Set.of("CUSTOMER_ID"));
-}
-```
-
-`detokenize(...)`의 세 번째 인자에 지정한 유형만 원문으로 복원되고, 다른 유형의
-불투명 토큰은 유지됩니다. 공개할 유형은 애플리케이션의 정책에 따라 지정하세요.
-try 블록을 벗어나 세션이 닫히면 그 세션의 불투명 토큰을 원문으로 복원할 수 없습니다.
-존재하지 않거나 이미 종료된 세션의 `handle`을 전달하면 오류가 발생합니다.
-
-`tokenizeValueTree()`와 `detokenizeValueTree()` 메서드는 JSON과 호환되는 `Map`과 `List`
-구조를 처리합니다. 값으로는 `null`, 불리언, 문자열과 `Byte`, `Short`, `Integer`,
-`Long`, `BigInteger`, `BigDecimal`, 유한한 `Float`·`Double` 값을 사용할 수
-있으며, `Map`의 키는 문자열이어야 합니다.
-
-이 메서드들은 입력 객체를 직접 수정하지 않고 변환된 새로운 `Map`과 `List`를
-반환합니다. 지원하지 않는 값이나 문자열이 아닌 `Map` 키, 순환 참조가 있으면
-`TRANSFORMATION_CONFLICT`가 발생하며, 처리 가능한 크기 제한을 초과하면
-`PAYLOAD_LIMIT_EXCEEDED`가 발생합니다.
-
-일반 Java 객체나 Jackson `JsonNode`를 이 두 메서드에 직접 전달할 수는 없습니다.
-직접 사용하는 경우에는 먼저 지원되는 `Map`/`List` 구조로 변환해야 합니다.
-
-## 테스트 지원
-
-`spring-ai-privacy-guardrails-test`는 JUnit 같은 자동화 테스트에서 사용하는 유틸리티
-모듈입니다. 모델에 개인정보 원문이 전달됐는지, 도구가 허용된 원문을 받았는지,
-요청이 끝난 뒤 개인정보 보호 세션이 정리됐는지 테스트 코드로 검증할 수 있습니다.
-
-```gradle
-dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0-SNAPSHOT"
-}
-```
-
-테스트에서는 이 모듈이 제공하는 `PrivacyTestProbe`로 모델과 도구에 전달되는 값을
-기록합니다. 요청 실행 후 `PrivacyTestAssertions.assertThatPrivacy(...)`로 그 기록을
-검증합니다.
-
-아래는 JUnit 테스트 메서드 예시입니다. 이름(`PERSON`)과 이메일(`EMAIL_ADDRESS`)을
-탐지하도록 분석기를 구성하고, `PrivacyService`와
-`GuardrailsChatClientFactory guardrails`를 테스트에 주입합니다.
-예제에서 `customerLookup`에 `PERSON`의 원문 공개를 허용하고,
-개인정보 처리 후 도구에 전달된 값을 기록합니다.
-
-예시에서 사용하는 값과 객체의 의미는 다음과 같습니다.
-
-| 값 또는 변수 | 테스트 코드에서 준비할 내용 |
-| --- | --- |
-| `testModel` | 첫 응답에서 `customerLookup` 도구를 요청하고, 도구 실행 후 최종 응답을 반환하도록 준비한 `ChatModel`입니다. 테스트용 구현이나 mock을 사용할 수 있습니다. |
-| `customerLookup` | 호출 시 전달되는 값을 확인할 원본 `ToolCallback`입니다. 테스트용 도구를 만들거나, 검증하려는 애플리케이션의 도구 콜백을 사용합니다. |
-| `"Alice"`, `"alice@example.com"` | 개인정보 탐지와 전달 여부를 확인하기 위한 예제 이름과 이메일입니다. 테스트 입력과 검증 메서드에 사용할 값을 맞춰 지정하세요. |
-
-이 테스트에서 `testModel`이 만드는 도구 호출 인자에는 모델 입력에서 받은 `PERSON`
-불투명 토큰을 사용하세요. 그러면 불투명 토큰이 도구에 전달되기 전에 `"Alice"`로 복원되는지
-확인할 수 있습니다.
-
-```java
-@Test
-void protectsModelInputAndDisclosesAllowedToolInput() {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder()
-            .privacy(privacy -> privacy.toolDisclosurePolicy(
-                    ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("PERSON")))))
-            .build();
-
-    try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {
-        ChatClient client = guardrails.builder(privacyProbe.wrapModel(testModel), policy)
-                .defaultTools(privacyProbe.wrapTool(customerLookup))
-                .build();
-
-        client.prompt()
-                .user("Find Alice (alice@example.com).")
-                .call()
-                .content();
-
-        assertThatPrivacy(privacyProbe)
-                .modelRequestsDoNotContainRawValues("Alice", "alice@example.com")
-                .modelRequestsContainOpaqueToken("PERSON")
-                .toolInputsContain("customerLookup", "Alice")
-                .hasNoActivePrivacySessions();
-    }
-}
-```
-
-`wrapModel(...)`은 모델이 실제로 받은 요청을 기록합니다.
-`wrapTool(...)`은 도구에 전달된 입력값과 도구의 반환값을 기록합니다.
-개인정보 보호는 `GuardrailsChatClientFactory`에 전달한 정책에 따라 적용됩니다.
-
-외부 LLM 연결 없이도 테스트용 `ChatModel`로 개인정보 보호 동작을 검증할 수 있습니다.
-
-이 예제는 대표적인 검증 메서드를 보여줍니다. 전체 테스트 유틸리티와 검증 메서드는
-각 클래스의 Javadoc과 IDE 자동완성에서 확인할 수 있습니다.
-
-`PrivacyTestProbe`에는 테스트 원문이 기록될 수 있으므로 테스트 환경에서만
-사용하세요. 위 예제처럼 try-with-resources로 사용하면 종료 시 기록이 정리됩니다.
-테스트 도중 기록만 초기화하려면 `clear()`를 사용할 수 있습니다.
-
-## 개인정보 보호 런타임 관측
-
-애플리케이션은 선택적으로 `PrivacyEnforcementObserver` 타입의 Spring 빈을 하나 등록해
-스타터가 관리하는 개인정보 보호 경계의 처리 결과를 받을 수 있습니다.
-
-```java
-@Bean
-PrivacyEnforcementObserver privacyEnforcementObserver() {
-    return event -> privacyMetrics.record(event.boundary(), event.outcome());
-}
-```
-
-`privacyMetrics.record(...)`는 애플리케이션의 메트릭 기록 코드를 나타내는 예시입니다.
-사용하는 모니터링 도구에 맞는 코드로 바꾸세요.
-
-라이브러리는 개인정보 보호 처리가 끝나면 등록된 옵저버에 이벤트를 전달합니다.
-`boundary()`는 이벤트가 발생한 지점을, `outcome()`은 해당 지점의 처리 결과를
-나타냅니다. 따라서 요청 하나에서 여러 이벤트가 발생할 수 있습니다. 요청이 특정
-경계를 지나지 않으면 해당 경계의 이벤트는 전달되지 않습니다. 출력 정책에 따른
-차단은 `BLOCKED`로 알리지만, 그 밖의 처리 실패를 알리는 이벤트는 제공하지 않습니다.
-
-`PrivacyEnforcementEvent`에는 의도적으로 `boundary()`와 `outcome()`만 포함됩니다.
-개인정보 원문, 불투명 토큰, 엔티티 유형, 페이로드, 도구 이름, 요청 식별자와
-상관관계 데이터는 전달하지 않습니다.
-
-| 경계 (`boundary`) | 이벤트 발생 시점 | 결과 (`outcome`)와 의미 |
-| --- | --- | --- |
-| `MODEL` | 모델에 전달할 요청의 보호 처리가 완료된 뒤 | `PROTECTED` — 모델 요청 보호가 완료됨 |
-| `TOOL_INPUT` | 도구 입력 처리가 완료된 뒤 | `DISCLOSED` — 정책에 따라 개인정보 원문을 하나 이상 복원함<br>`PROTECTED` — 도구에 전달하기 위해 복원된 개인정보 원문이 없음 |
-| `TOOL_RESULT` | 도구 결과의 보호 처리가 완료된 뒤 | `PROTECTED` — 도구 결과 보호가 완료됨 |
-| `APPLICATION_OUTPUT` | 최종 응답에 출력 보호를 적용할 때 | `PROTECTED` — 출력 보호가 완료되어 응답을 반환할 수 있음<br>`BLOCKED` — `BLOCK` 정책이 개인정보를 탐지해 응답 대신 차단 예외를 발생시킴 |
-
-`PROTECTED`는 해당 경계의 보호 처리가 정상적으로 완료됐다는 뜻입니다. 개인정보가
-있었는지 또는 실제 내용이 변경됐는지는 나타내지 않습니다. `TOOL_INPUT`에서
-`PROTECTED`는 도구에 전달하기 위해 복원된 개인정보 원문이 없다는 뜻입니다.
-
-스트리밍 애플리케이션 출력은 버퍼링된 전체 응답의 보호 처리가 끝난 뒤 이벤트를
-한 번만 전달합니다. 옵저버 콜백은 여러 요청에서 동시에 실행될 수 있습니다. 스트리밍
-출력에서는 Reactor가 응답 스트림을 처리하는 스레드에서 콜백을 실행할 수 있으므로,
-요청을 처음 처리한 스레드와 같다고 가정하면 안 됩니다.
-
-로그 기록이나 메트릭 갱신처럼 짧은 작업은 콜백에서 바로 수행해도 됩니다. 네트워크나
-데이터베이스 I/O가 필요하면 작업을 별도 큐에 넣고 콜백은 즉시 반환하는 방식을
-권장합니다. 옵저버 콜백에서 발생한 비치명적 오류는 무시되며 개인정보 보호 처리에는
-영향을 주지 않습니다.
-
-Spring Boot 스타터를 사용하면 등록한 옵저버 빈이 자동으로 연결됩니다. 스타터 없이
-구성할 때는 `PrivacyChatClientConfigurer.builder(privacyService).enforcementObserver(observer)`로
-옵저버를 지정한 뒤 configurer를 생성하세요. 모델 요청의 개인정보 보호 처리 결과를
-받을 수 있고, 출력 보호를 활성화하면 출력 처리 결과도 받습니다.
-도구 이벤트를 받으려면 `PrivacyToolCallbackFactory`의 생성자에도 옵저버를 별도로
-전달해야 합니다. `PrivacyOutputAdvisor`를 직접 생성한다면
-옵저버를 받는 생성자를 사용하세요. 옵저버를 지정하지 않은 configurer와 구성 요소는
-관측 이벤트를 전달하지 않습니다.
-
-## 저장 데이터와 진단 정보
-
-이 라이브러리는 모델에 전달되는 메모리와 검색 문서의 개인정보를 보호하지만, 이미
-저장된 데이터 자체를 찾아서 수정하지는 않습니다. `ChatMemory`, 벡터 저장소,
-데이터베이스, 로그와 추적 정보 등에 저장된 개인정보는 애플리케이션에서 별도로
-보호해야 합니다.
-
-[추론 텍스트 보호](#추론-텍스트-보호)에 명시한 필드 외의 응답 메타데이터와 비텍스트
-미디어는 자동으로 보호하지 않습니다.
-
-`PiiAnalyzerFailureObserver`에는 개인정보나 상세 예외 내용 대신 분석기 ID, 실패
-코드, 처리 단계와 시도 횟수처럼 정제된 실패 정보만 전달됩니다. 분석기나 원문 공개가
-허용된 도구의 상세 진단 정보에는 개인정보가 포함될 수 있으므로, 애플리케이션의
-안전한 로그 또는 모니터링 시스템에서 관리하세요.
-
-### 개인정보 보호 오류 처리
-
-`PrivacyGuardrailException`은 이 라이브러리의 개인정보 보호 처리 과정에서 발생한
-오류를 나타냅니다. `code()`로 오류 유형을, `phase()`로 오류가 발생한 처리 단계를
-확인할 수 있습니다.
-
-`PrivacyFailureCode`는 이 라이브러리에서 발생한 오류에만 사용합니다. 모델 제공자나
-애플리케이션 도구 자체에서 발생한 예외는 기존 예외를 그대로 전달합니다.
-
-사용 가능한 오류 유형과 자세한 의미는 `PrivacyFailureCode`의 Javadoc에서 확인할 수
-있습니다.
-
-| `phase()` | 의미 |
-| --- | --- |
-| `ANALYSIS` | 개인정보 탐지 및 분석 |
-| `TOKENIZATION` | 개인정보 토큰화 |
-| `TOKEN_SIMPLIFICATION` | 세션에서 발급한 개인정보 토큰의 난수 부분 제거 |
-| `REDACTION` | 개인정보를 마스킹 |
-| `DETOKENIZATION` | 허용된 원문 복원 |
-| `SESSION` | 개인정보 보호 세션 처리 |
-| `OUTPUT_POLICY` | 최종 출력 정책 적용 |
-| `TOOL_INPUT` | 도구 입력 검사 및 원문 공개 |
-| `TOOL_EXECUTION` | 도구 실행 경계 검사 |
-| `TOOL_OUTPUT` | 도구 실행 결과 보호 |

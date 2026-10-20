@@ -13,14 +13,14 @@ import java.util.function.UnaryOperator;
 
 /** Inspects input text before each model call, including calls made after tool execution. */
 final class ContentInspectionStage implements BiConsumer<ChatClientRequest, Boolean> {
-    private final InspectionEnforcement enforcement;
-    private final InspectionLimits limits;
+    private final InspectionEnforcement inspectionEnforcement;
+    private final InspectionLimits inspectionLimits;
     private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
 
-    ContentInspectionStage(InspectionService inspectionService, InspectionLimits limits,
-            PrivacyProcessingStatusResolver privacyProcessingStatusResolver, InspectionObserver observer) {
-        this.enforcement = new InspectionEnforcement(inspectionService, limits, observer);
-        this.limits = limits;
+    ContentInspectionStage(InspectionService inspectionService, InspectionLimits inspectionLimits,
+        PrivacyProcessingStatusResolver privacyProcessingStatusResolver, InspectionObserver inspectionObserver) {
+        this.inspectionEnforcement = new InspectionEnforcement(inspectionService, inspectionLimits, inspectionObserver);
+        this.inspectionLimits = inspectionLimits;
         this.privacyProcessingStatusResolver =
                 Objects.requireNonNull(privacyProcessingStatusResolver, "privacyProcessingStatusResolver");
     }
@@ -28,15 +28,15 @@ final class ContentInspectionStage implements BiConsumer<ChatClientRequest, Bool
     @Override
     public void accept(ChatClientRequest chatClientRequest, Boolean streaming) {
         UnaryOperator<String> piiTokenSimplifier = PiiTokenSimplifierContext.findSimplifier(chatClientRequest);
-        enforcement.inspect(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier,
-                new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, streaming));
+        inspectionEnforcement.inspect(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier,
+            new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, streaming));
     }
 
     private List<ContentSegment> extractInputSegments(ChatClientRequest chatClientRequest) {
         ContentSegment.PrivacyProcessingStatus privacyProcessingStatus = Objects.requireNonNull(
                 privacyProcessingStatusResolver.resolve(chatClientRequest), "privacyProcessingStatus");
         InspectionTextExtractor inspectionTextExtractor =
-                new InspectionTextExtractor(limits, privacyProcessingStatus, "segment-");
+            new InspectionTextExtractor(inspectionLimits, privacyProcessingStatus, "segment-");
         chatClientRequest.prompt().getInstructions().forEach(inspectionTextExtractor::addMessage);
         return inspectionTextExtractor.buildSegments();
     }

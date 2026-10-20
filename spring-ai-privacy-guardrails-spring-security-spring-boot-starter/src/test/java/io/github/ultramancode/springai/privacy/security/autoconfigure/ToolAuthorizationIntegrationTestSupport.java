@@ -75,17 +75,17 @@ abstract class ToolAuthorizationIntegrationTestSupport {
     }
 
     protected ApplicationContextRunner privacyContextRunner(
-            boolean outputEnabled, PrivacyResponseInspectionLimits limits) {
+        boolean outputEnabled, PrivacyResponseInspectionLimits limits) {
         return contextRunner().withConfiguration(AutoConfigurations.of(
-                        PrivacyGuardrailsAutoConfiguration.class, PrivacySecurityAutoConfiguration.class))
-                .withUserConfiguration(PrivacyClientConfiguration.class)
-                .withBean(PrivacyClientSettings.class, () -> new PrivacyClientSettings(outputEnabled, limits))
-                .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.byToolName(
-                        Map.of("customerLookup", List.of("EMPLOYEE_ID"))))
-                .withPropertyValues("spring.ai.privacy.regex.enabled=true",
-                        "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                        "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
-                        "spring.ai.privacy.regex.rules[0].score=0.9");
+            PrivacyGuardrailsAutoConfiguration.class, PrivacySecurityAutoConfiguration.class))
+            .withUserConfiguration(PrivacyClientConfiguration.class)
+            .withBean(PrivacyClientSettings.class, () -> new PrivacyClientSettings(outputEnabled, limits))
+            .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.byToolName(
+                Map.of("customerLookup", List.of("EMPLOYEE_ID"))))
+            .withPropertyValues("spring.ai.privacy.regex.enabled=true",
+                "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
+                "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
+                "spring.ai.privacy.regex.rules[0].score=0.9");
     }
 
     protected void startModelServer(String... responses) throws IOException {
@@ -232,14 +232,15 @@ abstract class ToolAuthorizationIntegrationTestSupport {
     static class PrivacyClientConfiguration {
         @Bean
         PrivacyChatClientConfigurer privacyChatClientConfigurer(
-                PrivacyService service, PrivacyToolCallbackFactory toolFactory, PrivacyClientSettings settings) {
-            PrivacyChatClientConfigurer.Builder builder = PrivacyChatClientConfigurer.builder(service)
-                    .toolCallbackFactory(toolFactory).responseInspectionLimits(settings.limits());
-            if (settings.outputEnabled()) {
-                builder.outputProtection(PrivacyOutputAdvisor.DEFAULT_ACTION,
-                        PrivacyOutputAdvisor.DEFAULT_BLOCK_EXCEPTION_MESSAGE);
+            PrivacyService privacyService, PrivacyToolCallbackFactory privacyToolCallbackFactory,
+            PrivacyClientSettings privacyClientSettings) {
+            PrivacyChatClientConfigurer.Builder privacyConfigurerBuilder = PrivacyChatClientConfigurer.builder(privacyService)
+                .toolCallbackFactory(privacyToolCallbackFactory).responseInspectionLimits(privacyClientSettings.limits());
+            if (privacyClientSettings.outputEnabled()) {
+                privacyConfigurerBuilder.outputProtection(PrivacyOutputAdvisor.DEFAULT_ACTION,
+                    PrivacyOutputAdvisor.DEFAULT_BLOCK_EXCEPTION_MESSAGE);
             }
-            return builder.build();
+            return privacyConfigurerBuilder.build();
         }
     }
 

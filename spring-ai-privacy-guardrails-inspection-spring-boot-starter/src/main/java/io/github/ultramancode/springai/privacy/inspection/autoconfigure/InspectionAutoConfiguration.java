@@ -22,11 +22,11 @@ import org.springframework.context.annotation.Configuration;
 import java.util.function.Predicate;
 
 /**
- * Configures content inspection for selected clients.
+ * Provides content inspection services and client integration.
  *
  * <p>Creates a default {@link InspectionService} from {@link ContentInspector} beans
- * unless the application provides a service. Apply the {@link InspectionChatClientConfigurer}
- * to each client builder that should use inspection.
+ * unless the application provides a service. The {@link InspectionChatClientConfigurer}
+ * bean supports applying inspection to client builders.
  *
  * <p>The default service runs inspectors in Spring order. The default content policy
  * blocks findings. The default failure policy is
@@ -49,29 +49,29 @@ public class InspectionAutoConfiguration {
     @ConditionalOnBean(ContentInspector.class)
     @ConditionalOnMissingBean
     InspectionService inspectionService(
-            ObjectProvider<ContentInspector> inspectors,
-            InspectionPolicy policy,
-            InspectionProperties properties) {
+        ObjectProvider<ContentInspector> contentInspectors,
+        InspectionPolicy inspectionPolicy,
+        InspectionProperties inspectionProperties) {
         return new InspectionService(
-                inspectors.orderedStream().toList(), policy,
-                properties.getFailurePolicy(), properties.getFailurePolicyOverrides())
-                .withPiiTokenSimplification(properties.getPiiTokenSimplificationInspectors());
+            contentInspectors.orderedStream().toList(), inspectionPolicy,
+            inspectionProperties.getFailurePolicy(), inspectionProperties.getFailurePolicyOverrides())
+            .withPiiTokenSimplification(inspectionProperties.getPiiTokenSimplificationInspectors());
     }
 
     @Bean
     @ConditionalOnBean(InspectionService.class)
     @ConditionalOnMissingBean
     InspectionChatClientConfigurer inspectionChatClientConfigurer(
-            InspectionService service,
-            ObjectProvider<PrivacyProcessingStatusResolver> resolver,
-            ObjectProvider<InspectionObserver> observer) {
-        InspectionObserver inspectionObserver = observer.getIfAvailable(InspectionObserver::noop);
-        InspectionLimits limits = InspectionLimits.defaults();
+        InspectionService inspectionService,
+        ObjectProvider<PrivacyProcessingStatusResolver> privacyProcessingStatusResolverProvider,
+        ObjectProvider<InspectionObserver> inspectionObserverProvider) {
+        InspectionObserver inspectionObserver = inspectionObserverProvider.getIfAvailable(InspectionObserver::noop);
+        InspectionLimits inspectionLimits = InspectionLimits.defaults();
         return new InspectionChatClientConfigurer(
-                service,
-                limits,
-                resolver.getIfAvailable(PrivacyProcessingStatusResolver::unknown),
-                inspectionObserver);
+            inspectionService,
+            inspectionLimits,
+            privacyProcessingStatusResolverProvider.getIfAvailable(PrivacyProcessingStatusResolver::unknown),
+            inspectionObserver);
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -82,10 +82,10 @@ public class InspectionAutoConfiguration {
         PrivacyProcessingStatusResolver privacyProcessingStatusResolver(
                 @Qualifier("privacyModelContentProtectionCheck")
                         Predicate<ChatClientRequest> privacyProcessingCheck) {
-            return request ->
-                    privacyProcessingCheck.test(request)
-                            ? ContentSegment.PrivacyProcessingStatus.PROCESSED
-                            : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
+            return chatClientRequest ->
+                privacyProcessingCheck.test(chatClientRequest)
+                    ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                    : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         }
     }
 }

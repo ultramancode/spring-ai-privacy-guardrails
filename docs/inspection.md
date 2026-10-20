@@ -20,7 +20,7 @@ Use the same version, `0.4.0` or later, for all Privacy Guardrails modules when 
 For a rules-based setup, add these modules to an application that provides a Spring AI
 `ChatModel`:
 
-- `spring-ai-privacy-guardrails-client-spring-boot-starter`
+- `spring-ai-privacy-guardrails-chat-client-spring-boot-starter`
 - `spring-ai-privacy-guardrails-inspection-rules`
 
 The client starter does not include an inspection backend.
@@ -36,9 +36,9 @@ ContentInspector applicationRules() {
 }
 
 @Bean
-ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection().build();
-    return guardrails.builder(chatModel, policy).build();
+ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().inspection().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
@@ -58,7 +58,7 @@ prompt-injection detector.
 Prepare the required components and add `privacy()` or `toolAuthorization(true)`
 to the same `GuardrailsPolicy`.
 Privacy processing runs first, followed by tool-definition authorization and content
-inspection. See [Client policies](clients.md) for per-client Java policies.
+inspection. See [Configuration](configuration.md) for per-client Java policies.
 
 ### Simplify PII tokens for selected inspectors
 
@@ -95,12 +95,12 @@ Use the rules module to inspect text directly. This example needs no model, Boot
 ```java
 InspectionRule rule = InspectionRule.literal(
     "blocked-phrase", InspectionFinding.Category.PROMPT_INJECTION, "ignore previous instructions");
-InspectionService service = new InspectionService(
+InspectionService inspectionService = new InspectionService(
     List.of(new RuleBasedContentInspector("application-rules", List.of(rule))));
 InspectionRequest request = new InspectionRequest(List.of(new ContentSegment(
     "input", ContentSegment.Role.USER, ContentSegment.PrivacyProcessingStatus.UNPROCESSED,
     "ignore previous instructions")), InspectionLimits.defaults());
-InspectionReport report = service.inspect(request);
+InspectionReport report = inspectionService.inspect(request);
 ```
 
 For this input, `report.decision()` is `BLOCK`. The service returns a decision for
@@ -111,10 +111,10 @@ the caller to enforce. The ChatClient integration throws an exception for a bloc
 Output inspection is disabled by default. Enable it on the configured client with:
 
 ```java
-GuardrailsPolicy policy = GuardrailsPolicy.builder()
-        .inspection(inspection -> inspection.applicationOutput(true))
+GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(true))
         .build();
-ChatClient client = guardrails.builder(chatModel, policy).build();
+ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 ```
 
 Output inspection checks the assistant text, including `returnDirect` tool
@@ -139,13 +139,13 @@ To apply different rules to output, supply an advisor with a separate `Inspectio
 
 ```java
 GuardrailsPolicy inputPolicy = GuardrailsPolicy.builder().inspection().build();
-ChatClient client = guardrails.builder(chatModel, inputPolicy)
+ChatClient chatClient = guardrails.builder(chatModel, inputPolicy)
     .defaultAdvisors(new InspectionOutputAdvisor(outputService))
     .build();
 ```
 
 The policy leaves output inspection disabled so the separate advisor owns it.
-For output-only inspection with the same service, use a [client policy](clients.md#policy-per-client).
+For output-only inspection with the same service, use a [client policy](configuration.md#policy-per-client).
 
 ## HTTP guard models and privacy
 
@@ -154,7 +154,7 @@ inspector for your deployed guard model. This module uses the official OpenAI Ja
 
 The example below requires privacy-processed content. Select privacy and inspection together as shown [above](#combine-with-privacy-or-tool-authorization).
 If output inspection is enabled too, also enable privacy output protection as described
-in [Output Policy and Streaming](configuration.md#output-policy-and-streaming).
+in [Output Policy and Streaming](privacy.md#output-policy-and-streaming).
 
 ```java
 @Bean
@@ -264,7 +264,7 @@ Failures preserve findings already collected and IDs of fully inspected segments
 
 ### Configure without the Spring Boot starter
 
-Supply services and a policy to the factory as described in [Client policies](clients.md#custom-tool-advisors-and-non-boot-applications).
+Supply services and a policy to the factory as described in [Configuration](configuration.md#without-spring-boot).
 Selecting privacy in the same policy automatically connects its processing status to inspection.
 
 ## Local content inspection with ONNX
@@ -434,7 +434,7 @@ an override use the common failure policy. Unknown IDs cause initialization to f
 Direct Java callers can pass the overrides to `InspectionService`:
 
 ```java
-InspectionService service = new InspectionService(
+InspectionService inspectionService = new InspectionService(
         inspectors,
         InspectionPolicy.blockFindings(),
         InspectionFailurePolicy.FAIL_CLOSED,

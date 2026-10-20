@@ -69,7 +69,7 @@ public record OpenAiCompatibleInspectionConfig(
         return new Builder(baseUrl, model);
     }
 
-    /** Named settings for an HTTP guard model. */
+    /** Configures the connection to an HTTP guard model. */
     public static final class Builder {
         private final URI baseUrl;
         private final String model;
@@ -105,7 +105,7 @@ public record OpenAiCompatibleInspectionConfig(
 
         public OpenAiCompatibleInspectionConfig build() {
             return new OpenAiCompatibleInspectionConfig(baseUrl, model, apiKey, requestTimeout,
-                    maxResponseBytes, requirePrivacyProcessedContent);
+                maxResponseBytes, requirePrivacyProcessedContent);
         }
     }
 }

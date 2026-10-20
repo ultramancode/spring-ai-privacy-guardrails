@@ -11,7 +11,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: ed74653521c10f728fceee4d03d750c232863ee72493df810a3d443f155acf8a -->
+<!-- i18n-source-sha256: a61a4fc2500cb15434f694adddb4324c98c4de28ea9a0d89c5d2257dafaf2179 -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -45,10 +45,10 @@ Privacy Boundary Inspector에서 Local Tool, RAG 및 MCP 시나리오의 모델�
 
 | 가이드 | 다루는 내용 |
 | --- | --- |
-| [클라이언트 정책](clients.md) | 기능 선택, 클라이언트별 정책과 자동 도구 보호. |
 | [시작하기](getting-started.md) | 스타터 선택, 기본 설정과 모델·도구·MCP·출력 보호 |
+| [설정](configuration.md) | 의존성, 클라이언트 생성, 기능 선택과 정책 재사용 |
 | [샘플 / 데모 가이드](sample.md) | Inspector 시나리오, 예상 결과, 엔드포인트와 언어 선택 |
-| [설정과 사용법](configuration.md) | 스타터, 분석기, 출력 정책, 도구 공개와 처리 제한 |
+| [개인정보 보호](privacy.md) | 분석기, 토큰화, 도구 원문 공개, 출력 보호와 처리 한도 |
 | [Spring Security 도구 권한](security.md) | 사용자별 도구 공개·실행 권한 검사, Tool Search와 비동기 보안 컨텍스트 |
 | [콘텐츠 검사](inspection.md) | 규칙, 로컬 ONNX 텍스트 분류 모델, HTTP 검사 모델을 통한 입력 검사와 선택적 출력 검사 |
 | [아키텍처](architecture.md) | 모듈 경계, 요청 세션, 탐지 결과 해석과 실행 수명 주기 |

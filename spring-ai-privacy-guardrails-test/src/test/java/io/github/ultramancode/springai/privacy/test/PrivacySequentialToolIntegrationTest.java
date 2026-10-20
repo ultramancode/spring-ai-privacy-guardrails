@@ -1,7 +1,7 @@
 package io.github.ultramancode.springai.privacy.test;
 
-import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
-import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
@@ -46,19 +46,19 @@ class PrivacySequentialToolIntegrationTest {
     @Test
     void chatClientExecutesTwoScopedToolsAndRetokenizesStructuredResultBetweenModelCalls() {
         PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        GuardrailsPolicy policy = GuardrailsPolicy.builder()
-                .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of(
-                        "crmLookup", Set.of("CUSTOMER_ID"),
-                        "emailCustomer", Set.of("EMAIL_ADDRESS")
-                ))))
-                .build();
-        SequentialToolModel model = new SequentialToolModel();
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
+        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of(
+                "crmLookup", Set.of("CUSTOMER_ID"),
+                "emailCustomer", Set.of("EMAIL_ADDRESS")
+            ))))
+            .build();
+        SequentialToolModel chatModel = new SequentialToolModel();
         ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
-                .build()
-                .builder(probe.wrapModel(model), policy)
-                .defaultTools(probe.wrapTool(crmLookup()), probe.wrapTool(emailCustomer()))
-                .build();
+            .build()
+            .builder(privacyTestProbe.wrapModel(chatModel), guardrailsPolicy)
+            .defaultTools(privacyTestProbe.wrapTool(crmLookup()), privacyTestProbe.wrapTool(emailCustomer()))
+            .build();
 
         String response = chatClient.prompt()
                 .user("Look up " + CUSTOMER_ID + " and email the primary contact")
@@ -66,29 +66,29 @@ class PrivacySequentialToolIntegrationTest {
                 .content();
 
         assertThat(response).isEqualTo("Workflow complete");
-        assertThat(model.calls()).isEqualTo(3);
-        assertThatPrivacy(probe)
-                .hasModelRequestCount(3)
-                .hasToolCallCount(2)
-                .modelRequestsDoNotContainRawValues(CUSTOMER_ID, EMAIL_ADDRESS)
-                .modelRequestsContainOpaqueToken("CUSTOMER_ID")
-                .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
-                .toolInputsContain("crmLookup", CUSTOMER_ID)
-                .toolInputsDoNotContainRawValues("crmLookup", EMAIL_ADDRESS)
-                .toolOutputsContain("crmLookup", CUSTOMER_ID, EMAIL_ADDRESS)
-                .toolInputsContain("emailCustomer", EMAIL_ADDRESS)
-                .toolInputsDoNotContainRawValues("emailCustomer", CUSTOMER_ID)
-                .toolInputsContainOpaqueToken("emailCustomer", "CUSTOMER_ID")
-                .hasNoActivePrivacySessions();
+        assertThat(chatModel.calls()).isEqualTo(3);
+        assertThatPrivacy(privacyTestProbe)
+            .hasModelRequestCount(3)
+            .hasToolCallCount(2)
+            .modelRequestsDoNotContainRawValues(CUSTOMER_ID, EMAIL_ADDRESS)
+            .modelRequestsContainOpaqueToken("CUSTOMER_ID")
+            .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
+            .toolInputsContain("crmLookup", CUSTOMER_ID)
+            .toolInputsDoNotContainRawValues("crmLookup", EMAIL_ADDRESS)
+            .toolOutputsContain("crmLookup", CUSTOMER_ID, EMAIL_ADDRESS)
+            .toolInputsContain("emailCustomer", EMAIL_ADDRESS)
+            .toolInputsDoNotContainRawValues("emailCustomer", CUSTOMER_ID)
+            .toolInputsContainOpaqueToken("emailCustomer", "CUSTOMER_ID")
+            .hasNoActivePrivacySessions();
 
-        assertThat(probe.toolCalls())
-                .filteredOn(call -> call.toolName().equals("emailCustomer"))
-                .singleElement()
-                .satisfies(call -> {
-                    Map<?, ?> input = new ObjectMapper().readValue(call.input(), Map.class);
-                    assertThat(input.get("email")).isEqualTo(EMAIL_ADDRESS);
-                    assertThat(input.get("customerId").toString()).matches(CUSTOMER_ID_TOKEN);
-                });
+        assertThat(privacyTestProbe.toolCalls())
+            .filteredOn(call -> call.toolName().equals("emailCustomer"))
+            .singleElement()
+            .satisfies(call -> {
+                Map<?, ?> input = new ObjectMapper().readValue(call.input(), Map.class);
+                assertThat(input.get("email")).isEqualTo(EMAIL_ADDRESS);
+                assertThat(input.get("customerId").toString()).matches(CUSTOMER_ID_TOKEN);
+            });
     }
 
     private PrivacyService privacyService() {

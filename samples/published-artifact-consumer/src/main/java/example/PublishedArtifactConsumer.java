@@ -10,8 +10,8 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
-import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
-import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -55,11 +55,11 @@ public class PublishedArtifactConsumer {
     @Bean
     GuardrailsPolicy guardrailsPolicy() {
         ToolDisclosurePolicy disclosure = ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")));
+            Map.of("customerLookup", List.of("CUSTOMER_ID")));
         return GuardrailsPolicy.builder()
-                .privacy(privacy -> privacy.toolDisclosurePolicy(disclosure).outputProtection(true))
-                .toolAuthorization(true)
-                .build();
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(disclosure).outputProtection(true))
+            .toolAuthorization(true)
+            .build();
     }
 
     @Bean
@@ -79,22 +79,22 @@ public class PublishedArtifactConsumer {
 
     public static void main(String[] args) {
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
-                PublishedArtifactConsumer.class
+            PublishedArtifactConsumer.class
         )
-                .web(WebApplicationType.NONE)
-                .properties(
-                        "spring.main.banner-mode=off",
-                        "logging.level.root=ERROR",
-                        "spring.ai.privacy.regex.enabled=true",
-                        "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
-                        "spring.ai.privacy.regex.rules[0].pattern="
-                                + "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
-                        "spring.ai.privacy.regex.rules[0].score=0.95",
-                        "spring.ai.privacy.regex.rules[1].entity-type=CUSTOMER_ID",
-                        "spring.ai.privacy.regex.rules[1].pattern=\\bCUST-\\d{4}\\b",
-                        "spring.ai.privacy.regex.rules[1].score=0.99"
-                )
-                .run(args)) {
+            .web(WebApplicationType.NONE)
+            .properties(
+                "spring.main.banner-mode=off",
+                "logging.level.root=ERROR",
+                "spring.ai.privacy.regex.enabled=true",
+                "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
+                "spring.ai.privacy.regex.rules[0].pattern="
+                    + "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+                "spring.ai.privacy.regex.rules[0].score=0.95",
+                "spring.ai.privacy.regex.rules[1].entity-type=CUSTOMER_ID",
+                "spring.ai.privacy.regex.rules[1].pattern=\\bCUST-\\d{4}\\b",
+                "spring.ai.privacy.regex.rules[1].score=0.99"
+            )
+            .run(args)) {
             verifyRuntime(context);
         }
     }
@@ -137,15 +137,15 @@ public class PublishedArtifactConsumer {
                 PublishedAuthorizationChecks.class
         );
         AtomicInteger deniedToolCalls = new AtomicInteger();
-        try (PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService)) {
+        try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService)) {
             AtomicReference<CustomerLookupRequest> toolInput = new AtomicReference<>();
             ToolCallback customerTool = customerLookup(toolInput);
             ToolCallback deniedTool = adminDelete(deniedToolCalls);
-            ChatModel model = probe.wrapModel(
-                    new PublishedToolLoopModel(upstreamManager)
+            ChatModel chatModel = privacyTestProbe.wrapModel(
+                new PublishedToolLoopModel(upstreamManager)
             );
-            ChatClient.Builder builder = context.getBean(GuardrailsChatClientFactory.class)
-                    .builder(model).defaultTools(customerTool, deniedTool);
+            ChatClient.Builder chatClientBuilder = context.getBean(GuardrailsChatClientFactory.class)
+                .builder(chatModel).defaultTools(customerTool, deniedTool);
             SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
             securityContext.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
                     "published-consumer",
@@ -155,28 +155,28 @@ public class PublishedArtifactConsumer {
             SecurityContextHolder.setContext(securityContext);
             String finalResponse;
             try {
-                finalResponse = builder.build()
-                        .prompt()
-                        .user("Find CUST-0042 for alice@example.com")
-                        .call()
-                        .content();
+                finalResponse = chatClientBuilder.build()
+                    .prompt()
+                    .user("Find CUST-0042 for alice@example.com")
+                    .call()
+                    .content();
             } finally {
                 SecurityContextHolder.clearContext();
             }
 
             CustomerLookupRequest input = toolInput.get();
-            if (probe.modelRequests().size() != 2 || input == null || deniedToolCalls.get() != 0) {
+            if (privacyTestProbe.modelRequests().size() != 2 || input == null || deniedToolCalls.get() != 0) {
                 throw new IllegalStateException("Published client did not preserve the authorized tool loop");
             }
             if (!input.customerId().equals("CUST-0042") || input.email().contains("alice@example.com")) {
                 throw new IllegalStateException("Published client violated scoped disclosure");
             }
-            boolean modelSawRaw = probe.modelRequests().stream()
-                    .flatMap(request -> request.modelVisibleContent().stream())
-                    .anyMatch(content -> content.contains("CUST-0042")
-                            || content.contains("alice@example.com")
-                            || content.contains("CUST-9000")
-                            || content.contains("result@example.com"));
+            boolean modelSawRaw = privacyTestProbe.modelRequests().stream()
+                .flatMap(request -> request.modelVisibleContent().stream())
+                .anyMatch(content -> content.contains("CUST-0042")
+                    || content.contains("alice@example.com")
+                    || content.contains("CUST-9000")
+                    || content.contains("result@example.com"));
             if (modelSawRaw) {
                 throw new IllegalStateException("Published configurer exposed raw PII to the model");
             }
@@ -193,15 +193,15 @@ public class PublishedArtifactConsumer {
 
     private static ToolCallback customerLookup(AtomicReference<CustomerLookupRequest> input) {
         return FunctionToolCallback.builder(
-                        "customerLookup",
-                        (CustomerLookupRequest request) -> {
-                            input.set(request);
-                            return "processed CUST-9000 for result@example.com";
-                        }
-                )
-                .description("Returns one synthetic customer")
-                .inputType(CustomerLookupRequest.class)
-                .build();
+            "customerLookup",
+            (CustomerLookupRequest request) -> {
+                input.set(request);
+                return "processed CUST-9000 for result@example.com";
+            }
+        )
+            .description("Returns one synthetic customer")
+            .inputType(CustomerLookupRequest.class)
+            .build();
     }
 
     private static ToolCallback adminDelete(AtomicInteger calls) {

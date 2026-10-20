@@ -16,7 +16,7 @@ configurations {
 
 dependencies {
     implementation platform("org.springframework.boot:spring-boot-dependencies:${providers.gradleProperty('springBootVersion').get()}")
-    implementation project(':spring-ai-privacy-guardrails-client-spring-boot-starter')
+    implementation project(':spring-ai-privacy-guardrails-chat-client-spring-boot-starter')
     implementation project(':spring-ai-privacy-guardrails-spring-security-spring-boot-starter')
     runtimeOnly project(':spring-ai-privacy-guardrails-opennlp-spring-boot-starter')
     runtimeOnly project(':spring-ai-privacy-guardrails-presidio-spring-boot-starter')

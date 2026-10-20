@@ -140,28 +140,28 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         privacyContextRunner(outputEnabled, PrivacyResponseInspectionLimits.defaults()).run(context -> {
             PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
             ChatClient client = protectedBuilder(context,
-                            ToolSearchToolCallingAdvisor.builder().toolIndex(index).advisorOrder(toolOrder)
-                                    .systemMessageSuffix("Search for tools before using them."))
-                    .defaultTools(factory.wrap(tool("customerLookup", customerInput::set)),
-                            factory.wrap(tool("adminDelete", new AtomicInteger()))).build();
+                ToolSearchToolCallingAdvisor.builder().toolIndex(index).advisorOrder(toolOrder)
+                    .systemMessageSuffix("Search for tools before using them."))
+                .defaultTools(factory.wrap(tool("customerLookup", customerInput::set)),
+                    factory.wrap(tool("adminDelete", new AtomicInteger()))).build();
             authenticate();
             ChatClient.ChatClientRequestSpec request = client.prompt().user("Find EMP-0042")
-                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "combined-session"));
+                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "combined-session"));
 
             String response = executeRequest(request, streaming);
             assertThat(response).isEqualTo("done");
             assertThat(customerInput).hasValue("{\"id\":\"EMP-0042\"}");
             verify(index).indexTools(eq("combined-session"), argThat(references ->
-                    references.stream().map(ToolReference::toolName).toList().equals(List.of("customerLookup"))));
+                references.stream().map(ToolReference::toolName).toList().equals(List.of("customerLookup"))));
             ArgumentCaptor<ToolSearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(ToolSearchRequest.class);
             verify(index).search(searchRequestCaptor.capture());
             String searchQuery = searchRequestCaptor.getValue().query();
             assertThat(searchQuery).contains("Find ").doesNotContain("EMP-0042");
             assertThat(OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID")
-                    .matcher(searchQuery).find()).isTrue();
+                .matcher(searchQuery).find()).isTrue();
             // Three model calls: request toolSearchTool, request customerLookup, then return the final answer.
             assertThat(this.modelRequests).hasSize(3).allSatisfy(modelRequest ->
-                    assertThat(modelRequest).doesNotContain("EMP-0042", "adminDelete"));
+                assertThat(modelRequest).doesNotContain("EMP-0042", "adminDelete"));
         });
     }
 
@@ -214,18 +214,18 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
                 streaming ? finalStreamResponse() : finalResponse());
         AtomicInteger calls = new AtomicInteger();
         privacyContextRunner(outputEnabled, new PrivacyResponseInspectionLimits(1024, 64, 16_777_216, Duration.ofSeconds(60)))
-                .run(context -> {
-                    PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
-                    ChatClient client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0))
-                            .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
-                    authenticate();
+            .run(context -> {
+                PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
+                ChatClient client = protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(0))
+                    .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
+                authenticate();
 
-                    ChatClient.ChatClientRequestSpec request = client.prompt().user("Run lookup");
-                    assertThatThrownBy(() -> executeRequest(request, streaming))
-                            .hasMessageContaining("inspection limit");
-                    assertThat(calls).hasValue(0);
-                    assertThat(this.modelRequests).hasSize(1);
-                });
+                ChatClient.ChatClientRequestSpec request = client.prompt().user("Run lookup");
+                assertThatThrownBy(() -> executeRequest(request, streaming))
+                    .hasMessageContaining("inspection limit");
+                assertThat(calls).hasValue(0);
+                assertThat(this.modelRequests).hasSize(1);
+            });
     }
 
     @Test
@@ -400,12 +400,12 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         AtomicInteger customizations = new AtomicInteger();
         ChatClientBuilderCustomizer customizer = builder -> customizations.incrementAndGet();
         privacyContextRunner(outputEnabled, PrivacyResponseInspectionLimits.defaults())
-                .withBean(ChatClientBuilderCustomizer.class, () -> customizer).run(context -> {
-            assertThatThrownBy(() -> protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(toolOrder)))
+            .withBean(ChatClientBuilderCustomizer.class, () -> customizer).run(context -> {
+                assertThatThrownBy(() -> protectedBuilder(context, ToolCallingAdvisor.builder().advisorOrder(toolOrder)))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("order");
-            assertThat(customizations).hasValue(0);
-            assertThat(this.modelRequests).isEmpty();
-        });
+                assertThat(customizations).hasValue(0);
+                assertThat(this.modelRequests).isEmpty();
+            });
     }
 
     private ChatClient.Builder protectedBuilder(

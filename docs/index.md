@@ -41,10 +41,10 @@ See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 
 | Guide | Covers |
 | --- | --- |
-| [Client policies](clients.md) | Feature selection, per-client policies and automatic tool protection. |
 | [Getting Started](getting-started.md) | Starter selection, basic setup, and model, tool, MCP, and output protection. |
+| [Configuration](configuration.md) | Dependencies, client creation, feature selection and policy reuse. |
 | [Sample / Demo Guide](sample.md) | Inspector scenarios, expected results, endpoints, and language selection. |
-| [Configuration](configuration.md) | Starters, analyzers, output policy, tool disclosure, and processing limits. |
+| [Privacy Protection](privacy.md) | Analyzers, tokenization, tool disclosure, output protection and processing limits. |
 | [Spring Security Tool Authorization](security.md) | Optional principal-aware tool discovery and execution checks, Tool Search, and asynchronous context. |
 | [Content Inspection](inspection.md) | Input and optional output inspection with rules, local ONNX text classification models or HTTP guard models. |
 | [Architecture](architecture.md) | Module boundaries, request sessions, evidence resolution, and execution lifecycle. |

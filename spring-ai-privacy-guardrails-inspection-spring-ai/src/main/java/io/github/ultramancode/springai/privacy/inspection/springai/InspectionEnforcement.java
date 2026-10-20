@@ -17,55 +17,56 @@ import java.util.function.UnaryOperator;
 /** Shared ALLOW/BLOCK enforcement and payload-free observer notifications. */
 final class InspectionEnforcement {
     private final InspectionService inspectionService;
-    private final InspectionLimits limits;
-    private final InspectionObserver observer;
+    private final InspectionLimits inspectionLimits;
+    private final InspectionObserver inspectionObserver;
 
-    InspectionEnforcement(InspectionService inspectionService, InspectionLimits limits, InspectionObserver observer) {
+    InspectionEnforcement(InspectionService inspectionService, InspectionLimits inspectionLimits,
+        InspectionObserver inspectionObserver) {
         this.inspectionService = Objects.requireNonNull(inspectionService, "inspectionService");
-        this.limits = Objects.requireNonNull(limits, "limits");
-        this.observer = Objects.requireNonNull(observer, "observer");
+        this.inspectionLimits = Objects.requireNonNull(inspectionLimits, "inspectionLimits");
+        this.inspectionObserver = Objects.requireNonNull(inspectionObserver, "inspectionObserver");
     }
 
     void inspect(Supplier<List<ContentSegment>> contentSegmentsSupplier,
-            UnaryOperator<String> piiTokenSimplifier, InspectionExecution execution) {
-        InspectionReport report;
+        UnaryOperator<String> piiTokenSimplifier, InspectionExecution inspectionExecution) {
+        InspectionReport inspectionReport;
         try {
             InspectionRequest.checkInterrupted();
-            report = inspectionService.inspect(
-                    new InspectionRequest(contentSegmentsSupplier.get(), limits), piiTokenSimplifier);
+            inspectionReport = inspectionService.inspect(
+                new InspectionRequest(contentSegmentsSupplier.get(), inspectionLimits), piiTokenSimplifier);
         } catch (RuntimeException ex) {
-            throw failure(ex, execution);
+            throw failure(ex, inspectionExecution);
         }
         try {
-            observer.onInspection(report, execution);
+            inspectionObserver.onInspection(inspectionReport, inspectionExecution);
         } catch (RuntimeException ignored) {
             /* Observability cannot change enforcement. */
         }
         if (Thread.currentThread().isInterrupted()) {
-            InspectionReport cancelledReport = new InspectionReport(InspectionDecision.BLOCK, report.outcomes());
-            throw failure(new InspectionException(InspectionFailureCode.CANCELLED, cancelledReport), execution);
+            InspectionReport cancelledReport = new InspectionReport(InspectionDecision.BLOCK, inspectionReport.outcomes());
+            throw failure(new InspectionException(InspectionFailureCode.CANCELLED, cancelledReport), inspectionExecution);
         }
-        if (report.decision() == InspectionDecision.BLOCK) {
-            throw new InspectionBlockedException(report);
+        if (inspectionReport.decision() == InspectionDecision.BLOCK) {
+            throw new InspectionBlockedException(inspectionReport);
         }
     }
 
-    InspectionException failure(RuntimeException ex, InspectionExecution execution) {
-        InspectionFailureCode code = InspectionFailureCode.INVALID_RESULT;
-        InspectionReport report = null;
+    InspectionException failure(RuntimeException ex, InspectionExecution inspectionExecution) {
+        InspectionFailureCode failureCode = InspectionFailureCode.INVALID_RESULT;
+        InspectionReport inspectionReport = null;
         if (ex instanceof InspectionException classified) {
-            code = classified.failureCode();
-            report = classified.report().orElse(null);
+            failureCode = classified.failureCode();
+            inspectionReport = classified.report().orElse(null);
         }
         if (Thread.currentThread().isInterrupted()) {
-            code = InspectionFailureCode.CANCELLED;
+            failureCode = InspectionFailureCode.CANCELLED;
         }
-        InspectionException failure = new InspectionException(code, report);
+        InspectionException inspectionFailure = new InspectionException(failureCode, inspectionReport);
         try {
-            observer.onFailure(failure, execution);
+            inspectionObserver.onFailure(inspectionFailure, inspectionExecution);
         } catch (RuntimeException ignored) {
             /* Observability cannot change enforcement. */
         }
-        return failure;
+        return inspectionFailure;
     }
 }

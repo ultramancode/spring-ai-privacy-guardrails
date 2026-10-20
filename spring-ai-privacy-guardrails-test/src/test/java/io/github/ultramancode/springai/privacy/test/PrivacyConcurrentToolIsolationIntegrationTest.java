@@ -1,7 +1,7 @@
 package io.github.ultramancode.springai.privacy.test;
 
-import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
-import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
@@ -57,23 +57,23 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
     @Test
     void sharedChatClientKeepsConcurrentToolLoopsInSeparatePrivacySessions() throws Exception {
         PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
         AtomicInteger activeSessionsAtToolBarrier = new AtomicInteger();
         CyclicBarrier toolBarrier = new CyclicBarrier(
                 2,
                 () -> activeSessionsAtToolBarrier.set(privacyService.activeSessionCount())
         );
         Map<String, String> rawIdByLabel = new ConcurrentHashMap<>();
-        ConcurrentToolModel model = new ConcurrentToolModel();
-        GuardrailsPolicy policy = GuardrailsPolicy.builder()
-                .privacy(privacy -> privacy.toolDisclosurePolicy(
-                        ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("CUSTOMER_ID")))))
-                .build();
+        ConcurrentToolModel chatModel = new ConcurrentToolModel();
+        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(
+                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("CUSTOMER_ID")))))
+            .build();
         ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
-                .build()
-                .builder(probe.wrapModel(model), policy)
-                .defaultTools(probe.wrapTool(customerLookup(toolBarrier, rawIdByLabel)))
-                .build();
+            .build()
+            .builder(privacyTestProbe.wrapModel(chatModel), guardrailsPolicy)
+            .defaultTools(privacyTestProbe.wrapTool(customerLookup(toolBarrier, rawIdByLabel)))
+            .build();
 
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -94,16 +94,16 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
                 "left", LEFT_ID,
                 "right", RIGHT_ID
         ));
-        assertThat(model.tokenByLabel()).containsKeys("left", "right");
-        assertThat(model.tokenByLabel().get("left"))
-                .matches(CUSTOMER_TOKEN)
-                .isNotEqualTo(model.tokenByLabel().get("right"));
-        assertThat(model.tokenByLabel().get("right")).matches(CUSTOMER_TOKEN);
-        assertThat(probe.modelRequests())
-                .hasSize(4)
-                .flatExtracting(ModelRequestSnapshot::modelVisibleContent)
-                .noneMatch(content -> content.contains(LEFT_ID) || content.contains(RIGHT_ID));
-        assertThat(probe.toolCalls()).hasSize(2).allSatisfy(call -> {
+        assertThat(chatModel.tokenByLabel()).containsKeys("left", "right");
+        assertThat(chatModel.tokenByLabel().get("left"))
+            .matches(CUSTOMER_TOKEN)
+            .isNotEqualTo(chatModel.tokenByLabel().get("right"));
+        assertThat(chatModel.tokenByLabel().get("right")).matches(CUSTOMER_TOKEN);
+        assertThat(privacyTestProbe.modelRequests())
+            .hasSize(4)
+            .flatExtracting(ModelRequestSnapshot::modelVisibleContent)
+            .noneMatch(content -> content.contains(LEFT_ID) || content.contains(RIGHT_ID));
+        assertThat(privacyTestProbe.toolCalls()).hasSize(2).allSatisfy(call -> {
             Map<?, ?> input = new ObjectMapper().readValue(call.input(), Map.class);
             String label = input.get("request").toString();
             String expected = label.equals("left") ? LEFT_ID : RIGHT_ID;
@@ -111,11 +111,11 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
             assertThat(input.get("customerId")).isEqualTo(expected);
             assertThat(call.input()).doesNotContain(foreign);
         });
-        assertThatPrivacy(probe)
-                .hasModelRequestCount(4)
-                .hasToolCallCount(2)
-                .modelRequestsDoNotContainRawValues(LEFT_ID, RIGHT_ID)
-                .hasNoActivePrivacySessions();
+        assertThatPrivacy(privacyTestProbe)
+            .hasModelRequestCount(4)
+            .hasToolCallCount(2)
+            .modelRequestsDoNotContainRawValues(LEFT_ID, RIGHT_ID)
+            .hasNoActivePrivacySessions();
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 

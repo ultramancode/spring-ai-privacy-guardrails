@@ -122,12 +122,12 @@ class CombinedInspectionIntegrationTest {
         };
         // These tests inspect model inputs after Privacy processing, including inputs from tool results.
         return new InspectionChatClientConfigurer(
-                new InspectionService(List.of(inspector)),
-                InspectionLimits.defaults(),
-                request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
-                        ? ContentSegment.PrivacyProcessingStatus.PROCESSED
-                        : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
-                InspectionObserver.noop());
+            new InspectionService(List.of(inspector)),
+            InspectionLimits.defaults(),
+            request -> PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(request)
+                ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                : ContentSegment.PrivacyProcessingStatus.UNKNOWN,
+            InspectionObserver.noop());
     }
 
     private static ChatResponse toolCallResponse(String toolName, String toolArgumentsJson) {

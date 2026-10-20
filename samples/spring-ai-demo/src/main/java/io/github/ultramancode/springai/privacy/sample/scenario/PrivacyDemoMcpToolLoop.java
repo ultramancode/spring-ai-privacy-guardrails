@@ -1,7 +1,7 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosureScope;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -38,7 +38,7 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             OpaquePiiTokenFormat.patternForEntityType("PHONE_NUMBER");
     private static final Pattern CUSTOMER_ID_TOKEN_PATTERN =
             OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID");
-    private final GuardrailsChatClientFactory guardrails;
+    private final GuardrailsChatClientFactory guardrailsChatClientFactory;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
     private final ToolCallingManager toolCallingManager;
     private final PrivacyDemoSecurityPolicy securityPolicy;
@@ -50,13 +50,13 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
     private Path serverBaseDirectory;
 
     public PrivacyDemoMcpToolLoop(
-            GuardrailsChatClientFactory guardrails,
-            ToolDisclosurePolicy toolDisclosurePolicy,
-            ToolCallingManager toolCallingManager,
-            PrivacyDemoSecurityPolicy securityPolicy,
-            ObjectMapper objectMapper
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolDisclosurePolicy toolDisclosurePolicy,
+        ToolCallingManager toolCallingManager,
+        PrivacyDemoSecurityPolicy securityPolicy,
+        ObjectMapper objectMapper
     ) {
-        this.guardrails = guardrails;
+        this.guardrailsChatClientFactory = guardrailsChatClientFactory;
         this.toolDisclosurePolicy = toolDisclosurePolicy;
         this.toolCallingManager = toolCallingManager;
         this.securityPolicy = securityPolicy;
@@ -78,7 +78,7 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
     @Override
     public synchronized void close() {
         LocalMcpCrmServer server = this.localMcpServer;
-        McpSyncClient client = this.mcpClient;
+        McpSyncClient mcpClient = this.mcpClient;
         Path baseDirectory = this.serverBaseDirectory;
         this.localMcpServer = null;
         this.mcpClient = null;
@@ -87,9 +87,9 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         this.serverBaseDirectory = null;
 
         Throwable cleanupFailure = null;
-        if (client != null) {
+        if (mcpClient != null) {
             try {
-                if (!client.closeGracefully()) {
+                if (!mcpClient.closeGracefully()) {
                     cleanupFailure = new IllegalStateException("Failed to close the local MCP demo client");
                 }
             }
@@ -124,19 +124,19 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             PrivacyDemoLocale locale,
             LocalMcpCrmServer server
     ) {
-        PrivacyDemoToolLoop.DemoToolLoopModel model =
-                new PrivacyDemoToolLoop.DemoToolLoopModel(
-                        this.objectMapper,
-                        "MCP",
-                        locale,
-                        this.toolCallingManager
-                );
+        PrivacyDemoToolLoop.DemoToolLoopModel toolLoopModel =
+            new PrivacyDemoToolLoop.DemoToolLoopModel(
+                this.objectMapper,
+                "MCP",
+                locale,
+                this.toolCallingManager
+            );
 
-        ChatClient.Builder builder = this.guardrails.builder(model)
-                .defaultTools(this.mcpTools);
+        ChatClient.Builder chatClientBuilder = this.guardrailsChatClientFactory.builder(toolLoopModel)
+            .defaultTools(this.mcpTools);
 
         int callsBeforeRequest = server.requestEvidence().calls();
-        String finalResponse = builder.build().prompt().user(input).call().content();
+        String finalResponse = chatClientBuilder.build().prompt().user(input).call().content();
         LocalMcpCrmServer.RequestEvidence requestEvidence = server.requestEvidence();
         if (requestEvidence.calls() - callsBeforeRequest != 1) {
             throw new IllegalStateException("MCP demo expected exactly one tool call");
@@ -159,35 +159,35 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
 
         List<String> allowedOriginalEntityTypes = this.disclosureScope.entityTypes().stream().sorted().toList();
         PrivacyDemoToolLoop.BoundaryEvidence boundaryEvidence = new PrivacyDemoToolLoop.BoundaryEvidence(
-                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                        model.rawValueCount(),
-                        RAW_VALUES.size()
-                ),
-                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                        deniedRawValueCount,
-                        DENIED_TOOL_VALUES.size()
-                ),
-                PrivacyDemoToolLoop.EvidenceCount.expectedAll(
-                        allowedRawValueCount,
-                        ALLOWED_TOOL_VALUES.size()
-                ),
-                PrivacyDemoToolLoop.EvidenceCount.expectedNone(
-                        model.rawToolResultValueCountAtModel(),
-                        RAW_VALUES.size()
-                )
+            PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                toolLoopModel.rawValueCount(),
+                RAW_VALUES.size()
+            ),
+            PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                deniedRawValueCount,
+                DENIED_TOOL_VALUES.size()
+            ),
+            PrivacyDemoToolLoop.EvidenceCount.expectedAll(
+                allowedRawValueCount,
+                ALLOWED_TOOL_VALUES.size()
+            ),
+            PrivacyDemoToolLoop.EvidenceCount.expectedNone(
+                toolLoopModel.rawToolResultValueCountAtModel(),
+                RAW_VALUES.size()
+            )
         );
 
         return new PrivacyDemoToolLoop.Result(
-                model.calls(),
-                !model.rawPiiSeenByModel(),
-                model.protectedModelInput(),
-                model.issuedToolArguments(),
-                allowedOriginalEntityTypes,
-                receivedOnlyAllowedOriginals,
-                requestEvidence.lookupSucceeded(),
-                model.protectedToolResultSeenByModel(),
-                boundaryEvidence,
-                finalResponse
+            toolLoopModel.calls(),
+            !toolLoopModel.rawPiiSeenByModel(),
+            toolLoopModel.protectedModelInput(),
+            toolLoopModel.issuedToolArguments(),
+            allowedOriginalEntityTypes,
+            receivedOnlyAllowedOriginals,
+            requestEvidence.lookupSucceeded(),
+            toolLoopModel.protectedToolResultSeenByModel(),
+            boundaryEvidence,
+            finalResponse
         );
     }
 
@@ -196,26 +196,26 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
             return;
         }
 
-        McpSyncClient client = server.connect();
+        McpSyncClient mcpClient = server.connect();
         try {
-            client.initialize();
+            mcpClient.initialize();
             ToolCallbackProvider mcpTools = SyncMcpToolCallbackProvider.builder()
-                    .mcpClients(client)
-                    .toolNamePrefixGenerator(McpToolNamePrefixGenerator.noPrefix())
-                    .build();
+                .mcpClients(mcpClient)
+                .toolNamePrefixGenerator(McpToolNamePrefixGenerator.noPrefix())
+                .build();
             ToolDefinition toolDefinition = requireSingleToolDefinition(mcpTools);
             ToolDisclosureScope scope = Objects.requireNonNull(
                     this.toolDisclosurePolicy.scopeFor(toolDefinition),
                     "tool disclosure policy must return a scope"
             );
 
-            this.mcpClient = client;
+            this.mcpClient = mcpClient;
             this.mcpTools = mcpTools;
             this.disclosureScope = scope;
         }
         catch (RuntimeException | Error failure) {
             try {
-                if (!client.closeGracefully()) {
+                if (!mcpClient.closeGracefully()) {
                     failure.addSuppressed(new IllegalStateException(
                             "Failed to close the local MCP demo client after initialization failure"
                     ));

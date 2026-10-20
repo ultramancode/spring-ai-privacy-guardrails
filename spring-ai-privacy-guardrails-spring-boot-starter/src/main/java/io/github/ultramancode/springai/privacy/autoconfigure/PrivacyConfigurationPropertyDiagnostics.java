@@ -24,9 +24,9 @@ final class PrivacyConfigurationPropertyDiagnostics {
     private static final int ROOT_ELEMENTS = ROOT.getNumberOfElements();
 
     static final List<String> ROOT_PROPERTIES = List.of(
-            "processing",
-            "analysis",
-            "regex"
+        "processing",
+        "analysis",
+        "regex"
     );
     static final List<String> PROCESSING_PROPERTIES = List.of(
             "max-text-characters",

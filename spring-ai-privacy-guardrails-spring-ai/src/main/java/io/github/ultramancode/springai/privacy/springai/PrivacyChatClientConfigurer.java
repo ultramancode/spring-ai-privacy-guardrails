@@ -15,13 +15,12 @@ import java.util.WeakHashMap;
 import java.util.function.IntFunction;
 
 /**
- * Configures the complete privacy lifecycle and model request stage on selected clients.
- * Works with or without Spring Boot. Compose optional inspection through
- * {@link ModelRequestBoundaryConfigurer#compose}, or use the security client factory.
+ * Configures privacy processing and request sessions on a Spring AI client builder.
+ * Compose other model-request features through {@link ModelRequestBoundaryConfigurer#compose}.
  */
 public final class PrivacyChatClientConfigurer
         implements ModelRequestBoundaryConfigurer, IntFunction<ModelRequestBoundaryConfigurer> {
-    private final PrivacyService service;
+    private final PrivacyService privacyService;
     private final PrivacyToolCallbackFactory expectedToolCallbackFactory;
     private final boolean automaticallyWrapTools;
     // Null means output protection is disabled.
@@ -32,8 +31,8 @@ public final class PrivacyChatClientConfigurer
     private final WeakHashMap<ChatClient.Builder, Boolean> configuredBuilders = new WeakHashMap<>();
 
     /** Creates a complete privacy boundary accepting tool wrappers from the same service. */
-    public PrivacyChatClientConfigurer(PrivacyService service) {
-        this(new Builder(service));
+    public PrivacyChatClientConfigurer(PrivacyService privacyService) {
+        this(new Builder(privacyService));
     }
 
     /**
@@ -41,23 +40,23 @@ public final class PrivacyChatClientConfigurer
      *
      * @see Builder#toolCallbackFactory(PrivacyToolCallbackFactory)
      */
-    public PrivacyChatClientConfigurer(PrivacyService service, PrivacyToolCallbackFactory expectedToolCallbackFactory) {
-        this(new Builder(service).toolCallbackFactory(expectedToolCallbackFactory));
+    public PrivacyChatClientConfigurer(PrivacyService privacyService, PrivacyToolCallbackFactory expectedToolCallbackFactory) {
+        this(new Builder(privacyService).toolCallbackFactory(expectedToolCallbackFactory));
     }
 
-    private PrivacyChatClientConfigurer(Builder builder) {
-        this.service = builder.service;
-        this.expectedToolCallbackFactory = builder.expectedToolCallbackFactory;
-        this.automaticallyWrapTools = builder.automaticallyWrapTools;
-        this.outputAction = builder.outputAction;
-        this.outputBlockMessage = builder.outputBlockMessage;
-        this.responseLimits = builder.responseLimits;
-        this.enforcementObserver = builder.enforcementObserver;
+    private PrivacyChatClientConfigurer(Builder privacyConfigurerBuilder) {
+        this.privacyService = privacyConfigurerBuilder.privacyService;
+        this.expectedToolCallbackFactory = privacyConfigurerBuilder.expectedToolCallbackFactory;
+        this.automaticallyWrapTools = privacyConfigurerBuilder.automaticallyWrapTools;
+        this.outputAction = privacyConfigurerBuilder.outputAction;
+        this.outputBlockMessage = privacyConfigurerBuilder.outputBlockMessage;
+        this.responseLimits = privacyConfigurerBuilder.responseLimits;
+        this.enforcementObserver = privacyConfigurerBuilder.enforcementObserver;
     }
 
     /** Creates a programmatic configuration builder. Output protection is initially disabled. */
-    public static Builder builder(PrivacyService service) {
-        return new Builder(service);
+    public static Builder builder(PrivacyService privacyService) {
+        return new Builder(privacyService);
     }
 
     /**
@@ -67,12 +66,12 @@ public final class PrivacyChatClientConfigurer
      * whether personal data was found or message text changed. If no personal data
      * was found, the text may remain unchanged while this method returns {@code true}.</p>
      *
-     * @param request the model request whose prompt messages are checked
+     * @param chatClientRequest the model request whose prompt messages are checked
      * @return {@code true} if the request carries this library's privacy processing marker
      *         and its current message list matches the recorded list
      */
-    public static boolean hasPrivacyProcessedMessages(ChatClientRequest request) {
-        return PrivacyModelRequestStage.hasPrivacyProcessedMessages(request);
+    public static boolean hasPrivacyProcessedMessages(ChatClientRequest chatClientRequest) {
+        return PrivacyModelRequestStage.hasPrivacyProcessedMessages(chatClientRequest);
     }
 
     /**
@@ -105,7 +104,7 @@ public final class PrivacyChatClientConfigurer
             throw new IllegalArgumentException("Privacy tool advisor order must be between " + minimumToolOrder + " and "
                     + maximumToolOrder + " to fit the input and model boundaries; received " + toolOrder);
         }
-        return (clientBuilder, boundarySpec) -> contributeToBoundary(clientBuilder, boundarySpec, toolOrder);
+        return (chatClientBuilder, boundarySpec) -> contributeToBoundary(chatClientBuilder, boundarySpec, toolOrder);
     }
 
     @Override
@@ -114,8 +113,8 @@ public final class PrivacyChatClientConfigurer
     }
 
     @Override
-    public void contributeToBoundary(ChatClient.Builder clientBuilder, ModelRequestBoundarySpec boundarySpec) {
-        forToolAdvisorOrder(ToolCallingAdvisor.DEFAULT_ORDER).contributeToBoundary(clientBuilder, boundarySpec);
+    public void contributeToBoundary(ChatClient.Builder chatClientBuilder, ModelRequestBoundarySpec boundarySpec) {
+        forToolAdvisorOrder(ToolCallingAdvisor.DEFAULT_ORDER).contributeToBoundary(chatClientBuilder, boundarySpec);
     }
 
     /**
@@ -123,38 +122,38 @@ public final class PrivacyChatClientConfigurer
      *
      * @see #forToolAdvisorOrder(int)
      */
-    private void contributeToBoundary(ChatClient.Builder clientBuilder, ModelRequestBoundarySpec boundarySpec, int toolOrder) {
-        Objects.requireNonNull(clientBuilder, "clientBuilder");
+    private void contributeToBoundary(ChatClient.Builder chatClientBuilder, ModelRequestBoundarySpec boundarySpec, int toolOrder) {
+        Objects.requireNonNull(chatClientBuilder, "clientBuilder");
         synchronized (configuredBuilders) {
-            if (configuredBuilders.containsKey(clientBuilder)) {
+            if (configuredBuilders.containsKey(chatClientBuilder)) {
                 throw new IllegalStateException("PrivacyChatClientConfigurer cannot configure the same ChatClient.Builder more than once");
             }
             PrivacyModelRequestStage privacyStage =
-                    new PrivacyModelRequestStage(service, expectedToolCallbackFactory, enforcementObserver);
+                new PrivacyModelRequestStage(privacyService, expectedToolCallbackFactory, enforcementObserver);
             boundarySpec.privacy(privacyStage);
             List<Advisor> advisors = new ArrayList<>();
-            PrivacyToolCallbackFactory automaticToolFactory = null;
+            PrivacyToolCallbackFactory automaticToolCallbackFactory = null;
             if (automaticallyWrapTools) {
-                automaticToolFactory = expectedToolCallbackFactory;
+                automaticToolCallbackFactory = expectedToolCallbackFactory;
             }
-            advisors.add(new PrivacyLifecycleAdvisor(service, automaticToolFactory));
-            advisors.add(new PrivacyInputAdvisor(service));
+            advisors.add(new PrivacyLifecycleAdvisor(privacyService, automaticToolCallbackFactory));
+            advisors.add(new PrivacyInputAdvisor(privacyService));
             if (outputAction != null) {
-                advisors.add(new PrivacyOutputAdvisor(service, outputAction, outputBlockMessage,
-                        responseLimits, enforcementObserver, toolOrder - 2));
+                advisors.add(new PrivacyOutputAdvisor(privacyService, outputAction, outputBlockMessage,
+                    responseLimits, enforcementObserver, toolOrder - 2));
             }
-            advisors.add(new PrivacyToolContextAdvisor(service, expectedToolCallbackFactory, toolOrder - 1));
-            advisors.add(new PrivacyToolCallValidationAdvisor(service, responseLimits, toolOrder + 1));
+            advisors.add(new PrivacyToolContextAdvisor(privacyService, expectedToolCallbackFactory, toolOrder - 1));
+            advisors.add(new PrivacyToolCallValidationAdvisor(privacyService, responseLimits, toolOrder + 1));
             List<Advisor> managedPrivacyAdvisors = List.copyOf(advisors);
             advisors.add(new PrivacyAdvisorChainValidator(managedPrivacyAdvisors, privacyStage, toolOrder));
-            clientBuilder.defaultAdvisors(advisors);
-            configuredBuilders.put(clientBuilder, Boolean.TRUE);
+            chatClientBuilder.defaultAdvisors(advisors);
+            configuredBuilders.put(chatClientBuilder, Boolean.TRUE);
         }
     }
 
     /** Settings shared by this configurer's clients. Request state is never retained here. */
     public static final class Builder {
-        private final PrivacyService service;
+        private final PrivacyService privacyService;
         private PrivacyToolCallbackFactory expectedToolCallbackFactory;
         private boolean automaticallyWrapTools;
         // Remains null unless outputProtection(...) is called.
@@ -163,8 +162,8 @@ public final class PrivacyChatClientConfigurer
         private PrivacyResponseInspectionLimits responseLimits = PrivacyResponseInspectionLimits.defaults();
         private PrivacyEnforcementObserver enforcementObserver = PrivacyEnforcementObserver.noop();
 
-        private Builder(PrivacyService service) {
-            this.service = Objects.requireNonNull(service, "service");
+        private Builder(PrivacyService privacyService) {
+            this.privacyService = Objects.requireNonNull(privacyService, "privacyService");
         }
 
         /**
@@ -176,15 +175,15 @@ public final class PrivacyChatClientConfigurer
          *
          * <p>If no factory is selected, wrappers using the same privacy service are accepted.</p>
          *
-         * @param factory factory whose tool wrappers the configured clients must use
+         * @param privacyToolCallbackFactory factory whose tool wrappers the configured clients must use
          * @return this builder
          */
-        public Builder toolCallbackFactory(PrivacyToolCallbackFactory factory) {
-            Objects.requireNonNull(factory, "factory");
-            if (!factory.usesPrivacyService(service)) {
+        public Builder toolCallbackFactory(PrivacyToolCallbackFactory privacyToolCallbackFactory) {
+            Objects.requireNonNull(privacyToolCallbackFactory, "privacyToolCallbackFactory");
+            if (!privacyToolCallbackFactory.usesPrivacyService(privacyService)) {
                 throw new IllegalArgumentException("expectedToolCallbackFactory must use the same PrivacyService");
             }
-            this.expectedToolCallbackFactory = factory;
+            this.expectedToolCallbackFactory = privacyToolCallbackFactory;
             return this;
         }
 
@@ -195,15 +194,15 @@ public final class PrivacyChatClientConfigurer
         }
 
         /** Enables output protection with a safe rejection message for the BLOCK action. */
-        public Builder outputProtection(PrivacyOutputAction action, String blockMessage) {
-            this.outputAction = Objects.requireNonNull(action, "action");
-            this.outputBlockMessage = Objects.requireNonNull(blockMessage, "blockMessage");
+        public Builder outputProtection(PrivacyOutputAction outputAction, String outputBlockMessage) {
+            this.outputAction = Objects.requireNonNull(outputAction, "outputAction");
+            this.outputBlockMessage = Objects.requireNonNull(outputBlockMessage, "outputBlockMessage");
             return this;
         }
 
         /** Limits model responses before tool execution and when applying output protection. */
-        public Builder responseInspectionLimits(PrivacyResponseInspectionLimits limits) {
-            this.responseLimits = Objects.requireNonNull(limits, "limits");
+        public Builder responseInspectionLimits(PrivacyResponseInspectionLimits responseInspectionLimits) {
+            this.responseLimits = Objects.requireNonNull(responseInspectionLimits, "responseInspectionLimits");
             return this;
         }
 

@@ -39,7 +39,7 @@ discovery and execution.
 
 Clients select privacy protection, content inspection and tool authorization through
 `GuardrailsChatClientFactory` and `GuardrailsPolicy`.
-See [Client policies](clients.md) for setup.
+See [Configuration](configuration.md) for setup.
 
 ## Module Structure
 
@@ -95,7 +95,7 @@ Before each model call, this shared module runs privacy protection, tool authori
 and content inspection in that order. Unconfigured stages are skipped.
 
 To use privacy protection and tool authorization together, add the client and
-Spring Security starters and select both features in the [client policy](clients.md).
+Spring Security starters and select both features in the [client policy](configuration.md).
 The core and privacy modules do not depend on Spring Security.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
@@ -149,7 +149,7 @@ work such as an external service call, that work must also use an appropriate
 finite timeout.
 
 Analyzer selection, failure policy, and score thresholds are configured under
-[Detection and Resolution](configuration.md#detection-and-resolution), which
+[Detection and Resolution](privacy.md#detection-and-resolution), which
 also documents overlap-resolution behavior.
 
 ## Requests and Sessions
@@ -240,8 +240,8 @@ with incomplete protection.
 The privacy integration can be used with other Spring AI advisors. Changes to
 model input, tools, or responses made by an advisor outside the privacy
 boundary are outside the automatic protection scope. See
-[Apply Privacy Protection to ChatClient](configuration.md#apply-privacy-protection-to-chatclient)
-for the supported composition rules.
+[advisor configuration](configuration.md#advisor-configuration)
+for advisor registration.
 
 ## Model and Output
 
@@ -263,7 +263,7 @@ Apart from reasoning text explicitly supported by the library, response metadata
 and non-text content such as images and audio are not automatically protected.
 
 Output policy and streaming behavior are documented under
-[Output Policy and Streaming](configuration.md#output-policy-and-streaming).
+[Output Policy and Streaming](privacy.md#output-policy-and-streaming).
 
 ## Tool Execution
 
@@ -285,7 +285,7 @@ Logs written or exceptions raised inside a tool after original values have been
 disclosed are not re-protected and may contain those values.
 
 Detailed disclosure rules and the `returnDirect` flow are documented under
-[Per-Tool Original Disclosure](configuration.md#per-tool-original-disclosure).
+[Per-Tool Original Disclosure](privacy.md#per-tool-original-disclosure).
 
 ## Optional Tool Authorization Boundary
 
@@ -359,14 +359,14 @@ whether they record sensitive values depends on the logging configuration of
 the component that produced them.
 
 Error codes and processing phases are documented under
-[Privacy Error Handling](configuration.md#privacy-error-handling).
+[Privacy Error Handling](privacy.md#privacy-error-handling).
 
 ## Resource Limits and Request Cleanup
 
 Privacy operations performed directly by the library, such as text
 transformation, structured-value traversal, analyzer-result retention, and
 response inspection, use processing bounds to keep memory use predictable. See
-[Configuration](configuration.md) for the main limits and related settings.
+[Privacy Protection](privacy.md) for the main limits and related settings.
 
 When a Spring AI streaming request is cancelled or fails, the library cleans
 up the request session and the privacy mappings it manages.
@@ -388,7 +388,7 @@ that PII did not reach the model, only required original values were disclosed
 to a tool, and the request session was cleaned up correctly.
 
 `PrivacyTestProbe` is a test-only API for verifying privacy-boundary behavior.
-See [Test Support](configuration.md#test-support) for usage.
+See [Test Support](privacy.md#test-support) for usage.
 
 ## Analyzer Integration
 
@@ -402,8 +402,7 @@ credentials, and deployment environment follow that service's configuration.
 When the application supplies a model, as with OpenNLP, the selected model can
 affect both detection coverage and quality.
 
-Available analyzer configurations are documented under
-[Starter Selection](configuration.md#starter-selection).
+See [Privacy Protection](privacy.md) for analyzer configuration.
 
 ## Stored Data
 
@@ -411,5 +410,5 @@ Available analyzer configurations are documented under
 is included in model or tool input. The library does not automatically rewrite
 data that is already stored.
 
-See [Stored Data and Diagnostics](configuration.md#stored-data-and-diagnostics)
+See [Stored Data and Diagnostics](privacy.md#stored-data-and-diagnostics)
 for the detailed scope.

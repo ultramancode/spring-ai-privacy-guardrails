@@ -6,15 +6,15 @@ plugins {
 apply from: 'scripts/inspection/test-model.gradle'
 
 privacyBuild {
-    module('spring-ai-privacy-guardrails-client') { module ->
-        module.publication('io.github.ultramancode.springai.privacy.client', 'Spring AI Privacy Guardrails Client')
+    module('spring-ai-privacy-guardrails-chat-client') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.chatclient', 'Spring AI Privacy Guardrails ChatClient')
         module.dependsOnProject 'spring-ai-privacy-guardrails-spring-ai'
         module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-spring-ai'
         module.denyExternalGroup 'org.springframework.boot'
     }
-    module('spring-ai-privacy-guardrails-client-spring-boot-starter') { module ->
-        module.publication('io.github.ultramancode.springai.privacy.client.autoconfigure', 'Spring AI Privacy Guardrails Client Starter')
-        module.dependsOnProject 'spring-ai-privacy-guardrails-client'
+    module('spring-ai-privacy-guardrails-chat-client-spring-boot-starter') { module ->
+        module.publication('io.github.ultramancode.springai.privacy.chatclient.autoconfigure', 'Spring AI Privacy Guardrails ChatClient Starter')
+        module.dependsOnProject 'spring-ai-privacy-guardrails-chat-client'
         module.dependsOnProject 'spring-ai-privacy-guardrails-spring-boot-starter'
         module.dependsOnProject 'spring-ai-privacy-guardrails-inspection-spring-boot-starter'
         module.compileOnlyProject 'spring-ai-privacy-guardrails-spring-security'
@@ -154,7 +154,7 @@ privacyBuild {
     }
 
     module('spring-ai-privacy-guardrails-sample-demo') { module ->
-        module.dependsOnProject 'spring-ai-privacy-guardrails-client-spring-boot-starter'
+        module.dependsOnProject 'spring-ai-privacy-guardrails-chat-client-spring-boot-starter'
         module.dependsOnProject(
                 'spring-ai-privacy-guardrails-opennlp-spring-boot-starter',
                 'spring-ai-privacy-guardrails-presidio-spring-boot-starter',
@@ -165,11 +165,11 @@ privacyBuild {
     localizedDocument 'README.md', 'README.ko.md'
     localizedDocument 'docs/index.md', 'docs/ko/index.md'
     localizedDocument 'docs/architecture.md', 'docs/ko/architecture.md'
-    localizedDocument 'docs/configuration.md', 'docs/ko/configuration.md'
+    localizedDocument 'docs/privacy.md', 'docs/ko/privacy.md'
     localizedDocument 'docs/inspection.md', 'docs/ko/inspection.md'
     localizedDocument 'docs/evaluation.md', 'docs/ko/evaluation.md'
     localizedDocument 'docs/getting-started.md', 'docs/ko/getting-started.md'
-    localizedDocument 'docs/clients.md', 'docs/ko/clients.md'
+    localizedDocument 'docs/configuration.md', 'docs/ko/configuration.md'
     localizedDocument 'docs/sample.md', 'docs/ko/sample.md'
     localizedDocument 'docs/security.md', 'docs/ko/security.md'
     localizedDocument 'docs/threat-model.md', 'docs/ko/threat-model.md'

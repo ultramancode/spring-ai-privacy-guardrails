@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: dec80688b7891e93acfd1af41ad34f071209b82634f423c438ca18dfffc40fb6 -->
+<!-- i18n-source-sha256: 4a8595ac0307a550c8ee49595a92c387493889fbe594a6cd74af45950f1051f2 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -130,7 +130,7 @@ Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니�
 
 | 필요한 기능 | 추가할 스타터 |
 | --- | --- |
-| 정책에 따른 클라이언트 구성과 개인정보 보호·검사 | `spring-ai-privacy-guardrails-client-spring-boot-starter` |
+| 정책에 따른 클라이언트 구성과 개인정보 보호·검사 | `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` |
 | Presidio 연동 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
 | Apache OpenNLP 연동 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | 사용자별 도구 공개·실행 권한 검사 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
@@ -153,7 +153,7 @@ Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니�
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -179,17 +179,17 @@ spring:
 
 ```java
 @Bean
-ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
-    return guardrails.builder(chatModel, policy).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
-콘텐츠 검사와 도구 권한도 같은 Factory를 사용합니다. 기능 선택과 Java 정책은
-[클라이언트 정책](docs/ko/clients.md)을 참고하세요.
+콘텐츠 검사와 도구 권한도 같은 Factory를 사용합니다. 기능 선택과 클라이언트별 정책은
+[설정](docs/ko/configuration.md)을 참고하세요.
 
 직접 호출하는 `ChatModel`은 자동 보호 범위에 포함되지 않습니다. 파생 클라이언트,
-분석기 조합과 실패 정책은 [설정 문서](docs/ko/configuration.md)를 참고하세요.
+분석기 조합과 실패 정책은 [개인정보 보호](docs/ko/privacy.md)를 참고하세요.
 
 ## 도구별 원문 공개
 
@@ -207,7 +207,7 @@ GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
 애플리케이션 도구와 MCP 제공자를 그대로 등록합니다.
 
 ```java
-ChatClient client = guardrails.builder(chatModel, toolPolicy)
+ChatClient chatClient = guardrails.builder(chatModel, toolPolicy)
         .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
         .build();
 ```
@@ -218,7 +218,7 @@ ChatClient client = guardrails.builder(chatModel, toolPolicy)
 
 Spring AI의 표준 도구 등록 경로가 아닌 사용자 정의 실행 경로에는 별도의 보호 구성이
 필요합니다. 자세한 규칙은
-[도구별 원문 공개](docs/ko/configuration.md#도구별-원문-공개)를 참고하세요.
+[도구별 원문 공개](docs/ko/privacy.md#도구별-원문-공개)를 참고하세요.
 
 ## Spring Security 도구 권한
 
@@ -234,7 +234,7 @@ dependencies {
 
 `AuthorizationManager<ToolAuthorizationContext>` Bean을 제공하고
 `GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택합니다.
-클라이언트는 `guardrails.builder(chatModel, policy)`로 생성합니다.
+클라이언트는 `guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)`로 생성합니다.
 개인정보 보호가 필요하면 별도로 선택하세요. 사용자 인증은 애플리케이션이 담당합니다.
 
 개인정보 보호와 함께 사용해도 도구 권한과 개인정보 원문 공개 범위는 서로 다른 정책으로
@@ -260,7 +260,7 @@ dependencies {
   스트리밍 응답은 검사를 위해 버퍼링하며, 요청이 완료·실패·취소되면 관리 중인 세션
   매핑을 정리합니다.
 
-구성별 세부 동작은 [설정과 사용법](docs/ko/configuration.md), 요청 흐름과 모듈 역할은
+구성별 세부 동작은 [개인정보 보호](docs/ko/privacy.md), 요청 흐름과 모듈 역할은
 [아키텍처](docs/ko/architecture.md)를 참고하세요.
 
 ## 개인정보 보호 런타임 관측
@@ -271,7 +271,7 @@ dependencies {
 포함됩니다. 개인정보 원문, 불투명 토큰, 페이로드, 도구 이름과 요청 식별자는 포함되지 않습니다.
 
 등록 방법, 결과의 의미와 콜백 실행 지침은
-[개인정보 보호 런타임 관측](docs/ko/configuration.md#개인정보-보호-런타임-관측)을 참고하세요.
+[개인정보 보호 런타임 관측](docs/ko/privacy.md#개인정보-보호-런타임-관측)을 참고하세요.
 
 ## 라이브러리 모듈
 
@@ -296,8 +296,8 @@ dependencies {
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | OpenAI 호환 HTTP API를 통한 검사 모델 호출 |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | 모델 입력 검사와 선택적 출력 검사 |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | 선택한 클라이언트의 콘텐츠 검사를 위한 Spring Boot 설정 |
-| `spring-ai-privacy-guardrails-client` | 정책에 따른 클라이언트 구성과 도구 자동 보호 |
-| `spring-ai-privacy-guardrails-client-spring-boot-starter` | 기본 클라이언트 정책과 구성 요소 연결 |
+| `spring-ai-privacy-guardrails-chat-client` | 정책에 따른 클라이언트 구성과 도구 자동 보호 |
+| `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` | 정책에 따른 클라이언트 구성을 위한 Spring Boot 자동 구성 |
 | `spring-ai-privacy-guardrails-test` | 선택형 모델·도구 프로브와 AssertJ 검증 API |
 
 모듈의 책임과 의존성 구조는 [아키텍처](docs/ko/architecture.md)를 참고하세요. 저장소 전용
@@ -315,15 +315,14 @@ JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 
 
 Spring AI 2.0.x, Spring Boot 4.x와 Spring Security 7.x를 사용합니다.
 Boot 스타터의 Security 버전은 Spring Boot BOM이 선택합니다.
-독립 Security 모듈은 7.0.0을 기준으로 컴파일합니다. 저장소의 의존성 버전은
-[gradle.properties](gradle.properties)에서 관리합니다.
 
 구조화된 JSON을 Presidio로 분석하려면 Presidio Analyzer 2.2.361 이상을 사용하세요.
 
 ## 상세 문서
 
 - [시작하기](docs/ko/getting-started.md): 단계별 스타터 선택과 개인정보 보호 경계 설정
-- [설정과 사용법](docs/ko/configuration.md): 스타터, 분석기, 도구와 출력 정책
+- [설정](docs/ko/configuration.md): 의존성, 클라이언트 생성과 정책 재사용
+- [개인정보 보호](docs/ko/privacy.md): 분석기, 토큰화, 도구 원문 공개, 출력 보호와 처리 한도
 - [Spring Security 도구 권한](docs/ko/security.md): 도구 권한 정책, 고급 도구
   구성, Tool Search와 보안 컨텍스트 전달
 - [콘텐츠 검사](docs/ko/inspection.md): 선택적 규칙, 로컬 ONNX 분류 모델과 HTTP 검사 모델

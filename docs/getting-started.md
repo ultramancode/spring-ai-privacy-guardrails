@@ -21,7 +21,7 @@ Use OpenNLP when you want to run your own NER models inside the JVM, or a
 custom `PiiAnalyzer` when you need detection tailored to your application.
 
 The application provides a `ChatModel`. The client starter supplies
-`GuardrailsChatClientFactory`. See [Client policies](clients.md) to select and reuse client protection policies.
+`GuardrailsChatClientFactory`. See [Configuration](configuration.md) to select and reuse client protection policies.
 
 To check protection with a local model and fixed examples, without an external model API key, see
 the [Sample / Demo Guide](sample.md).
@@ -60,7 +60,7 @@ Add the client starter. Analyzer-specific starters can be added as needed.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -69,7 +69,7 @@ dependencies {
 ```xml
 <dependency>
     <groupId>io.github.ultramancode</groupId>
-    <artifactId>spring-ai-privacy-guardrails-client-spring-boot-starter</artifactId>
+    <artifactId>spring-ai-privacy-guardrails-chat-client-spring-boot-starter</artifactId>
     <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -99,7 +99,7 @@ Once a `PiiAnalyzer` bean is available, the starter provides `PrivacyService`
 and the components used by `GuardrailsChatClientFactory`.
 
 If a format match also needs a checksum or business-rule check, add a
-[custom Regex validator](configuration.md#regex-analyzer).
+[custom Regex validator](privacy.md#regex-analyzer).
 
 ## 3. Protect a ChatClient
 
@@ -110,9 +110,9 @@ Create the protected client through the factory:
 
 ```java
 @Bean
-ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
-    return guardrails.builder(chatModel, policy).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
@@ -208,7 +208,7 @@ To limit which tools the model can discover and execute based on the current
 user's permissions, add the Spring Security starter and register a tool
 authorization policy as an `AuthorizationManager<ToolAuthorizationContext>`
 bean. Select `toolAuthorization(true)` in `GuardrailsPolicy` and pass it to
-`guardrails.builder(chatModel, policy)`. Privacy is selected independently.
+`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)`. Privacy is selected independently.
 When both
 features are used, permission is checked again immediately before tool
 execution, and only then are the original PII values allowed for that tool
@@ -268,7 +268,7 @@ Regex and Presidio may also be enabled together. In the default `UNION` mode,
 all configured analyzers run and their detection findings are merged. The
 default `REQUIRE_ALL` failure policy fails the request if any configured
 analyzer fails. Review
-[Configuration](configuration.md#detection-and-resolution) before combining
+[Privacy Protection](privacy.md#detection-and-resolution) before combining
 analyzers in production.
 
 ## 6. Use OpenNLP for JVM-Local Detection
@@ -323,20 +323,17 @@ for the reproducible OpenNLP smoke-test setup.
 
 ## 7. Optional: Protect Final Responses
 
-Input and tool boundaries do not automatically enable final-response
-inspection.
+Final-response privacy protection is disabled by default. Enable it in the client policy:
 
-Enable output protection when application-facing responses also need a final
-privacy check:
-
-```yaml
-spring:
-  ai:
-    privacy:
-      output:
-        enabled: true
-        action: tokenize
+```java
+GuardrailsPolicy outputPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.outputProtection(true))
+        .build();
+ChatClient outputClient = guardrails.builder(chatModel, outputPolicy).build();
 ```
+
+The default action is `TOKENIZE`. To select another action and enable output
+protection, use `outputAction(...)` in the privacy settings.
 
 Supported output actions are:
 
@@ -352,8 +349,8 @@ library first buffers the complete response, inspects it, and then releases the
 protected result. This allows PII split across multiple chunks to be detected, but model output
 cannot be delivered in real time as it is generated.
 
-See [Output Policy and Streaming](configuration.md#output-policy-and-streaming)
-and [Input and Response Limits](configuration.md#input-and-response-limits) for
+See [Output Policy and Streaming](privacy.md#output-policy-and-streaming)
+and [Input and Response Limits](privacy.md#input-and-response-limits) for
 details.
 
 ## 8. Custom Analyzers
@@ -368,9 +365,9 @@ be invoked concurrently by multiple requests, so it must be thread-safe and
 reentrant. Apply finite timeouts to blocking work such as external service calls
 and bound its own memory and other resource usage.
 
-See [Configuration](configuration.md#detection-and-resolution) for analyzer
+See [Privacy Protection](privacy.md#detection-and-resolution) for analyzer
 selection, provider IDs, entity aliases, confidence floors, and failure
-policies. See [Custom Analyzers](configuration.md#custom-analyzers) for
+policies. See [Custom Analyzers](privacy.md#custom-analyzers) for
 implementation requirements and analysis of multiple texts.
 
 ## Boundary Notes
@@ -382,9 +379,9 @@ chat-memory storage, vector stores, databases, logs, or traces.
 
 ## Next Steps
 
-- See [Configuration](configuration.md) for the complete property and API
-  reference.
-- See [Privacy-Safe Runtime Observation](configuration.md#privacy-safe-runtime-observation)
+- See [Configuration](configuration.md) to combine features and reuse client policies.
+- See [Privacy Protection](privacy.md) for privacy properties, behavior and API usage.
+- See [Privacy-Safe Runtime Observation](privacy.md#privacy-safe-runtime-observation)
   to observe boundary outcomes without exposing PII or payloads.
 - See the [Sample / Demo Guide](sample.md) to check protection in Local Tool,
   RAG, and Streamable HTTP MCP scenarios.

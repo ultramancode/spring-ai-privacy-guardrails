@@ -201,16 +201,16 @@ public class PrivacyGuardrailsAutoConfiguration {
     @ConditionalOnBean(PrivacyService.class)
     @ConditionalOnMissingBean
     PrivacyChatClientConfigurer privacyChatClientConfigurer(
-            PrivacyService privacyService,
-            PrivacyToolCallbackFactory toolCallbackFactory,
-            ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
+        PrivacyService privacyService,
+        PrivacyToolCallbackFactory toolCallbackFactory,
+        ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
     ) {
         PrivacyEnforcementObserver configuredEnforcementObserver = enforcementObserver
                 .getIfAvailable(PrivacyEnforcementObserver::noop);
         return PrivacyChatClientConfigurer.builder(privacyService)
-                .toolCallbackFactory(toolCallbackFactory)
-                .enforcementObserver(configuredEnforcementObserver)
-                .build();
+            .toolCallbackFactory(toolCallbackFactory)
+            .enforcementObserver(configuredEnforcementObserver)
+            .build();
     }
 
     @Bean

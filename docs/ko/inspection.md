@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: c0d224594625ae4779f2fe3cba7d6b0ceaddee4fde5103ef2508390370620156 -->
+<!-- i18n-source-sha256: b2ac0205c75008fe6ff009991e88e909f1d239a8736d3a90d63c604631b50563 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -23,7 +23,7 @@ description: >-
 규칙 기반 검사를 사용하려면 Spring AI `ChatModel`이 구성된 애플리케이션에 다음 모듈을
 추가합니다.
 
-- `spring-ai-privacy-guardrails-client-spring-boot-starter`
+- `spring-ai-privacy-guardrails-chat-client-spring-boot-starter`
 - `spring-ai-privacy-guardrails-inspection-rules`
 
 클라이언트 스타터에는 검사 백엔드가 포함되어 있지 않습니다.
@@ -39,9 +39,9 @@ ContentInspector applicationRules() {
 }
 
 @Bean
-ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection().build();
-    return guardrails.builder(chatModel, policy).build();
+ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().inspection().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
@@ -60,7 +60,7 @@ ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory 
 필요한 구성 요소를 준비하고 같은 `GuardrailsPolicy`에서 `privacy()` 또는
 `toolAuthorization(true)`를 추가로 선택합니다.
 개인정보 처리, 도구 정의 권한 검사, 콘텐츠 검사 순으로 실행합니다.
-클라이언트별 Java 정책은 [클라이언트 정책](clients.md)을 참고하세요.
+클라이언트별 Java 정책은 [설정](configuration.md)을 참고하세요.
 
 ### 선택한 검사기의 개인정보 토큰 간결화
 
@@ -97,12 +97,12 @@ InspectionReport inspectionReport = selectedInspectionService.inspect(inspection
 ```java
 InspectionRule rule = InspectionRule.literal(
     "blocked-phrase", InspectionFinding.Category.PROMPT_INJECTION, "ignore previous instructions");
-InspectionService service = new InspectionService(
+InspectionService inspectionService = new InspectionService(
     List.of(new RuleBasedContentInspector("application-rules", List.of(rule))));
 InspectionRequest request = new InspectionRequest(List.of(new ContentSegment(
     "input", ContentSegment.Role.USER, ContentSegment.PrivacyProcessingStatus.UNPROCESSED,
     "ignore previous instructions")), InspectionLimits.defaults());
-InspectionReport report = service.inspect(request);
+InspectionReport report = inspectionService.inspect(request);
 ```
 
 이 입력의 `report.decision()`은 `BLOCK`입니다. 서비스는 판정을 반환하므로
@@ -113,10 +113,10 @@ InspectionReport report = service.inspect(request);
 출력 검사는 기본적으로 꺼져 있습니다. 클라이언트 정책에서 활성화합니다.
 
 ```java
-GuardrailsPolicy policy = GuardrailsPolicy.builder()
-        .inspection(inspection -> inspection.applicationOutput(true))
+GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(true))
         .build();
-ChatClient client = guardrails.builder(chatModel, policy).build();
+ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 ```
 
 출력 검사는 답변을 애플리케이션에 반환하기 전에 실행하며, `returnDirect`로
@@ -138,13 +138,13 @@ Spring Boot 스타터는 입력과 출력에 같은 검사기와 정책을 적�
 
 ```java
 GuardrailsPolicy inputPolicy = GuardrailsPolicy.builder().inspection().build();
-ChatClient client = guardrails.builder(chatModel, inputPolicy)
+ChatClient chatClient = guardrails.builder(chatModel, inputPolicy)
     .defaultAdvisors(new InspectionOutputAdvisor(outputService))
     .build();
 ```
 
 정책에서는 출력 검사를 끄고 별도 Advisor에 맡깁니다. 같은 서비스로 출력만 검사하려면
-[클라이언트 정책](clients.md#클라이언트별-정책)을 사용하세요.
+[클라이언트별 정책](configuration.md#클라이언트별-정책)을 사용하세요.
 
 ## HTTP guard 모델과 개인정보 처리
 
@@ -153,7 +153,7 @@ ChatClient client = guardrails.builder(chatModel, inputPolicy)
 
 아래 예제는 개인정보 처리가 완료된 콘텐츠를 요구합니다.
 [앞의 조합 예제](#개인정보-보호-또는-도구-권한-검사와-조합)처럼 같은 클라이언트에서 개인정보 보호와 검사를 선택하세요. 출력 검사도 활성화한다면
-[출력 정책과 스트리밍](configuration.md#출력-정책과-스트리밍)에 따라 개인정보 출력 보호도 활성화해야 합니다.
+[출력 정책과 스트리밍](privacy.md#출력-정책과-스트리밍)에 따라 개인정보 출력 보호도 활성화해야 합니다.
 
 ```java
 @Bean
@@ -262,7 +262,7 @@ ContentInspector inspector = new OpenAiCompatibleContentInspector(
 
 ### Spring Boot 스타터 없이 구성
 
-[클라이언트 정책](clients.md#사용자-정의-도구-advisor와-boot-없는-구성)에 따라
+[설정](configuration.md#spring-boot-없이-구성)에 따라
 서비스와 정책을 Factory에 전달합니다. 같은 정책에서 개인정보 보호를 선택하면
 처리 상태가 검사에 자동으로 연결됩니다.
 
@@ -432,7 +432,7 @@ spring.ai.inspection.failure-policy-overrides[optional-guard]=FAIL_OPEN
 Java에서 직접 구성할 때는 `InspectionService`에 개별 설정을 전달합니다.
 
 ```java
-InspectionService service = new InspectionService(
+InspectionService inspectionService = new InspectionService(
         inspectors,
         InspectionPolicy.blockFindings(),
         InspectionFailurePolicy.FAIL_CLOSED,

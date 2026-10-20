@@ -15,9 +15,9 @@ public final class ModelRequestBoundarySpec {
     /** Default order of the common model request boundary advisor. */
     public static final int DEFAULT_ORDER = Integer.MAX_VALUE - 3;
 
-    private UnaryOperator<ChatClientRequest> privacy;
-    private UnaryOperator<ChatClientRequest> authorization;
-    private BiConsumer<ChatClientRequest, Boolean> inspection;
+    private UnaryOperator<ChatClientRequest> privacyStage;
+    private UnaryOperator<ChatClientRequest> authorizationStage;
+    private BiConsumer<ChatClientRequest, Boolean> inspectionStage;
     private boolean allowAdvisorsAfterBoundary;
 
     ModelRequestBoundarySpec() {
@@ -25,18 +25,18 @@ public final class ModelRequestBoundarySpec {
 
     /** Registers the privacy module's transformation, before definition filtering. */
     public void privacy(UnaryOperator<ChatClientRequest> stage) {
-        if (privacy != null) {
+        if (privacyStage != null) {
             throw new IllegalStateException("Privacy stage already configured");
         }
-        privacy = Objects.requireNonNull(stage, "privacy stage");
+        privacyStage = Objects.requireNonNull(stage, "privacy stage");
     }
 
     /** Registers the security stage that removes unauthorized tools from the model request. */
     public void authorization(UnaryOperator<ChatClientRequest> stage) {
-        if (authorization != null) {
+        if (authorizationStage != null) {
             throw new IllegalStateException("Authorization stage already configured");
         }
-        authorization = Objects.requireNonNull(stage, "authorization stage");
+        authorizationStage = Objects.requireNonNull(stage, "authorization stage");
     }
 
     /**
@@ -45,10 +45,10 @@ public final class ModelRequestBoundarySpec {
      * The inspection stage does not return a replacement request.
      */
     public void inspection(BiConsumer<ChatClientRequest, Boolean> stage) {
-        if (inspection != null) {
+        if (inspectionStage != null) {
             throw new IllegalStateException("Inspection stage already configured");
         }
-        inspection = Objects.requireNonNull(stage, "inspection stage");
+        inspectionStage = Objects.requireNonNull(stage, "inspection stage");
     }
 
     void allowAdvisorsAfterBoundary(boolean allow) {
@@ -56,10 +56,10 @@ public final class ModelRequestBoundarySpec {
     }
 
     ModelRequestBoundaryPlan build() {
-        if (privacy == null && authorization == null && inspection == null) {
+        if (privacyStage == null && authorizationStage == null && inspectionStage == null) {
             throw new IllegalStateException("At least one model request stage is required");
         }
-        return new ModelRequestBoundaryPlan(privacy, authorization, inspection, allowAdvisorsAfterBoundary);
+        return new ModelRequestBoundaryPlan(privacyStage, authorizationStage, inspectionStage, allowAdvisorsAfterBoundary);
     }
 
     /** Supports identity validation of a feature's required model stage. */

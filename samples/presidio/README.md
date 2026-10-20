@@ -33,7 +33,7 @@ Add the client and Presidio starters:
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```

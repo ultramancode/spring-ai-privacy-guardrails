@@ -72,11 +72,11 @@ class InspectionAutoConfigurationTest {
                     new String(resource.readAllBytes(), StandardCharsets.UTF_8));
             List<?> properties = (List<?>) metadata.get("properties");
             assertThat(properties)
-                    .extracting(property -> (String) ((Map<?, ?>) property).get("name"))
-                    .containsExactlyInAnyOrder(
-                            "spring.ai.inspection.failure-policy",
-                            "spring.ai.inspection.failure-policy-overrides",
-                            "spring.ai.inspection.pii-token-simplification-inspectors");
+                .extracting(property -> (String) ((Map<?, ?>) property).get("name"))
+                .containsExactlyInAnyOrder(
+                    "spring.ai.inspection.failure-policy",
+                    "spring.ai.inspection.failure-policy-overrides",
+                    "spring.ai.inspection.pii-token-simplification-inspectors");
             for (Object property : properties) {
                 assertThat(((Map<?, ?>) property).get("description"))
                         .isInstanceOfSatisfying(String.class, description -> assertThat(description).isNotBlank());
@@ -182,9 +182,9 @@ class InspectionAutoConfigurationTest {
                     assertThat(context.getBean(InspectionProperties.class).getFailurePolicyOverrides())
                             .containsEntry(inspectorId, overridePolicy);
                     InspectionRequest request = new InspectionRequest(
-                            List.of(new ContentSegment("s1", ContentSegment.Role.USER,
-                                    ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "hello")),
-                            InspectionLimits.defaults());
+                        List.of(new ContentSegment("s1", ContentSegment.Role.USER,
+                            ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "hello")),
+                        InspectionLimits.defaults());
 
                     InspectionReport report = context.getBean(InspectionService.class).inspect(request);
 

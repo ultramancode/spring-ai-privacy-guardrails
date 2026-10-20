@@ -58,10 +58,11 @@ public final class PrivacyToolCallbackFactory {
     }
 
     /**
-     * Returns the only callback instance that should be registered with Spring AI.
+     * Wraps an application callback with this factory's privacy policy.
      *
      * @param toolCallback original application callback
      * @return privacy-wrapped callback bound to this factory
+     * @throws IllegalArgumentException if the callback is already privacy-wrapped
      */
     public ToolCallback wrap(ToolCallback toolCallback) {
         return wrapValidated(requireUnwrapped(toolCallback));
@@ -69,7 +70,6 @@ public final class PrivacyToolCallbackFactory {
 
     /**
      * Returns whether the callback was created by this exact factory instance.
-     * This semantic check avoids exposing the private wrapper implementation.
      *
      * @param toolCallback callback to inspect
      * @return {@code true} only for a wrapper created by this factory
@@ -159,17 +159,17 @@ public final class PrivacyToolCallbackFactory {
         return delegate;
     }
 
-    List<ToolCallback> prepareCallbacks(List<ToolCallback> callbacks) {
-        List<ToolCallback> prepared = new ArrayList<>(callbacks.size());
-        for (ToolCallback callback : callbacks) {
-            if (isWrapped(callback)) {
-                prepared.add(callback);
+    List<ToolCallback> prepareCallbacks(List<ToolCallback> toolCallbacks) {
+        List<ToolCallback> preparedToolCallbacks = new ArrayList<>(toolCallbacks.size());
+        for (ToolCallback toolCallback : toolCallbacks) {
+            if (isWrapped(toolCallback)) {
+                preparedToolCallbacks.add(toolCallback);
             } else {
-                prepared.add(wrap(callback));
+                preparedToolCallbacks.add(wrap(toolCallback));
             }
         }
-        requireDistinctToolNames(prepared);
-        return List.copyOf(prepared);
+        requireDistinctToolNames(preparedToolCallbacks);
+        return List.copyOf(preparedToolCallbacks);
     }
 
     private ToolCallbackProvider requireUnwrappedProvider(ToolCallbackProvider toolCallbackProvider) {
@@ -193,8 +193,8 @@ public final class PrivacyToolCallbackFactory {
         );
     }
 
-    boolean usesPrivacyService(PrivacyService expected) {
-        return this.privacyService == expected;
+    boolean usesPrivacyService(PrivacyService expectedPrivacyService) {
+        return this.privacyService == expectedPrivacyService;
     }
 
     Provenance provenance() {

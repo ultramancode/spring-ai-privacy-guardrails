@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 7ab55ab504da4f79e6bd844ffd83ccb0823e13b298d89c4b99c5a364b970725b -->
+<!-- i18n-source-sha256: a2642a69ac36b05dce30313354d8b27b21250c0ee243136b905fad8145c848be -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -24,7 +24,7 @@ JVM 내부에서 자체 NER 모델을 사용하려면 OpenNLP를, 애플리케�
 
 애플리케이션은 `ChatModel`을 제공합니다. 클라이언트 스타터는
 `GuardrailsChatClientFactory`를 제공합니다. 기능 조합과 Java 정책은
-[클라이언트 정책](clients.md)을 참고하세요.
+[설정](configuration.md)을 참고하세요.
 
 외부 모델 API 키 없이 로컬 모델과 고정 예제로 보호 동작을 확인하려면
 [샘플 / 데모 가이드](sample.md)를 참고하세요.
@@ -64,7 +64,7 @@ Regex 분석기를 사용할 수 있습니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -73,7 +73,7 @@ dependencies {
 ```xml
 <dependency>
     <groupId>io.github.ultramancode</groupId>
-    <artifactId>spring-ai-privacy-guardrails-client-spring-boot-starter</artifactId>
+    <artifactId>spring-ai-privacy-guardrails-chat-client-spring-boot-starter</artifactId>
     <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -102,7 +102,7 @@ spring:
 Factory가 사용할 개인정보 보호 구성 요소를 제공합니다.
 
 형식이 일치한 뒤 체크섬이나 업무 규칙을 추가로 확인해야 한다면
-[사용자 정의 Regex 검증기](configuration.md#regex-분석기)를 연결할 수 있습니다.
+[사용자 정의 Regex 검증기](privacy.md#regex-분석기)를 연결할 수 있습니다.
 
 ## 3. ChatClient 보호
 
@@ -110,13 +110,13 @@ Factory가 사용할 개인정보 보호 구성 요소를 제공합니다.
 보호되지는 않습니다.
 
 Factory로 보호된 클라이언트를 생성합니다. 기능 조합과 Java 정책은
-[클라이언트 정책](clients.md)을 참고하세요.
+[설정](configuration.md)을 참고하세요.
 
 ```java
 @Bean
-ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrails) {
-    GuardrailsPolicy policy = GuardrailsPolicy.builder().privacy().build();
-    return guardrails.builder(chatModel, policy).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
@@ -212,7 +212,7 @@ Spring Security 스타터를 추가하고, 도구 권한 정책을
 `AuthorizationManager<ToolAuthorizationContext>` Bean으로 등록합니다.
 
 `GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택하고
-`guardrails.builder(chatModel, policy)`로 클라이언트를 생성합니다. 개인정보 보호는 별도로 선택합니다.
+`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)`로 클라이언트를 생성합니다. 개인정보 보호는 별도로 선택합니다.
 권한 검사와 도구별 원문 공개 정책은 각각 유지됩니다.
 자세한 설정은 [도구 권한](security.md)을 참고하세요.
 
@@ -267,7 +267,7 @@ Regex와 Presidio를 함께 활성화할 수도 있습니다. 기본 `UNION` 모
 분석기를 모두 실행한 뒤 탐지 결과를 합칩니다. 기본 실패 정책인 `REQUIRE_ALL`에서는
 구성한 분석기 중 하나라도 실패하면 해당 요청도 실패합니다. 여러 분석기를 함께
 사용할 때의 선택 방식과 실패 처리 방법은
-[설정과 사용법](configuration.md#탐지와-해석)을 참고하세요.
+[개인정보 보호](privacy.md#탐지와-해석)를 참고하세요.
 
 ## 6. JVM 내부 탐지에 OpenNLP 사용
 
@@ -320,20 +320,17 @@ OpenNLP 모델 바이너리는 이 프로젝트에 포함되어 있지 않습니
 
 ## 7. 선택 사항: 최종 응답 보호
 
-입력 및 도구 경계를 보호하더라도 최종 응답 검사가 자동으로 활성화되지는
-않습니다.
+최종 응답의 개인정보 보호는 기본적으로 비활성화되어 있습니다. 클라이언트 정책에서 활성화합니다.
 
-애플리케이션에 반환되는 응답에도 최종 개인정보 검사가 필요하면 출력 보호
-(output protection)를 활성화합니다.
-
-```yaml
-spring:
-  ai:
-    privacy:
-      output:
-        enabled: true
-        action: tokenize
+```java
+GuardrailsPolicy outputPolicy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy.outputProtection(true))
+        .build();
+ChatClient outputClient = guardrails.builder(chatModel, outputPolicy).build();
 ```
+
+기본 처리 방식은 `TOKENIZE`입니다. 다른 방식을 선택하면서 출력 보호를
+활성화하려면 개인정보 보호 설정에서 `outputAction(...)`을 사용합니다.
 
 지원하는 출력 동작은 다음과 같습니다.
 
@@ -348,8 +345,8 @@ spring:
 나뉜 개인정보도 탐지할 수 있지만, 모델 응답이 생성되는 즉시 전달되는 실시간
 스트리밍은 사용할 수 없습니다.
 
-자세한 내용은 [출력 정책과 스트리밍](configuration.md#출력-정책과-스트리밍)과
-[입력·응답 처리 제한](configuration.md#입력응답-처리-제한)을 참고하세요.
+자세한 내용은 [출력 정책과 스트리밍](privacy.md#출력-정책과-스트리밍)과
+[입력·응답 처리 제한](privacy.md#입력응답-처리-제한)을 참고하세요.
 
 ## 8. 사용자 정의 분석기
 
@@ -365,8 +362,8 @@ Regex, Presidio 또는 OpenNLP가 적합하지 않은 경우 애플리케이션�
 사용량도 자체적으로 제한해야 합니다.
 
 분석기 선택, 분석기 ID(provider ID), 엔티티 별칭, 신뢰도 하한 및 실패 정책은
-[설정과 사용법](configuration.md#탐지와-해석)을 참고하세요. 구현 시 지켜야 할 조건과
-여러 텍스트의 분석 방법은 [사용자 정의 분석기](configuration.md#사용자-정의-분석기)를
+[개인정보 보호](privacy.md#탐지와-해석)를 참고하세요. 구현 시 지켜야 할 조건과
+여러 텍스트의 분석 방법은 [사용자 정의 분석기](privacy.md#사용자-정의-분석기)를
 참고하세요.
 
 ## 보호 경계 참고 사항
@@ -378,10 +375,10 @@ Regex, Presidio 또는 OpenNLP가 적합하지 않은 경우 애플리케이션�
 
 ## 다음 단계
 
-- 전체 설정 속성과 API 참고 문서는 [설정과 사용법](configuration.md)을
-  참고하세요.
+- 기능 조합과 클라이언트 정책 재사용은 [설정](configuration.md)을 참고하세요.
+- 개인정보 보호의 설정 속성, 동작과 API 사용법은 [개인정보 보호](privacy.md)를 참고하세요.
 - 개인정보 원문이나 페이로드를 노출하지 않고 경계 처리 결과만 관측하려면
-  [개인정보 보호 런타임 관측](configuration.md#개인정보-보호-런타임-관측)을 참고하세요.
+  [개인정보 보호 런타임 관측](privacy.md#개인정보-보호-런타임-관측)을 참고하세요.
 - 로컬 도구, RAG 및 Streamable HTTP MCP 시나리오에서 보호 동작을 확인하려면
   [샘플 / 데모 가이드](sample.md)를 참고하세요.
 - 모델, 도구, 세션 및 요청 수명주기 경계는

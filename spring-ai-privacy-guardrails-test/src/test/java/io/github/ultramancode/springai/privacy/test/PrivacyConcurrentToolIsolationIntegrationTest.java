@@ -1,12 +1,12 @@
 package io.github.ultramancode.springai.privacy.test;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -65,18 +65,14 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
         );
         Map<String, String> rawIdByLabel = new ConcurrentHashMap<>();
         ConcurrentToolModel model = new ConcurrentToolModel();
-        PrivacyToolCallbackFactory toolCallbackFactory = new PrivacyToolCallbackFactory(
-                privacyService,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("CUSTOMER_ID")))
-        );
-        ToolCallback protectedTool = probe.wrapTool(
-                customerLookup(toolBarrier, rawIdByLabel),
-                toolCallbackFactory
-        );
-        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
+        GuardrailsPolicy policy = GuardrailsPolicy.builder()
+                .privacy(privacy -> privacy.toolDisclosurePolicy(
+                        ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("CUSTOMER_ID")))))
+                .build();
+        ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
                 .build()
-                .configure(ChatClient.builder(probe.wrapModel(model)))
-                .defaultTools(protectedTool)
+                .builder(probe.wrapModel(model), policy)
+                .defaultTools(probe.wrapTool(customerLookup(toolBarrier, rawIdByLabel)))
                 .build();
 
         CountDownLatch start = new CountDownLatch(1);

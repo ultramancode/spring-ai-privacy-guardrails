@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: b88d3b750c60d2d0dd374aed4b68a8c5a78d5a95885e9d380cfd3912b2f99d89 -->
+<!-- i18n-source-sha256: 6cecfddc543ad33092fc95cdafc255535a8400cb0d23c3fa0ff97acebf9c5a64 -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로

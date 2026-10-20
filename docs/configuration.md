@@ -87,10 +87,10 @@ by a separate advisor outside the protection boundary may remain unprotected.
 
 ### Advanced manual assembly
 
-The individual `PrivacyChatClientConfigurer` and `ModelRequestBoundaryConfigurer`
-remain available for custom assembly. On that path, wrap tools with
-`PrivacyToolCallbackFactory`, compose multiple feature configurers with `compose(...)`
-and apply them once. Do not combine this assembly path with the unified factory.
+To configure features directly on a Spring AI builder, wrap tools with
+`PrivacyToolCallbackFactory` and configure privacy with `PrivacyChatClientConfigurer`.
+Use `ModelRequestBoundaryConfigurer.compose(...)` to combine multiple feature configurers
+and apply them once to the builder.
 
 ## Configuration Properties
 
@@ -560,16 +560,19 @@ result remains in the form of opaque tokens. When output protection is enabled,
 the final result is processed according to the configured `TOKENIZE`, `REDACT`,
 or `BLOCK` policy.
 
-### Final Model Output Inspection
+### Final Model Output Protection
 
 `outputProtection(...)` controls whether the output policy is applied to the final
 model-generated response. Disabling it does not disable privacy protection for
 inputs, model-call boundaries, or tool results.
 
-| Output protection | Final model-output inspection | Delivery behavior |
+| Output protection | PII analysis of final model output | Delivery behavior |
 | --- | --- | --- |
 | `false` | No | The final model output is not inspected separately. Streaming calls may deliver model-generated text incrementally. Other privacy boundaries remain active, and PII in `returnDirect` results is still replaced with opaque tokens. |
 | `true` | Yes | The complete response is inspected, then `TOKENIZE`, `REDACT`, or `BLOCK` is applied before delivery. |
+
+Content inspection has its own `inspection.applicationOutput(...)` policy setting.
+See [model-output inspection](inspection.md#optional-model-output-inspection) for rules and guard models.
 
 The Spring AI streaming API remains usable when output protection is enabled,
 but the library must first buffer the complete response for privacy inspection.
@@ -673,14 +676,11 @@ In tests, use the module's `PrivacyTestProbe` to record the values passed to the
 model and tools. After executing a request, check those records with
 `PrivacyTestAssertions.assertThatPrivacy(...)`.
 
-The probe example below uses individual configurers and manual tool wrapping to
-record the values received by the delegate. Do not also apply the unified factory.
-
 The following JUnit test method assumes an analyzer configured to detect names
-(`PERSON`) and email addresses (`EMAIL_ADDRESS`), with disclosure of `PERSON`
-allowed for `customerLookup`. Inject `privacyService`, `privacyConfigurer`, and
-`privacyToolCallbackFactory` into the test from the starter configuration
-described above.
+(`PERSON`) and email addresses (`EMAIL_ADDRESS`). Inject `PrivacyService` and
+`GuardrailsChatClientFactory guardrails` into the test.
+The example configures disclosure of `PERSON` to `customerLookup` and records
+the values that reach the tool after privacy processing.
 
 The example uses the following values and objects:
 
@@ -697,14 +697,15 @@ restored to `"Alice"` before it reaches the tool.
 ```java
 @Test
 void protectsModelInputAndDisclosesAllowedToolInput() {
-    try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {
-        ChatModel recordingModel = privacyProbe.wrapModel(testModel);
-        ToolCallback protectedTool = privacyProbe.wrapTool(
-                customerLookup, privacyToolCallbackFactory);
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
+            .privacy(privacy -> privacy.toolDisclosurePolicy(
+                    ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("PERSON")))))
+            .build();
 
-        ChatClient client = privacyConfigurer.configure(
-                ChatClient.builder(recordingModel).defaultTools(protectedTool)
-        ).build();
+    try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {
+        ChatClient client = guardrails.builder(privacyProbe.wrapModel(testModel), policy)
+                .defaultTools(privacyProbe.wrapTool(customerLookup))
+                .build();
 
         client.prompt()
                 .user("Find Alice (alice@example.com).")
@@ -720,10 +721,9 @@ void protectsModelInputAndDisclosesAllowedToolInput() {
 }
 ```
 
-`wrapModel(...)` adds recording, while `privacyConfigurer.configure(...)`
-applies privacy protection to model input. `wrapTool(...)` applies tool
-protection through the supplied `PrivacyToolCallbackFactory` and records the
-values passed to the tool after privacy processing.
+`wrapModel(...)` records the requests the model actually receives.
+`wrapTool(...)` records the input the tool actually receives and the output it returns.
+Privacy protection follows the policy passed to `GuardrailsChatClientFactory`.
 
 A test `ChatModel` can verify privacy behavior without connecting to an external LLM.
 

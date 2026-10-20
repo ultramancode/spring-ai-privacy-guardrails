@@ -8,8 +8,8 @@ description: >-
 **English** | [한국어](ko/clients.md)
 
 Use `GuardrailsChatClientFactory` to select privacy, content inspection and tool
-authorization for each client. The factory assembles the selected features and
-protects tools registered through Spring AI, including request-specific and MCP tools.
+authorization for each client. When privacy is selected, it protects tools registered
+through Spring AI, including request-specific and MCP tools.
 
 ## Dependencies and components
 
@@ -155,7 +155,7 @@ Observation settings and client customizers belong on `GuardrailsChatClientFacto
 Before a model call, the factory runs privacy processing, tool-definition
 authorization and content inspection, in that order, for the selected features.
 Tool authorization checks execution permission before restoring allowed original
-values. Tool results are protected before reaching the model or application.
+values. With privacy selected, tool results are protected before reaching the model or application.
 Content inspection does not inspect newly generated tool arguments immediately
 before execution.
 
@@ -174,10 +174,8 @@ Direct calls to `ChatModel` bypass this client. Detection coverage depends on th
 configured analyzers and inspectors. See [scope and limits](inspection.md#scope-and-limits)
 and the [threat model](threat-model.md).
 
-For custom assembly, use the individual configurers as described in
-[advanced manual assembly](configuration.md#advanced-manual-assembly).
-Apply them directly to a Spring AI builder. A factory-built client already has
-its selected features configured.
+See [manual assembly](configuration.md#advanced-manual-assembly) to configure individual
+features directly on a Spring AI builder.
 
 For a first run without a model API key, use the [local demo](sample.md).
 For inspection without a ChatClient, see the [standalone example](inspection.md#inspect-without-a-chatclient).

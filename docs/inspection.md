@@ -23,7 +23,7 @@ For a rules-based setup, add these modules to an application that provides a Spr
 - `spring-ai-privacy-guardrails-client-spring-boot-starter`
 - `spring-ai-privacy-guardrails-inspection-rules`
 
-The inspection starter does not include a rule or model backend.
+The client starter does not include an inspection backend.
 
 Register a rule and select inspection in the client policy:
 

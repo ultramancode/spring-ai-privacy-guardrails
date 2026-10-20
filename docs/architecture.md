@@ -37,9 +37,9 @@ The library protects data that crosses supported model, tool, and output
 boundaries. The optional Spring Security integration can also authorize tool
 discovery and execution.
 
-Clients select features through `GuardrailsChatClientFactory` and `GuardrailsPolicy`.
-This assembly layer reuses the engines and protects each privacy-enabled request's tools
-before authorization captures the callback list. See [Client policies](clients.md) for setup.
+Clients select privacy protection, content inspection and tool authorization through
+`GuardrailsChatClientFactory` and `GuardrailsPolicy`.
+See [Client policies](clients.md) for setup.
 
 ## Module Structure
 

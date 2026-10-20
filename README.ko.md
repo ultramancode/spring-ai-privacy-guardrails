@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 5d577c7974f93ec185acf9d3a3786b013ce1ca6a0d19422a80b932d6f1443f6f -->
+<!-- i18n-source-sha256: dec80688b7891e93acfd1af41ad34f071209b82634f423c438ca18dfffc40fb6 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -105,8 +105,7 @@ Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 
 단계별 설정 방법은 [시작하기](docs/ko/getting-started.md)를 참고하세요.
 
-다음 예제는 통합 클라이언트 스타터와 애플리케이션이 제공하는 `ChatModel`을 사용합니다.
-직접 연동할 때는 개별 기능 스타터도 사용할 수 있습니다.
+다음 예제는 클라이언트 스타터와 애플리케이션이 제공하는 `ChatModel`을 사용합니다.
 
 ### PII 분석기 선택
 

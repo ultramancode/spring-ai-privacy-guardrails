@@ -8,11 +8,11 @@ description: >-
 [English](../clients.md) | **한국어**
 
 <!-- i18n-source: docs/clients.md -->
-<!-- i18n-source-sha256: 17dc86e130ce873f6047962f869a4d8804784d2c05be4e04985bb8b317b6e183 -->
+<!-- i18n-source-sha256: ad1a2ff6b141562fc8288c0b90dd3353c6e0db4266b17c0eb58c97506f01f5b5 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
-도구 권한 검사를 선택합니다. Factory는 선택한 기능을 조립하고 Spring AI를 통해
-등록한 도구를 보호합니다. 요청별 도구와 MCP 도구에도 같은 정책을 적용합니다.
+도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
+도구를 보호합니다. 요청별 도구와 MCP 도구에도 같은 정책을 적용합니다.
 
 ## 의존성과 구성 요소
 
@@ -154,7 +154,7 @@ GuardrailsChatClientFactory guardrails = GuardrailsChatClientFactory.builder()
 
 모델 호출 전에는 선택한 기능에 따라 개인정보 처리, 도구 정의 권한 검사,
 콘텐츠 검사 순서로 실행합니다. 도구 권한을 확인한 뒤 허용한 원문만 복원합니다.
-도구 결과는 모델이나 애플리케이션에 전달하기 전에 보호합니다.
+개인정보 보호를 선택하면 도구 결과도 모델이나 애플리케이션에 전달하기 전에 보호합니다.
 콘텐츠 검사는 새로 생성된 도구 인자를 실행 직전에 검사하지 않습니다.
 
 개인정보 출력 보호와 출력 검사는 스트리밍 응답을 끝까지 모으므로 전달이 늦어집니다.
@@ -171,9 +171,8 @@ GuardrailsChatClientFactory guardrails = GuardrailsChatClientFactory.builder()
 탐지 범위는 구성한 분석기와 검사기에 따라 달라집니다.
 [검사 범위와 한도](inspection.md#검사-범위와-한도)와 [위협 모델](threat-model.md)을 참고하세요.
 
-사용자 정의 조립에는 [직접 조립하는 고급 연동](configuration.md#직접-조립하는-고급-연동)의
-개별 Configurer를 Spring AI 빌더에 직접 적용하세요. Factory로 만든 클라이언트에는
-선택한 기능이 이미 구성되어 있습니다.
+개별 기능을 Spring AI 빌더에 직접 구성하려면
+[직접 조립하는 고급 연동](configuration.md#직접-조립하는-고급-연동)을 참고하세요.
 
 모델 API 키 없이 처음 실행하려면 [로컬 데모](sample.md)를 사용하세요.
 ChatClient 없는 검사는 [단독 검사 예제](inspection.md#chatclient-없이-검사)를 참고하세요.

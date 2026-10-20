@@ -139,7 +139,7 @@ all tools.
 ## Configure the ChatClient
 
 After preparing dependencies and the authorization policy, create the client through
-the unified factory. `customerLookupToolCallback` is an application-provided tool bean.
+`GuardrailsChatClientFactory`. `customerLookupToolCallback` is an application-provided tool bean.
 
 ```java
 @Bean
@@ -379,7 +379,7 @@ client.
 ## Without the Spring Boot Starter
 
 Depend on `spring-ai-privacy-guardrails-client` and the Security module, then connect
-the authorization boundary to the unified factory. This example selects authorization only:
+the authorization boundary to `GuardrailsChatClientFactory`. This example selects authorization only:
 
 ```java
 SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
@@ -393,7 +393,6 @@ ChatClient client = guardrails.builder(chatModel).defaultTools(customerLookupToo
 ```
 
 To add privacy or inspection, supply its service and select the feature in the policy.
-The individual factories and configurers remain available for advanced manual assembly.
 
 ## Tool Search
 

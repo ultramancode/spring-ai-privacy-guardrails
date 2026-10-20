@@ -9,7 +9,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 949089cc3bbba659031bfe146508ade557725df98684674a3c5871548d6599f4 -->
+<!-- i18n-source-sha256: 8b86bdfa73386df0ef8b1921a350f98190164b9a93d0a2680762d5bd0e07dd88 -->
 
 이 문서는 Spring AI Privacy Guardrails를 사용하는 애플리케이션을 위한 종합
 참고 문서입니다.
@@ -88,10 +88,10 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 
 ### 직접 조립하는 고급 연동
 
-개별 `PrivacyChatClientConfigurer`와 `ModelRequestBoundaryConfigurer`는
-사용자 정의 조립에 사용할 수 있습니다. 이 경로에서는 도구를
-`PrivacyToolCallbackFactory`로 감싸고, 다른 기능과 조합할 때 Configurer를
-`compose(...)`로 합쳐 한 번 적용해야 합니다. 통합 Factory와 중복 적용하지 마세요.
+Spring AI 빌더에 기능을 직접 구성하려면 `PrivacyToolCallbackFactory`로 도구를 감싸고
+`PrivacyChatClientConfigurer`로 개인정보 보호를 적용합니다.
+여러 기능의 Configurer는 `ModelRequestBoundaryConfigurer.compose(...)`로 합쳐
+빌더에 한 번 적용합니다.
 
 ## 설정 속성
 
@@ -534,16 +534,19 @@ ChatClient client = guardrails.builder(chatModel, policy).build();
 개인정보는 불투명 토큰 상태를 유지합니다. 출력 보호를 활성화하면 최종 결과에
 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용합니다.
 
-### 최종 모델 출력 검사
+### 최종 모델 출력 보호
 
 `outputProtection(...)`는 모델이 생성한 최종 응답에 출력 정책을 적용할지를 결정합니다.
 이 설정을 비활성화해도 입력, 모델 호출 경계와 도구 결과에 대한 개인정보 보호는 계속
 적용됩니다.
 
-| 출력 보호 | 최종 모델 출력 검사 | 전달 방식 |
+| 출력 보호 | 최종 모델 출력의 개인정보 분석 | 전달 방식 |
 | --- | --- | --- |
 | `false` | 하지 않음 | 최종 모델 출력을 별도로 검사하지 않습니다. 스트리밍 호출에서는 모델이 생성하는 텍스트를 실시간으로 전달할 수 있습니다. 다른 개인정보 보호 경계는 계속 적용되며, `returnDirect` 결과의 개인정보도 불투명 토큰으로 바뀝니다. |
 | `true` | 적용 | 완성된 응답을 검사한 뒤 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용하여 전달합니다. |
+
+콘텐츠 검사는 정책의 `inspection.applicationOutput(...)`에서 별도로 설정합니다.
+규칙이나 검사 모델을 사용하는 방법은 [모델 출력 검사](inspection.md#선택적-모델-출력-검사)를 참고하세요.
 
 출력 보호가 활성화되어도 Spring AI의 스트리밍 API를 사용할 수 있지만, 개인정보를
 검사하기 위해 완성된 응답을 먼저 버퍼링합니다. 따라서 모델 응답이 생성되는 즉시
@@ -641,14 +644,11 @@ dependencies {
 기록합니다. 요청 실행 후 `PrivacyTestAssertions.assertThatPrivacy(...)`로 그 기록을
 검증합니다.
 
-다음 프로브 예제는 도구가 받는 값을 기록하기 위해 개별 Configurer와 수동 도구 래핑을
-사용합니다. 통합 Factory와 중복 적용하지 마세요.
-
 아래는 JUnit 테스트 메서드 예시입니다. 이름(`PERSON`)과 이메일(`EMAIL_ADDRESS`)을
-탐지하도록 분석기를 구성하고, `customerLookup` 도구에는 `PERSON`의 원문 공개를
-허용했다고 가정합니다. `privacyService`, `privacyConfigurer`,
-`privacyToolCallbackFactory`는 앞에서 설명한 스타터 구성의 Bean을 테스트에 주입받아
-사용합니다.
+탐지하도록 분석기를 구성하고, `PrivacyService`와
+`GuardrailsChatClientFactory guardrails`를 테스트에 주입합니다.
+예제에서 `customerLookup`에 `PERSON`의 원문 공개를 허용하고,
+개인정보 처리 후 도구에 전달된 값을 기록합니다.
 
 예시에서 사용하는 값과 객체의 의미는 다음과 같습니다.
 
@@ -665,14 +665,15 @@ dependencies {
 ```java
 @Test
 void protectsModelInputAndDisclosesAllowedToolInput() {
-    try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {
-        ChatModel recordingModel = privacyProbe.wrapModel(testModel);
-        ToolCallback protectedTool = privacyProbe.wrapTool(
-                customerLookup, privacyToolCallbackFactory);
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
+            .privacy(privacy -> privacy.toolDisclosurePolicy(
+                    ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("PERSON")))))
+            .build();
 
-        ChatClient client = privacyConfigurer.configure(
-                ChatClient.builder(recordingModel).defaultTools(protectedTool)
-        ).build();
+    try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {
+        ChatClient client = guardrails.builder(privacyProbe.wrapModel(testModel), policy)
+                .defaultTools(privacyProbe.wrapTool(customerLookup))
+                .build();
 
         client.prompt()
                 .user("Find Alice (alice@example.com).")
@@ -688,9 +689,9 @@ void protectsModelInputAndDisclosesAllowedToolInput() {
 }
 ```
 
-`wrapModel(...)`로 기록 기능을 붙이고, `privacyConfigurer.configure(...)`로 모델 입력의
-개인정보 보호를 적용합니다. `wrapTool(...)`은 전달받은 `PrivacyToolCallbackFactory`로
-도구를 보호하고, 보호 처리 후 도구에 전달되는 값을 기록합니다.
+`wrapModel(...)`은 모델이 실제로 받은 요청을 기록합니다.
+`wrapTool(...)`은 도구에 전달된 입력값과 도구의 반환값을 기록합니다.
+개인정보 보호는 `GuardrailsChatClientFactory`에 전달한 정책에 따라 적용됩니다.
 
 외부 LLM 연결 없이도 테스트용 `ChatModel`로 개인정보 보호 동작을 검증할 수 있습니다.
 

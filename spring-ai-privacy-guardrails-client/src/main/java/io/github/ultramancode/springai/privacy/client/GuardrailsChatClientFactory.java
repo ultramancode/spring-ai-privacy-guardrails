@@ -25,7 +25,10 @@ import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
 
 /**
- * Creates client builders with selected privacy, content inspection and tool authorization.
+ * Creates {@link ChatClient} builders with the features selected by a {@link GuardrailsPolicy}.
+ * Privacy-enabled clients protect tools registered through {@code defaultTools(...)} or request-specific
+ * {@code tools(...)} calls. Supply callbacks and providers that have not been wrapped
+ * by {@link PrivacyToolCallbackFactory}.
  */
 public final class GuardrailsChatClientFactory {
     private final Builder settings;
@@ -34,12 +37,16 @@ public final class GuardrailsChatClientFactory {
         this.settings = new Builder(settings);
     }
 
-    /** Prepares reusable components. Supplying a component does not enable its feature. */
+    /** Creates a factory builder for shared services, client defaults and an optional default policy. */
     public static Builder builder() {
         return new Builder();
     }
 
-    /** Uses the configured default policy. */
+    /**
+     * Creates a client builder using the factory's default policy.
+     *
+     * @throws IllegalStateException if no default policy is configured
+     */
     public ChatClient.Builder builder(ChatModel model) {
         if (settings.defaultPolicy == null) {
             throw new IllegalStateException("No default GuardrailsPolicy is configured. Supply a policy explicitly");
@@ -52,7 +59,7 @@ public final class GuardrailsChatClientFactory {
         return builder(model, policy, settings.toolAdvisorBuilder);
     }
 
-    /** Preserves a caller-selected tool advisor builder, including Tool Search builders. */
+    /** Creates a client builder using the supplied policy and a copy of the tool advisor builder. */
     public ChatClient.Builder builder(ChatModel model, GuardrailsPolicy policy,
             ToolCallingAdvisor.Builder<?> toolAdvisorBuilder) {
         Objects.requireNonNull(model, "model");
@@ -133,9 +140,14 @@ public final class GuardrailsChatClientFactory {
         }
     }
 
-    /** Adapter for the optional security module's managed client builder. */
+    /** Connects tool authorization to client creation. */
     @FunctionalInterface
     public interface AuthorizedClientBuilder {
+        /**
+         * Creates a client with tool authorization and the supplied model-request features.
+         * Use {@code clientBuilderFactory} with an authorization-aware tool advisor builder.
+         * Compose {@code configurer} with the authorization configurer before applying them to the builder.
+         */
         ChatClient.Builder create(ChatModel model, ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
                 ModelRequestBoundaryConfigurer configurer,
                 BiFunction<ChatModel, ToolCallingAdvisor.Builder<?>, ChatClient.Builder> clientBuilderFactory);

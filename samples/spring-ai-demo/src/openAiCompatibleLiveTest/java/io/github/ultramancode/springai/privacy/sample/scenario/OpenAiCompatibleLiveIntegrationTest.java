@@ -139,7 +139,7 @@ class OpenAiCompatibleLiveIntegrationTest {
         long startedAt = System.nanoTime();
         try (PrivacyTestProbe probe = PrivacyTestProbe.create(this.privacyService)) {
             PrivacyDemoCrmTool delegate = new PrivacyDemoCrmTool(this.objectMapper);
-            ToolCallback protectedTool = probe.wrapTool(delegate, this.toolCallbackFactory);
+            ToolCallback protectedTool = this.toolCallbackFactory.wrap(probe.wrapTool(delegate));
             ChatClient chatClient = protectedClient(probe, protectedTool);
 
             String response = chatClient.prompt()
@@ -198,7 +198,7 @@ class OpenAiCompatibleLiveIntegrationTest {
     void returnDirectToolResultStillPassesTheProtectedApplicationBoundary() {
         long startedAt = System.nanoTime();
         try (PrivacyTestProbe probe = PrivacyTestProbe.create(this.privacyService)) {
-            ToolCallback protectedTool = probe.wrapTool(returnDirectTool(), this.toolCallbackFactory);
+            ToolCallback protectedTool = this.toolCallbackFactory.wrap(probe.wrapTool(returnDirectTool()));
             ChatClient chatClient = protectedClient(probe, protectedTool);
 
             String response = chatClient.prompt()

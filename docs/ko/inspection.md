@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: c80956cd2a28ebebd3aaf4b0bfe6547f47074725d6ee4139e89331a1f396ca19 -->
+<!-- i18n-source-sha256: c0d224594625ae4779f2fe3cba7d6b0ceaddee4fde5103ef2508390370620156 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -26,7 +26,7 @@ description: >-
 - `spring-ai-privacy-guardrails-client-spring-boot-starter`
 - `spring-ai-privacy-guardrails-inspection-rules`
 
-검사 스타터에는 규칙 검사기나 모델 백엔드가 포함되어 있지 않습니다.
+클라이언트 스타터에는 검사 백엔드가 포함되어 있지 않습니다.
 
 규칙을 등록하고 클라이언트 정책에서 검사를 선택합니다.
 
@@ -523,7 +523,7 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 | --- | --- | --- |
 | `failure-policy` | `FAIL_CLOSED` | 위 실패 정책 표에 해당하는 오류가 발생했을 때 적용할 기본 정책 |
 | `failure-policy-overrides` | 빈 맵 | 검사기 ID별 실패 정책 |
-| `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 유형 표기로 전달받을 검사기 ID |
+| `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 난수 부분 없이 전달받을 검사기 ID |
 
 정책의 `inspection.limits(...)`에 `InspectionLimits`를 전달하고 출력 수집 한도를 설정합니다.
 

@@ -176,8 +176,10 @@ class GuardrailsChatClientFactoryTest {
         ChatClient second = first.mutate().build();
         assertThat(invoke(second.prompt().user("Alice"), streaming)).isEqualTo("[REDACTED_PERSON]");
 
-        assertThat(firstInput.get()).contains("[[PII_PERSON_").doesNotContain("Alice");
-        assertThat(secondInput.get()).contains("[[PII_PERSON_").doesNotContain("Alice");
+        assertThat(firstInput.get()).containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"))
+                .doesNotContain("Alice");
+        assertThat(secondInput.get()).containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"))
+                .doesNotContain("Alice");
         assertThat(privacy.activeSessionCount()).isZero();
     }
 
@@ -199,7 +201,8 @@ class GuardrailsChatClientFactoryTest {
         assertThat(second.prompt().user("Alice").call().content())
                 .matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
         assertThat(disclosed.get()).contains("Alice");
-        assertThat(protectedInput.get()).doesNotContain("Alice").contains("[[PII_PERSON_");
+        assertThat(protectedInput.get()).doesNotContain("Alice")
+                .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
         assertThat(privacy.activeSessionCount()).isZero();
     }
 
@@ -302,7 +305,7 @@ class GuardrailsChatClientFactoryTest {
 
         assertThat(output).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
         assertThat(inspections).hasSize(2).allSatisfy(request -> {
-            assertThat(request.segments()).extracting(ContentSegment::text).contains("[PERSON]");
+            assertThat(request.segments()).extracting(ContentSegment::text).contains("[PII_PERSON_1]");
             assertThat(request.segments()).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                     .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
         });

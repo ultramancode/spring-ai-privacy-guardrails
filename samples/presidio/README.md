@@ -29,11 +29,12 @@ Presidio Analyzer service is up
 
 ## Configure The Application
 
-The Presidio starter includes the base Privacy Guardrails starter transitively:
+Add the client and Presidio starters:
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -53,8 +54,8 @@ spring:
 `analyzer-url` accepts a base HTTP(S) URI without user-info, query, or fragment
 components. Put credentials in `presidio.headers` rather than in the URL.
 
-Apply `PrivacyChatClientConfigurer` to the clients that need protection, as shown
-in [Getting Started](../../docs/getting-started.md#3-protect-a-chatclient).
+Create a client through `GuardrailsChatClientFactory` with a policy that selects
+`privacy()`, as shown in [Getting Started](../../docs/getting-started.md#3-protect-a-chatclient).
 
 ## Manual API Check
 

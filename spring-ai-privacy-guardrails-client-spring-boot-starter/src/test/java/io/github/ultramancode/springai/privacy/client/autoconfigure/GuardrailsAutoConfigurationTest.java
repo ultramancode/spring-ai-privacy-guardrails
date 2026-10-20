@@ -3,6 +3,7 @@ package io.github.ultramancode.springai.privacy.client.autoconfigure;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
 import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
+import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
@@ -139,7 +140,8 @@ class GuardrailsAutoConfigurationTest {
                     assertThatThrownBy(() -> factory.builder(new EchoModel())).hasMessageContaining("No default");
                     ChatClient client = factory.builder(new EchoModel(),
                             GuardrailsPolicy.builder().privacy().build()).build();
-                    assertThat(client.prompt().user("Alice").call().content()).contains("[[PII_PERSON_");
+                    assertThat(client.prompt().user("Alice").call().content())
+                            .matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
                 });
     }
 

@@ -76,10 +76,7 @@ class InspectionAutoConfigurationTest {
                     .containsExactlyInAnyOrder(
                             "spring.ai.inspection.failure-policy",
                             "spring.ai.inspection.failure-policy-overrides",
-                            "spring.ai.inspection.pii-token-simplification-inspectors",
-                            "spring.ai.inspection.output.enabled",
-                            "spring.ai.inspection.output.max-frames",
-                            "spring.ai.inspection.output.stream-timeout");
+                            "spring.ai.inspection.pii-token-simplification-inspectors");
             for (Object property : properties) {
                 assertThat(((Map<?, ?>) property).get("description"))
                         .isInstanceOfSatisfying(String.class, description -> assertThat(description).isNotBlank());

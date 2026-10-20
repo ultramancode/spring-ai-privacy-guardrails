@@ -1,12 +1,12 @@
 package io.github.ultramancode.springai.privacy.test;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.client.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.client.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -47,20 +47,17 @@ class PrivacySequentialToolIntegrationTest {
     void chatClientExecutesTwoScopedToolsAndRetokenizesStructuredResultBetweenModelCalls() {
         PrivacyService privacyService = privacyService();
         PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        PrivacyToolCallbackFactory toolCallbackFactory = new PrivacyToolCallbackFactory(
-                privacyService,
-                ToolDisclosurePolicy.byToolName(Map.of(
+        GuardrailsPolicy policy = GuardrailsPolicy.builder()
+                .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of(
                         "crmLookup", Set.of("CUSTOMER_ID"),
                         "emailCustomer", Set.of("EMAIL_ADDRESS")
-                ))
-        );
+                ))))
+                .build();
         SequentialToolModel model = new SequentialToolModel();
-        ToolCallback crmLookup = probe.wrapTool(crmLookup(), toolCallbackFactory);
-        ToolCallback emailCustomer = probe.wrapTool(emailCustomer(), toolCallbackFactory);
-        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
+        ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
                 .build()
-                .configure(ChatClient.builder(probe.wrapModel(model)))
-                .defaultTools(crmLookup, emailCustomer)
+                .builder(probe.wrapModel(model), policy)
+                .defaultTools(probe.wrapTool(crmLookup()), probe.wrapTool(emailCustomer()))
                 .build();
 
         String response = chatClient.prompt()

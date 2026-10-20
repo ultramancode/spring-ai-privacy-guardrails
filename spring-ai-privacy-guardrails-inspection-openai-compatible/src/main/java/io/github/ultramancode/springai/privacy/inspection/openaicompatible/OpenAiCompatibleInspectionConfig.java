@@ -64,7 +64,7 @@ public record OpenAiCompatibleInspectionConfig(
                 + "]";
     }
 
-    /** Creates connection settings with a 10-second timeout, a 1 MiB response limit and required privacy processing. */
+    /** Creates a builder with a 10-second timeout, a 1 MiB response limit and required privacy processing. */
     public static Builder builder(URI baseUrl, String model) {
         return new Builder(baseUrl, model);
     }

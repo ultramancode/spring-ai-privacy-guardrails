@@ -10,7 +10,6 @@ import java.util.function.UnaryOperator;
  * Contributes client infrastructure and a model request stage to one boundary.
  * Compose contributions before applying them to a builder.
  * Separately configured boundaries are rejected at request time.
- * No shared builder registry is used.
  */
 @FunctionalInterface
 public interface ModelRequestBoundaryConfigurer extends UnaryOperator<ChatClient.Builder> {

@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 04ca7ad80602c989f59c80c551cd5bb1eaba892682744a33ef8781d72b9b4147 -->
+<!-- i18n-source-sha256: cd18dc4decee4c07368bb6cfbd8558cd5e19339bc6eed3ee6612d50e3b7328b0 -->
 
 ## 책임 범위
 
@@ -36,9 +36,9 @@ flowchart TD
 라이브러리는 지원하는 모델·도구·출력 경계를 통과하는 데이터를 보호합니다.
 필요한 경우 Spring Security를 연동해 모델에 공개할 도구와 실행 가능한 도구도 제한할 수 있습니다.
 
-클라이언트는 `GuardrailsChatClientFactory`와 `GuardrailsPolicy`로 사용할 기능을
-선택합니다. 통합 계층은 기존 엔진을 조립하고, 개인정보 보호를 선택한 요청의 도구를
-권한 검사용 목록을 확보하기 전에 보호합니다. 설정과 사용법은 [클라이언트 정책](clients.md)을 참고하세요.
+클라이언트는 `GuardrailsChatClientFactory`와 `GuardrailsPolicy`로 개인정보 보호,
+콘텐츠 검사와 도구 권한 검사를 선택합니다.
+설정과 사용법은 [클라이언트 정책](clients.md)을 참고하세요.
 
 ## 모듈 구조
 

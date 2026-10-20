@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: f579b0d97603acca549bc856a39b50b5619a9d8ed7ba352c6e0d9b97ad85e97c -->
+<!-- i18n-source-sha256: 0afca49e23eb81c5e3283a1db7cfb46669a0e43d6c6fd99caaf937a36ab5158e -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -132,7 +132,7 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 
 ## ChatClient 구성
 
-의존성과 권한 정책을 준비한 뒤 통합 Factory로 클라이언트를 생성합니다.
+의존성과 권한 정책을 준비한 뒤 `GuardrailsChatClientFactory`로 클라이언트를 생성합니다.
 `customerLookupToolCallback`은 애플리케이션이 제공하는 도구 빈입니다.
 
 ```java
@@ -363,7 +363,7 @@ SpringSecurityToolBoundary springSecurityToolBoundary(
 ## Spring Boot 스타터 없이 구성
 
 `spring-ai-privacy-guardrails-client`와 Security 모듈에 의존하고 권한 바운더리를
-통합 Factory에 연결합니다. 다음은 도구 권한 검사만 적용하는 예제입니다.
+`GuardrailsChatClientFactory`에 연결합니다. 다음은 도구 권한 검사만 적용하는 예제입니다.
 
 ```java
 SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
@@ -377,7 +377,6 @@ ChatClient client = guardrails.builder(chatModel).defaultTools(customerLookupToo
 ```
 
 개인정보 보호나 콘텐츠 검사를 추가하려면 해당 서비스를 전달하고 정책에서 선택하세요.
-개별 Factory와 Configurer를 직접 조립하는 고급 경로도 유지합니다.
 
 ## Tool Search
 

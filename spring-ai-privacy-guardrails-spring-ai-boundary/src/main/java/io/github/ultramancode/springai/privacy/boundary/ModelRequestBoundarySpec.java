@@ -8,9 +8,8 @@ import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 /**
- * Module integration contract used by the library's configurers. Its public visibility
- * allows independently optional feature modules to contribute to one boundary.
- * Applications should compose feature configurers rather than implement request stages.
+ * Registers privacy, authorization and inspection stages for a model request boundary.
+ * Applications combine feature configurers through {@link ModelRequestBoundaryConfigurer#compose}.
  */
 public final class ModelRequestBoundarySpec {
     /** Default order of the common model request boundary advisor. */

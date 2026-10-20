@@ -10,7 +10,6 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserv
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
-import org.springframework.ai.chat.client.ChatClientCustomizer;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.observation.AdvisorObservationConvention;
 import org.springframework.ai.chat.client.observation.ChatClientObservationConvention;
@@ -34,7 +33,6 @@ import org.springframework.core.env.Environment;
 public class GuardrailsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    @SuppressWarnings("removal")
     GuardrailsChatClientFactory guardrailsChatClientFactory(
             ObjectProvider<PrivacyService> privacy,
             ObjectProvider<InspectionService> inspection,
@@ -46,7 +44,6 @@ public class GuardrailsAutoConfiguration {
             ObjectProvider<ObservationRegistry> registries,
             ObjectProvider<ChatClientObservationConvention> chatConvention,
             ObjectProvider<AdvisorObservationConvention> advisorConvention,
-            ObjectProvider<ChatClientCustomizer> legacyCustomizers,
             ObjectProvider<ChatClientBuilderCustomizer> customizers,
             Environment environment) {
         ObservationRegistry registry = registries.getIfUnique(() -> ObservationRegistry.NOOP);
@@ -64,7 +61,6 @@ public class GuardrailsAutoConfiguration {
                     if (!environment.getProperty("spring.ai.chat.client.tool-calling.enabled", Boolean.class, true)) {
                         client.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
                     }
-                    legacyCustomizers.orderedStream().forEach(customizer -> customizer.customize(client));
                     customizers.orderedStream().forEach(customizer -> customizer.customize(client));
                     return client;
                 });
@@ -73,7 +69,6 @@ public class GuardrailsAutoConfiguration {
         privacyObserver.ifAvailable(builder::privacyObserver);
         inspectionObserver.ifAvailable(builder::inspectionObserver);
         authorizedBuilder.ifAvailable(builder::toolAuthorization);
-        // An ambiguous default remains unavailable. Explicit policies can still be used.
         GuardrailsPolicy defaultPolicy = policies.getIfUnique();
         if (defaultPolicy != null) {
             builder.defaultPolicy(defaultPolicy);

@@ -105,8 +105,7 @@ for the corresponding reproducible automated coverage.
 
 For a step-by-step setup path, see [Getting Started](docs/getting-started.md).
 
-The following sections use the unified client starter with an application-provided
-`ChatModel`. Individual feature starters remain available for direct integration.
+The following sections use the client starter with an application-provided `ChatModel`.
 
 ### Choose a PII Analyzer
 

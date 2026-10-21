@@ -30,7 +30,7 @@ class PrivacyToolBoundaryPropertyTest {
         AtomicReference<String> delegateInput = new AtomicReference<>();
         ToolCallback wrapped = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")))
         ).wrap(recordingToolCallback(delegateInput));
 
         for (int index = 0; index < 250; index++) {

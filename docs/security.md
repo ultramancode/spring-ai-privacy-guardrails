@@ -157,8 +157,10 @@ Select the permitted original-value disclosure in the client policy:
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
         .toolAuthorization(true)
         .build();
 ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
@@ -384,7 +386,9 @@ the authorization boundary to `GuardrailsChatClientFactory`. This example select
 ```java
 SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
         ToolCallingManager.builder().build(), authorizationManager).build();
-ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
+ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatClientFactory.builder()
+        .toolAuthorizationBoundary(boundary)
+        .build();
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .toolAuthorization(authorizationFactory::prepareToolAuthorization)
         .defaultPolicy(GuardrailsPolicy.builder().toolAuthorization(true).build())

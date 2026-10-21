@@ -67,7 +67,7 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
         ConcurrentToolModel chatModel = new ConcurrentToolModel();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
             .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("CUSTOMER_ID")))))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("CUSTOMER_ID")))))
             .build();
         ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
             .build()

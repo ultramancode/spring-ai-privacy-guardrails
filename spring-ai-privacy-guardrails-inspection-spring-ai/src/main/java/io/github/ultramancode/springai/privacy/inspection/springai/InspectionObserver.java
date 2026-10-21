@@ -15,7 +15,7 @@ public interface InspectionObserver {
      * Receives ALLOW and BLOCK reports, including requests allowed by FAIL_OPEN after an inspector failed.
      *
      * @param inspectionReport completed inspector outcomes and the resulting decision
-     * @param inspectionExecution inspection boundary and call or stream mode
+     * @param inspectionExecution inspection phase and call or stream mode
      */
     void onInspection(InspectionReport inspectionReport, InspectionExecution inspectionExecution);
 
@@ -24,7 +24,7 @@ public interface InspectionObserver {
      * The exception includes an inspection report when available.
      *
      * @param inspectionFailure the classified inspection failure
-     * @param inspectionExecution inspection boundary and call or stream mode
+     * @param inspectionExecution inspection phase and call or stream mode
      */
     default void onFailure(InspectionException inspectionFailure, InspectionExecution inspectionExecution) {}
 

@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,9 +43,10 @@ class ModelRequestBoundaryIntegrationTest {
     void stagesExecuteInFixedOrderRegardlessOfRegistrationOrder(boolean streaming) {
         List<String> executedStages = new ArrayList<>();
         RecordingModel model = new RecordingModel();
-        BiConsumer<ChatClientRequest, Boolean> inspectionStage = (request, streamed) -> {
+        ModelRequestInspectionStage inspectionStage = (request, streamingRequest) -> {
             executedStages.add("inspection");
             assertThat(request.prompt().getContents()).isEqualTo("authorized");
+            assertThat(streamingRequest).isEqualTo(streaming);
         };
         UnaryOperator<ChatClientRequest> authorizationStage = request -> {
             executedStages.add("authorization");
@@ -120,7 +120,7 @@ class ModelRequestBoundaryIntegrationTest {
                 return ToolCallingChatOptions.builder().build();
             }
         };
-        BiConsumer<ChatClientRequest, Boolean> inspectionStage = (request, streamed) -> {
+        ModelRequestInspectionStage inspectionStage = (request, streamingRequest) -> {
             executionOrder.add("inspection");
             inspectedMessages.add(List.copyOf(request.prompt().getInstructions()));
         };
@@ -172,7 +172,7 @@ class ModelRequestBoundaryIntegrationTest {
     void lateAdvisorCannotBypassInspectionRejectionEvenWithOptIn(boolean streaming) {
         RecordingModel model = new RecordingModel();
         LateAdvisor lateAdvisor = new LateAdvisor("changed by late advisor");
-        BiConsumer<ChatClientRequest, Boolean> inspectionStage = (request, streamed) -> {
+        ModelRequestInspectionStage inspectionStage = (request, streamingRequest) -> {
             if (request.prompt().getContents().equals("blocked")) {
                 throw new IllegalArgumentException("inspection blocked");
             }

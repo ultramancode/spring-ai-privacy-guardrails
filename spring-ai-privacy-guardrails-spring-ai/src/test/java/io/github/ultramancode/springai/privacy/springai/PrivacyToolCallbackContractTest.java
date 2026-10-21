@@ -88,7 +88,7 @@ class PrivacyToolCallbackContractTest {
                     return "ok";
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON")))
         );
 
         ToolContext context = toolContext(handle);
@@ -110,7 +110,7 @@ class PrivacyToolCallbackContractTest {
                         throw delegateFailure;
                     }),
                     service,
-                    ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                    ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON")))
             );
 
             assertThatThrownBy(() -> wrapper.call(
@@ -130,7 +130,7 @@ class PrivacyToolCallbackContractTest {
                     throw fatal;
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON")))
         );
 
         try (PrivacySession session = service.openSession()) {
@@ -155,26 +155,26 @@ class PrivacyToolCallbackContractTest {
     }
 
     @Test
-    void scopedPolicyRejectsAmbiguousOrEmptyConfiguration() {
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of("", List.of("PERSON"))))
+    void toolDisclosurePolicyRejectsAmbiguousOrEmptyConfiguration() {
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("", List.of("PERSON"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("blank");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of("look up", List.of("PERSON"))))
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("look up", List.of("PERSON"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("whitespace");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of(" lookup", List.of("PERSON"))))
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(" lookup", List.of("PERSON"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("whitespace");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of())))
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("empty");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of(
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
                 "lookup",
                 List.of("person")
         )))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("uppercase ASCII");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of(
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
                 "lookup",
                 List.of("PERSON", "PERSON")
         )))
@@ -183,7 +183,7 @@ class PrivacyToolCallbackContractTest {
     }
 
     @Test
-    void scopedPolicyMatchesToolNamesExactlyAndCaseSensitively() {
+    void toolDisclosurePolicyMatchesToolNamesExactlyAndCaseSensitively() {
         PrivacyService service = TestPrivacyServices.privacyService();
         AtomicReference<String> received = new AtomicReference<>();
         PrivacyToolCallbackWrapper wrapper = wrap(
@@ -192,7 +192,7 @@ class PrivacyToolCallbackContractTest {
                     return "ok";
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("LOOKUP", List.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("LOOKUP", List.of("PERSON")))
         );
 
         try (PrivacySession session = service.openSession()) {
@@ -409,7 +409,7 @@ class PrivacyToolCallbackContractTest {
     }
 
     @Test
-    void wrapperPropagatesPolicyFailureBeforeAnyDetokenization() {
+    void wrapperPropagatesPolicyFailureBeforeToolExecution() {
         PrivacyService service = TestPrivacyServices.privacyService();
         AtomicReference<String> received = new AtomicReference<>();
         IllegalStateException policyFailure =
@@ -433,7 +433,7 @@ class PrivacyToolCallbackContractTest {
     }
 
     @Test
-    void wrapperRejectsMissingPolicyResultBeforeAnyDetokenization() {
+    void wrapperRejectsNullPolicyResultBeforeToolExecution() {
         PrivacyService service = TestPrivacyServices.privacyService();
         AtomicReference<String> received = new AtomicReference<>();
         PrivacyToolCallbackWrapper wrapper = wrap(
@@ -450,7 +450,7 @@ class PrivacyToolCallbackContractTest {
                     .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
                         assertThat(failure.code()).isEqualTo(PrivacyFailureCode.TOOL_POLICY_FAILED);
                         assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOOL_INPUT);
-                        assertThat(failure).hasMessage("Tool disclosure policy returned no disclosure");
+                        assertThat(failure).hasMessage("Tool disclosure policy returned null");
                     });
         }
         assertThat(received.get()).isNull();

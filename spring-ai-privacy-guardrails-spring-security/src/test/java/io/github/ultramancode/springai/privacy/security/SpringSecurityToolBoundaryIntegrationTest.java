@@ -57,7 +57,9 @@ class SpringSecurityToolBoundaryIntegrationTest {
         PrivacyService service = privacyService();
         PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(service, Set.of("customerLookup"));
         PrivacyChatClientConfigurer privacyConfigurer = new PrivacyChatClientConfigurer(service, toolCallbackFactory);
-        ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
+        ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(boundary)
+            .build();
         PrivacySecurityChatClientFactory privacySecurityFactory =
                 new PrivacySecurityChatClientFactory(privacyConfigurer, authorizationFactory);
         DefinitionResolvingModel model = new DefinitionResolvingModel(ToolCallingManager.builder().build());

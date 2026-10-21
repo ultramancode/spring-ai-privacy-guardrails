@@ -42,12 +42,18 @@ Configure analyzers through their starter properties. Supply model paths and
 connection settings when creating HTTP or ONNX inspector beans.
 
 ```java
+GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+        .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+        .outputProtection().redact()
+        .build();
+GuardrailsPolicy.Inspection inspectionPolicy = GuardrailsPolicy.Inspection.builder()
+        .finalOutputInspectionEnabled(true)
+        .build();
+
 GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy
-                .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
-                .outputAction(PrivacyOutputAction.REDACT))
-        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(true))
+        .privacy(privacyPolicy)
+        .inspection(inspectionPolicy)
         .toolAuthorization(true)
         .build();
 
@@ -75,10 +81,18 @@ checks model requests. Final output protection and inspection are separate opt-i
 For output-only inspection, select:
 
 ```java
-.inspection(inspection -> inspection
+.inspection(GuardrailsPolicy.Inspection.builder()
         .modelRequestInspectionEnabled(false)
-        .applicationOutputInspectionEnabled(true))
+        .finalOutputInspectionEnabled(true)
+        .build())
 ```
+
+The settings builders start with defaults. Passing a settings object to `privacy(...)`
+or `inspection(...)` replaces that feature's settings. Call `mutate()` on the settings
+object to change selected values while preserving the others.
+
+Callback overloads offer an inline alternative, such as
+`privacy(privacy -> privacy.outputProtection().tokenize())`.
 
 ## Reuse policies
 
@@ -88,8 +102,8 @@ leaves the original policy unchanged.
 
 ```java
 GuardrailsPolicy inputPolicy = supportPolicy.mutate()
-        .privacy(privacy -> privacy.outputProtection(false))
-        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(false))
+        .privacy(supportPolicy.privacy().mutate().outputProtection().disable().build())
+        .inspection(supportPolicy.inspection().mutate().finalOutputInspectionEnabled(false).build())
         .build();
 
 GuardrailsPolicy privacyOnly = supportPolicy.mutate()
@@ -180,7 +194,7 @@ and cancellation release no buffered output. Blocking final output cannot undo
 side effects of tools that have already run.
 
 Use `InspectionObserver` to record inspection reports and failures. Its callbacks
-also receive the inspection boundary and call or stream mode. See
+also receive the inspection phase and call or stream mode. See
 [observability](inspection.md#observability).
 
 Direct calls to `ChatModel` bypass this client. Detection coverage depends on the

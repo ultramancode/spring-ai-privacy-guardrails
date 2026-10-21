@@ -3,7 +3,6 @@ package io.github.ultramancode.springai.privacy.chatclient;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
-import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 
@@ -39,18 +38,40 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
      * Settings for protecting model requests and tools, with optional final output protection.
      *
      * @param toolDisclosurePolicy which PII entity types each tool may receive as original values
-     * @param outputProtectionEnabled whether to protect final output
-     * @param outputAction action to apply when final output protection is enabled
-     * @param outputBlockMessage message used when BLOCK rejects the response
+     * @param outputProtection final output protection settings, or null to disable final output protection
      * @param responseLimits limits for inspecting model responses and buffering output
      */
-    public record Privacy(ToolDisclosurePolicy toolDisclosurePolicy, boolean outputProtectionEnabled,
-        PrivacyOutputAction outputAction, String outputBlockMessage, PrivacyResponseInspectionLimits responseLimits) {
+    public record Privacy(ToolDisclosurePolicy toolDisclosurePolicy, OutputProtection outputProtection,
+        PrivacyResponseInspectionLimits responseLimits) {
         public Privacy {
             Objects.requireNonNull(toolDisclosurePolicy, "toolDisclosurePolicy");
-            Objects.requireNonNull(outputAction, "outputAction");
-            Objects.requireNonNull(outputBlockMessage, "outputBlockMessage");
             Objects.requireNonNull(responseLimits, "responseLimits");
+        }
+
+        /** Creates a builder with default privacy settings. */
+        public static PrivacyBuilder builder() {
+            return new PrivacyBuilder(null);
+        }
+
+        /** Returns a new builder initialized with these privacy settings. */
+        public PrivacyBuilder mutate() {
+            return new PrivacyBuilder(this);
+        }
+    }
+
+    /**
+     * Settings for protecting final output.
+     *
+     * @param action action applied when final output contains PII
+     * @param blockMessage non-blank message used when BLOCK rejects the response
+     */
+    public record OutputProtection(PrivacyOutputAction action, String blockMessage) {
+        public OutputProtection {
+            Objects.requireNonNull(action, "action");
+            Objects.requireNonNull(blockMessage, "blockMessage");
+            if (blockMessage.isBlank()) {
+                throw new IllegalArgumentException("blockMessage must not be blank");
+            }
         }
     }
 
@@ -59,18 +80,18 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
      *
      * @param modelRequestInspectionEnabled whether to inspect each model request,
      *                                      including requests after tool execution
-     * @param applicationOutputInspectionEnabled whether to inspect the output returned by ChatClient to its caller
+     * @param finalOutputInspectionEnabled whether to inspect the final output returned by ChatClient to its caller
      * @param limits execution limits for each inspection
      * @param maxOutputFrames maximum response frames buffered for streaming output inspection
      * @param outputStreamTimeout maximum time to collect streaming output for inspection
      */
-    public record Inspection(boolean modelRequestInspectionEnabled, boolean applicationOutputInspectionEnabled,
+    public record Inspection(boolean modelRequestInspectionEnabled, boolean finalOutputInspectionEnabled,
         InspectionLimits limits, int maxOutputFrames, Duration outputStreamTimeout) {
         public Inspection {
             Objects.requireNonNull(limits, "limits");
             Objects.requireNonNull(outputStreamTimeout, "outputStreamTimeout");
-            if (!modelRequestInspectionEnabled && !applicationOutputInspectionEnabled) {
-                throw new IllegalArgumentException("Select model request or application output inspection");
+            if (!modelRequestInspectionEnabled && !finalOutputInspectionEnabled) {
+                throw new IllegalArgumentException("Select model request or final output inspection");
             }
             if (maxOutputFrames < 1 || outputStreamTimeout.isZero() || outputStreamTimeout.isNegative()) {
                 throw new IllegalArgumentException("Output inspection limits must be positive");
@@ -80,6 +101,16 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
             } catch (ArithmeticException ex) {
                 throw new IllegalArgumentException("Output stream timeout must fit nanoseconds");
             }
+        }
+
+        /** Creates a builder with default inspection settings. */
+        public static InspectionBuilder builder() {
+            return new InspectionBuilder(null);
+        }
+
+        /** Returns a new builder initialized with these inspection settings. */
+        public InspectionBuilder mutate() {
+            return new InspectionBuilder(this);
         }
     }
 
@@ -98,7 +129,10 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
 
         /** Enables privacy, preserving its settings if already selected. */
         public Builder privacy() {
-            return privacy(privacyPolicyBuilder -> {});
+            if (privacy == null) {
+                privacy = Privacy.builder().build();
+            }
+            return this;
         }
 
         /** Selects or removes privacy. Selecting it preserves existing settings. */
@@ -107,6 +141,12 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
                 return privacy();
             }
             privacy = null;
+            return this;
+        }
+
+        /** Uses the supplied privacy settings, replacing any previous privacy settings. */
+        public Builder privacy(Privacy privacyPolicy) {
+            privacy = Objects.requireNonNull(privacyPolicy, "privacyPolicy");
             return this;
         }
 
@@ -120,7 +160,10 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
 
         /** Enables inspection, preserving its settings if already selected. */
         public Builder inspection() {
-            return inspection(inspectionPolicyBuilder -> {});
+            if (inspection == null) {
+                inspection = Inspection.builder().build();
+            }
+            return this;
         }
 
         /** Selects or removes inspection. Selecting it preserves existing settings. */
@@ -129,6 +172,12 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
                 return inspection();
             }
             inspection = null;
+            return this;
+        }
+
+        /** Uses the supplied inspection settings, replacing any previous inspection settings. */
+        public Builder inspection(Inspection inspectionPolicy) {
+            inspection = Objects.requireNonNull(inspectionPolicy, "inspectionPolicy");
             return this;
         }
 
@@ -152,17 +201,13 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
 
     public static final class PrivacyBuilder {
         private ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.denyAll();
-        private boolean outputProtectionEnabled;
-        private PrivacyOutputAction outputAction = PrivacyOutputAdvisor.DEFAULT_ACTION;
-        private String outputBlockMessage = "Response blocked by privacy guardrail.";
+        private OutputProtection outputProtection;
         private PrivacyResponseInspectionLimits responseLimits = PrivacyResponseInspectionLimits.defaults();
 
         private PrivacyBuilder(Privacy privacyPolicy) {
             if (privacyPolicy != null) {
                 toolDisclosurePolicy = privacyPolicy.toolDisclosurePolicy();
-                outputProtectionEnabled = privacyPolicy.outputProtectionEnabled();
-                outputAction = privacyPolicy.outputAction();
-                outputBlockMessage = privacyPolicy.outputBlockMessage();
+                outputProtection = privacyPolicy.outputProtection();
                 responseLimits = privacyPolicy.responseLimits();
             }
         }
@@ -172,21 +217,14 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
             return this;
         }
 
-        /** Enables or disables final output protection, preserving the selected action. Disabled by default. */
-        public PrivacyBuilder outputProtection(boolean enabled) {
-            outputProtectionEnabled = enabled;
-            return this;
+        /** Returns a configurer for final output protection. */
+        public OutputProtectionConfigurer outputProtection() {
+            return new OutputProtectionConfigurer(this);
         }
 
-        /** Selects the action and enables final output protection. The default action is TOKENIZE. */
-        public PrivacyBuilder outputAction(PrivacyOutputAction outputAction) {
-            this.outputAction = Objects.requireNonNull(outputAction, "outputAction");
-            outputProtectionEnabled = true;
-            return this;
-        }
-
-        public PrivacyBuilder outputBlockMessage(String outputBlockMessage) {
-            this.outputBlockMessage = Objects.requireNonNull(outputBlockMessage, "outputBlockMessage");
+        /** Enables final output protection with the supplied settings, replacing any previous settings. */
+        public PrivacyBuilder outputProtection(OutputProtection outputProtection) {
+            this.outputProtection = Objects.requireNonNull(outputProtection, "outputProtection");
             return this;
         }
 
@@ -195,14 +233,54 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
             return this;
         }
 
-        private Privacy build() {
-            return new Privacy(toolDisclosurePolicy, outputProtectionEnabled, outputAction, outputBlockMessage, responseLimits);
+        /** Creates privacy settings from this builder. */
+        public Privacy build() {
+            return new Privacy(toolDisclosurePolicy, outputProtection, responseLimits);
+        }
+    }
+
+    /** Selects or disables final output protection. */
+    public static final class OutputProtectionConfigurer {
+        private static final String DEFAULT_BLOCK_MESSAGE = "Response blocked by privacy guardrail.";
+
+        private final PrivacyBuilder privacyPolicyBuilder;
+
+        private OutputProtectionConfigurer(PrivacyBuilder privacyPolicyBuilder) {
+            this.privacyPolicyBuilder = privacyPolicyBuilder;
+        }
+
+        /** Enables final output protection with TOKENIZE. */
+        public PrivacyBuilder tokenize() {
+            return privacyPolicyBuilder.outputProtection(
+                new OutputProtection(PrivacyOutputAction.TOKENIZE, DEFAULT_BLOCK_MESSAGE));
+        }
+
+        /** Enables final output protection with REDACT. */
+        public PrivacyBuilder redact() {
+            return privacyPolicyBuilder.outputProtection(
+                new OutputProtection(PrivacyOutputAction.REDACT, DEFAULT_BLOCK_MESSAGE));
+        }
+
+        /** Enables BLOCK output protection with the default block message. */
+        public PrivacyBuilder block() {
+            return block(DEFAULT_BLOCK_MESSAGE);
+        }
+
+        /** Enables BLOCK output protection with the supplied block message. */
+        public PrivacyBuilder block(String blockMessage) {
+            return privacyPolicyBuilder.outputProtection(new OutputProtection(PrivacyOutputAction.BLOCK, blockMessage));
+        }
+
+        /** Removes final output protection settings. */
+        public PrivacyBuilder disable() {
+            privacyPolicyBuilder.outputProtection = null;
+            return privacyPolicyBuilder;
         }
     }
 
     public static final class InspectionBuilder {
         private boolean modelRequestInspectionEnabled = true;
-        private boolean applicationOutputInspectionEnabled;
+        private boolean finalOutputInspectionEnabled;
         private InspectionLimits limits = InspectionLimits.defaults();
         private int maxOutputFrames = InspectionOutputAdvisor.DEFAULT_MAX_FRAMES;
         private Duration outputStreamTimeout = InspectionOutputAdvisor.DEFAULT_STREAM_TIMEOUT;
@@ -210,7 +288,7 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
         private InspectionBuilder(Inspection inspectionPolicy) {
             if (inspectionPolicy != null) {
                 modelRequestInspectionEnabled = inspectionPolicy.modelRequestInspectionEnabled();
-                applicationOutputInspectionEnabled = inspectionPolicy.applicationOutputInspectionEnabled();
+                finalOutputInspectionEnabled = inspectionPolicy.finalOutputInspectionEnabled();
                 limits = inspectionPolicy.limits();
                 maxOutputFrames = inspectionPolicy.maxOutputFrames();
                 outputStreamTimeout = inspectionPolicy.outputStreamTimeout();
@@ -223,9 +301,9 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
             return this;
         }
 
-        /** Sets whether to inspect the output returned by ChatClient to its caller. */
-        public InspectionBuilder applicationOutputInspectionEnabled(boolean enabled) {
-            applicationOutputInspectionEnabled = enabled;
+        /** Sets whether to inspect the final output returned by ChatClient to its caller. */
+        public InspectionBuilder finalOutputInspectionEnabled(boolean enabled) {
+            finalOutputInspectionEnabled = enabled;
             return this;
         }
 
@@ -244,8 +322,9 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
             return this;
         }
 
-        private Inspection build() {
-            return new Inspection(modelRequestInspectionEnabled, applicationOutputInspectionEnabled, limits,
+        /** Creates inspection settings from this builder. */
+        public Inspection build() {
+            return new Inspection(modelRequestInspectionEnabled, finalOutputInspectionEnabled, limits,
                 maxOutputFrames, outputStreamTimeout);
         }
     }

@@ -80,7 +80,7 @@ abstract class ToolAuthorizationIntegrationTestSupport {
             PrivacyGuardrailsAutoConfiguration.class, PrivacySecurityAutoConfiguration.class))
             .withUserConfiguration(PrivacyClientConfiguration.class)
             .withBean(PrivacyClientSettings.class, () -> new PrivacyClientSettings(outputEnabled, limits))
-            .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.byToolName(
+            .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
                 Map.of("customerLookup", List.of("EMPLOYEE_ID"))))
             .withPropertyValues("spring.ai.privacy.regex.enabled=true",
                 "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",

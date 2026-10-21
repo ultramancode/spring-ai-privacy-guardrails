@@ -42,7 +42,9 @@ class ToolAuthorizationStandaloneIntegrationTest {
     void factoryInspectionReceivesOnlyAuthorizedTools(boolean streaming, boolean customToolOrder) {
         SpringSecurityToolBoundary boundary = boundary((authentication, context) ->
                 new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup")));
-        ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
+        ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(boundary)
+            .build();
         DefinitionResolvingModel model = new DefinitionResolvingModel(ToolCallingManager.builder().build());
         AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
         ModelRequestBoundaryConfigurer inspectionConfigurer =

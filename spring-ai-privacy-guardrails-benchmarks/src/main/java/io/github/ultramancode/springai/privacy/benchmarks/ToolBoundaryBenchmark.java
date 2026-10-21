@@ -43,7 +43,7 @@ public class ToolBoundaryBenchmark {
         this.privacyService = CorePrivacyBenchmark.benchmarkPrivacyService();
         this.protectedTool = new PrivacyToolCallbackFactory(
                 this.privacyService,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")))
         ).wrap(delegate());
         this.toolInput = toolInput(this.entityPairs);
 

@@ -158,8 +158,10 @@ lookup, specify the tool name and permitted PII types in `ToolDisclosurePolicy`.
 
 ```java
 GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
         .build();
 ```
 
@@ -327,13 +329,14 @@ Final-response privacy protection is disabled by default. Enable it in the clien
 
 ```java
 GuardrailsPolicy outputPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.outputProtection(true))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .outputProtection().tokenize()
+                .build())
         .build();
 ChatClient outputClient = guardrails.builder(chatModel, outputPolicy).build();
 ```
 
-The default action is `TOKENIZE`. To select another action and enable output
-protection, use `outputAction(...)` in the privacy settings.
+Choose the output action through `outputProtection()` in the privacy settings.
 
 Supported output actions are:
 

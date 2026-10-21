@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: 52a62d9b5567c9cc30f075389149817b0a7a1c24e1208d717d9f80d37411d262 -->
+<!-- i18n-source-sha256: 57b45b18a24cb961eb2a7a254b1cc9f68addf1d2c02cc80f8adb4555ff0f732f -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -363,8 +363,10 @@ OpenNLP 연동은 기존 NER 모델을 활용하려는 애플리케이션을 위
 
 ```java
 GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
         .build();
 ```
 
@@ -417,21 +419,33 @@ Spring Security 연동을 활성화하면 원문 공개 정책을 적용하기 �
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.outputAction(PrivacyOutputAction.TOKENIZE))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .outputProtection().tokenize()
+                .build())
         .build();
 ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 ```
 
-`outputAction(...)`을 지정하면 해당 방식으로 출력 보호를 활성화합니다.
-기본 처리 방식은 `TOKENIZE`입니다. `outputProtection(true)`로 선택한 방식의
-출력 보호를 활성화합니다. `outputProtection(false)`로 끄더라도 선택한 방식은 유지합니다.
-모델이나 도구에서 애플리케이션으로 반환되는 개인정보에 이 정책을 적용합니다.
-`BLOCK` 예외의 안전한 메시지는 `outputBlockMessage(...)`로 지정합니다.
+차단 메시지를 직접 지정하려면 `block(message)`를 사용합니다.
 
-- `TOKENIZE`는 같은 요청 안에서 동일한 개인정보를 일관된 불투명 토큰으로 치환합니다.
-- `REDACT`는 개인정보를 원문으로 복원할 수 없는 유형 마커로 대체합니다.
-- `BLOCK`은 개인정보가 포함된 출력을 차단하고 `PrivacyOutputBlockedException`을
-  발생시킵니다.
+```java
+GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+        .outputProtection().block("Response contains personal information.")
+        .build();
+```
+
+처리 방식을 선택하면 출력 보호 설정 전체를 교체합니다. `mutate()`는 기존 설정을
+유지합니다. `outputProtection().disable()`로 출력 보호 설정을 제거합니다.
+모델이나 도구에서 애플리케이션으로 반환되는 개인정보에 이 정책을 적용합니다.
+
+- `tokenize()`는 같은 요청 안에서 동일한 개인정보를 일관된 불투명 토큰으로 치환합니다.
+- `redact()`는 개인정보를 원문으로 복원할 수 없는 유형 마커로 대체합니다.
+- `block()`은 개인정보가 포함된 출력을 차단하고 기본 차단 메시지로
+  `PrivacyOutputBlockedException`을 발생시킵니다. 메시지를 직접 지정하려면
+  `block(message)`를 사용합니다.
+
+`GuardrailsPolicy.OutputProtection` 설정 객체를 재사용하려면 개인정보 설정 빌더의
+`outputProtection(settings)`에 직접 전달합니다.
 
 출력 보호는 일반 모델 응답, 도구 호출 인자와 `returnDirect` 결과에 적용됩니다.
 
@@ -452,28 +466,29 @@ ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 호출하지 않고 결과를 직접 반환합니다. 그렇지 않으면 도구 결과는 모델로 다시
 전달됩니다.
 
-`outputProtection(false)`인 경우에도 `returnDirect`로 직접 반환되는 도구 결과의
-개인정보는 불투명 토큰 상태를 유지합니다. 출력 보호를 활성화하면 최종 결과에
-`TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용합니다.
+도구 결과 보호 단계에서 탐지한 개인정보를 먼저 불투명 토큰으로 치환합니다.
+최종 출력 보호를 설정하지 않고 `returnDirect` 결과를 직접 반환할 때는 이 토큰을
+그대로 전달합니다. 최종 출력 보호를 설정하면 선택한 `TOKENIZE`, `REDACT` 또는
+`BLOCK` 처리를 최종 결과에 적용합니다.
 
 ### 최종 모델 출력 보호
 
-`outputProtection(...)`는 모델이 생성한 최종 응답에 출력 정책을 적용할지를 결정합니다.
+출력 보호 설정은 모델이 생성한 최종 응답에 출력 정책을 적용할지를 결정합니다.
 이 설정을 비활성화해도 입력, 모델 호출 경계와 도구 결과에 대한 개인정보 보호는 계속
 적용됩니다.
 
 | 출력 보호 | 최종 모델 출력의 개인정보 분석 | 전달 방식 |
 | --- | --- | --- |
-| `false` | 하지 않음 | 최종 모델 출력을 별도로 검사하지 않습니다. 스트리밍 호출에서는 모델이 생성하는 텍스트를 실시간으로 전달할 수 있습니다. 다른 개인정보 보호 경계는 계속 적용되며, `returnDirect` 결과의 개인정보도 불투명 토큰으로 바뀝니다. |
-| `true` | 적용 | 완성된 응답을 검사한 뒤 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용하여 전달합니다. |
+| 미설정 | 하지 않음 | 최종 모델 출력을 별도로 검사하지 않습니다. 스트리밍 호출에서는 모델이 생성하는 텍스트를 실시간으로 전달할 수 있습니다. 다른 개인정보 보호 경계는 계속 적용되며, `returnDirect` 결과의 개인정보도 불투명 토큰으로 바뀝니다. |
+| 설정 | 적용 | 완성된 응답을 검사한 뒤 `TOKENIZE`, `REDACT` 또는 `BLOCK` 정책을 적용하여 전달합니다. |
 
-콘텐츠 검사는 정책의 `inspection.applicationOutputInspectionEnabled(...)`에서 별도로 설정합니다.
-규칙이나 검사 모델을 사용하는 방법은 [모델 출력 검사](inspection.md#선택적-모델-출력-검사)를 참고하세요.
+콘텐츠 검사는 정책의 `inspection.finalOutputInspectionEnabled(...)`에서 별도로 설정합니다.
+규칙이나 검사 모델을 사용하는 방법은 [최종 출력 검사](inspection.md#선택적-최종-출력-검사)를 참고하세요.
 
 출력 보호가 활성화되어도 Spring AI의 스트리밍 API를 사용할 수 있지만, 개인정보를
 검사하기 위해 완성된 응답을 먼저 버퍼링합니다. 따라서 모델 응답이 생성되는 즉시
 전달되는 실시간 스트리밍은 사용할 수 없습니다. 실시간 스트리밍이 반드시 필요하다면
-`outputProtection(false)`로 두고 최종 모델 출력의 개인정보 보호를 애플리케이션에서
+최종 출력 보호를 비활성화하고 최종 모델 출력의 개인정보 보호를 애플리케이션에서
 처리해야 합니다.
 
 ### 추론 텍스트 보호
@@ -498,7 +513,7 @@ ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 미디어 한도는 데이터 크기만 확인하며 이미지나 오디오 내용에서 개인정보를 탐지하지는 않습니다.
 
 `processing.*`는 개인정보를 분석하거나 변환할 때 적용하는 제한입니다.
-`outputProtection(false)`여도 적용되며, 각 설정에는 양의 정수를 지정합니다.
+최종 출력 보호가 비활성화되어 있어도 적용되며, 각 설정에는 양의 정수를 지정합니다.
 
 문자열 길이는 Java `String.length()` 기준인 UTF-16 코드 단위로 계산합니다.
 JSON의 출력 길이에는 JSON 구문과 이스케이프 문자도 포함합니다. 값 트리의 출력 길이는
@@ -588,8 +603,11 @@ dependencies {
 @Test
 void protectsModelInputAndDisclosesAllowedToolInput() {
     GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-            .privacy(privacy -> privacy.toolDisclosurePolicy(
-                    ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("PERSON")))))
+            .privacy(GuardrailsPolicy.Privacy.builder()
+                    .toolDisclosurePolicy(
+                            ToolDisclosurePolicy.allowEntityTypesByToolName(
+                                    Map.of("customerLookup", List.of("PERSON"))))
+                    .build())
             .build();
 
     try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {

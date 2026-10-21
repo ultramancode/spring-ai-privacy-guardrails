@@ -380,8 +380,10 @@ needs original values, specify the entity types it may receive in
 
 ```java
 GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
         .build();
 ```
 
@@ -438,23 +440,34 @@ Final output protection is disabled by default. Enable it in the client policy:
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.outputAction(PrivacyOutputAction.TOKENIZE))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .outputProtection().tokenize()
+                .build())
         .build();
 ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 ```
 
-Selecting `outputAction(...)` enables output protection with that action.
-The default action is `TOKENIZE`. Use `outputProtection(true)` to enable protection
-with the selected action. `outputProtection(false)` disables it while retaining that action.
-The policy applies to PII returned from the model or tools to the application.
-Use `outputBlockMessage(...)` to set the safe exception message for `BLOCK`.
+To customize the block message, use `block(message)`:
 
-- `TOKENIZE` consistently replaces the same PII value with the same opaque token within
-  one request.
-- `REDACT` replaces PII with a typed marker that cannot be restored to the
+```java
+GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+        .outputProtection().block("Response contains personal information.")
+        .build();
+```
+
+Selecting an action replaces the output protection settings. `mutate()` preserves
+existing settings. Use `outputProtection().disable()` to remove them. The policy
+applies to PII returned from the model or tools to the application.
+
+- `tokenize()` consistently replaces the same PII value with the same opaque token
+  within one request.
+- `redact()` replaces PII with a typed marker that cannot be restored to the
   original value.
-- `BLOCK` blocks output that contains PII and throws
-  `PrivacyOutputBlockedException`.
+- `block()` blocks output that contains PII and throws `PrivacyOutputBlockedException`
+  with the default block message. Use `block(message)` to supply a custom message.
+
+To reuse a `GuardrailsPolicy.OutputProtection` settings object, pass it directly
+to the privacy builder's `outputProtection(settings)` method.
 
 Output protection applies to normal model responses, tool-call arguments, and
 `returnDirect` results.
@@ -475,29 +488,29 @@ A single `ChatClient` may register both kinds of tools. Spring AI skips the
 additional model call only when every tool selected in one model response has
 `returnDirect = true`. Otherwise, tool results are returned to the model.
 
-Even with `outputProtection(false)`, PII in a directly returned `returnDirect`
-result remains in the form of opaque tokens. When output protection is enabled,
-the final result is processed according to the configured `TOKENIZE`, `REDACT`,
-or `BLOCK` policy.
+Tool-result protection replaces detected PII with opaque tokens. When a
+`returnDirect` result is returned without final output protection, those tokens
+are passed through unchanged. With final output protection, the selected
+`TOKENIZE`, `REDACT` or `BLOCK` action is applied to the final result.
 
 ### Final Model Output Protection
 
-`outputProtection(...)` controls whether the output policy is applied to the final
+The output protection settings control whether the output policy is applied to the final
 model-generated response. Disabling it does not disable privacy protection for
 inputs, model-call boundaries, or tool results.
 
 | Output protection | PII analysis of final model output | Delivery behavior |
 | --- | --- | --- |
-| `false` | No | The final model output is not inspected separately. Streaming calls may deliver model-generated text incrementally. Other privacy boundaries remain active, and PII in `returnDirect` results is still replaced with opaque tokens. |
-| `true` | Yes | The complete response is inspected, then `TOKENIZE`, `REDACT`, or `BLOCK` is applied before delivery. |
+| Not configured | No | The final model output is not inspected separately. Streaming calls may deliver model-generated text incrementally. Other privacy boundaries remain active, and PII in `returnDirect` results is still replaced with opaque tokens. |
+| Configured | Yes | The complete response is inspected, then `TOKENIZE`, `REDACT`, or `BLOCK` is applied before delivery. |
 
-Content inspection has its own `inspection.applicationOutputInspectionEnabled(...)` policy setting.
-See [model-output inspection](inspection.md#optional-model-output-inspection) for rules and guard models.
+Content inspection has its own `inspection.finalOutputInspectionEnabled(...)` policy setting.
+See [final output inspection](inspection.md#optional-final-output-inspection) for rules and guard models.
 
 The Spring AI streaming API remains usable when output protection is enabled,
 but the library must first buffer the complete response for privacy inspection.
 Model-generated text therefore cannot be delivered in real time as it is
-generated. If real-time streaming is required, use `outputProtection(false)`
+generated. If real-time streaming is required, leave final output protection disabled
 and handle privacy protection for final model output in the application.
 
 ### Reasoning Text Protection
@@ -524,7 +537,7 @@ text and media limits also apply to the final response. The media limit measures
 data size. It does not detect PII in image or audio content.
 
 `processing.*` sets limits on privacy analysis and transformation. These limits
-apply even with `outputProtection(false)`. All values must be positive integers.
+apply even when final output protection is disabled. All values must be positive integers.
 
 String lengths are measured in UTF-16 code units, as with Java `String.length()`.
 JSON output length includes JSON syntax and escape sequences. Value-tree output
@@ -618,8 +631,11 @@ restored to `"Alice"` before it reaches the tool.
 @Test
 void protectsModelInputAndDisclosesAllowedToolInput() {
     GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-            .privacy(privacy -> privacy.toolDisclosurePolicy(
-                    ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("PERSON")))))
+            .privacy(GuardrailsPolicy.Privacy.builder()
+                    .toolDisclosurePolicy(
+                            ToolDisclosurePolicy.allowEntityTypesByToolName(
+                                    Map.of("customerLookup", List.of("PERSON"))))
+                    .build())
             .build();
 
     try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {

@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: a2642a69ac36b05dce30313354d8b27b21250c0ee243136b905fad8145c848be -->
+<!-- i18n-source-sha256: 408367a4f7a2815645084dbd78c1108f8eca0c5a6387dd97e103ac512fd17180 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -161,8 +161,10 @@ Employee [PII_EMPLOYEE_ID_1:<opaque>] requested customer
 
 ```java
 GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
         .build();
 ```
 
@@ -324,13 +326,14 @@ OpenNLP 모델 바이너리는 이 프로젝트에 포함되어 있지 않습니
 
 ```java
 GuardrailsPolicy outputPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.outputProtection(true))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .outputProtection().tokenize()
+                .build())
         .build();
 ChatClient outputClient = guardrails.builder(chatModel, outputPolicy).build();
 ```
 
-기본 처리 방식은 `TOKENIZE`입니다. 다른 방식을 선택하면서 출력 보호를
-활성화하려면 개인정보 보호 설정에서 `outputAction(...)`을 사용합니다.
+개인정보 보호 설정의 `outputProtection()`에서 사용할 출력 처리 방식을 선택합니다.
 
 지원하는 출력 동작은 다음과 같습니다.
 

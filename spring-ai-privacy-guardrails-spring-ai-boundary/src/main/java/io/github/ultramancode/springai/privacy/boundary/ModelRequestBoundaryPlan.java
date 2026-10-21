@@ -3,7 +3,6 @@ package io.github.ultramancode.springai.privacy.boundary;
 import org.springframework.ai.chat.client.ChatClientRequest;
 
 import java.util.Objects;
-import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 /**
@@ -15,11 +14,11 @@ final class ModelRequestBoundaryPlan {
     // A null stage means that feature was not configured for this client.
     private final UnaryOperator<ChatClientRequest> privacyStage;
     private final UnaryOperator<ChatClientRequest> authorizationStage;
-    private final BiConsumer<ChatClientRequest, Boolean> inspectionStage;
+    private final ModelRequestInspectionStage inspectionStage;
     private final boolean allowAdvisorsAfterBoundary;
 
     ModelRequestBoundaryPlan(UnaryOperator<ChatClientRequest> privacyStage,
-        UnaryOperator<ChatClientRequest> authorizationStage, BiConsumer<ChatClientRequest, Boolean> inspectionStage,
+        UnaryOperator<ChatClientRequest> authorizationStage, ModelRequestInspectionStage inspectionStage,
         boolean allowAdvisorsAfterBoundary) {
         this.privacyStage = privacyStage;
         this.authorizationStage = authorizationStage;
@@ -54,7 +53,7 @@ final class ModelRequestBoundaryPlan {
             preparedRequest = Objects.requireNonNull(authorizationStage.apply(preparedRequest), "authorization stage result");
         }
         if (inspectionStage != null) {
-            inspectionStage.accept(preparedRequest, streaming);
+            inspectionStage.inspect(preparedRequest, streaming);
         }
         return preparedRequest;
     }

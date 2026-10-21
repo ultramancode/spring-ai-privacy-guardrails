@@ -334,13 +334,13 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void toolDisclosuresRejectAmbiguousConfiguration() {
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of(
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
                 " customerLookup",
                 Set.of("CUSTOMER_ID")
         )))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("tool disclosure names must not contain whitespace");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of(
+        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
                 "customerLookup",
                 List.of("customer-id")
         )))
@@ -509,7 +509,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                 )
             )))
             .withBean(PrivacyEnforcementObserver.class, () -> enforcementEvents::add)
-            .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.byToolName(
+            .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
                 Map.of("customerLookup", List.of("CUSTOMER_ID"))))
             .run(context -> {
                 StarterToolLoopModel model = new StarterToolLoopModel();
@@ -802,9 +802,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
                 assertThat(policy.failurePolicy()).isEqualTo(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY);
                 assertThat(policy.providerMinimumScores()).containsEntry("PRESIDIO", 0.72);
 
-                ToolDisclosurePolicy toolPolicy = context.getBean(ToolDisclosurePolicy.class);
-                assertThat(toolPolicy.scopeFor(tool("customerLookup")).entityTypes()).isEmpty();
-                assertThat(toolPolicy.scopeFor(tool("externalSearch")).entityTypes())
+                ToolDisclosurePolicy toolDisclosurePolicy = context.getBean(ToolDisclosurePolicy.class);
+                assertThat(toolDisclosurePolicy.getAllowedEntityTypes(tool("customerLookup")).entityTypes())
+                    .isEmpty();
+                assertThat(toolDisclosurePolicy.getAllowedEntityTypes(tool("externalSearch")).entityTypes())
                     .isEmpty();
             });
     }

@@ -54,10 +54,14 @@ public class PublishedArtifactConsumer {
 
     @Bean
     GuardrailsPolicy guardrailsPolicy() {
-        ToolDisclosurePolicy disclosure = ToolDisclosurePolicy.byToolName(
+        ToolDisclosurePolicy disclosure = ToolDisclosurePolicy.allowEntityTypesByToolName(
             Map.of("customerLookup", List.of("CUSTOMER_ID")));
+        GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+            .toolDisclosurePolicy(disclosure)
+            .outputProtection().tokenize()
+            .build();
         return GuardrailsPolicy.builder()
-            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(disclosure).outputProtection(true))
+            .privacy(privacyPolicy)
             .toolAuthorization(true)
             .build();
     }

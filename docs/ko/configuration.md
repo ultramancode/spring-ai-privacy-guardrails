@@ -8,7 +8,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 3675a94549d64f6501c489b10399e2e9f8d23f1d58dfb0a6055320af1b2f6ff0 -->
+<!-- i18n-source-sha256: df21482c6a3036f194456a792be63ebc413ca0499f72a45238daab8e6e313930 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
@@ -44,12 +44,18 @@ Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인�
 모델 경로와 연결 설정을 전달합니다.
 
 ```java
+GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+        .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+        .outputProtection().redact()
+        .build();
+GuardrailsPolicy.Inspection inspectionPolicy = GuardrailsPolicy.Inspection.builder()
+        .finalOutputInspectionEnabled(true)
+        .build();
+
 GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy
-                .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
-                .outputAction(PrivacyOutputAction.REDACT))
-        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(true))
+        .privacy(privacyPolicy)
+        .inspection(inspectionPolicy)
         .toolAuthorization(true)
         .build();
 
@@ -76,10 +82,18 @@ ChatClient chatClient = guardrails.builder(chatModel, supportPolicy)
 출력만 검사하려면 다음과 같이 설정합니다.
 
 ```java
-.inspection(inspection -> inspection
+.inspection(GuardrailsPolicy.Inspection.builder()
         .modelRequestInspectionEnabled(false)
-        .applicationOutputInspectionEnabled(true))
+        .finalOutputInspectionEnabled(true)
+        .build())
 ```
+
+각 설정 빌더는 기본값에서 시작합니다. 완성한 설정 객체를 `privacy(...)`나
+`inspection(...)`에 전달하면 해당 기능의 설정을 교체합니다. 일부 값만 바꾸고
+나머지를 유지하려면 설정 객체의 `mutate()`를 사용합니다.
+
+간단한 설정은 `privacy(privacy -> privacy.outputProtection().tokenize())`처럼
+람다로 바로 지정할 수도 있습니다.
 
 ## 정책 재사용
 
@@ -88,8 +102,8 @@ ChatClient chatClient = guardrails.builder(chatModel, supportPolicy)
 
 ```java
 GuardrailsPolicy inputPolicy = supportPolicy.mutate()
-        .privacy(privacy -> privacy.outputProtection(false))
-        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(false))
+        .privacy(supportPolicy.privacy().mutate().outputProtection().disable().build())
+        .inspection(supportPolicy.inspection().mutate().finalOutputInspectionEnabled(false).build())
         .build();
 
 GuardrailsPolicy privacyOnly = supportPolicy.mutate()
@@ -175,7 +189,7 @@ GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFa
 최종 출력 차단은 이미 실행한 도구의 부작용을 되돌리지 않습니다.
 
 `InspectionObserver`로 검사 보고서와 실패를 기록할 수 있습니다. 콜백에는
-검사 경계와 call 또는 stream 실행 여부도 전달됩니다.
+검사 단계와 call 또는 stream 실행 여부도 전달됩니다.
 [검사 결과 기록](inspection.md#검사-결과-기록)을 참고하세요.
 
 `ChatModel`을 직접 호출하면 이 클라이언트를 거치지 않습니다.

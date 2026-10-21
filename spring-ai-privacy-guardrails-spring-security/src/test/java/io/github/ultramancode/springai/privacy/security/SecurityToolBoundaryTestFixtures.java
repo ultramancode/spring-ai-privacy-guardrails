@@ -59,7 +59,9 @@ final class SecurityToolBoundaryTestFixtures {
             ToolCallback... callbacks
     ) {
         PrivacyChatClientConfigurer privacy = new PrivacyChatClientConfigurer(service, factory);
-        ToolAuthorizationChatClientFactory security = new ToolAuthorizationChatClientFactory(boundary);
+        ToolAuthorizationChatClientFactory security = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(boundary)
+            .build();
         return new PrivacySecurityChatClientFactory(privacy, security).builder(model)
                 .defaultTools((Object[]) callbacks)
                 .build();
@@ -85,7 +87,7 @@ final class SecurityToolBoundaryTestFixtures {
                 ));
         return new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(disclosures)
+                ToolDisclosurePolicy.allowEntityTypesByToolName(disclosures)
         );
     }
 

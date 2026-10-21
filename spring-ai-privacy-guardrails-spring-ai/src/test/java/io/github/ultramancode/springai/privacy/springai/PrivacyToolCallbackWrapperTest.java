@@ -59,7 +59,7 @@ class PrivacyToolCallbackWrapperTest {
         PrivacyToolCallbackWrapper allowedWrapper = wrap(delegate(input -> {
             allowedDelegateInput.set(input);
             return "Alice";
-        }), service, ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON"))));
+        }), service, ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON"))));
         String toolInput = "{\"name\":\"Alice\"}";
         Pattern personTokenPattern = OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
@@ -91,7 +91,7 @@ class PrivacyToolCallbackWrapperTest {
             PrivacyToolCallbackWrapper wrapper = wrap(
                     delegate,
                     service,
-                    ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                    ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON")))
             );
 
             String result = wrapper.call("{\"name\":\"" + token + "\"}", toolContext(session.handle()));
@@ -181,7 +181,7 @@ class PrivacyToolCallbackWrapperTest {
                     return "ok";
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
         );
 
         try (PrivacySession session = service.openSession()) {
@@ -400,7 +400,7 @@ class PrivacyToolCallbackWrapperTest {
                         return "Alice " + email;
                     }),
                     service,
-                    ToolDisclosurePolicy.byToolName(Map.of(
+                    ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
                             "lookup",
                             Set.of("EMAIL_ADDRESS")
                     ))
@@ -435,7 +435,7 @@ class PrivacyToolCallbackWrapperTest {
                     return "ok";
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of(
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
                         "lookup",
                         Set.of("EMAIL_ADDRESS")
                 ))
@@ -508,7 +508,7 @@ class PrivacyToolCallbackWrapperTest {
                     return "ok";
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
         );
 
         try (PrivacySession session = service.openSession()) {
@@ -553,7 +553,7 @@ class PrivacyToolCallbackWrapperTest {
                             return "Alice found";
                         }),
                         service,
-                        ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                        ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON")))
                 );
 
                 String result = CompletableFuture.supplyAsync(

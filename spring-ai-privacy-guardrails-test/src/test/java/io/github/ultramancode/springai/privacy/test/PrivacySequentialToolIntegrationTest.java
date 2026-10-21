@@ -48,10 +48,11 @@ class PrivacySequentialToolIntegrationTest {
         PrivacyService privacyService = privacyService();
         PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of(
-                "crmLookup", Set.of("CUSTOMER_ID"),
-                "emailCustomer", Set.of("EMAIL_ADDRESS")
-            ))))
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
+                    "crmLookup", Set.of("CUSTOMER_ID"),
+                    "emailCustomer", Set.of("EMAIL_ADDRESS")
+                ))))
             .build();
         SequentialToolModel chatModel = new SequentialToolModel();
         ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)

@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: b2ac0205c75008fe6ff009991e88e909f1d239a8736d3a90d63c604631b50563 -->
+<!-- i18n-source-sha256: 864e95fa0db11d98beab7b088238914c72491610d9dbbef7fa42032a46937804 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -108,13 +108,13 @@ InspectionReport report = inspectionService.inspect(request);
 이 입력의 `report.decision()`은 `BLOCK`입니다. 서비스는 판정을 반환하므로
 호출자가 그에 따라 처리합니다. ChatClient 연동은 차단 판정에서 예외를 던집니다.
 
-## 선택적 모델 출력 검사
+## 선택적 최종 출력 검사
 
 출력 검사는 기본적으로 꺼져 있습니다. 클라이언트 정책에서 활성화합니다.
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(true))
+        .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build())
         .build();
 ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 ```
@@ -160,9 +160,6 @@ ChatClient chatClient = guardrails.builder(chatModel, inputPolicy)
 ContentInspector httpGuard() {
     OpenAiCompatibleInspectionConfig config = OpenAiCompatibleInspectionConfig.builder(
             URI.create("http://127.0.0.1:8000/v1"), "kakaocorp/kanana-safeguard-prompt-2.1b")
-        .requestTimeout(Duration.ofSeconds(10))
-        .maxResponseBytes(16_384)
-        .requirePrivacyProcessedContent(true)
         .build();
     return new OpenAiCompatibleContentInspector("primary-guard", config, new KananaSafeguardPromptProtocol());
 }
@@ -175,6 +172,7 @@ ContentInspector httpGuard() {
 모델 이름을 지정합니다. Bearer 인증이 필요하면 `apiKey`를 설정합니다. 키가 null이거나
 공백이면 인증이 필요 없는 서버를 위해 `Authorization: Bearer not-required`를 보냅니다.
 `requestTimeout`은 HTTP 요청별 제한 시간이며, `maxResponseBytes`는 응답 본문의 최대 크기입니다.
+빌더의 기본값은 요청별 제한 시간 1분과 응답 본문 최대 크기 2 MiB입니다.
 
 `requirePrivacyProcessedContent`는 검사 모델에 텍스트를 보내기 전에 개인정보 처리 완료를
 요구할지 정합니다. `true`이면 모든 검사 구간의 상태가 `PROCESSED`여야 합니다.
@@ -367,7 +365,7 @@ Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 
 모델 내부 연산에 사용할 CPU 스레드 수(`intraOpThreads`, 기본 2개)와 요청 전체의
 윈도우 개수 한도(`maxWindows`, 기본 256개)는 `OnnxInspectionConfig`에서 설정합니다.
-전체 검사 시간 제한은 `InspectionLimits`에서 설정하며 기본값은 10초입니다.
+전체 검사 시간 제한은 `InspectionLimits`에서 설정하며 기본값은 1분입니다.
 
 긴 텍스트는 토큰 윈도우로 나누어 검사합니다. 각 구간의 모든 윈도우를 검사해야 해당 구간을 완료로 처리합니다.
 탐지 결과에는 각 구간에서 레이블별로 임계값을 충족한 최고 점수를 담습니다.
@@ -492,8 +490,8 @@ InspectionObserver inspectionObserver() {
 발생해도 검사 결정은 바뀌지 않습니다. 보고서에는 식별자와 탐지 결과가 담기며,
 프롬프트나 응답 원문은 포함되지 않습니다.
 
-두 콜백 모두 `InspectionExecution`을 받습니다. `boundary()`는 `MODEL_REQUEST`
-또는 `APPLICATION_OUTPUT`, `streaming()`은 스트리밍 여부를 나타냅니다.
+두 콜백 모두 `InspectionExecution`을 받습니다. `phase()`는 모델 요청 검사(`MODEL_REQUEST`)
+또는 최종 출력 검사(`FINAL_OUTPUT`)를 나타냅니다. `streaming()`은 스트리밍 호출 여부입니다.
 
 ## 검사 범위와 한도
 
@@ -531,7 +529,7 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 | --- | --- | --- |
 | `limits.maxSegments` | 64 | 빈 본문을 포함한 최대 텍스트 구간 수 |
 | `limits.maxCharacters` | 131072 | 한 번의 검사에서 처리하는 텍스트의 최대 합산 길이 |
-| `limits.timeout` | 10s | 정책 평가를 포함해 한 요청의 모든 검사기가 함께 사용하는 제한 시간 |
+| `limits.timeout` | 60s | 정책 평가를 포함해 한 요청의 모든 검사기가 함께 사용하는 제한 시간 |
 | `maxOutputFrames` | 4096 | 출력 검사에서 수집하는 최대 응답 프레임 수. 빈 프레임 포함 |
 | `outputStreamTimeout` | 60s | 모델 호출과 도구 실행을 포함한 전체 스트림 수집 시간 |
 

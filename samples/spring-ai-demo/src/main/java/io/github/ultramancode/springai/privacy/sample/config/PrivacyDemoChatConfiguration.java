@@ -32,14 +32,17 @@ class PrivacyDemoChatConfiguration {
 
     @Bean
     ToolDisclosurePolicy toolDisclosurePolicy() {
-        return ToolDisclosurePolicy.byToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")));
+        return ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")));
     }
 
     @Bean
     GuardrailsPolicy guardrailsPolicy(ToolDisclosurePolicy toolDisclosurePolicy) {
+        GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+            .toolDisclosurePolicy(toolDisclosurePolicy)
+            .outputProtection().tokenize()
+            .build();
         return GuardrailsPolicy.builder()
-            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder
-                .toolDisclosurePolicy(toolDisclosurePolicy).outputProtection(true))
+            .privacy(privacyPolicy)
             .toolAuthorization(true)
             .build();
     }

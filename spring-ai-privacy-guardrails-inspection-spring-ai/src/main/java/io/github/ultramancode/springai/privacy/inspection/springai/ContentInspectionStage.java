@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.inspection.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.ModelRequestInspectionStage;
 import io.github.ultramancode.springai.privacy.boundary.PiiTokenSimplifierContext;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
@@ -8,11 +9,10 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 /** Inspects input text before each model call, including calls made after tool execution. */
-final class ContentInspectionStage implements BiConsumer<ChatClientRequest, Boolean> {
+final class ContentInspectionStage implements ModelRequestInspectionStage {
     private final InspectionEnforcement inspectionEnforcement;
     private final InspectionLimits inspectionLimits;
     private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
@@ -26,10 +26,10 @@ final class ContentInspectionStage implements BiConsumer<ChatClientRequest, Bool
     }
 
     @Override
-    public void accept(ChatClientRequest chatClientRequest, Boolean streaming) {
+    public void inspect(ChatClientRequest chatClientRequest, boolean streaming) {
         UnaryOperator<String> piiTokenSimplifier = PiiTokenSimplifierContext.findSimplifier(chatClientRequest);
-        inspectionEnforcement.inspect(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier,
-            new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, streaming));
+        inspectionEnforcement.inspectAndEnforce(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier,
+            new InspectionExecution(InspectionExecution.Phase.MODEL_REQUEST, streaming));
     }
 
     private List<ContentSegment> extractInputSegments(ChatClientRequest chatClientRequest) {

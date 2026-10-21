@@ -51,7 +51,7 @@ class PrivacyTestProbeTest {
         PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
             .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))))
             .build();
         ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
             .build()

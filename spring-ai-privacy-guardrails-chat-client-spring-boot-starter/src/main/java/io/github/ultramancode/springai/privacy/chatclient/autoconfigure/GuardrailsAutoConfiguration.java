@@ -28,6 +28,7 @@ import org.springframework.core.env.Environment;
     "io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration",
     "io.github.ultramancode.springai.privacy.inspection.autoconfigure.InspectionAutoConfiguration",
     "io.github.ultramancode.springai.privacy.security.autoconfigure.ToolAuthorizationAutoConfiguration",
+    "org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration",
     "org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration"
 })
 public class GuardrailsAutoConfiguration {
@@ -41,6 +42,7 @@ public class GuardrailsAutoConfiguration {
         ObjectProvider<InspectionObserver> inspectionObserverProvider,
         ObjectProvider<GuardrailsChatClientFactory.ToolAuthorizationConfigurer> toolAuthorizationConfigurerProvider,
         ObjectProvider<ToolCallingAdvisor.Builder<?>> toolAdvisorBuilderProvider,
+        ObjectProvider<ToolCallingManager> toolCallingManagerProvider,
         ObjectProvider<ObservationRegistry> observationRegistryProvider,
         ObjectProvider<ChatClientObservationConvention> chatClientObservationConventionProvider,
         ObjectProvider<AdvisorObservationConvention> advisorObservationConventionProvider,
@@ -51,7 +53,9 @@ public class GuardrailsAutoConfiguration {
             ToolCallingAdvisor.builder()
                 .advisorOrder(environment.getProperty("spring.ai.chat.client.tool-calling.advisor-order",
                     Integer.class, ToolCallingAdvisor.DEFAULT_ORDER))
-                .toolCallingManager(ToolCallingManager.builder().observationRegistry(observationRegistry).build()));
+                .toolCallingManager(toolCallingManagerProvider.getIfAvailable(() -> ToolCallingManager.builder()
+                    .observationRegistry(observationRegistry)
+                    .build())));
         GuardrailsChatClientFactory.Builder guardrailsFactoryBuilder = GuardrailsChatClientFactory.builder()
             .observationRegistry(observationRegistry)
             .chatClientObservationConvention(chatClientObservationConventionProvider.getIfUnique())

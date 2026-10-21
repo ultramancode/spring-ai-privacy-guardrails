@@ -69,14 +69,22 @@ public class ToolAuthorizationAutoConfiguration {
                     "spring.ai.chat.client.tool-calling.advisor-order", Integer.class, ToolCallingAdvisor.DEFAULT_ORDER);
             return ToolCallingAdvisor.builder().advisorOrder(toolOrder);
         });
-        return new ToolAuthorizationChatClientFactory(boundary, defaultToolAdvisorBuilder,
-                observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP),
-                chatClientObservationConvention.getIfUnique(), advisorObservationConvention.getIfUnique(),
-                builder -> {
-                    legacyCustomizers.orderedStream().forEach(customizer -> customizer.customize(builder));
-                    customizers.orderedStream().forEach(customizer -> customizer.customize(builder));
-                    return builder;
-                }, environment.getProperty("spring.ai.chat.client.tool-calling.enabled", Boolean.class, true));
+        return ToolAuthorizationChatClientFactory.builder()
+                .toolAuthorizationBoundary(boundary)
+                .toolAdvisorBuilder(defaultToolAdvisorBuilder)
+                .observationRegistry(observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP))
+                .chatClientObservationConvention(chatClientObservationConvention.getIfUnique())
+                .advisorObservationConvention(advisorObservationConvention.getIfUnique())
+                .clientCustomizer(chatClientBuilder -> {
+                    legacyCustomizers.orderedStream()
+                            .forEach(chatClientCustomizer -> chatClientCustomizer.customize(chatClientBuilder));
+                    customizers.orderedStream()
+                            .forEach(chatClientBuilderCustomizer -> chatClientBuilderCustomizer.customize(chatClientBuilder));
+                    return chatClientBuilder;
+                })
+                .autoRegisterToolAdvisor(environment.getProperty(
+                        "spring.ai.chat.client.tool-calling.enabled", Boolean.class, true))
+                .build();
     }
 
     private static ToolCallingManager resolveDefaultToolCallingManager(

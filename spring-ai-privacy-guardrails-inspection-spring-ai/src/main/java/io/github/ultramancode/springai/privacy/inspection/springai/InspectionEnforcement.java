@@ -27,7 +27,7 @@ final class InspectionEnforcement {
         this.inspectionObserver = Objects.requireNonNull(inspectionObserver, "inspectionObserver");
     }
 
-    void inspect(Supplier<List<ContentSegment>> contentSegmentsSupplier,
+    void inspectAndEnforce(Supplier<List<ContentSegment>> contentSegmentsSupplier,
         UnaryOperator<String> piiTokenSimplifier, InspectionExecution inspectionExecution) {
         InspectionReport inspectionReport;
         try {

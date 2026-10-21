@@ -106,13 +106,13 @@ InspectionReport report = inspectionService.inspect(request);
 For this input, `report.decision()` is `BLOCK`. The service returns a decision for
 the caller to enforce. The ChatClient integration throws an exception for a block decision.
 
-## Optional model-output inspection
+## Optional final output inspection
 
 Output inspection is disabled by default. Enable it on the configured client with:
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .inspection(inspection -> inspection.applicationOutputInspectionEnabled(true))
+        .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build())
         .build();
 ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 ```
@@ -161,9 +161,6 @@ in [Output Policy and Streaming](privacy.md#output-policy-and-streaming).
 ContentInspector httpGuard() {
     OpenAiCompatibleInspectionConfig config = OpenAiCompatibleInspectionConfig.builder(
             URI.create("http://127.0.0.1:8000/v1"), "kakaocorp/kanana-safeguard-prompt-2.1b")
-        .requestTimeout(Duration.ofSeconds(10))
-        .maxResponseBytes(16_384)
-        .requirePrivacyProcessedContent(true)
         .build();
     return new OpenAiCompatibleContentInspector("primary-guard", config, new KananaSafeguardPromptProtocol());
 }
@@ -177,6 +174,7 @@ Set `baseUrl` to the API base URL (for example, `http://localhost:8000/v1`) and
 or blank key sends `Authorization: Bearer not-required` for servers that do not
 require authentication.
 `requestTimeout` limits each HTTP request, and `maxResponseBytes` limits its response body.
+The builder defaults to one minute per request and a 2 MiB response body limit.
 
 `requirePrivacyProcessedContent` controls whether the inspector requires privacy
 processing before sending text to the guard model. Set it to `true` to accept only
@@ -369,7 +367,7 @@ The padding token must be registered in the vocabulary or added-token list in `t
 Configure the model's internal CPU threads (`intraOpThreads`, default 2) and the
 window limit across the entire request (`maxWindows`, default 256) in
 `OnnxInspectionConfig`. Set the shared inspection deadline in `InspectionLimits`,
-which defaults to 10 seconds.
+which defaults to one minute.
 
 Long text is split into token windows. A segment is complete only after all
 its windows have been inspected. Findings retain each label's highest qualifying
@@ -495,8 +493,9 @@ Callbacks may run concurrently and should return promptly. A runtime exception i
 callback does not change the inspection decision. Reports contain identifiers and
 findings without prompt or response text.
 
-Both callbacks receive `InspectionExecution`. Its `boundary()` is `MODEL_REQUEST`
-or `APPLICATION_OUTPUT`, and `streaming()` identifies streaming.
+Both callbacks receive `InspectionExecution`. Its `phase()` identifies model request
+(`MODEL_REQUEST`) or final output (`FINAL_OUTPUT`) inspection.
+Its `streaming()` indicates whether the client call is streaming.
 
 ## Scope and limits
 
@@ -535,7 +534,7 @@ Pass `InspectionLimits` to `inspection.limits(...)` in the policy and set output
 | --- | --- | --- |
 | `limits.maxSegments` | 64 | Extracted text segments, including empty bodies |
 | `limits.maxCharacters` | 131072 | Maximum combined text length per inspection |
-| `limits.timeout` | 10s | Time available to all inspectors in one request, including policy evaluation |
+| `limits.timeout` | 60s | Time available to all inspectors in one request, including policy evaluation |
 | `maxOutputFrames` | 4096 | Maximum response frames collected for output inspection, including empty frames |
 | `outputStreamTimeout` | 60s | Total stream assembly time, including model calls and tool execution |
 

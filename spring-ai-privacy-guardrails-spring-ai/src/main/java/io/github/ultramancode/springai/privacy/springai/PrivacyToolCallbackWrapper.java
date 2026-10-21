@@ -15,11 +15,11 @@ import org.springframework.ai.tool.metadata.ToolMetadata;
 import java.util.Objects;
 
 /**
- * Protects tool arguments and results according to a capability-scoped disclosure policy.
- * Only callbacks explicitly created by {@link PrivacyToolCallbackFactory} are protected.
- * Raw callbacks registered directly with Spring AI are outside this boundary. Definition and
- * metadata accessors are read once when the wrapper is created. Application-owned accessor
- * failures propagate unchanged, while invalid null contracts become safe typed failures.
+ * Protects tool arguments and results. Restores original values in arguments only
+ * for entity types allowed by the policy.
+ * Tool definitions and metadata are captured when the wrapper is created.
+ * Accessor failures propagate unchanged. Null definitions or metadata become
+ * typed guardrail failures.
  */
 final class PrivacyToolCallbackWrapper implements ToolCallback {
 
@@ -88,11 +88,11 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
     private String callDelegate(String toolInput, ToolContext toolContext) {
         Objects.requireNonNull(toolInput, "toolInput must not be null");
         PrivacyContextHandle handle = requireActiveHandle(toolContext);
-        ToolDisclosureScope disclosureScope = disclosureScope();
+        AllowedEntityTypes allowedEntityTypes = getAllowedEntityTypes();
         PrivacyJsonPayloadTransformer.DisclosureResult inputResult = transformInput(
                 handle,
                 toolInput,
-                disclosureScope
+                allowedEntityTypes
         );
         String cleanInput = inputResult.payload();
         ToolContext delegateContext = withoutInternalPrivacyContext(toolContext);
@@ -121,28 +121,28 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
         return protectedResult;
     }
 
-    private ToolDisclosureScope disclosureScope() {
-        ToolDisclosureScope scope = this.disclosurePolicy.scopeFor(this.toolDefinition);
-        if (scope == null) {
+    private AllowedEntityTypes getAllowedEntityTypes() {
+        AllowedEntityTypes allowedEntityTypes = this.disclosurePolicy.getAllowedEntityTypes(this.toolDefinition);
+        if (allowedEntityTypes == null) {
             throw new PrivacyGuardrailException(
                     PrivacyFailureCode.TOOL_POLICY_FAILED,
                     PrivacyPhase.TOOL_INPUT,
-                    "Tool disclosure policy returned no disclosure"
+                    "Tool disclosure policy returned null"
             );
         }
-        return scope;
+        return allowedEntityTypes;
     }
 
     private PrivacyJsonPayloadTransformer.DisclosureResult transformInput(
             PrivacyContextHandle handle,
             String toolInput,
-            ToolDisclosureScope disclosureScope
+            AllowedEntityTypes allowedEntityTypes
     ) {
         return PrivacyJsonPayloadTransformer.discloseWithOutcome(
                 this.privacyService,
                 handle,
                 toolInput,
-                disclosureScope.entityTypes(),
+                allowedEntityTypes.entityTypes(),
                 PrivacyPhase.TOOL_INPUT,
                 true
         );

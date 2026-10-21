@@ -18,6 +18,7 @@ import java.util.function.UnaryOperator;
 
 /**
  * Creates ChatClient builders with request-scoped tool authorization.
+ * Use {@link #builder()} to configure the factory and {@link #builder(ChatModel)} to create client builders.
  *
  * <p>Supply a tool advisor builder to customize the loop, including Tool Search.
  * Tool calls must use the advisor created by this factory.</p>
@@ -32,31 +33,86 @@ public final class ToolAuthorizationChatClientFactory {
     private final ObservationRegistry observationRegistry;
     private final ChatClientObservationConvention chatClientObservationConvention;
     private final AdvisorObservationConvention advisorObservationConvention;
-    private final UnaryOperator<ChatClient.Builder> clientBuilderCustomizer;
+    private final UnaryOperator<ChatClient.Builder> clientCustomizer;
     private final boolean autoRegisterToolAdvisor;
 
-    /** Creates a programmatic client factory without requiring Spring Boot. */
-    public ToolAuthorizationChatClientFactory(SpringSecurityToolBoundary toolAuthorizationBoundary) {
-        this(toolAuthorizationBoundary, ToolCallingAdvisor.builder(), ObservationRegistry.NOOP,
-            null, null, UnaryOperator.identity(), true);
+    private ToolAuthorizationChatClientFactory(Builder factoryBuilder) {
+        this.toolAuthorizationBoundary = factoryBuilder.toolAuthorizationBoundary;
+        this.defaultToolAdvisorBuilder = factoryBuilder.defaultToolAdvisorBuilder.copy();
+        this.observationRegistry = factoryBuilder.observationRegistry;
+        this.chatClientObservationConvention = factoryBuilder.chatClientObservationConvention;
+        this.advisorObservationConvention = factoryBuilder.advisorObservationConvention;
+        this.clientCustomizer = factoryBuilder.clientCustomizer;
+        this.autoRegisterToolAdvisor = factoryBuilder.autoRegisterToolAdvisor;
     }
 
-    /** Creates a factory with application observation, defaults and client customization. */
-    public ToolAuthorizationChatClientFactory(SpringSecurityToolBoundary toolAuthorizationBoundary,
-        ToolCallingAdvisor.Builder<?> defaultToolAdvisorBuilder, ObservationRegistry observationRegistry,
-        ChatClientObservationConvention chatClientObservationConvention,
-        AdvisorObservationConvention advisorObservationConvention,
-        UnaryOperator<ChatClient.Builder> clientBuilderCustomizer, boolean autoRegisterToolAdvisor) {
-        this.toolAuthorizationBoundary = Objects.requireNonNull(
-            toolAuthorizationBoundary, "toolAuthorizationBoundary must not be null");
-        this.defaultToolAdvisorBuilder = Objects.requireNonNull(
-                defaultToolAdvisorBuilder, "defaultToolAdvisorBuilder must not be null").copy();
-        this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry must not be null");
-        this.chatClientObservationConvention = chatClientObservationConvention;
-        this.advisorObservationConvention = advisorObservationConvention;
-        this.clientBuilderCustomizer = Objects.requireNonNull(
-                clientBuilderCustomizer, "clientBuilderCustomizer must not be null");
-        this.autoRegisterToolAdvisor = autoRegisterToolAdvisor;
+    /** Creates a factory builder for tool authorization, client defaults and observation settings. */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /** Builds a {@link ToolAuthorizationChatClientFactory} with shared authorization and client defaults. */
+    public static final class Builder {
+        private SpringSecurityToolBoundary toolAuthorizationBoundary;
+        private ToolCallingAdvisor.Builder<?> defaultToolAdvisorBuilder = ToolCallingAdvisor.builder();
+        private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
+        private ChatClientObservationConvention chatClientObservationConvention;
+        private AdvisorObservationConvention advisorObservationConvention;
+        private UnaryOperator<ChatClient.Builder> clientCustomizer = UnaryOperator.identity();
+        private boolean autoRegisterToolAdvisor = true;
+
+        private Builder() {}
+
+        /** Sets the authorization boundary used by clients created by this factory. */
+        public Builder toolAuthorizationBoundary(SpringSecurityToolBoundary toolAuthorizationBoundary) {
+            this.toolAuthorizationBoundary = Objects.requireNonNull(toolAuthorizationBoundary, "toolAuthorizationBoundary");
+            return this;
+        }
+
+        /** Sets the default tool advisor builder for clients created by this factory. */
+        public Builder toolAdvisorBuilder(ToolCallingAdvisor.Builder<?> defaultToolAdvisorBuilder) {
+            // Keep these defaults independent of later changes to the supplied builder.
+            this.defaultToolAdvisorBuilder = Objects.requireNonNull(
+                defaultToolAdvisorBuilder, "defaultToolAdvisorBuilder").copy();
+            return this;
+        }
+
+        public Builder observationRegistry(ObservationRegistry observationRegistry) {
+            this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry");
+            return this;
+        }
+
+        public Builder chatClientObservationConvention(ChatClientObservationConvention chatClientObservationConvention) {
+            this.chatClientObservationConvention = chatClientObservationConvention;
+            return this;
+        }
+
+        public Builder advisorObservationConvention(AdvisorObservationConvention advisorObservationConvention) {
+            this.advisorObservationConvention = advisorObservationConvention;
+            return this;
+        }
+
+        public Builder clientCustomizer(UnaryOperator<ChatClient.Builder> clientCustomizer) {
+            this.clientCustomizer = Objects.requireNonNull(clientCustomizer, "clientCustomizer");
+            return this;
+        }
+
+        /** Sets whether to register the configured tool advisor automatically. Defaults to {@code true}. */
+        public Builder autoRegisterToolAdvisor(boolean autoRegisterToolAdvisor) {
+            this.autoRegisterToolAdvisor = autoRegisterToolAdvisor;
+            return this;
+        }
+
+        /**
+         * Creates a factory from this builder.
+         * @throws IllegalStateException if no authorization boundary is configured
+         */
+        public ToolAuthorizationChatClientFactory build() {
+            if (toolAuthorizationBoundary == null) {
+                throw new IllegalStateException("No SpringSecurityToolBoundary is configured");
+            }
+            return new ToolAuthorizationChatClientFactory(this);
+        }
     }
 
     /**
@@ -165,8 +221,8 @@ public final class ToolAuthorizationChatClientFactory {
         if (!this.autoRegisterToolAdvisor) {
             chatClientBuilder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
         }
-        chatClientBuilder = Objects.requireNonNull(this.clientBuilderCustomizer.apply(chatClientBuilder),
-            "clientBuilderCustomizer must not return null");
+        chatClientBuilder = Objects.requireNonNull(this.clientCustomizer.apply(chatClientBuilder),
+            "clientCustomizer must not return null");
         return chatClientBuilder;
     }
 }

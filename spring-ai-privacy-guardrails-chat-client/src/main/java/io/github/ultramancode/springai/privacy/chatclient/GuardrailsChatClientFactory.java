@@ -217,7 +217,7 @@ public final class GuardrailsChatClientFactory {
             if (inspectionPolicy.modelRequestInspectionEnabled()) {
                 modelRequestBoundaryConfigurers.add(createInspectionConfigurer(inspectionPolicy));
             }
-            if (inspectionPolicy.applicationOutputInspectionEnabled()) {
+            if (inspectionPolicy.finalOutputInspectionEnabled()) {
                 inspectionOutputAdvisor = new InspectionOutputAdvisor(inspectionService, inspectionPolicy.limits(),
                     inspectionObserver, inspectionPolicy.maxOutputFrames(), inspectionPolicy.outputStreamTimeout());
             }
@@ -246,9 +246,9 @@ public final class GuardrailsChatClientFactory {
             PrivacyChatClientConfigurer.builder(privacyService)
                 .toolCallbackFactory(privacyToolCallbackFactory).automaticallyWrapTools(true)
                 .responseInspectionLimits(privacyPolicy.responseLimits()).enforcementObserver(privacyObserver);
-        if (privacyPolicy.outputProtectionEnabled()) {
-            privacyConfigurerBuilder.outputProtection(
-                privacyPolicy.outputAction(), privacyPolicy.outputBlockMessage());
+        GuardrailsPolicy.OutputProtection outputProtection = privacyPolicy.outputProtection();
+        if (outputProtection != null) {
+            privacyConfigurerBuilder.outputProtection(outputProtection.action(), outputProtection.blockMessage());
         }
         return privacyConfigurerBuilder.build().forToolAdvisorOrder(toolAdvisorOrder);
     }
@@ -294,7 +294,7 @@ public final class GuardrailsChatClientFactory {
         if (privacyPolicy == null) {
             throw new IllegalStateException("PII token simplification requires privacy in the client policy");
         }
-        if (inspectionPolicy.applicationOutputInspectionEnabled() && !privacyPolicy.outputProtectionEnabled()) {
+        if (inspectionPolicy.finalOutputInspectionEnabled() && privacyPolicy.outputProtection() == null) {
             throw new IllegalStateException("Output PII token simplification requires privacy output protection");
         }
     }

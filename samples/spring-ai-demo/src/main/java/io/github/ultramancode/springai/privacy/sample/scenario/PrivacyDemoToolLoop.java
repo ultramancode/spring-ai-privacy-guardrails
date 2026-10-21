@@ -111,7 +111,8 @@ public final class PrivacyDemoToolLoop {
             return new Attempt(toolLoopModel, crmTool, null, denial);
         }
 
-        List<String> allowedOriginalEntityTypes = this.toolDisclosurePolicy.scopeFor(crmTool.getToolDefinition())
+        List<String> allowedOriginalEntityTypes = this.toolDisclosurePolicy
+            .getAllowedEntityTypes(crmTool.getToolDefinition())
             .entityTypes()
             .stream()
             .sorted()

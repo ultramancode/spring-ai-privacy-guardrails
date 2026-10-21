@@ -55,7 +55,7 @@ class PrivacyEnforcementObserverTest {
         );
         PrivacyToolCallbackFactory toolFactory = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON"))),
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON"))),
                 observer
         );
         PrivacyOutputAdvisor outputBoundary = new PrivacyOutputAdvisor(
@@ -139,7 +139,7 @@ class PrivacyEnforcementObserverTest {
         List<PrivacyEnforcementEvent> events = new ArrayList<>();
         PrivacyToolCallbackFactory toolFactory = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON"))),
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON"))),
                 events::add
         );
         ToolCallback protectedTool = toolFactory.wrap(tool(input -> "safe result"));

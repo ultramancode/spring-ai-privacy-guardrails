@@ -25,7 +25,7 @@ import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementBoundary;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementEvent;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementOutcome;
-import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
+import io.github.ultramancode.springai.privacy.springai.PrivacyOutputBlockedException;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.AfterEach;
@@ -114,12 +114,13 @@ class GuardrailsChatClientFactoryTest {
         GuardrailsPolicy.Builder guardrailsPolicyBuilder = GuardrailsPolicy.builder().toolAuthorization(authorizationEnabled);
         if (privacyEnabled) {
             guardrailsPolicyBuilder.privacy(privacyPolicyBuilder -> privacyPolicyBuilder
-                .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PERSON"))))
-                .outputAction(PrivacyOutputAction.REDACT));
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                    Map.of("lookup", List.of("PERSON"))))
+                .outputProtection().redact());
         }
         if (inspectionEnabled) {
             guardrailsPolicyBuilder.inspection(inspectionPolicyBuilder -> inspectionPolicyBuilder
-                .applicationOutputInspectionEnabled(true));
+                .finalOutputInspectionEnabled(true));
         }
         ChatClient.Builder chatClientBuilder = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicyBuilder.build());
         if (!streaming) {
@@ -146,9 +147,9 @@ class GuardrailsChatClientFactoryTest {
         if (inspectionEnabled) {
             assertThat(inspections).hasSize(3);
             assertThat(executions).containsExactly(
-                new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, streaming),
-                new InspectionExecution(InspectionExecution.Boundary.MODEL_REQUEST, streaming),
-                new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, streaming));
+                new InspectionExecution(InspectionExecution.Phase.MODEL_REQUEST, streaming),
+                new InspectionExecution(InspectionExecution.Phase.MODEL_REQUEST, streaming),
+                new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, streaming));
             if (privacyEnabled) {
                 assertThat(inspections.get(0).segments()).allSatisfy(segment ->
                     assertThat(segment.privacyProcessingStatus()).isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
@@ -189,12 +190,17 @@ class GuardrailsChatClientFactoryTest {
                 authorizationPhases.add(context.phase());
                 return new AuthorizationDecision(context.phase() == ToolAuthorizationPhase.DEFINITION);
             }).build();
+        ToolAuthorizationChatClientFactory toolAuthorizationChatClientFactory = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(toolAuthorizationBoundary)
+            .build();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
-            .privacyService(privacyService).privacyObserver(privacyEvents::add)
-            .toolAuthorization(new ToolAuthorizationChatClientFactory(toolAuthorizationBoundary)::prepareToolAuthorization).build();
+            .privacyService(privacyService)
+            .privacyObserver(privacyEvents::add)
+            .toolAuthorization(toolAuthorizationChatClientFactory::prepareToolAuthorization)
+            .build();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
             .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PERSON")))))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PERSON")))))
             .toolAuthorization(true).build();
         LoopModel chatModel = new LoopModel();
         ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).defaultTools(callback).build();
@@ -268,7 +274,7 @@ class GuardrailsChatClientFactoryTest {
             new ToolCallback[]{tool("first", true, firstInput)});
         ToolCallbackProvider provider = tools::get;
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy(privacyPolicyBuilder ->
-            privacyPolicyBuilder.outputAction(PrivacyOutputAction.REDACT))
+            privacyPolicyBuilder.outputProtection().redact())
             .toolAuthorization(authorizationEnabled).build();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
             .toolAuthorization(toolAuthorizationFactory(new AtomicInteger())::prepareToolAuthorization)
@@ -292,8 +298,8 @@ class GuardrailsChatClientFactoryTest {
     void explicitPoliciesDoNotInheritDisclosureOrOutputSettings() {
         PrivacyService privacyService = privacyService();
         GuardrailsPolicy defaultPolicy = GuardrailsPolicy.builder().privacy(privacyPolicyBuilder -> privacyPolicyBuilder
-            .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PERSON"))))
-            .outputAction(PrivacyOutputAction.REDACT)).build();
+            .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PERSON"))))
+            .outputProtection().redact()).build();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
             .privacyService(privacyService).defaultPolicy(defaultPolicy).build();
         AtomicReference<String> disclosed = new AtomicReference<>();
@@ -309,6 +315,33 @@ class GuardrailsChatClientFactoryTest {
         assertThat(disclosed.get()).contains("Alice");
         assertThat(protectedInput.get()).doesNotContain("Alice")
             .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+        assertThat(privacyService.activeSessionCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void outputProtectionSettingsControlBlockingAndCanBeRemoved(boolean streaming) {
+        PrivacyService privacyService = privacyService();
+        ChatModel chatModel = new ChatModel() {
+            public ChatResponse call(Prompt prompt) { return response("Alice"); }
+            public Flux<ChatResponse> stream(Prompt prompt) { return Flux.just(call(prompt)); }
+        };
+        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy(GuardrailsPolicy.Privacy.builder()
+                .outputProtection().block("Private response blocked")
+                .build())
+            .build();
+        GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
+            .privacyService(privacyService).defaultPolicy(guardrailsPolicy).build();
+
+        assertThatThrownBy(() -> invoke(guardrailsChatClientFactory.builder(chatModel).build().prompt().user("hello"), streaming))
+            .isInstanceOf(PrivacyOutputBlockedException.class).hasMessage("Private response blocked");
+        assertThat(privacyService.activeSessionCount()).isZero();
+
+        GuardrailsPolicy inputOnlyPolicy = guardrailsPolicy.mutate()
+            .privacy(guardrailsPolicy.privacy().mutate().outputProtection().disable().build()).build();
+        ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, inputOnlyPolicy).build();
+        assertThat(invoke(chatClient.prompt().user("hello"), streaming)).isEqualTo("Alice");
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 
@@ -344,7 +377,7 @@ class GuardrailsChatClientFactoryTest {
         ToolCallingAdvisor.Builder<?> toolSearchAdvisorBuilder = ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex)
             .systemMessageSuffix("Search for the tool before calling it.").advisorOrder(100);
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy(privacyPolicyBuilder -> privacyPolicyBuilder
-            .toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PERSON")))))
+            .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PERSON")))))
             .inspection().toolAuthorization(true).build();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder().privacyService(privacyService)
             .inspectionService(inspectionService(new CopyOnWriteArrayList<>()))
@@ -414,7 +447,7 @@ class GuardrailsChatClientFactoryTest {
         };
         ChatClient unprotectedOutputClient = guardrailsChatClientFactory.builder(chatModel, disabledPolicy).build();
         GuardrailsPolicy enabledPolicy = disabledPolicy.mutate()
-            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.outputProtection(true)).build();
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.outputProtection().tokenize()).build();
         ChatClient protectedOutputClient = guardrailsChatClientFactory.builder(chatModel, enabledPolicy).build();
 
         assertThat(invoke(unprotectedOutputClient.prompt().user("hello"), streaming)).isEqualTo("Alice");
@@ -432,9 +465,8 @@ class GuardrailsChatClientFactoryTest {
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder().privacyService(privacyService)
             .inspectionService(inspectionService).build();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.outputAction(PrivacyOutputAction.TOKENIZE))
-            .inspection(inspectionPolicyBuilder -> inspectionPolicyBuilder
-                .applicationOutputInspectionEnabled(true)).build();
+            .privacy(GuardrailsPolicy.Privacy.builder().outputProtection().tokenize().build())
+            .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build()).build();
         ChatClient chatClient = guardrailsChatClientFactory.builder(new LoopModel(), guardrailsPolicy)
             .defaultTools(tool("lookup", true, new AtomicReference<>())).build();
 
@@ -450,7 +482,7 @@ class GuardrailsChatClientFactoryTest {
         assertThatThrownBy(() -> guardrailsChatClientFactory.builder(new LoopModel(), GuardrailsPolicy.builder().inspection().build()))
             .hasMessageContaining("requires privacy");
         GuardrailsPolicy outputProtectionDisabled = guardrailsPolicy.mutate()
-            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.outputProtection(false)).build();
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.outputProtection().disable()).build();
         assertThatThrownBy(() -> guardrailsChatClientFactory.builder(new LoopModel(), outputProtectionDisabled))
             .hasMessageContaining("requires privacy output protection");
     }
@@ -465,7 +497,7 @@ class GuardrailsChatClientFactoryTest {
             .inspectionService(inspectionService)
             .inspectionObserver((report, execution) -> executions.add(execution)).build();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().inspection(inspectionPolicyBuilder -> inspectionPolicyBuilder
-            .modelRequestInspectionEnabled(false).applicationOutputInspectionEnabled(true)).build();
+            .modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true)).build();
         ChatClient chatClient = guardrailsChatClientFactory
             .builder(responseModel(Flux.just(response("attack"))), guardrailsPolicy).build();
 
@@ -477,11 +509,11 @@ class GuardrailsChatClientFactoryTest {
                 .isInstanceOf(InspectionBlockedException.class);
         }
         assertThat(executions).containsExactly(
-            new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, streaming));
+            new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, streaming));
     }
 
     @Test
-    void outputFrameLimitReportsItsBoundaryAndClosesPrivacySession() {
+    void outputFrameLimitReportsFinalOutputPhaseAndClosesPrivacySession() {
         PrivacyService privacyService = privacyService();
         AtomicReference<InspectionExecution> failureContext = new AtomicReference<>();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder().privacyService(privacyService)
@@ -494,7 +526,7 @@ class GuardrailsChatClientFactoryTest {
             }).build();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy()
             .inspection(inspectionPolicyBuilder -> inspectionPolicyBuilder
-                .modelRequestInspectionEnabled(false).applicationOutputInspectionEnabled(true)
+                .modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true)
                 .maxOutputFrames(1)).build();
         ChatClient chatClient = guardrailsChatClientFactory
             .builder(responseModel(Flux.just(response("one"), response("two"))), guardrailsPolicy).build();
@@ -504,7 +536,7 @@ class GuardrailsChatClientFactoryTest {
                 failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED)))
             .verify(Duration.ofSeconds(5));
         assertThat(failureContext.get()).isEqualTo(
-            new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, true));
+            new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, true));
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 
@@ -571,7 +603,9 @@ class GuardrailsChatClientFactoryTest {
                 authorizationChecks.incrementAndGet();
                 return new AuthorizationDecision(true);
             }).build();
-        return new ToolAuthorizationChatClientFactory(toolAuthorizationBoundary);
+        return ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(toolAuthorizationBoundary)
+            .build();
     }
 
     private static void authenticate() {

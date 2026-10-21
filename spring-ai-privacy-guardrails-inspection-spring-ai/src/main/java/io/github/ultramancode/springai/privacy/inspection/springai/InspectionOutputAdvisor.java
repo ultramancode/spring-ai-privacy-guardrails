@@ -131,14 +131,14 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
                         inspectionOutputBuffer.accept(chatClientResponse);
                     } catch (RuntimeException ex) {
                         throw inspectionEnforcement.failure(ex,
-                            new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, true));
+                            new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, true));
                     }
                 })
                 .then(Mono.just(inspectionOutputBuffer));
             Mono<InspectionOutputBuffer> timeoutFailure = Mono.defer(() -> {
                 InspectionException timeoutException = new InspectionException(InspectionFailureCode.TIMEOUT);
                 return Mono.error(inspectionEnforcement.failure(timeoutException,
-                    new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, true)));
+                    new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, true)));
             });
             // Mono timeout bounds total assembly time, not merely the gap between frames.
             return collectedOutput
@@ -177,8 +177,8 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         if (simplifiedTextsByOriginalText != null) {
             piiTokenSimplifier = outputText -> simplifiedTextsByOriginalText.getOrDefault(outputText, outputText);
         }
-        inspectionEnforcement.inspect(outputSegmentsSupplier, piiTokenSimplifier,
-            new InspectionExecution(InspectionExecution.Boundary.APPLICATION_OUTPUT, streaming));
+        inspectionEnforcement.inspectAndEnforce(outputSegmentsSupplier, piiTokenSimplifier,
+            new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, streaming));
     }
 
     private void validateChain(List<? extends Advisor> advisors) {

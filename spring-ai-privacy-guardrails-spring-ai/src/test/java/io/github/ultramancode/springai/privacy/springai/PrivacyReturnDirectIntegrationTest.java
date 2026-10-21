@@ -43,7 +43,7 @@ class PrivacyReturnDirectIntegrationTest {
         VerifyingToolLoopModel model = new VerifyingToolLoopModel();
         ToolCallback scopedTool = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(failingReturnDirectTool(toolInput));
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
                 .defaultTools(scopedTool)
@@ -196,7 +196,7 @@ class PrivacyReturnDirectIntegrationTest {
         VerifyingToolLoopModel model = new VerifyingToolLoopModel();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         );
         ToolCallback scopedTool = factory.wrap(returnDirectTool(toolInput));
         ToolCallback normalTool = factory.wrap(tool("search", false, "Bob search result"));

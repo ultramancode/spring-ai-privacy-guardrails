@@ -2,8 +2,8 @@ package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.springai.AllowedEntityTypes;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
-import io.github.ultramancode.springai.privacy.springai.ToolDisclosureScope;
 import io.modelcontextprotocol.client.McpSyncClient;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.mcp.McpToolNamePrefixGenerator;
@@ -46,7 +46,7 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
     private LocalMcpCrmServer localMcpServer;
     private McpSyncClient mcpClient;
     private ToolCallbackProvider mcpTools;
-    private ToolDisclosureScope disclosureScope;
+    private AllowedEntityTypes allowedEntityTypes;
     private Path serverBaseDirectory;
 
     public PrivacyDemoMcpToolLoop(
@@ -83,7 +83,7 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
         this.localMcpServer = null;
         this.mcpClient = null;
         this.mcpTools = null;
-        this.disclosureScope = null;
+        this.allowedEntityTypes = null;
         this.serverBaseDirectory = null;
 
         Throwable cleanupFailure = null;
@@ -157,7 +157,7 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
                 && SCENARIO.customerId().equals(customerId)
                 && !CUSTOMER_ID_TOKEN_PATTERN.matcher(customerId).find();
 
-        List<String> allowedOriginalEntityTypes = this.disclosureScope.entityTypes().stream().sorted().toList();
+        List<String> allowedOriginalEntityTypes = this.allowedEntityTypes.entityTypes().stream().sorted().toList();
         PrivacyDemoToolLoop.BoundaryEvidence boundaryEvidence = new PrivacyDemoToolLoop.BoundaryEvidence(
             PrivacyDemoToolLoop.EvidenceCount.expectedNone(
                 toolLoopModel.rawValueCount(),
@@ -204,14 +204,14 @@ public final class PrivacyDemoMcpToolLoop implements AutoCloseable {
                 .toolNamePrefixGenerator(McpToolNamePrefixGenerator.noPrefix())
                 .build();
             ToolDefinition toolDefinition = requireSingleToolDefinition(mcpTools);
-            ToolDisclosureScope scope = Objects.requireNonNull(
-                    this.toolDisclosurePolicy.scopeFor(toolDefinition),
-                    "tool disclosure policy must return a scope"
+            AllowedEntityTypes allowedEntityTypes = Objects.requireNonNull(
+                    this.toolDisclosurePolicy.getAllowedEntityTypes(toolDefinition),
+                    "tool disclosure policy must return allowed entity types"
             );
 
             this.mcpClient = mcpClient;
             this.mcpTools = mcpTools;
-            this.disclosureScope = scope;
+            this.allowedEntityTypes = allowedEntityTypes;
         }
         catch (RuntimeException | Error failure) {
             try {

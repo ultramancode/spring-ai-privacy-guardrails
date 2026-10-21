@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: 35de7d21f52120e37afdd90bca1389e9dd7385f9fd12d00ed64d9c45a6041a21 -->
+<!-- i18n-source-sha256: d8f185af68785a99f831cb801c835a8d9115984640e0f633881c73f1b57ca0c0 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -151,8 +151,10 @@ ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .privacy(privacy -> privacy.toolDisclosurePolicy(ToolDisclosurePolicy.byToolName(
-                Map.of("customerLookup", List.of("CUSTOMER_ID")))))
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
         .toolAuthorization(true)
         .build();
 ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
@@ -368,7 +370,9 @@ SpringSecurityToolBoundary springSecurityToolBoundary(
 ```java
 SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
         ToolCallingManager.builder().build(), authorizationManager).build();
-ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
+ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatClientFactory.builder()
+        .toolAuthorizationBoundary(boundary)
+        .build();
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .toolAuthorization(authorizationFactory::prepareToolAuthorization)
         .defaultPolicy(GuardrailsPolicy.builder().toolAuthorization(true).build())

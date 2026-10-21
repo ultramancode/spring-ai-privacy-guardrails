@@ -65,8 +65,9 @@ class OpenAiCompatibleInspectionConfigTest {
     })
     void toStringRedactsApiKeyAndQuery(String url, String displayedUrl) {
         URI baseUrl = URI.create(url);
-        OpenAiCompatibleInspectionConfig config = new OpenAiCompatibleInspectionConfig(
-                baseUrl, "test-model", "test-key", Duration.ofSeconds(2), 4096, true);
+        OpenAiCompatibleInspectionConfig config = OpenAiCompatibleInspectionConfig.builder(baseUrl, "test-model")
+                .apiKey("test-key")
+                .build();
 
         assertThat(config.toString())
                 .contains("baseUrl=" + displayedUrl + ",")

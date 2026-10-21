@@ -452,6 +452,8 @@ jobs:
       - name: Verify all modules on public Maven Central
         run: |
           modules=(
+            spring-ai-privacy-guardrails-chat-client
+            spring-ai-privacy-guardrails-chat-client-spring-boot-starter
             spring-ai-privacy-guardrails-core
             spring-ai-privacy-guardrails-inspection-core
             spring-ai-privacy-guardrails-inspection-onnx

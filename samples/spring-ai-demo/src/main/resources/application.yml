@@ -7,16 +7,9 @@ spring:
     name: spring-ai-privacy-guardrails-demo
   ai:
     privacy:
-      output:
-        enabled: true
-        action: tokenize
       analysis:
         language: ko
         minimum-score: 0.5
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
       regex:
         enabled: true
         # Prefer explicit ASCII boundaries to \b for ASCII-oriented rules,

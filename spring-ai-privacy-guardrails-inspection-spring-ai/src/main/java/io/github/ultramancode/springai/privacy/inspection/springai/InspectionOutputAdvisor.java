@@ -53,8 +53,8 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     /** Orders output inspection after privacy output protection. */
     public static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE + 1;
 
-    private final InspectionEnforcement enforcement;
-    private final InspectionLimits limits;
+    private final InspectionEnforcement inspectionEnforcement;
+    private final InspectionLimits inspectionLimits;
     private final int maxFrames;
     private final Duration streamTimeout;
     private final boolean simplifyPiiTokens;
@@ -73,16 +73,16 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
      * Sets limits for output inspection and stream collection. Input inspection has separate limits.
      *
      * @param inspectionService inspectors and policies applied to the application output
-     * @param limits text extraction and inspection limits
-     * @param observer receives inspection reports and failures
+     * @param inspectionLimits text extraction and inspection limits
+     * @param inspectionObserver receives inspection reports and failures
      * @param maxFrames maximum response frames collected for inspection, including empty frames
      * @param streamTimeout total stream collection budget, including model calls and tool execution
      * @throws IllegalArgumentException if a stream budget is not positive or the timeout cannot fit in nanoseconds
      */
-    public InspectionOutputAdvisor(InspectionService inspectionService, InspectionLimits limits,
-            InspectionObserver observer, int maxFrames, Duration streamTimeout) {
-        this.enforcement = new InspectionEnforcement(inspectionService, limits, observer);
-        this.limits = limits;
+    public InspectionOutputAdvisor(InspectionService inspectionService, InspectionLimits inspectionLimits,
+        InspectionObserver inspectionObserver, int maxFrames, Duration streamTimeout) {
+        this.inspectionEnforcement = new InspectionEnforcement(inspectionService, inspectionLimits, inspectionObserver);
+        this.inspectionLimits = inspectionLimits;
         if (maxFrames < 1) {
             throw new IllegalArgumentException("Maximum stream frame count must be positive");
         }
@@ -114,29 +114,31 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
                 OutputResponseContext.findSimplifiedTextsByOriginalText(chatClientResponse);
 
         inspectOutput(
-                () -> extractOutputSegments(chatClientResponse, privacyProcessingStatus),
-                simplifiedTextsByOriginalText);
+            () -> extractOutputSegments(chatClientResponse, privacyProcessingStatus),
+            simplifiedTextsByOriginalText, false);
         return OutputResponseContext.clearPrivacyTracking(chatClientResponse);
     }
 
     @Override
-    public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
+    public Flux<ChatClientResponse> adviseStream(ChatClientRequest chatClientRequest, StreamAdvisorChain streamAdvisorChain) {
         return Flux.defer(() -> {
-            validateChain(chain.getStreamAdvisors());
-            InspectionOutputBuffer buffer = new InspectionOutputBuffer(limits, maxFrames);
-            Mono<InspectionOutputBuffer> collectedOutput = chain
-                    .nextStream(OutputResponseContext.requestPrivacyTracking(request, simplifyPiiTokens))
-                    .doOnNext(response -> {
-                        try {
-                            buffer.accept(response);
-                        } catch (RuntimeException ex) {
-                            throw enforcement.failure(ex);
-                        }
-                    })
-                    .then(Mono.just(buffer));
+            validateChain(streamAdvisorChain.getStreamAdvisors());
+            InspectionOutputBuffer inspectionOutputBuffer = new InspectionOutputBuffer(inspectionLimits, maxFrames);
+            Mono<InspectionOutputBuffer> collectedOutput = streamAdvisorChain
+                .nextStream(OutputResponseContext.requestPrivacyTracking(chatClientRequest, simplifyPiiTokens))
+                .doOnNext(chatClientResponse -> {
+                    try {
+                        inspectionOutputBuffer.accept(chatClientResponse);
+                    } catch (RuntimeException ex) {
+                        throw inspectionEnforcement.failure(ex,
+                            new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, true));
+                    }
+                })
+                .then(Mono.just(inspectionOutputBuffer));
             Mono<InspectionOutputBuffer> timeoutFailure = Mono.defer(() -> {
-                InspectionException timeout = new InspectionException(InspectionFailureCode.TIMEOUT);
-                return Mono.error(enforcement.failure(timeout));
+                InspectionException timeoutException = new InspectionException(InspectionFailureCode.TIMEOUT);
+                return Mono.error(inspectionEnforcement.failure(timeoutException,
+                    new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, true)));
             });
             // Mono timeout bounds total assembly time, not merely the gap between frames.
             return collectedOutput
@@ -148,7 +150,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     private List<ContentSegment> extractOutputSegments(ChatClientResponse chatClientResponse,
             ContentSegment.PrivacyProcessingStatus privacyProcessingStatus) {
         InspectionTextExtractor inspectionTextExtractor =
-                new InspectionTextExtractor(limits, privacyProcessingStatus, "output-");
+            new InspectionTextExtractor(inspectionLimits, privacyProcessingStatus, "output-");
         if (chatClientResponse.chatResponse() != null) {
             for (Generation generation : chatClientResponse.chatResponse().getResults()) {
                 InspectionTextExtractor.requireSupportedAssistant(generation.getOutput());
@@ -158,11 +160,11 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         return inspectionTextExtractor.buildSegments();
     }
 
-    private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer buffer) {
+    private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer inspectionOutputBuffer) {
         Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
-            Map<String, String> simplifiedTextsByOriginalText = buffer.collectSimplifiedTextsByOriginalText();
-            inspectOutput(buffer::buildSegments, simplifiedTextsByOriginalText);
-            return buffer.framesWithoutPrivacyTracking();
+            Map<String, String> simplifiedTextsByOriginalText = inspectionOutputBuffer.collectSimplifiedTextsByOriginalText();
+            inspectOutput(inspectionOutputBuffer::buildSegments, simplifiedTextsByOriginalText, true);
+            return inspectionOutputBuffer.framesWithoutPrivacyTracking();
         });
         return inspectedFrames
                 .subscribeOn(Schedulers.boundedElastic())
@@ -170,12 +172,13 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     }
 
     private void inspectOutput(Supplier<List<ContentSegment>> outputSegmentsSupplier,
-            Map<String, String> simplifiedTextsByOriginalText) {
+        Map<String, String> simplifiedTextsByOriginalText, boolean streaming) {
         UnaryOperator<String> piiTokenSimplifier = null;
         if (simplifiedTextsByOriginalText != null) {
             piiTokenSimplifier = outputText -> simplifiedTextsByOriginalText.getOrDefault(outputText, outputText);
         }
-        enforcement.inspect(outputSegmentsSupplier, piiTokenSimplifier);
+        inspectionEnforcement.inspectAndEnforce(outputSegmentsSupplier, piiTokenSimplifier,
+            new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, streaming));
     }
 
     private void validateChain(List<? extends Advisor> advisors) {

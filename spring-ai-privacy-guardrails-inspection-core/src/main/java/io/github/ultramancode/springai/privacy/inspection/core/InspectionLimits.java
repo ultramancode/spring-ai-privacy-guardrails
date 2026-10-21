@@ -16,7 +16,7 @@ public record InspectionLimits(int maxSegments, int maxCharacters, Duration time
 
     public static final int DEFAULT_MAX_SEGMENTS = 64;
     public static final int DEFAULT_MAX_CHARACTERS = 131_072;
-    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
+    public static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(1);
 
     public InspectionLimits {
         Objects.requireNonNull(timeout, "timeout");

@@ -54,7 +54,7 @@ input, RAG query and prompt template, and CRM result text.
 These runtime demonstrations complement the reproducible automated coverage in
 the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
 
-## ChatClient With The Explicit Privacy Configurer
+## ChatClient With The Guardrails Factory
 
 ```bash
 curl "http://127.0.0.1:8080/demo/chat-client"
@@ -63,7 +63,7 @@ curl "http://127.0.0.1:8080/demo/chat-client"
 This endpoint uses a Spring AI `ChatClient` with the starter's privacy
 configuration. `modelResponse` shows the opaque tokens that reached the model.
 `activeSessionsAfterCall` is the service-wide active session count observed
-after the call; the isolated sample normally reports `0`, but concurrent calls
+after the call. The isolated sample normally reports `0`, but concurrent calls
 can make it nonzero without indicating that this request leaked a session.
 
 Custom synthetic text can be sent with `POST /demo/chat-client` and a JSON body
@@ -93,7 +93,7 @@ curl "http://127.0.0.1:8080/demo/protect" \
 ```
 
 `GET /demo/protect` selects its deterministic English or Korean fixture from
-`Accept-Language`; this command pins the English fixture used below.
+`Accept-Language`. This command pins the English fixture used below.
 
 Expected shape:
 
@@ -141,7 +141,7 @@ identifier formats, so the regex-only profile does not guess them. Use a
 configured NER provider such as Presidio or the optional OpenNLP profile below
 when `PERSON` detection is required.
 
-These rules are sample-oriented; production systems should tune them for their
+These rules are sample-oriented. Production systems should tune them for their
 own data or add custom `PiiAnalyzer` beans. The checked-in
 [evaluation baseline](../../docs/evaluation.md) covers positive, negative, and
 adversarial synthetic cases using this configuration.
@@ -158,14 +158,14 @@ only as opaque tokens. Within the current request, the CRM delegate receives
 the original `customerId` while `employeeId`, `email`, and `phone` remain
 opaque tokens. Detected values in the tool result are protected before the next
 model call. `activeSessionsAfterCall` is the service-wide active session count
-observed after the call; concurrent requests can make it nonzero without
+observed after the call. Concurrent requests can make it nonzero without
 showing that this request leaked a session.
 
-Set the PII types each tool may receive as original values in
-`spring.ai.privacy.tools.disclosures`. The sample wraps tools with
-`PrivacyToolCallbackFactory` and creates the client with
-`PrivacySecurityChatClientFactory` to apply both privacy protection and tool
-authorization.
+The sample defines a `GuardrailsPolicy` bean in `PrivacyDemoChatConfiguration`.
+It selects privacy, output protection and tool authorization, and uses
+`ToolDisclosurePolicy` to allow original customer IDs for `customerLookup`.
+Raw tools are registered with `GuardrailsChatClientFactory`, which applies the
+policy for each request.
 
 The `/demo/tool-loop` endpoint calls a local CRM tool included in the sample,
 so no external CRM service is required.
@@ -184,7 +184,7 @@ execution blocking independently of tool-list filtering.
 For a general employee (`ROLE_EMPLOYEE`), `customerLookup` is absent from the
 model-visible definitions and the forced request is denied before the callback
 runs. For a customer-support employee (`ROLE_CUSTOMER_SUPPORT`), the tool is
-exposed and executed once; the existing disclosure policy restores only
+exposed and executed once. The existing disclosure policy restores only
 `CUSTOMER_ID`, and the result is protected again before model re-entry. The
 sample installs a fixed in-process authorization policy and requires no login,
 authentication token issuer, external model, or external service.
@@ -252,7 +252,7 @@ Then run the demo with the `presidio` profile:
 ```
 
 Once this optional profile is enabled, the default `REQUIRE_ALL` policy makes
-Presidio availability mandatory for every analysis request; an outage fails
+Presidio availability mandatory for every analysis request. An outage fails
 closed even if regex succeeds. The profile uses language `en`, spaCy
 `en_core_web_lg`, and a provider-specific minimum score of `0.8`. Production
 deployments should calibrate that threshold with representative synthetic data.

@@ -200,7 +200,7 @@ class PrivacyChatClientIntegrationTest {
         VerifyingToolLoopModel model = new VerifyingToolLoopModel();
         ToolCallback scopedTool = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(lookupTool(toolInput));
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
                 .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked")
@@ -241,7 +241,7 @@ class PrivacyChatClientIntegrationTest {
         };
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         );
         ProviderToolLoopModel model = new ProviderToolLoopModel();
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
@@ -276,7 +276,7 @@ class PrivacyChatClientIntegrationTest {
         VerifyingToolLoopModel model = new VerifyingToolLoopModel();
         ToolCallback scopedTool = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(lookupTool(toolInput));
         ToolCallingAdvisor customToolAdvisor = ToolCallingAdvisor.builder()
                 .advisorOrder(0)
@@ -305,7 +305,7 @@ class PrivacyChatClientIntegrationTest {
         VerifyingToolLoopModel model = new VerifyingToolLoopModel();
         ToolCallback scopedTool = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(lookupTool(toolInput));
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service)
                 .outputProtection(PrivacyOutputAction.TOKENIZE, "blocked")
@@ -484,7 +484,7 @@ class PrivacyChatClientIntegrationTest {
         VerifyingToolLoopModel model = new VerifyingToolLoopModel(false);
         ToolCallback wrappedTool = new PrivacyToolCallbackFactory(
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         ).wrap(lookupTool(toolInput));
         CallAdvisor dynamicTools = dynamicToolsAdvisor(wrappedTool);
         ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))

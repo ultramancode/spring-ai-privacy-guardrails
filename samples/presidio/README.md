@@ -6,7 +6,7 @@ digest for reproducible smoke tests. Run the commands below from the repository
 root in a Linux shell.
 
 The pinned image uses spaCy `en_core_web_lg`. Presidio combines its NLP pipeline
-with pattern-, context-, and checksum-based recognizers; this adapter reports
+with pattern-, context-, and checksum-based recognizers. This adapter reports
 their combined output as provider `PRESIDIO`.
 
 ## Start
@@ -29,11 +29,12 @@ Presidio Analyzer service is up
 
 ## Configure The Application
 
-The Presidio starter includes the base Privacy Guardrails starter transitively:
+Add the client and Presidio starters:
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -53,8 +54,8 @@ spring:
 `analyzer-url` accepts a base HTTP(S) URI without user-info, query, or fragment
 components. Put credentials in `presidio.headers` rather than in the URL.
 
-Apply `PrivacyChatClientConfigurer` to the clients that need protection, as shown
-in [Getting Started](../../docs/getting-started.md#3-protect-a-chatclient).
+Create a client through `GuardrailsChatClientFactory` with a policy that selects
+`privacy()`, as shown in [Getting Started](../../docs/getting-started.md#3-protect-a-chatclient).
 
 ## Manual API Check
 
@@ -65,7 +66,7 @@ curl -X POST http://localhost:5002/analyze \
 ```
 
 Presidio should return entities such as `PERSON` and `EMAIL_ADDRESS`. Results
-depend on the image, model, language, and recognizers; calibrate production
+depend on the image, model, language, and recognizers. Calibrate production
 configurations against representative synthetic data.
 
 Run the adapter and sample-profile live integration tests:

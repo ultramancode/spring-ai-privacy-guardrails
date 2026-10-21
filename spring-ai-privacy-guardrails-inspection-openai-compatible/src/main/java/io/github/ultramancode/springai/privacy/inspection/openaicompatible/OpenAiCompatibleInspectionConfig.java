@@ -10,7 +10,8 @@ import java.util.Objects;
  * @param baseUrl HTTP(S) API base URL, such as {@code http://localhost:8000/v1}
  * @param model deployed guard model name
  * @param apiKey bearer token. A null or blank value sends {@code Bearer not-required} for unauthenticated servers
- * @param requestTimeout maximum time per HTTP request, also limited by the time remaining for inspection
+ * @param requestTimeout time limit for a complete HTTP request, including reading the response body.
+ *        The remaining inspection time may impose a shorter limit.
  * @param maxResponseBytes maximum response body size in bytes
  * @param requirePrivacyProcessedContent whether all segments must be marked {@code PROCESSED} before sending.
  *        This setting does not perform privacy processing.
@@ -62,5 +63,53 @@ public record OpenAiCompatibleInspectionConfig(
                 + ", model=<configured>, apiKey=<redacted>, requirePrivacyProcessedContent="
                 + requirePrivacyProcessedContent
                 + "]";
+    }
+
+    /**
+     * Creates a builder with a one-minute timeout and a 2 MiB response limit.
+     * Requires privacy-processed content by default.
+     */
+    public static Builder builder(URI baseUrl, String model) {
+        return new Builder(baseUrl, model);
+    }
+
+    /** Configures the connection to an HTTP guard model. */
+    public static final class Builder {
+        private final URI baseUrl;
+        private final String model;
+        private String apiKey;
+        private Duration requestTimeout = Duration.ofMinutes(1);
+        private int maxResponseBytes = 2 * 1024 * 1024;
+        private boolean requirePrivacyProcessedContent = true;
+
+        private Builder(URI baseUrl, String model) {
+            this.baseUrl = baseUrl;
+            this.model = model;
+        }
+
+        public Builder apiKey(String apiKey) {
+            this.apiKey = apiKey;
+            return this;
+        }
+
+        public Builder requestTimeout(Duration requestTimeout) {
+            this.requestTimeout = requestTimeout;
+            return this;
+        }
+
+        public Builder maxResponseBytes(int maxResponseBytes) {
+            this.maxResponseBytes = maxResponseBytes;
+            return this;
+        }
+
+        public Builder requirePrivacyProcessedContent(boolean required) {
+            this.requirePrivacyProcessedContent = required;
+            return this;
+        }
+
+        public OpenAiCompatibleInspectionConfig build() {
+            return new OpenAiCompatibleInspectionConfig(baseUrl, model, apiKey, requestTimeout,
+                maxResponseBytes, requirePrivacyProcessedContent);
+        }
     }
 }

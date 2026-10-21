@@ -30,7 +30,7 @@ import java.util.Set;
  */
 public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, StreamAdvisor {
 
-    /** Tested position immediately inside Spring AI tool calling. */
+    /** Default request order immediately after the tool-calling advisor. */
     public static final int DEFAULT_ORDER = ToolCallingAdvisor.DEFAULT_ORDER + 1;
 
     private final PrivacyService privacyService;

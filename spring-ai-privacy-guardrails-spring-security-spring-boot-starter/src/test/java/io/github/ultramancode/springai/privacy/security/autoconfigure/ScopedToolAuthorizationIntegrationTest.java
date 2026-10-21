@@ -4,6 +4,7 @@ import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClien
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -308,19 +309,19 @@ class ScopedToolAuthorizationIntegrationTest extends ToolAuthorizationIntegratio
     void oversizedToolCallArgumentsAreRejectedBeforeToolExecution() throws IOException {
         startModelServer(toolResponse("customerLookup", "{\\\"payload\\\":\\\"" + "x".repeat(200) + "\\\"}"), finalResponse());
         AtomicInteger calls = new AtomicInteger();
-        privacyContextRunner().withPropertyValues("spring.ai.privacy.response-inspection.max-characters=64")
-                .run(context -> {
-                    PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
-                    ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
-                            .builder(context.getBean(OpenAiChatModel.class))
-                            .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
-                    authenticate();
+        privacyContextRunner(false, new PrivacyResponseInspectionLimits(1024, 64, 16_777_216, Duration.ofSeconds(60)))
+            .run(context -> {
+                PrivacyToolCallbackFactory factory = context.getBean(PrivacyToolCallbackFactory.class);
+                ChatClient client = context.getBean(PrivacySecurityChatClientFactory.class)
+                    .builder(context.getBean(OpenAiChatModel.class))
+                    .defaultTools(factory.wrap(tool("customerLookup", calls))).build();
+                authenticate();
 
-                    assertThatThrownBy(() -> client.prompt().user("Run lookup").call().content())
-                            .hasMessageContaining("inspection limit");
-                    assertThat(calls).hasValue(0);
-                    assertThat(this.modelRequests).hasSize(1);
-                });
+                assertThatThrownBy(() -> client.prompt().user("Run lookup").call().content())
+                    .hasMessageContaining("inspection limit");
+                assertThat(calls).hasValue(0);
+                assertThat(this.modelRequests).hasSize(1);
+            });
     }
 
     private void verifyToolSearchWithPrivacyAndAuthorization(boolean streaming) throws IOException {

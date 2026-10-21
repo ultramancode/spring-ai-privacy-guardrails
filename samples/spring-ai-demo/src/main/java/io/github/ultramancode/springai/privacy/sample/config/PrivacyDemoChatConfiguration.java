@@ -1,13 +1,12 @@
 package io.github.ultramancode.springai.privacy.sample.config;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoMcpToolLoop;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoRag;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoSecurityPolicy;
 import io.github.ultramancode.springai.privacy.sample.scenario.PrivacyDemoToolLoop;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
-import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -24,11 +23,29 @@ import org.springframework.security.authorization.AuthorizationManager;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Configuration(proxyBeanMethods = false)
 class PrivacyDemoChatConfiguration {
+
+    @Bean
+    ToolDisclosurePolicy toolDisclosurePolicy() {
+        return ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", List.of("CUSTOMER_ID")));
+    }
+
+    @Bean
+    GuardrailsPolicy guardrailsPolicy(ToolDisclosurePolicy toolDisclosurePolicy) {
+        GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+            .toolDisclosurePolicy(toolDisclosurePolicy)
+            .outputProtection().tokenize()
+            .build();
+        return GuardrailsPolicy.builder()
+            .privacy(privacyPolicy)
+            .toolAuthorization(true)
+            .build();
+    }
 
     @Bean("privacyDemoChatModel")
     ChatModel privacyDemoChatModel() {
@@ -37,15 +54,15 @@ class PrivacyDemoChatConfiguration {
 
     @Bean
     ChatClient privacyDemoChatClient(
-            @Qualifier("privacyDemoChatModel") ChatModel chatModel,
-            PrivacyChatClientConfigurer privacyConfigurer
+        @Qualifier("privacyDemoChatModel") ChatModel chatModel,
+        GuardrailsChatClientFactory guardrailsChatClientFactory
     ) {
-        return privacyConfigurer.configure(ChatClient.builder(chatModel)).build();
+        return guardrailsChatClientFactory.builder(chatModel).build();
     }
 
     @Bean
-    PrivacyDemoRag privacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
-        return new PrivacyDemoRag(privacyConfigurer);
+    PrivacyDemoRag privacyDemoRag(GuardrailsChatClientFactory guardrailsChatClientFactory) {
+        return new PrivacyDemoRag(guardrailsChatClientFactory);
     }
 
     @Bean
@@ -65,39 +82,35 @@ class PrivacyDemoChatConfiguration {
 
     @Bean
     PrivacyDemoToolLoop privacyDemoToolLoop(
-            PrivacySecurityChatClientFactory privacySecurityFactory,
-            PrivacyToolCallbackFactory toolCallbackFactory,
-            ToolDisclosurePolicy toolDisclosurePolicy,
-            ToolCallingManager toolCallingManager,
-            PrivacyDemoSecurityPolicy securityPolicy,
-            ObjectMapper objectMapper
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolDisclosurePolicy toolDisclosurePolicy,
+        ToolCallingManager toolCallingManager,
+        PrivacyDemoSecurityPolicy securityPolicy,
+        ObjectMapper objectMapper
     ) {
         return new PrivacyDemoToolLoop(
-                privacySecurityFactory,
-                toolCallbackFactory,
-                toolDisclosurePolicy,
-                toolCallingManager,
-                securityPolicy,
-                objectMapper
+            guardrailsChatClientFactory,
+            toolDisclosurePolicy,
+            toolCallingManager,
+            securityPolicy,
+            objectMapper
         );
     }
 
     @Bean(destroyMethod = "close")
     PrivacyDemoMcpToolLoop privacyDemoMcpToolLoop(
-            PrivacySecurityChatClientFactory privacySecurityFactory,
-            PrivacyToolCallbackFactory toolCallbackFactory,
-            ToolDisclosurePolicy toolDisclosurePolicy,
-            ToolCallingManager toolCallingManager,
-            PrivacyDemoSecurityPolicy securityPolicy,
-            ObjectMapper objectMapper
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolDisclosurePolicy toolDisclosurePolicy,
+        ToolCallingManager toolCallingManager,
+        PrivacyDemoSecurityPolicy securityPolicy,
+        ObjectMapper objectMapper
     ) {
         return new PrivacyDemoMcpToolLoop(
-                privacySecurityFactory,
-                toolCallbackFactory,
-                toolDisclosurePolicy,
-                toolCallingManager,
-                securityPolicy,
-                objectMapper
+            guardrailsChatClientFactory,
+            toolDisclosurePolicy,
+            toolCallingManager,
+            securityPolicy,
+            objectMapper
         );
     }
 

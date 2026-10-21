@@ -59,7 +59,7 @@ class PrivacyToolCallbackWrapperTest {
         PrivacyToolCallbackWrapper allowedWrapper = wrap(delegate(input -> {
             allowedDelegateInput.set(input);
             return "Alice";
-        }), service, ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON"))));
+        }), service, ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON"))));
         String toolInput = "{\"name\":\"Alice\"}";
         Pattern personTokenPattern = OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
@@ -91,7 +91,7 @@ class PrivacyToolCallbackWrapperTest {
             PrivacyToolCallbackWrapper wrapper = wrap(
                     delegate,
                     service,
-                    ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                    ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON")))
             );
 
             String result = wrapper.call("{\"name\":\"" + token + "\"}", toolContext(session.handle()));
@@ -181,7 +181,7 @@ class PrivacyToolCallbackWrapperTest {
                     return "ok";
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
         );
 
         try (PrivacySession session = service.openSession()) {
@@ -400,7 +400,7 @@ class PrivacyToolCallbackWrapperTest {
                         return "Alice " + email;
                     }),
                     service,
-                    ToolDisclosurePolicy.byToolName(Map.of(
+                    ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
                             "lookup",
                             Set.of("EMAIL_ADDRESS")
                     ))
@@ -426,32 +426,33 @@ class PrivacyToolCallbackWrapperTest {
     }
 
     @Test
-    void scopedToolProtectsRawDisallowedValuesBeforeSelectiveDisclosure() {
+    void scopedToolSelectivelyDisclosesRawNestedJsonAndProtectsTheResult() throws Exception {
         PrivacyService service = TestPrivacyServices.privacyService();
-        AtomicReference<String> received = new AtomicReference<>();
-        PrivacyToolCallbackWrapper wrapper = wrap(
-                delegate(input -> {
-                    received.set(input);
-                    return "ok";
-                }),
-                service,
-                ToolDisclosurePolicy.byToolName(Map.of(
-                        "lookup",
-                        Set.of("EMAIL_ADDRESS")
-                ))
-        );
+        String email = "alice@example.com";
+        String rawInput = OBJECT_MAPPER.writeValueAsString(Map.of(
+            "customer", Map.of("name", "Alice", "email", email),
+            "contacts", List.of(Map.of("name", "Bob", "email", email)),
+            "note", "고객 \"메모\"\n😀"
+        ));
+        AtomicReference<String> receivedInput = new AtomicReference<>();
+        ToolCallback echoTool = delegate(input -> {
+            receivedInput.set(input);
+            return input;
+        });
+        ToolDisclosurePolicy disclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
+            Map.of("lookup", Set.of("EMAIL_ADDRESS")));
+        PrivacyToolCallbackWrapper wrapper = wrap(echoTool, service, disclosurePolicy);
 
         try (PrivacySession session = service.openSession()) {
-            wrapper.call(
-                    "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
-                    toolContext(session.handle())
-            );
+            String protectedResult = wrapper.call(rawInput, toolContext(session.handle()));
 
-            assertThat(received.get())
-                    .contains("alice@example.com")
-                    .containsPattern(OpaquePiiTokenFormat
-                            .patternForEntityType("PERSON"));
-            assertThat(TestPrivacyServices.containsRawName(received.get())).isFalse();
+            assertThat(receivedInput.get()).contains(email);
+            assertThat(TestPrivacyServices.containsRawName(receivedInput.get())).isFalse();
+            assertThat(protectedResult).doesNotContain(email);
+            assertThat(TestPrivacyServices.containsRawName(protectedResult)).isFalse();
+
+            String restoredResult = service.detokenize(session.handle(), protectedResult);
+            assertThat(OBJECT_MAPPER.readTree(restoredResult)).isEqualTo(OBJECT_MAPPER.readTree(rawInput));
         }
     }
 
@@ -508,7 +509,7 @@ class PrivacyToolCallbackWrapperTest {
                     return "ok";
                 }),
                 service,
-                ToolDisclosurePolicy.byToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PHONE_NUMBER")))
         );
 
         try (PrivacySession session = service.openSession()) {
@@ -553,7 +554,7 @@ class PrivacyToolCallbackWrapperTest {
                             return "Alice found";
                         }),
                         service,
-                        ToolDisclosurePolicy.byToolName(Map.of("lookup", Set.of("PERSON")))
+                        ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", Set.of("PERSON")))
                 );
 
                 String result = CompletableFuture.supplyAsync(
@@ -562,7 +563,7 @@ class PrivacyToolCallbackWrapperTest {
                                 toolContext(session.handle())
                         ),
                         executor
-                ).get();
+                ).get(5, TimeUnit.SECONDS);
 
                 assertThat(service.detokenize(session.handle(), result)).isEqualTo("Alice found");
             } finally {

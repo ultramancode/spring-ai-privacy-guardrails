@@ -58,13 +58,13 @@ class InspectionEnforcementTest {
         List<InspectionException> observedFailures = new ArrayList<>();
         InspectionObserver observer = new InspectionObserver() {
             @Override
-            public void onInspection(InspectionReport report) {
+            public void onInspection(InspectionReport report, InspectionExecution execution) {
                 observedReports.add(report);
                 Thread.currentThread().interrupt();
             }
 
             @Override
-            public void onFailure(InspectionException failure) {
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 observedFailures.add(failure);
             }
         };
@@ -75,14 +75,15 @@ class InspectionEnforcementTest {
                 List.of(new InspectionReport.Outcome(inspector.inspectorId(), true, inspectorResult));
 
         try {
-            assertThatThrownBy(() -> enforcement.inspect(() -> List.of(segment), null))
-                    .isInstanceOfSatisfying(InspectionException.class, failure -> {
-                        assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
-                        assertThat(failure).hasNoCause();
-                        assertThat(failure.report()).contains(
-                                new InspectionReport(InspectionDecision.BLOCK, expectedOutcomes));
-                        assertThat(observedFailures).containsExactly(failure);
-                    });
+            assertThatThrownBy(() -> enforcement.inspectAndEnforce(() -> List.of(segment), null,
+                new InspectionExecution(InspectionExecution.Phase.MODEL_REQUEST, false)))
+                .isInstanceOfSatisfying(InspectionException.class, failure -> {
+                    assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+                    assertThat(failure).hasNoCause();
+                    assertThat(failure.report()).contains(
+                        new InspectionReport(InspectionDecision.BLOCK, expectedOutcomes));
+                    assertThat(observedFailures).containsExactly(failure);
+                });
             assertThat(observedReports).containsExactly(
                     new InspectionReport(InspectionDecision.ALLOW, expectedOutcomes));
             assertThat(Thread.currentThread().isInterrupted()).isTrue();

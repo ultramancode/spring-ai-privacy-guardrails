@@ -34,12 +34,12 @@ and original PII disclosure separately:
 
 - `AuthorizationManager<ToolAuthorizationContext>` decides whether the current
   principal may discover or execute a tool.
-- `tools.disclosures` decides which PII entity types an authorized tool may
+- `ToolDisclosurePolicy` decides which PII entity types an authorized tool may
   receive as original values.
 
 Authorizing a tool does not automatically disclose original PII. An original
 value is provided only when the authorization policy allows execution and its
-entity type is configured under `tools.disclosures`.
+entity type is configured under `ToolDisclosurePolicy`.
 
 ## Add the Spring Boot Starter
 
@@ -47,7 +47,7 @@ entity type is configured under `tools.disclosures`.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -57,7 +57,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-security-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -68,18 +68,13 @@ that uses tools begins.
 
 ### Tool Authorization Only
 
-Register an `AuthorizationManager<ToolAuthorizationContext>` bean as shown in
-[Define the Authorization Policy](#define-the-authorization-policy).
-The starter then provides a `ToolAuthorizationChatClientFactory` for
-creating clients with tool authorization. No privacy analyzer is required.
+Add the [client starter](configuration.md) and an `AuthorizationManager<ToolAuthorizationContext>`
+bean, then select `toolAuthorization(true)` in `GuardrailsPolicy`. No privacy analyzer is required.
 
 ### With Privacy Protection
 
-Add the base Privacy Guardrails starter or an analyzer starter that includes
-it, and use the same version for all Privacy Guardrails modules. Configure
-Regex, Presidio, OpenNLP, or a custom `PiiAnalyzer` as described in
-[Getting Started](getting-started.md). When privacy and authorization are both
-configured, the starter also provides a `PrivacySecurityChatClientFactory`.
+Configure an analyzer as described in [Getting Started](getting-started.md) and select
+`privacy()` in the same policy.
 
 ## Define the Authorization Policy
 
@@ -143,72 +138,34 @@ all tools.
 
 ## Configure the ChatClient
 
-After adding the dependency and registering the authorization policy bean,
-create a `ChatClient` through a factory as shown below. Choose tool authorization
-alone or combine it with privacy protection.
-
-A client that only needs privacy protection can use `PrivacyChatClientConfigurer`.
-
-In the examples below, `customerLookupToolCallback` is a customer lookup tool
-registered as a bean by the application. Registering it with `defaultTools(...)`
-makes it available to requests through that client.
-
-### Apply Tool Authorization Only
-
-To use tool authorization on its own, configure the `ChatClient` as follows:
+After preparing dependencies and the authorization policy, create the client through
+`GuardrailsChatClientFactory`. `customerLookupToolCallback` is an application-provided tool bean.
 
 ```java
 @Bean
-ChatClient authorizedToolClient(
-        ChatModel chatModel,
-        ToolAuthorizationChatClientFactory authorizationFactory,
-        ToolCallback customerLookupToolCallback
-) {
-    return authorizationFactory.builder(chatModel)
+ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolCallback customerLookupToolCallback) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
 ```
 
-### Combine with Privacy Protection
-
-When privacy protection is also configured, use
-`PrivacySecurityChatClientFactory`. It applies tool authorization and privacy
-protection together:
+When privacy is also selected, the factory protects tools automatically.
+Select the permitted original-value disclosure in the client policy:
 
 ```java
-@Bean
-ChatClient securedChatClient(
-        ChatModel chatModel,
-        PrivacySecurityChatClientFactory privacySecurityFactory,
-        PrivacyToolCallbackFactory privacyToolCallbackFactory,
-        ToolCallback customerLookupToolCallback
-) {
-    ToolCallback protectedCustomerLookup =
-            privacyToolCallbackFactory.wrap(customerLookupToolCallback);
-
-    return privacySecurityFactory.builder(chatModel)
-            .defaultTools(protectedCustomerLookup)
-            .build();
-}
-```
-
-The combined factory already configures privacy protection. Do not apply
-`PrivacyChatClientConfigurer` again to its builders.
-
-As shown above, wrap tools with `PrivacyToolCallbackFactory` before registering
-them for privacy protection. Configure the PII types to disclose as original
-values under `tools.disclosures`. This example allows only the original customer
-ID (`CUSTOMER_ID`) to reach `customerLookup`:
-
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
+        .toolAuthorization(true)
+        .build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
 
 ## Tool Advisor Configuration
@@ -221,7 +178,7 @@ results back to it. `ToolCallingAdvisor` and the search-enabled
 Factory-created clients can also use ordinary advisors, such as conversation
 memory or RAG advisors, registered through `defaultAdvisors(...)` or request-level
 `advisors(...)`. When combining them with privacy protection, follow the
-[advisor ordering guidance](configuration.md#custom-advisor-order) so added data
+[advisor ordering guidance](configuration.md#advisor-configuration) so added data
 passes through privacy inspection.
 
 The factory configures the tool-calling advisor with authorization checks.
@@ -237,7 +194,7 @@ For clients that use tools:
 ### Custom Tool Advisor
 
 Pass the builder for your chosen tool-calling advisor to
-`factory.builder(chatModel, toolAdvisorBuilder)`. The factory connects tool
+`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)`. The factory connects tool
 authorization checks when configuring the client.
 
 The following example sets the tool-calling advisor's execution order to `100`
@@ -247,19 +204,18 @@ on a client using tool authorization alone:
 @Bean
 ChatClient customToolAdvisorClient(
         ChatModel chatModel,
-        ToolAuthorizationChatClientFactory authorizationFactory,
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback
 ) {
-    ToolCallingAdvisor.Builder<?> toolAdvisorBuilder =
-            ToolCallingAdvisor.builder().advisorOrder(100);
-
-    return authorizationFactory.builder(chatModel, toolAdvisorBuilder)
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
 ```
 
-`100` is an example value; choose an execution order that fits the other advisors
+`100` is an example value. Choose an execution order that fits the other advisors
 in your application. Orders incompatible with the protection setup are rejected.
 
 The factory supports `ToolCallingAdvisor.Builder<?>` and its subclasses.
@@ -316,37 +272,15 @@ final class CustomToolCallingAdvisor extends ToolCallingAdvisor {
 }
 ```
 
-`super.copy()` calls `copy()` in the parent class, `ToolCallingAdvisor.Builder`.
-The three methods have the following roles:
-
-| Method | Role in this example |
-| --- | --- |
-| `copy()` | Delegates copying to the parent's `copy()` and returns the result as this example's `Builder` type. |
-| `newCopy()` | Called by the parent's `copy()`. Creates the new `Builder` that will receive the copied settings. |
-| `build()` | Reads the `ToolCallingManager` set by the factory through `getToolCallingManager()` and passes it, along with the remaining settings, to the `CustomToolCallingAdvisor` constructor. |
-
-The factory sets the authorization-aware `ToolCallingManager` on the builder.
-Your `build()` implementation reads it through `getToolCallingManager()` and
-passes it to the advisor constructor. The `manager` variable above holds this value.
-
-The constructor passes that same `ToolCallingManager` to the parent
-`ToolCallingAdvisor` as the first argument of `super(manager, checker, order, history)`.
-The remaining three arguments configure tool execution eligibility, advisor
-execution order, and conversation history. The parent advisor uses the supplied
-`ToolCallingManager` to call tools.
-
-The parent's `copy()` copies the `ToolCallingManager`, execution eligibility checker,
-execution order, and conversation history setting into the new builder.
-
-If your builder adds configuration fields, assign their values to the copy
-returned by `super.copy()` inside your `copy()` implementation, then return that
-copy. As shown above, `newCopy()` is responsible for creating the new builder.
+The inherited `copy()` copies the standard advisor settings into the builder
+created by `newCopy()`. If your builder adds configuration fields, copy those
+fields in your `copy()` implementation as well.
 
 Pass this builder to the factory when creating the client:
 
 ```java
-ChatClient client = authorizationFactory
-        .builder(chatModel, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
+ChatClient chatClient = guardrailsChatClientFactory
+        .builder(chatModel, guardrailsPolicy, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -424,49 +358,23 @@ client.
 
 ## Without the Spring Boot Starter
 
-When using `spring-ai-privacy-guardrails-spring-security` directly, create a
-`SpringSecurityToolBoundary` and pass it to `ToolAuthorizationChatClientFactory`.
-The factory configures the client to capture the request's authentication and
-check permissions before exposing tools to the model and before executing tool calls.
-
-The following example creates a client with **tool authorization only**, using
-your model, authorization policy, and customer lookup tool.
+Depend on `spring-ai-privacy-guardrails-chat-client` and the Security module, then connect
+the authorization boundary to `GuardrailsChatClientFactory`. This example selects authorization only:
 
 ```java
-ChatClient createAuthorizedClient(
-        ChatModel chatModel,
-        AuthorizationManager<ToolAuthorizationContext> authorizationManager,
-        ToolCallback customerLookupToolCallback
-) {
-    SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
-            ToolCallingManager.builder().build(), authorizationManager
-    ).build();
-
-    ToolAuthorizationChatClientFactory authorizationFactory =
-            new ToolAuthorizationChatClientFactory(boundary);
-
-    return authorizationFactory.builder(chatModel)
-            .defaultTools(customerLookupToolCallback)
-            .build();
-}
+SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
+        ToolCallingManager.builder().build(), authorizationManager).build();
+ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatClientFactory.builder()
+        .toolAuthorizationBoundary(boundary)
+        .build();
+GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
+        .toolAuthorization(authorizationFactory::prepareToolAuthorization)
+        .defaultPolicy(GuardrailsPolicy.builder().toolAuthorization(true).build())
+        .build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel).defaultTools(customerLookupToolCallback).build();
 ```
 
-The factory places the tool-calling advisor before the common model request
-boundary. Do not register a separate tool advisor; pass its builder to the
-factory when customizing the tool loop.
-
-Callback additions and replacements performed by application advisors must
-finish before `boundary.toolAuthorizationAdvisor()` captures the request's tool
-list.
-
-To include privacy protection without Spring Boot, create a
-`PrivacyChatClientConfigurer` from the privacy integration module and pass it
-with this authorization factory to `PrivacySecurityChatClientFactory`.
-
-Both factories support `builderWithBoundary(model, additionalConfigurer)` and
-`builder(model, toolAdvisorBuilder, additionalConfigurer)` for composing extra
-features, such as content inspection of model input, into the same boundary.
-Do not apply another boundary configurer separately to the returned builder.
+To add privacy or inspection, supply its service and select the feature in the policy.
 
 ## Tool Search
 
@@ -484,36 +392,28 @@ protection by passing the tool-search advisor's builder to the factory.
 @Bean
 ChatClient toolSearchClient(
         ChatModel chatModel,
-        PrivacySecurityChatClientFactory privacySecurityFactory,
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolIndex toolIndex
 ) {
-    return privacySecurityFactory.builder(chatModel,
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().toolAuthorization(true).build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy,
                     ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();
 }
 ```
 
-For tool authorization alone, replace the injected parameter
-`PrivacySecurityChatClientFactory privacySecurityFactory` in the code directly
-above with `ToolAuthorizationChatClientFactory authorizationFactory`.
-Update the return statement to call `authorizationFactory.builder(...)`.
-Pass the same model and tool-search advisor builder to `builder(...)`.
-
-Register tools with `defaultTools(...)` when building the client or with
-`tools(...)` on each request. When also applying privacy protection, register
-callbacks wrapped by `PrivacyToolCallbackFactory.wrap(...)`.
+For authorization alone, omit `.privacy()` from the policy. Register tools directly
+with `defaultTools(...)` or request-specific `tools(...)`. If tools need original PII,
+set `toolDisclosurePolicy(...)` in the privacy settings.
 
 Tool Search also requires a conversation ID on each request. The following example
 registers a tool and passes the application's `conversationId` to a client that
 also uses privacy protection:
 
 ```java
-ToolCallback protectedCustomerLookup =
-        privacyToolCallbackFactory.wrap(customerLookupToolCallback);
-
 String response = toolSearchClient.prompt()
         .user("Find customer CUST-123456.")
-        .tools(protectedCustomerLookup)
+        .tools(customerLookupToolCallback)
         .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, conversationId))
         .call()
         .content();
@@ -525,7 +425,7 @@ When privacy protection is also used, detected PII in the search query is
 replaced with **opaque tokens** before the search runs. These replacement
 strings do not directly reveal the original values.
 
-The library allows the tool that performs the search; the application's
+The library allows the tool that performs the search. The application's
 authorization policy applies to the tools being searched. Tool replacements
 and unsupported additions during a request are rejected before execution.
 

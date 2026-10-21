@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
 
 class PrivacyOutputAdvisorStreamTest {
     @Test
-    void adviseStreamBuffersAllChunksBeforeTokenizingCrossChunkPii() {
+    void applicationBoundaryBuffersAllChunksBeforeTokenizingCrossChunkPii() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -165,7 +165,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamPreservesEveryGenerationMediaAndMetadataWhileBuffering() {
+    void applicationBoundaryPreservesEveryGenerationMediaAndMetadataWhileBuffering() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -251,7 +251,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamAggregatesAndProtectsSplitProviderTextMetadata() {
+    void applicationBoundaryAggregatesAndProtectsSplitProviderTextMetadata() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -295,17 +295,17 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamKeepsGoogleThoughtContentOutOfTheAnswerChannel() {
+    void applicationBoundaryKeepsGoogleThoughtContentOutOfTheAnswerChannel() {
         assertThoughtChannelIsProtectedSeparately("isThought");
     }
 
     @Test
-    void adviseStreamKeepsAnthropicThinkingContentOutOfTheAnswerChannel() {
+    void applicationBoundaryKeepsAnthropicThinkingContentOutOfTheAnswerChannel() {
         assertThoughtChannelIsProtectedSeparately("thinking");
     }
 
     @Test
-    void adviseStreamAggregatesAndProtectsOfficialDeepSeekReasoningContent() {
+    void applicationBoundaryAggregatesAndProtectsOfficialDeepSeekReasoningContent() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -339,7 +339,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamCountsProviderTextMetadataAgainstTheCharacterLimit() {
+    void applicationBoundaryCountsProviderTextMetadataAgainstTheCharacterLimit() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
                 service,
@@ -369,7 +369,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamCorrelatesReorderedChoicesByProviderIndex() {
+    void applicationBoundaryCorrelatesReorderedChoicesByProviderIndex() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -416,7 +416,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamCorrelatesIndexedChoicesAcrossChangingChoiceCountAndEmptyFrames() {
+    void applicationBoundaryCorrelatesIndexedChoicesAcrossChangingChoiceCountAndEmptyFrames() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         ChatClientResponse empty = response(List.of());
@@ -466,7 +466,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamRejectsDuplicateChoiceIndexesBeforeReplayingAnyFrame() {
+    void applicationBoundaryRejectsDuplicateChoiceIndexesBeforeReplayingAnyFrame() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         Flux<ChatClientResponse> responses = Flux.just(
@@ -491,7 +491,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamFailsClosedWhenChoiceIndexSourcesConflict() {
+    void applicationBoundaryFailsClosedWhenChoiceIndexSourcesConflict() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -516,7 +516,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamFailsClosedWhenChoiceIndexIsOnlyPartiallyAvailable() {
+    void applicationBoundaryFailsClosedWhenChoiceIndexIsOnlyPartiallyAvailable() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -538,7 +538,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamIgnoresNonNumericIndexMetadataAndUsesStablePosition() {
+    void applicationBoundaryIgnoresNonNumericIndexMetadataAndUsesStablePosition() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -569,7 +569,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamProtectsToolArgumentsSplitAcrossChunks() {
+    void applicationBoundaryProtectsToolArgumentsSplitAcrossChunks() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -609,7 +609,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamFailsClosedForUnidentifiedMultipleToolCalls() {
+    void applicationBoundaryFailsClosedForUnidentifiedMultipleToolCalls() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -641,7 +641,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamProtectsUnidentifiedMultipleToolCallsInOneFrame() {
+    void applicationBoundaryProtectsUnidentifiedMultipleToolCallsInOneFrame() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -675,7 +675,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamFailsClosedForUnknownAssistantSubtypeBeforeReplayingFrames() {
+    void applicationBoundaryFailsClosedForUnknownAssistantSubtypeBeforeReplayingFrames() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -699,7 +699,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamCancelsInfiniteSourceAtFrameLimitBeforeEmitting() {
+    void applicationBoundaryCancelsInfiniteSourceAtFrameLimitBeforeEmitting() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
                 service,
@@ -732,7 +732,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamEnforcesCharacterAndMediaLimits() {
+    void applicationBoundaryEnforcesCharacterAndMediaLimits() {
         PrivacyService service = privacyService();
         StreamAdvisorChain characterChain = mock(StreamAdvisorChain.class);
         when(characterChain.nextStream(any())).thenReturn(Flux.just(response("Alice")));
@@ -803,7 +803,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamFailsClosedForUrlMediaData() throws MalformedURLException {
+    void applicationBoundaryFailsClosedForUrlMediaData() throws MalformedURLException {
         PrivacyService service = privacyService();
         Media remoteMedia = Media.builder()
                 .mimeType(MimeTypeUtils.IMAGE_PNG)
@@ -847,7 +847,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamTimesOutAStalledSourceBeforeEmitting() {
+    void applicationBoundaryTimesOutAStalledSourceBeforeEmitting() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
                 service,
@@ -872,7 +872,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamFailsClosedWhenChoicesCannotBeCorrelated() {
+    void applicationBoundaryFailsClosedWhenChoicesCannotBeCorrelated() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
@@ -898,7 +898,7 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void adviseStreamBlocksBeforeAnyRawChunkReachesTheSubscriber() {
+    void applicationBoundaryBlocksBeforeAnyRawChunkReachesTheSubscriber() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
                 service,

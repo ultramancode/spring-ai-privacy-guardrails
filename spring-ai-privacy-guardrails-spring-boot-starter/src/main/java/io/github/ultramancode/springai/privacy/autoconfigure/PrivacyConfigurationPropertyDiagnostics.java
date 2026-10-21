@@ -24,12 +24,9 @@ final class PrivacyConfigurationPropertyDiagnostics {
     private static final int ROOT_ELEMENTS = ROOT.getNumberOfElements();
 
     static final List<String> ROOT_PROPERTIES = List.of(
-            "processing",
-            "output",
-            "response-inspection",
-            "analysis",
-            "regex",
-            "tools"
+        "processing",
+        "analysis",
+        "regex"
     );
     static final List<String> PROCESSING_PROPERTIES = List.of(
             "max-text-characters",
@@ -39,17 +36,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "max-depth",
             "max-analysis-segments",
             "max-result-spans"
-    );
-    static final List<String> OUTPUT_PROPERTIES = List.of(
-            "enabled",
-            "action",
-            "block-exception-message"
-    );
-    static final List<String> RESPONSE_INSPECTION_PROPERTIES = List.of(
-            "max-stream-frames",
-            "max-characters",
-            "max-media-bytes",
-            "stream-idle-timeout"
     );
     static final List<String> ANALYSIS_PROPERTIES = List.of(
             "language",
@@ -80,9 +66,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "capture-group",
             "validator-id"
     );
-    static final List<String> TOOLS_PROPERTIES = List.of("disclosures");
-    static final Set<String> TOOLS_MAP_PROPERTIES = Set.of("disclosures");
-
     PrivacyConfigurationPropertyDiagnostics(Environment environment) {
         findDiagnostics(environment).forEach(PrivacyConfigurationPropertyDiagnostics::warn);
     }
@@ -128,20 +111,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     PROCESSING_PROPERTIES,
                     context
             );
-            case "output" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    OUTPUT_PROPERTIES,
-                    context
-            );
-            case "response-inspection" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    RESPONSE_INSPECTION_PROPERTIES,
-                    context
-            );
             case "analysis" -> diagnoseFixedPropertyPath(
                     name,
                     propertyIndex,
@@ -155,15 +124,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     name,
                     propertyIndex,
                     propertyRoot,
-                    context
-            );
-            case "tools" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    TOOLS_PROPERTIES,
-                    TOOLS_MAP_PROPERTIES,
-                    Set.of(),
                     context
             );
             default -> Optional.empty();
@@ -407,10 +367,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     candidate,
                     systemEnvironmentMapping
             )) {
-                String candidateComparison = variant.consumedElements() == 1
-                        ? candidateUniform
-                        : candidate;
-                if (variant.comparison().equals(candidateComparison)) {
+                if (variant.comparison().equals(candidateUniform)) {
                     return Optional.of(new SegmentMatch(
                             variant.display(),
                             candidate,
@@ -420,7 +377,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
                 }
                 int distance = levenshteinDistance(
                         variant.comparison(),
-                        candidateComparison
+                        candidateUniform
                 );
                 SegmentMatch match = new SegmentMatch(
                         variant.display(),
@@ -440,9 +397,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         if (tied || closest == null) {
             return Optional.empty();
         }
-        String thresholdCandidate = closest.consumedElements() == 1
-                ? toUniformForm(closest.expected())
-                : closest.expected();
+        String thresholdCandidate = toUniformForm(closest.expected());
         if (closestDistance > typoThreshold(thresholdCandidate)) {
             return Optional.empty();
         }
@@ -459,37 +414,33 @@ final class PrivacyConfigurationPropertyDiagnostics {
             String candidate,
             boolean systemEnvironmentMapping
     ) {
-        List<SegmentVariant> variants = new ArrayList<>(2);
-        int candidateElements = candidate.split("-").length;
+        int candidateWordCount = candidate.split("-").length;
+        List<SegmentVariant> variants = new ArrayList<>(candidateWordCount);
         String singleDisplay = dashedElement(name, propertyIndex);
+        String singleComparison = uniformElement(name, propertyIndex);
         variants.add(new SegmentVariant(
                 singleDisplay,
-                uniformElement(name, propertyIndex),
+                singleComparison,
                 1
         ));
 
-        if (!systemEnvironmentMapping
-                || candidateElements == 1
-                || propertyIndex + candidateElements > name.getNumberOfElements()) {
+        int elementsToJoin = Math.min(candidateWordCount, name.getNumberOfElements() - propertyIndex);
+        if (!systemEnvironmentMapping || elementsToJoin < 2) {
             return variants;
         }
-        StringBuilder joinedDisplay = new StringBuilder();
-        for (int offset = 0; offset < candidateElements; offset++) {
+        StringBuilder joinedDisplay = new StringBuilder(singleDisplay);
+        StringBuilder joinedComparison = new StringBuilder(singleComparison);
+        for (int offset = 1; offset < elementsToJoin; offset++) {
             int elementIndex = propertyIndex + offset;
             if (name.isNumericIndex(elementIndex)) {
                 return variants;
             }
-            if (!joinedDisplay.isEmpty()) {
-                joinedDisplay.append('-');
-            }
-            joinedDisplay.append(dashedElement(name, elementIndex));
-        }
-        String display = joinedDisplay.toString();
-        if (!display.equals(singleDisplay)) {
+            joinedDisplay.append('-').append(dashedElement(name, elementIndex));
+            joinedComparison.append(uniformElement(name, elementIndex));
             variants.add(new SegmentVariant(
-                    display,
-                    display,
-                    candidateElements
+                    joinedDisplay.toString(),
+                    joinedComparison.toString(),
+                    offset + 1
             ));
         }
         return variants;

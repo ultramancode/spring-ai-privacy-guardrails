@@ -39,32 +39,43 @@ class ToolAuthorizationStandaloneIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
-    void factoryInspectionReceivesOnlyAuthorizedTools(boolean streaming, boolean customToolOrder) {
-        SpringSecurityToolBoundary boundary = boundary((authentication, context) ->
-                new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup")));
-        ToolAuthorizationChatClientFactory authorizationFactory = new ToolAuthorizationChatClientFactory(boundary);
-        DefinitionResolvingModel model = new DefinitionResolvingModel(ToolCallingManager.builder().build());
+    void factoryInspectionReceivesOnlyAuthorizedTools(
+        boolean streaming,
+        boolean useCustomToolAdvisorOrder
+    ) {
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary((authentication, context) ->
+            new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup")));
+        ToolAuthorizationChatClientFactory toolAuthorizationFactory = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(toolAuthorizationBoundary)
+            .build();
+        DefinitionResolvingModel chatModel = new DefinitionResolvingModel(ToolCallingManager.builder().build());
         AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
-        ModelRequestBoundaryConfigurer inspectionConfigurer =
-                (clientBuilder, boundarySpec) -> boundarySpec.inspection(inspectedRequest::set);
+        ModelRequestBoundaryConfigurer inspectionConfigurer = (chatClientBuilder, boundarySpec) ->
+            boundarySpec.inspection((request, ignoredStreaming) -> inspectedRequest.set(request));
 
-        ChatClient.Builder clientBuilder;
-        if (customToolOrder) {
+        ChatClient.Builder chatClientBuilder;
+        if (useCustomToolAdvisorOrder) {
             ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
-            clientBuilder = authorizationFactory.builder(model, toolAdvisorBuilder, inspectionConfigurer);
+            chatClientBuilder = toolAuthorizationFactory.builder(chatModel, toolAdvisorBuilder, inspectionConfigurer);
         } else {
-            clientBuilder = authorizationFactory.builderWithBoundary(model, inspectionConfigurer);
+            chatClientBuilder = toolAuthorizationFactory.builderWithBoundary(chatModel, inspectionConfigurer);
         }
-        ChatClient client = clientBuilder.defaultTools(
+        ChatClient chatClient = chatClientBuilder
+            .defaultTools(
                 tool("customerLookup", ignored -> { }),
-                tool("adminDelete", ignored -> { })).build();
+                tool("adminDelete", ignored -> { })
+            )
+            .build();
         useAuthentication(authentication("alice"));
 
-        ChatClient.ChatClientRequestSpec request = client.prompt().user("Find Alice");
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().user("Find Alice");
         String result;
         if (streaming) {
-            result = request.stream().content().collectList()
-                    .map(parts -> String.join("", parts)).block(Duration.ofSeconds(5));
+            result = request.stream()
+                .content()
+                .collectList()
+                .map(parts -> String.join("", parts))
+                .block(Duration.ofSeconds(5));
         } else {
             result = request.call().content();
         }
@@ -74,87 +85,85 @@ class ToolAuthorizationStandaloneIntegrationTest {
         assertThat(authorizedRequest).isNotNull();
         ToolCallingChatOptions authorizedOptions = (ToolCallingChatOptions) authorizedRequest.prompt().getOptions();
         assertThat(authorizedOptions.getToolCallbacks())
-                .extracting(callback -> callback.getToolDefinition().name())
-                .containsExactly("customerLookup");
+            .extracting(callback -> callback.getToolDefinition().name())
+            .containsExactly("customerLookup");
     }
 
     @Test
     void filtersDefinitionsAndExecutesAnAuthorizedToolWithoutPrivacyAdvisors() {
-        AtomicInteger definitionChecks = new AtomicInteger();
-        AtomicInteger executionChecks = new AtomicInteger();
-        AuthorizationManager<ToolAuthorizationContext> policy = (authentication, context) -> {
+        AtomicInteger definitionAuthorizationChecks = new AtomicInteger();
+        AtomicInteger executionAuthorizationChecks = new AtomicInteger();
+        AuthorizationManager<ToolAuthorizationContext> authorizationManager = (authentication, context) -> {
             if (context.phase() == ToolAuthorizationPhase.DEFINITION) {
-                definitionChecks.incrementAndGet();
-                return new AuthorizationDecision(
-                        context.toolDefinition().name().equals("customerLookup")
-                );
+                definitionAuthorizationChecks.incrementAndGet();
+                return new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup"));
             }
-            executionChecks.incrementAndGet();
+            executionAuthorizationChecks.incrementAndGet();
             return new AuthorizationDecision(true);
         };
-        SpringSecurityToolBoundary boundary = boundary(policy);
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(authorizationManager);
         AtomicReference<String> customerLookupInput = new AtomicReference<>();
         AtomicInteger adminDeleteCalls = new AtomicInteger();
         ToolCallback customerLookup = tool("customerLookup", customerLookupInput::set);
         ToolCallback adminDelete = tool(
-                "adminDelete",
-                ignored -> adminDeleteCalls.incrementAndGet()
+            "adminDelete",
+            ignored -> adminDeleteCalls.incrementAndGet()
         );
-        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
-                boundary.toolCallingManager(),
-                List.of("customerLookup")
+        ResolvingToolLoopModel chatModel = new ResolvingToolLoopModel(
+            toolAuthorizationBoundary.toolCallingManager(),
+            List.of("customerLookup")
         );
         ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-                .toolCallingManager(boundary.toolCallingManager())
-                .build();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(boundary.toolAuthorizationAdvisor(), toolCallingAdvisor)
-                .defaultTools(customerLookup, adminDelete)
-                .build();
+            .toolCallingManager(toolAuthorizationBoundary.toolCallingManager())
+            .build();
+        ChatClient chatClient = ChatClient.builder(chatModel)
+            .defaultAdvisors(toolAuthorizationBoundary.toolAuthorizationAdvisor(), toolCallingAdvisor)
+            .defaultTools(customerLookup, adminDelete)
+            .build();
         useAuthentication(authentication("alice"));
 
         assertThat(chatClient.prompt().user("Find Alice").call().content()).isEqualTo("done");
-        assertThat(model.exposedToolNames()).containsOnly("customerLookup");
+        assertThat(chatModel.exposedToolNames()).containsOnly("customerLookup");
         assertThat(customerLookupInput).hasValue("{\"name\":\"Alice\"}");
         assertThat(adminDeleteCalls).hasValue(0);
-        assertThat(definitionChecks).hasValueGreaterThanOrEqualTo(1);
-        assertThat(executionChecks).hasValue(2);
-        assertThat(boundary.activeSessionCount()).isZero();
+        assertThat(definitionAuthorizationChecks).hasValueGreaterThanOrEqualTo(1);
+        assertThat(executionAuthorizationChecks).hasValue(2);
+        assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
     }
 
     @Test
-    void rejectsCallbackReauthorizationBeforeExecutingARawTool() {
-        AtomicInteger executionChecks = new AtomicInteger();
-        AuthorizationManager<ToolAuthorizationContext> policy = (authentication, context) -> {
+    void rejectsToolExecutionWhenCallbackReauthorizationFails() {
+        AtomicInteger executionAuthorizationChecks = new AtomicInteger();
+        AuthorizationManager<ToolAuthorizationContext> authorizationManager = (authentication, context) -> {
             if (context.phase() == ToolAuthorizationPhase.DEFINITION) {
                 return new AuthorizationDecision(true);
             }
-            return new AuthorizationDecision(executionChecks.incrementAndGet() == 1);
+            return new AuthorizationDecision(executionAuthorizationChecks.incrementAndGet() == 1);
         };
-        SpringSecurityToolBoundary boundary = boundary(policy);
-        AtomicInteger toolCalls = new AtomicInteger();
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(authorizationManager);
+        AtomicInteger customerLookupCalls = new AtomicInteger();
         ToolCallback customerLookup = tool(
-                "customerLookup",
-                ignored -> toolCalls.incrementAndGet()
+            "customerLookup",
+            ignored -> customerLookupCalls.incrementAndGet()
         );
-        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
-                boundary.toolCallingManager(),
-                List.of("customerLookup")
+        ResolvingToolLoopModel chatModel = new ResolvingToolLoopModel(
+            toolAuthorizationBoundary.toolCallingManager(),
+            List.of("customerLookup")
         );
         ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-                .toolCallingManager(boundary.toolCallingManager())
-                .build();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(boundary.toolAuthorizationAdvisor(), toolCallingAdvisor)
-                .defaultTools(customerLookup)
-                .build();
+            .toolCallingManager(toolAuthorizationBoundary.toolCallingManager())
+            .build();
+        ChatClient chatClient = ChatClient.builder(chatModel)
+            .defaultAdvisors(toolAuthorizationBoundary.toolAuthorizationAdvisor(), toolCallingAdvisor)
+            .defaultTools(customerLookup)
+            .build();
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("Tool execution was not authorized");
-        assertThat(executionChecks).hasValue(2);
-        assertThat(toolCalls).hasValue(0);
-        assertThat(boundary.activeSessionCount()).isZero();
+            .isInstanceOf(AuthorizationDeniedException.class)
+            .hasMessage("Tool execution was not authorized");
+        assertThat(executionAuthorizationChecks).hasValue(2);
+        assertThat(customerLookupCalls).hasValue(0);
+        assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
     }
 }

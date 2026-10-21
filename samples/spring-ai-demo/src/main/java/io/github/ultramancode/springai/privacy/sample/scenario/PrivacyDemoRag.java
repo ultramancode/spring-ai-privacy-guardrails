@@ -1,6 +1,6 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -66,7 +66,7 @@ public final class PrivacyDemoRag {
     private final Map<PrivacyDemoLocale, ChatClient> chatClients;
     private final RecordingPromptChatModel chatModel;
 
-    public PrivacyDemoRag(PrivacyChatClientConfigurer privacyConfigurer) {
+    public PrivacyDemoRag(GuardrailsChatClientFactory guardrailsChatClientFactory) {
         VectorStore vectorStore = SimpleVectorStore.builder(new DeterministicEmbeddingModel()).build();
         vectorStore.add(List.of(
                 new Document(ENGLISH.retrievedDocument()),
@@ -75,15 +75,15 @@ public final class PrivacyDemoRag {
         ));
         this.chatModel = new RecordingPromptChatModel();
         this.chatClients = Map.of(
-                PrivacyDemoLocale.EN, chatClient(privacyConfigurer, vectorStore, ENGLISH),
-                PrivacyDemoLocale.KO, chatClient(privacyConfigurer, vectorStore, KOREAN)
+            PrivacyDemoLocale.EN, chatClient(guardrailsChatClientFactory, vectorStore, ENGLISH),
+            PrivacyDemoLocale.KO, chatClient(guardrailsChatClientFactory, vectorStore, KOREAN)
         );
     }
 
     private ChatClient chatClient(
-            PrivacyChatClientConfigurer privacyConfigurer,
-            VectorStore vectorStore,
-            RagFixture fixture
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
+        VectorStore vectorStore,
+        RagFixture fixture
     ) {
         QuestionAnswerAdvisor retrievalAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
                 .searchRequest(SearchRequest.builder()
@@ -92,9 +92,9 @@ public final class PrivacyDemoRag {
                         .build())
                 .promptTemplate(fixture.promptTemplate())
                 .build();
-        ChatClient.Builder builder = ChatClient.builder(this.chatModel)
-                .defaultAdvisors(retrievalAdvisor);
-        return privacyConfigurer.configure(builder).build();
+        ChatClient.Builder chatClientBuilder = guardrailsChatClientFactory.builder(this.chatModel)
+            .defaultAdvisors(retrievalAdvisor);
+        return chatClientBuilder.build();
     }
 
     Result run(PrivacyDemoLocale locale) {

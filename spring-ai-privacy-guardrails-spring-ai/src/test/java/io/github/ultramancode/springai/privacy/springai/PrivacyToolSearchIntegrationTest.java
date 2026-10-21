@@ -118,7 +118,7 @@ class PrivacyToolSearchIntegrationTest {
     private Scenario scenario(ResponseMode mode) {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
-                service, ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
+                service, ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))
         );
         AtomicReference<String> businessInput = new AtomicReference<>();
         ToolCallback business = factory.wrap(new ToolCallback() {

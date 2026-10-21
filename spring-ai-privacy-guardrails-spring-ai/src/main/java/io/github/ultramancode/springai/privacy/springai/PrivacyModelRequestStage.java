@@ -46,16 +46,22 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
     private final PrivacyService privacyService;
     private final PrivacyMessageTransformer messageTransformer;
     private final PrivacyToolControlValidator toolControlValidator;
+    // Null permits wrappers from any factory using the same privacy service.
     private final PrivacyToolCallbackFactory.Provenance expectedFactoryProvenance;
     private final PrivacyEnforcementNotifier enforcementNotifier;
 
-    PrivacyModelRequestStage(PrivacyService privacyService, PrivacyToolCallbackFactory expectedFactory,
-            PrivacyEnforcementObserver enforcementObserver) {
+    PrivacyModelRequestStage(PrivacyService privacyService,
+        PrivacyToolCallbackFactory expectedToolCallbackFactory, PrivacyEnforcementObserver enforcementObserver) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
-        if (expectedFactory != null && !expectedFactory.usesPrivacyService(privacyService)) {
-            throw new IllegalArgumentException("expectedFactory must use the same PrivacyService");
+        if (expectedToolCallbackFactory != null
+            && !expectedToolCallbackFactory.usesSamePrivacyService(privacyService)) {
+            throw new IllegalArgumentException("expectedToolCallbackFactory must use the same PrivacyService");
         }
-        this.expectedFactoryProvenance = expectedFactory == null ? null : expectedFactory.provenance();
+        if (expectedToolCallbackFactory == null) {
+            this.expectedFactoryProvenance = null;
+        } else {
+            this.expectedFactoryProvenance = expectedToolCallbackFactory.provenance();
+        }
         this.messageTransformer = new PrivacyMessageTransformer(privacyService);
         this.toolControlValidator = new PrivacyToolControlValidator();
         this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
@@ -80,16 +86,14 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
         }
         this.toolControlValidator.validateHistoryToolControlStructure(request);
         PrivacyToolExecutionContextSupport.requireCallbacksMatchValidatedSnapshot(request);
-        Set<String> registeredToolNames = request.prompt().getOptions() instanceof ToolCallingChatOptions
-                ? PrivacyToolContextAdvisor.requirePrivacyWrappedToolNames(
-                        request,
-                        this.privacyService,
-                        this.expectedFactoryProvenance
-                )
-                : Set.of();
-        ChatClientRequest tokenized = this.messageTransformer.tokenize(handle, request);
+        Set<String> registeredToolNames = Set.of();
+        if (request.prompt().getOptions() instanceof ToolCallingChatOptions) {
+            registeredToolNames = PrivacyToolContextAdvisor.requirePrivacyWrappedToolNames(
+                request, this.privacyService, this.expectedFactoryProvenance);
+        }
+        ChatClientRequest tokenizedRequest = this.messageTransformer.tokenize(handle, request);
         ChatClientRequest protectedRequest = PrivacyToolExecutionContextSupport.attachRegisteredToolNames(
-                tokenized,
+                tokenizedRequest,
                 registeredToolNames
         );
         this.enforcementNotifier.notify(

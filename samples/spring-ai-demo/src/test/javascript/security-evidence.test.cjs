@@ -12,6 +12,7 @@ assert.ok(startup > 0);
 // Run the page's actual render, reset, translation, and request logic with a small DOM substitute.
 function createView(language = "en") {
   const elements = new Map();
+  const requests = [];
   function node() {
     const classes = new Set();
     let ownText = "";
@@ -47,11 +48,15 @@ function createView(language = "en") {
   element("scenarioSelector").value = "security";
   const page = runInNewContext(script.slice(0, startup) + `
     currentLanguage = ${JSON.stringify(language)};
-    ({renderSecurityEvidence, setSessionCount, run});
-  `, {document, fetch: async () => ({ok: false, status: 503})});
+    ({renderSecurityEvidence, renderRagBoundary, setSessionCount, run});
+  `, {document, fetch: async (path, options) => {
+    requests.push({path, options});
+    return {ok: false, status: 503};
+  }});
   return {
     element,
     page,
+    requests,
     render(customerSupport = allowedSupport, overrides = {}) {
       page.renderSecurityEvidence({
         generalEmployee: deniedEmployee, customerSupport,
@@ -159,6 +164,9 @@ for (const language of ["en", "ko"]) {
     const view = createView(language);
     view.render();
     await view.page.run();
+    assert.equal(view.requests.length, 1);
+    assert.equal(view.requests[0].path, "/demo/security-tool-boundary");
+    assert.equal(view.requests[0].options.headers["Accept-Language"], language);
     for (const metric of ["Authorization", "ToolInput", "ToolOutput", "Cleanup"]) {
       assert.equal(view.element(`security${metric}Meaning`).textContent, "—");
       assert.equal(view.element(`security${metric}Status`).dataset.i18n, "status.wait");
@@ -189,6 +197,26 @@ test("absence of a tool request is not labeled a permission denial", () => {
   assert.equal(view.element("securitySupportRequest").textContent, "NOT REQUESTED");
   assert.equal(view.element("securitySupportOutcome").textContent, "No tool execution was recorded.");
   assert.equal(view.element("securityAuthorizationStatus").textContent, "FAIL");
+});
+
+test("RAG protection requires complete backend evidence", () => {
+  const view = createView();
+  const evidence = {
+    retrievedDocumentContainsRawPii: true,
+    modelVisibleContextContainsRawPii: false,
+    modelVisibleContextContainsTokenizedPii: true
+  };
+  view.page.renderRagBoundary(evidence);
+  assert.equal(view.element("ragBoundaryState").dataset.i18n, "rag.boundaryProtected");
+
+  for (const missingEvidence of [
+    {retrievedDocumentContainsRawPii: false},
+    {modelVisibleContextContainsRawPii: true},
+    {modelVisibleContextContainsTokenizedPii: false}
+  ]) {
+    view.page.renderRagBoundary({...evidence, ...missingEvidence});
+    assert.equal(view.element("ragBoundaryState").dataset.i18n, "rag.boundaryNotConfirmed");
+  }
 });
 
 test("service-wide session counts remain observations, including concurrent sessions", () => {

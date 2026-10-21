@@ -15,6 +15,9 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.Ordered;
 import reactor.core.publisher.Flux;
 
@@ -23,12 +26,18 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
- * Owns the privacy session around the advisors that execute inside its configured position
- * and applies the optional output policy when control returns to that position.
- * Supplies input inspection with a function that simplifies PII tokens using the current session.
- * When output inspection requests token simplification, prepares its text before the session closes.
- * The default order wraps the standard privacy bundle. Applications remain responsible for
- * mutations performed by advisors placed outside it.
+ * Opens a privacy session before delegating to the remaining advisor chain.
+ * Each call or stream subscription uses its own session, which is closed on
+ * completion, failure, or stream cancellation.
+ *
+ * <p>Automatic tool callback wrapping can be enabled through
+ * {@link PrivacyChatClientConfigurer.Builder#autoWrapToolCallbacks(boolean)}.
+ * When a {@link PrivacyOutputAdvisor} is present, applies its output protection
+ * before the session closes.</p>
+ *
+ * <p>At {@link #DEFAULT_ORDER}, the session opens before the other standard privacy
+ * advisors run and remains active until their processing completes.
+ * When using a custom order, place this advisor before advisors that require the session.</p>
  */
 public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -36,6 +45,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
     public static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE;
 
     private final PrivacyService privacyService;
+    private final PrivacyToolCallbackFactory autoWrappingToolCallbackFactory;
     private final int order;
 
     /**
@@ -55,7 +65,15 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
      */
     public PrivacyLifecycleAdvisor(PrivacyService privacyService, int order) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
+        this.autoWrappingToolCallbackFactory = null;
         this.order = order;
+    }
+
+    PrivacyLifecycleAdvisor(PrivacyService privacyService,
+        PrivacyToolCallbackFactory autoWrappingToolCallbackFactory) {
+        this.privacyService = Objects.requireNonNull(privacyService, "privacyService");
+        this.autoWrappingToolCallbackFactory = autoWrappingToolCallbackFactory;
+        this.order = DEFAULT_ORDER;
     }
 
     @Override
@@ -68,7 +86,8 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
         try (PrivacySession privacySession = this.privacyService.openSession()) {
             ChatClientRequest chatClientRequestWithPrivacyContext =
                     prepareRequestContext(chatClientRequest, privacySession);
-            ChatClientResponse chatClientResponse = callAdvisorChain.nextCall(chatClientRequestWithPrivacyContext);
+            ChatClientResponse chatClientResponse = callAdvisorChain.nextCall(
+                wrapToolCallbacks(chatClientRequestWithPrivacyContext));
             if (privacyOutputAdvisor != null) {
                 chatClientResponse = privacyOutputAdvisor.protectAtApplicationBoundary(
                         privacySession.handle(),
@@ -96,7 +115,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
                     ChatClientRequest chatClientRequestWithPrivacyContext =
                             prepareRequestContext(chatClientRequest, privacySession);
                     Flux<ChatClientResponse> chatClientResponses =
-                            streamAdvisorChain.nextStream(chatClientRequestWithPrivacyContext);
+                        streamAdvisorChain.nextStream(wrapToolCallbacks(chatClientRequestWithPrivacyContext));
                     if (privacyOutputAdvisor != null) {
                         chatClientResponses = privacyOutputAdvisor.protectAtApplicationBoundary(
                                 privacySession.handle(),
@@ -176,6 +195,35 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
             return null;
         }
         return text -> this.privacyService.simplifyTokens(privacySession.handle(), text);
+    }
+
+    private ChatClientRequest wrapToolCallbacks(ChatClientRequest chatClientRequest) {
+        if (autoWrappingToolCallbackFactory == null) {
+            return chatClientRequest;
+        }
+
+        Prompt originalPrompt = chatClientRequest.prompt();
+        if (!(originalPrompt.getOptions() instanceof ToolCallingChatOptions toolCallingOptions)) {
+            return chatClientRequest;
+        }
+
+        List<ToolCallback> toolCallbacks = toolCallingOptions.getToolCallbacks();
+        if (toolCallbacks == null || toolCallbacks.isEmpty()) {
+            return chatClientRequest;
+        }
+
+        // Authorization must capture the same protected callbacks that the tool loop executes.
+        List<ToolCallback> protectedToolCallbacks =
+            autoWrappingToolCallbackFactory.prepareCallbacks(toolCallbacks);
+        ToolCallingChatOptions protectedToolCallingOptions = toolCallingOptions.mutate()
+            .toolCallbacks(protectedToolCallbacks)
+            .build();
+        Prompt promptWithProtectedToolCallbacks =
+            new Prompt(originalPrompt.getInstructions(), protectedToolCallingOptions);
+
+        return chatClientRequest.mutate()
+            .prompt(promptWithProtectedToolCallbacks)
+            .build();
     }
 
     private PrivacyOutputAdvisor validateBundleAndFindOutputAdvisor(List<? extends Advisor> advisors) {

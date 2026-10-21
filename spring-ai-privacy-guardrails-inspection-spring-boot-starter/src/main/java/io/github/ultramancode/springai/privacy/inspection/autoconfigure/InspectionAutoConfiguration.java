@@ -8,7 +8,6 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
-import io.github.ultramancode.springai.privacy.inspection.springai.InspectionOutputAdvisor;
 import io.github.ultramancode.springai.privacy.inspection.springai.PrivacyProcessingStatusResolver;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
@@ -23,17 +22,15 @@ import org.springframework.context.annotation.Configuration;
 import java.util.function.Predicate;
 
 /**
- * Configures content inspection for selected clients.
+ * Provides content inspection services and client integration.
  *
  * <p>Creates a default {@link InspectionService} from {@link ContentInspector} beans
- * unless the application provides a service. Apply the {@link InspectionChatClientConfigurer}
- * to each client builder that should use inspection.
+ * unless the application provides a service. The {@link InspectionChatClientConfigurer}
+ * bean supports applying inspection to client builders.
  *
  * <p>The default service runs inspectors in Spring order. The default content policy
  * blocks findings. The default failure policy is
  * {@link InspectionFailurePolicy#FAIL_CLOSED}.
- * Output inspection is disabled by default. Enable it on the auto-configured
- * configurer with {@code spring.ai.inspection.output.enabled=true}.
  * Applications can provide policy, resolver and observer beans to customize inspection.
  */
 @AutoConfiguration(
@@ -52,37 +49,29 @@ public class InspectionAutoConfiguration {
     @ConditionalOnBean(ContentInspector.class)
     @ConditionalOnMissingBean
     InspectionService inspectionService(
-            ObjectProvider<ContentInspector> inspectors,
-            InspectionPolicy policy,
-            InspectionProperties properties) {
+        ObjectProvider<ContentInspector> contentInspectors,
+        InspectionPolicy inspectionPolicy,
+        InspectionProperties inspectionProperties) {
         return new InspectionService(
-                inspectors.orderedStream().toList(), policy,
-                properties.getFailurePolicy(), properties.getFailurePolicyOverrides())
-                .withPiiTokenSimplification(properties.getPiiTokenSimplificationInspectors());
+            contentInspectors.orderedStream().toList(), inspectionPolicy,
+            inspectionProperties.getFailurePolicy(), inspectionProperties.getFailurePolicyOverrides())
+            .withPiiTokenSimplification(inspectionProperties.getPiiTokenSimplificationInspectors());
     }
 
     @Bean
     @ConditionalOnBean(InspectionService.class)
     @ConditionalOnMissingBean
     InspectionChatClientConfigurer inspectionChatClientConfigurer(
-            InspectionService service,
-            InspectionProperties properties,
-            ObjectProvider<PrivacyProcessingStatusResolver> resolver,
-            ObjectProvider<InspectionObserver> observer) {
-        InspectionObserver inspectionObserver = observer.getIfAvailable(InspectionObserver::noop);
-        InspectionLimits limits = properties.limits();
-        InspectionChatClientConfigurer configurer = new InspectionChatClientConfigurer(
-                service,
-                limits,
-                resolver.getIfAvailable(PrivacyProcessingStatusResolver::unknown),
-                inspectionObserver);
-        InspectionProperties.Output output = properties.getOutput();
-        if (output.isEnabled()) {
-            InspectionOutputAdvisor outputAdvisor = new InspectionOutputAdvisor(
-                    service, limits, inspectionObserver, output.getMaxFrames(), output.getStreamTimeout());
-            return configurer.withOutputInspection(outputAdvisor);
-        }
-        return configurer;
+        InspectionService inspectionService,
+        ObjectProvider<PrivacyProcessingStatusResolver> privacyProcessingStatusResolverProvider,
+        ObjectProvider<InspectionObserver> inspectionObserverProvider) {
+        InspectionObserver inspectionObserver = inspectionObserverProvider.getIfAvailable(InspectionObserver::noop);
+        InspectionLimits inspectionLimits = InspectionLimits.defaults();
+        return new InspectionChatClientConfigurer(
+            inspectionService,
+            inspectionLimits,
+            privacyProcessingStatusResolverProvider.getIfAvailable(PrivacyProcessingStatusResolver::unknown),
+            inspectionObserver);
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -93,10 +82,10 @@ public class InspectionAutoConfiguration {
         PrivacyProcessingStatusResolver privacyProcessingStatusResolver(
                 @Qualifier("privacyModelContentProtectionCheck")
                         Predicate<ChatClientRequest> privacyProcessingCheck) {
-            return request ->
-                    privacyProcessingCheck.test(request)
-                            ? ContentSegment.PrivacyProcessingStatus.PROCESSED
-                            : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
+            return chatClientRequest ->
+                privacyProcessingCheck.test(chatClientRequest)
+                    ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                    : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         }
     }
 }

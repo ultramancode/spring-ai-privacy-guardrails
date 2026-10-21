@@ -20,34 +20,30 @@ de-identification, as an external analyzer service.
 Use OpenNLP when you want to run your own NER models inside the JVM, or a
 custom `PiiAnalyzer` when you need detection tailored to your application.
 
-The application is expected to already provide a `ChatModel` and
-`ChatClient.Builder`.
+The application provides a `ChatModel`. The client starter supplies
+`GuardrailsChatClientFactory`. See [Configuration](configuration.md) to select and reuse client protection policies.
 
 To check protection with a local model and fixed examples, without an external model API key, see
 the [Sample / Demo Guide](sample.md).
 
 ## Prerequisites
 
-The current code is verified with:
+Minimum versions: Java 17, Spring AI 2.0.0 and Spring Boot 4.0.0.
 
-- Java 17
-- Spring AI 2.0.1
-- Spring Boot 4.1.1
+## 1. Choose an Analyzer
 
-## 1. Choose a Privacy Starter
+Use the client starter to configure your `ChatClient`, then choose an analyzer.
+Presidio and OpenNLP require an additional starter. Each linked section includes
+its Gradle and Maven dependencies.
 
-Choose the starter for the analyzer you want to use. Each linked section
-includes its Gradle and Maven dependencies.
-
-| Starter | Use |
+| Analyzer | Use |
 | --- | --- |
-| [Base](#2-quick-start-with-regex) | Application-defined Regex rules or custom analyzers |
+| [Regex](#2-quick-start-with-regex) | Application-defined patterns. Included in the client starter. |
 | [Presidio](#5-use-presidio-for-pii-detection) | Detect various types of PII through an external Presidio service. |
 | [OpenNLP](#6-use-opennlp-for-jvm-local-detection) | Detect PII inside the application using OpenNLP models you provide. No external analysis service is needed. |
 
-The Presidio and OpenNLP starters already include the base starter. Use the
-same version for all Privacy Guardrails modules used together. Adding a starter
-does not enable privacy protection or an analyzer automatically.
+Use the same version for all Privacy Guardrails modules used together. Adding a
+starter does not enable privacy protection or an analyzer automatically.
 
 Tool authorization uses a separate Spring Security starter. It can be used on
 its own or together with a privacy starter. See
@@ -58,13 +54,13 @@ its own or together with a privacy starter. See
 The built-in Regex analyzer is the easiest way to verify the privacy boundary
 without an external analyzer service.
 
-Add the base starter.
+Add the client starter. Analyzer-specific starters can be added as needed.
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -73,8 +69,8 @@ dependencies {
 ```xml
 <dependency>
     <groupId>io.github.ultramancode</groupId>
-    <artifactId>spring-ai-privacy-guardrails-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <artifactId>spring-ai-privacy-guardrails-chat-client-spring-boot-starter</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -96,30 +92,27 @@ spring:
 ```
 
 These rules detect only the configured formats. Regex rules are useful for
-structured application identifiers; they are not intended to provide complete
+structured application identifiers. They are not intended to provide complete
 general-purpose PII detection.
 
 Once a `PiiAnalyzer` bean is available, the starter provides `PrivacyService`
-and `PrivacyChatClientConfigurer`.
+and the components used by `GuardrailsChatClientFactory`.
 
 If a format match also needs a checksum or business-rule check, add a
-[custom Regex validator](configuration.md#regex-analyzer).
+[custom Regex validator](privacy.md#regex-analyzer).
 
 ## 3. Protect a ChatClient
 
 Configuring an analyzer does not automatically protect every
 `ChatClient`.
 
-Apply the starter-provided `PrivacyChatClientConfigurer` to each builder that
-should be inside the privacy boundary:
+Create the protected client through the factory:
 
 ```java
 @Bean
-ChatClient privacyChatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    return privacyConfigurer.configure(builder).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
@@ -161,69 +154,46 @@ To inspect the input sent to the model, run the fixed examples in the
 
 Once privacy protection is applied to a tool, detected PII is passed as opaque tokens
 by default. If a tool needs an original value, such as a customer ID for a
-lookup, specify the tool name and permitted PII types in `tools.disclosures`.
+lookup, specify the tool name and permitted PII types in `ToolDisclosurePolicy`.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
+        .build();
 ```
 
-For both local and MCP tools, the name configured in `tools.disclosures` is
+For both local and MCP tools, the name configured in `ToolDisclosurePolicy` is
 case-sensitive and must exactly match the actual `ToolDefinition.name()`. With
 this policy, `customerLookup` receives only customer IDs (`CUSTOMER_ID`) as
 original values. Other detected PII is passed as opaque tokens.
 
 ### Local ToolCallback
 
-Wrap an existing Spring AI `ToolCallback` before registering it with a protected
-`ChatClient`:
+Register existing callbacks or objects with annotated tools directly:
 
 ```java
-ToolCallback protectedCustomerLookup =
-        privacyToolCallbackFactory.wrap(customerLookupToolCallback);
-```
-
-Here, `customerLookupToolCallback` is the application's existing Spring AI
-`ToolCallback`.
-
-Register the wrapped `ToolCallback` with the client's `defaultTools(...)`:
-
-```java
-ChatClient toolClient = privacyConfigurer.configure(
-        ChatClient.builder(chatModel)
-                .defaultTools(protectedCustomerLookup)
-).build();
-```
-
-Detected values in tool results are protected again before being sent back to
-the model or returned directly to the application.
-
-### MCP and Dynamic ToolCallbackProvider
-
-MCP tool lists can be registered through a `ToolCallbackProvider`. Wrap the
-provider itself with `wrapProvider(...)` so protection also applies to tools it
-supplies in later requests. In this example, `mcpToolCallbackProvider` is the
-`ToolCallbackProvider` supplied by the application's MCP integration.
-
-```java
-ToolCallbackProvider protectedMcpTools =
-        privacyToolCallbackFactory.wrapProvider(mcpToolCallbackProvider);
-```
-
-Register the wrapped `ToolCallbackProvider` with the client's `defaultTools(...)`:
-
-```java
-ChatClient mcpClient = privacyConfigurer.configure(builder)
-        .defaultTools(protectedMcpTools)
+ChatClient toolClient = guardrails.builder(chatModel, toolPolicy)
+        .defaultTools(customerLookupToolCallback)
         .build();
 ```
 
-If an MCP provider adds a tool-name prefix, configure `tools.disclosures` with
+Detected values in tool results are protected before being returned to the model
+or application. Request-specific tools passed to `.tools(...)` follow the same policy.
+
+### MCP and Dynamic ToolCallbackProvider
+
+Register the provider itself so Spring AI resolves its current tools for every request:
+
+```java
+ChatClient mcpClient = guardrails.builder(chatModel, toolPolicy)
+        .defaultTools(mcpToolCallbackProvider)
+        .build();
+```
+
+If an MCP provider adds a tool-name prefix, configure `ToolDisclosurePolicy` with
 the final prefixed tool name.
 
 Privacy protection is not applied automatically to separate tool-calling paths
@@ -239,16 +209,9 @@ tool-result re-protection, see the
 To limit which tools the model can discover and execute based on the current
 user's permissions, add the Spring Security starter and register a tool
 authorization policy as an `AuthorizationManager<ToolAuthorizationContext>`
-bean. Create the `ChatClient` with the factory bean for the features you need:
-
-- **Tool authorization alone:** Use `ToolAuthorizationChatClientFactory`.
-  No privacy starter or analyzer is required.
-- **Combined with privacy protection:** Configure a privacy starter and an
-  analyzer, then use `PrivacySecurityChatClientFactory`. If you configured
-  privacy protection in the preceding steps, use this factory to create the
-  client.
-
-Both factories create clients with `builder(chatModel).build()`. When both
+bean. Select `toolAuthorization(true)` in `GuardrailsPolicy` and pass it to
+`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)`. Privacy is selected independently.
+When both
 features are used, permission is checked again immediately before tool
 execution, and only then are the original PII values allowed for that tool
 restored.
@@ -262,15 +225,13 @@ Presidio is an open-source framework for PII detection and de-identification.
 Use the Presidio starter when you want to detect PII beyond
 application-specific patterns through an external Presidio Analyzer service.
 
-The Presidio starter already includes the base Privacy Guardrails starter, so
-do not add the base starter separately when using Presidio. Add another analyzer
-starter only when that analyzer is also needed.
+Add the Presidio starter alongside the [client starter](#2-quick-start-with-regex):
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -280,7 +241,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -303,27 +264,26 @@ If you cloned this repository, start its pinned local Presidio service with:
 docker compose -f samples/presidio/docker-compose.yml up -d --wait
 ```
 
-Presidio also requires the `PrivacyChatClientConfigurer` setup in
-[Protect a ChatClient](#3-protect-a-chatclient). If you already applied it above,
-you do not need to configure the client again.
+Create the client as shown in [Protect a ChatClient](#3-protect-a-chatclient).
 
 Regex and Presidio may also be enabled together. In the default `UNION` mode,
 all configured analyzers run and their detection findings are merged. The
 default `REQUIRE_ALL` failure policy fails the request if any configured
 analyzer fails. Review
-[Configuration](configuration.md#detection-and-resolution) before combining
+[Privacy Protection](privacy.md#detection-and-resolution) before combining
 analyzers in production.
 
 ## 6. Use OpenNLP for JVM-Local Detection
 
 Use the OpenNLP starter when detection should run inside the application JVM
-with application-supplied compatible OpenNLP models.
+with application-supplied compatible OpenNLP models. Add it alongside the
+[client starter](#2-quick-start-with-regex).
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -333,7 +293,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -356,7 +316,7 @@ OpenNLP model binaries are not bundled with this project. The application owns
 the model files and must validate model provenance, tokenizer compatibility, and
 detection quality for the target environment.
 
-`tokenizer-model` is optional; when omitted, the integration uses OpenNLP's
+`tokenizer-model` is optional. When omitted, the integration uses OpenNLP's
 `SimpleTokenizer`.
 
 See the
@@ -365,20 +325,18 @@ for the reproducible OpenNLP smoke-test setup.
 
 ## 7. Optional: Protect Final Responses
 
-Input and tool boundaries do not automatically enable final-response
-inspection.
+Final-response privacy protection is disabled by default. Enable it in the client policy:
 
-Enable output protection when application-facing responses also need a final
-privacy check:
-
-```yaml
-spring:
-  ai:
-    privacy:
-      output:
-        enabled: true
-        action: tokenize
+```java
+GuardrailsPolicy outputPolicy = GuardrailsPolicy.builder()
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .outputProtection().tokenize()
+                .build())
+        .build();
+ChatClient outputClient = guardrails.builder(chatModel, outputPolicy).build();
 ```
+
+Choose the output action through `outputProtection()` in the privacy settings.
 
 Supported output actions are:
 
@@ -394,8 +352,8 @@ library first buffers the complete response, inspects it, and then releases the
 protected result. This allows PII split across multiple chunks to be detected, but model output
 cannot be delivered in real time as it is generated.
 
-See [Output Policy and Streaming](configuration.md#output-policy-and-streaming)
-and [Input and Response Limits](configuration.md#input-and-response-limits) for
+See [Output Policy and Streaming](privacy.md#output-policy-and-streaming)
+and [Input and Response Limits](privacy.md#input-and-response-limits) for
 details.
 
 ## 8. Custom Analyzers
@@ -410,9 +368,9 @@ be invoked concurrently by multiple requests, so it must be thread-safe and
 reentrant. Apply finite timeouts to blocking work such as external service calls
 and bound its own memory and other resource usage.
 
-See [Configuration](configuration.md#detection-and-resolution) for analyzer
+See [Privacy Protection](privacy.md#detection-and-resolution) for analyzer
 selection, provider IDs, entity aliases, confidence floors, and failure
-policies. See [Custom Analyzers](configuration.md#custom-analyzers) for
+policies. See [Custom Analyzers](privacy.md#custom-analyzers) for
 implementation requirements and analysis of multiple texts.
 
 ## Boundary Notes
@@ -424,9 +382,9 @@ chat-memory storage, vector stores, databases, logs, or traces.
 
 ## Next Steps
 
-- See [Configuration](configuration.md) for the complete property and API
-  reference.
-- See [Privacy-Safe Runtime Observation](configuration.md#privacy-safe-runtime-observation)
+- See [Configuration](configuration.md) to combine features and reuse client policies.
+- See [Privacy Protection](privacy.md) for privacy properties, behavior and API usage.
+- See [Privacy-Safe Runtime Observation](privacy.md#privacy-safe-runtime-observation)
   to observe boundary outcomes without exposing PII or payloads.
 - See the [Sample / Demo Guide](sample.md) to check protection in Local Tool,
   RAG, and Streamable HTTP MCP scenarios.

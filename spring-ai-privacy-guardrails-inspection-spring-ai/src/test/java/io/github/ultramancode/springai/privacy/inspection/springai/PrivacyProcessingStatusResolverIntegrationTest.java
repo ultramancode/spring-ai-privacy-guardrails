@@ -88,11 +88,11 @@ class PrivacyProcessingStatusResolverIntegrationTest {
         AtomicBoolean interruptObserved = new AtomicBoolean();
         List<InspectionException> observedInspectionFailures = new CopyOnWriteArrayList<>();
         InspectionObserver observer = new InspectionObserver() {
-            public void onInspection(InspectionReport report) {
+            public void onInspection(InspectionReport report, InspectionExecution execution) {
                 inspectionReportNotificationCount.incrementAndGet();
             }
 
-            public void onFailure(InspectionException failure) {
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 observedInspectionFailures.add(failure);
                 interruptObserved.set(Thread.currentThread().isInterrupted());
                 if (observerThrows) {
@@ -167,11 +167,11 @@ class PrivacyProcessingStatusResolverIntegrationTest {
         AtomicInteger inspectorInvocationCount = new AtomicInteger();
         List<InspectionException> observedInspectionFailures = new CopyOnWriteArrayList<>();
         InspectionObserver observer = new InspectionObserver() {
-            public void onInspection(InspectionReport report) {
+            public void onInspection(InspectionReport report, InspectionExecution execution) {
                 throw new AssertionError("A hard failure must use onFailure");
             }
 
-            public void onFailure(InspectionException failure) {
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 observedInspectionFailures.add(failure);
             }
         };

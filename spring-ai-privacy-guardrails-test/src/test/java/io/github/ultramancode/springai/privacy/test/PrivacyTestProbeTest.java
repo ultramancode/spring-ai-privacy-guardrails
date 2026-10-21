@@ -1,6 +1,7 @@
 package io.github.ultramancode.springai.privacy.test;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
@@ -11,6 +12,8 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFacto
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextTestAccess;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -41,92 +44,77 @@ class PrivacyTestProbeTest {
 
     private static final Pattern PERSON_TOKEN = OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
-    @Test
-    void probeVerifiesModelToolAndSessionBoundariesEndToEnd() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void probeVerifiesModelToolAndSessionBoundariesEndToEnd(boolean streaming) {
         PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        PrivacyToolCallbackFactory toolCallbackFactory = new PrivacyToolCallbackFactory(
-                privacyService,
-                ToolDisclosurePolicy.byToolName(Map.of("customerLookup", Set.of("PERSON")))
-        );
-        ToolCallback protectedTool = probe.wrapTool(customerLookup(), toolCallbackFactory);
-        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
-                .build()
-                .configure(ChatClient.builder(probe.wrapModel(new ToolLoopModel())))
-                .defaultTools(protectedTool)
-                .build();
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
+        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(
+                ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("customerLookup", Set.of("PERSON")))))
+            .build();
+        ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
+            .build()
+            .builder(privacyTestProbe.wrapModel(new ToolLoopModel()), guardrailsPolicy)
+            .defaultTools(privacyTestProbe.wrapTool(customerLookup()))
+            .build();
 
-        String response = chatClient.prompt().user("Find Alice").call().content();
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().user("Find Alice");
+        String response = streaming
+            ? request.stream().content().reduce("", String::concat).block()
+            : request.call().content();
 
         assertThat(response).isEqualTo("Lookup complete");
-        assertThatPrivacy(probe)
-                .hasModelRequestCount(2)
-                .hasToolCallCount(1)
-                .modelRequestsDoNotContainRawValues("Alice", "Bob")
-                .modelRequestsContainOpaqueToken("PERSON")
-                .modelRequestHasDistinctOpaqueTokenCount(1, "PERSON", 2)
-                .toolInputsContain("customerLookup", "Alice")
-                .toolOutputsContain("customerLookup", "Bob")
-                .hasNoActivePrivacySessions();
+        assertThatPrivacy(privacyTestProbe)
+            .hasModelRequestCount(2)
+            .hasToolCallCount(1)
+            .modelRequestsDoNotContainRawValues("Alice", "Bob")
+            .modelRequestsContainOpaqueToken("PERSON")
+            .modelRequestHasDistinctOpaqueTokenCount(1, "PERSON", 2)
+            .toolInputsContain("customerLookup", "Alice")
+            .toolOutputsContain("customerLookup", "Bob")
+            .hasNoActivePrivacySessions();
         // The first model request contains the user's input, before customerLookup runs.
-        assertThat(probe.modelRequests().get(0).toString())
-                .doesNotContain("Alice", "PII_PERSON");
-        assertThat(probe.modelRequests()).allSatisfy(snapshot -> assertThat(snapshot.toolDefinitions())
-                .singleElement()
+        assertThat(privacyTestProbe.modelRequests().get(0).toString())
+            .doesNotContain("Alice", "PII_PERSON");
+        assertThat(privacyTestProbe.modelRequests()).allSatisfy(snapshot -> {
+            assertThat(snapshot.invocation()).isEqualTo(streaming
+                ? ModelRequestSnapshot.Invocation.STREAM : ModelRequestSnapshot.Invocation.CALL);
+            assertThat(snapshot.toolDefinitions()).singleElement()
                 .isEqualTo(new ToolDefinitionSnapshot(
-                        "customerLookup",
-                        "Looks up a synthetic customer",
-                        "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}"
-                )));
-        // The second model request includes customerLookup's call and result.
-        assertThat(probe.modelRequests().get(1).toolControlFields())
-                .containsExactly(
-                        new ToolControlFieldSnapshot(
-                                ToolControlFieldSnapshot.Source.ASSISTANT_TOOL_CALL,
-                                "call-1",
-                                "function",
-                                "customerLookup"
-                        ),
-                        new ToolControlFieldSnapshot(
-                                ToolControlFieldSnapshot.Source.TOOL_RESPONSE,
-                                "call-1",
-                                null,
-                                "customerLookup"
-                        )
-                );
-        assertThat(probe.modelRequests().get(1).toString())
-                .doesNotContain("customerLookup", "call-1");
-        assertThatThrownBy(() -> assertThatPrivacy(probe)
-                .modelRequestsDoNotContainRawValues("Looks up a synthetic customer"))
-                .isInstanceOf(AssertionError.class);
-        assertThatThrownBy(() -> assertThatPrivacy(probe).modelRequestsDoNotContainRawValues("call-1"))
-                .isInstanceOf(AssertionError.class);
-    }
-
-    @Test
-    void probeRecordsStreamingInvocations() {
-        PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
-                .build()
-                .configure(ChatClient.builder(probe.wrapModel(new EchoModel())))
-                .build();
-
-        String response = chatClient.prompt().user("Find Alice").stream().content().blockFirst();
-
-        assertThat(response).isEqualTo("ok");
-        assertThat(probe.modelRequests()).singleElement().satisfies(snapshot -> {
-            assertThat(snapshot.invocation()).isEqualTo(ModelRequestSnapshot.Invocation.STREAM);
-            assertThat(snapshot.modelVisibleContent()).noneMatch(content -> content.contains("Alice"));
+                    "customerLookup",
+                    "Looks up a synthetic customer",
+                    "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}"
+            ));
         });
-        assertThatPrivacy(probe)
-                .modelRequestsContainOpaqueToken("PERSON")
-                .hasNoActivePrivacySessions();
+        // The second model request includes customerLookup's call and result.
+        assertThat(privacyTestProbe.modelRequests().get(1).toolControlFields())
+            .containsExactly(
+                new ToolControlFieldSnapshot(
+                    ToolControlFieldSnapshot.Source.ASSISTANT_TOOL_CALL,
+                    "call-1",
+                    "function",
+                    "customerLookup"
+                ),
+                new ToolControlFieldSnapshot(
+                    ToolControlFieldSnapshot.Source.TOOL_RESPONSE,
+                    "call-1",
+                    null,
+                    "customerLookup"
+                )
+            );
+        assertThat(privacyTestProbe.modelRequests().get(1).toString())
+            .doesNotContain("customerLookup", "call-1");
+        assertThatThrownBy(() -> assertThatPrivacy(privacyTestProbe)
+            .modelRequestsDoNotContainRawValues("Looks up a synthetic customer"))
+            .isInstanceOf(AssertionError.class);
+        assertThatThrownBy(() -> assertThatPrivacy(privacyTestProbe).modelRequestsDoNotContainRawValues("call-1"))
+            .isInstanceOf(AssertionError.class);
     }
 
     @Test
     void probeRecordsSupportedAssistantReasoningContentVisibleToTheModel() {
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService());
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService());
         AssistantMessage assistant = AssistantMessage.builder()
                 .content("safe")
                 .properties(Map.of(
@@ -140,28 +128,24 @@ class PrivacyTestProbeTest {
                 .reasoningContent("Carol reasoned")
                 .build();
 
-        probe.wrapModel(new EchoModel()).call(new Prompt(List.of(assistant, deepSeekAssistant)));
+        privacyTestProbe.wrapModel(new EchoModel()).call(new Prompt(List.of(assistant, deepSeekAssistant)));
 
-        assertThat(probe.modelRequests()).singleElement().satisfies(snapshot ->
-                assertThat(snapshot.modelVisibleContent())
-                        .contains(
-                                "safe",
-                                "Alice reasoned",
-                                "Bob considered",
-                                "also safe",
-                                "Carol reasoned"
-                        )
+        assertThat(privacyTestProbe.modelRequests()).singleElement().satisfies(snapshot ->
+            assertThat(snapshot.modelVisibleContent())
+                .contains(
+                    "safe",
+                    "Alice reasoned",
+                    "Bob considered",
+                    "also safe",
+                    "Carol reasoned"
+                )
         );
     }
 
     @Test
     void probeSnapshotsToolDefinitionAndMetadataAccessorsOnce() {
-        PrivacyService service = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(service);
-        PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
-                service,
-                ToolDisclosurePolicy.denyAll()
-        );
+        PrivacyService privacyService = privacyService();
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
         AtomicInteger definitionReads = new AtomicInteger();
         AtomicInteger metadataReads = new AtomicInteger();
         AtomicInteger nameReads = new AtomicInteger();
@@ -214,7 +198,7 @@ class PrivacyTestProbeTest {
             }
         };
 
-        ToolCallback wrapped = probe.wrapTool(delegate, factory);
+        ToolCallback wrapped = privacyTestProbe.wrapTool(delegate);
 
         assertThat(wrapped.getToolDefinition().name()).isEqualTo("lookup");
         assertThat(wrapped.getToolMetadata().returnDirect()).isFalse();
@@ -226,38 +210,39 @@ class PrivacyTestProbeTest {
         assertThat(returnDirectReads).hasValue(1);
     }
 
-    @Test
-    void probeVerifiesDefaultDenyToolBoundary() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void probeVerifiesDefaultDenyToolBoundary(boolean streaming) {
         PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        PrivacyToolCallbackFactory toolCallbackFactory = new PrivacyToolCallbackFactory(
-                privacyService,
-                ToolDisclosurePolicy.denyAll()
-        );
-        ToolCallback protectedTool = probe.wrapTool(customerLookup(), toolCallbackFactory);
-        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
-                .build()
-                .configure(ChatClient.builder(probe.wrapModel(new ToolLoopModel())))
-                .defaultTools(protectedTool)
-                .build();
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
+        ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
+            .build()
+            .builder(privacyTestProbe.wrapModel(new ToolLoopModel()), GuardrailsPolicy.builder().privacy().build())
+            .defaultTools(privacyTestProbe.wrapTool(customerLookup()))
+            .build();
 
-        chatClient.prompt().user("Find Alice").call().content();
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().user("Find Alice");
+        if (streaming) {
+            request.stream().content().blockLast();
+        } else {
+            request.call().content();
+        }
 
-        assertThatPrivacy(probe)
-                .toolInputsDoNotContainRawValues("customerLookup", "Alice")
-                .toolInputsContainOpaqueToken("customerLookup", "PERSON")
-                .hasNoActivePrivacySessions();
+        assertThatPrivacy(privacyTestProbe)
+            .toolInputsDoNotContainRawValues("customerLookup", "Alice")
+            .toolInputsContainOpaqueToken("customerLookup", "PERSON")
+            .hasNoActivePrivacySessions();
     }
 
     @Test
     void probeRecordsDelegateFailureWhilePrivacyBoundaryPreservesTheException() {
         PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
         PrivacyToolCallbackFactory toolCallbackFactory = new PrivacyToolCallbackFactory(
                 privacyService,
                 ToolDisclosurePolicy.denyAll()
         );
-        ToolCallback failingTool = probe.wrapTool(failingTool(), toolCallbackFactory);
+        ToolCallback failingTool = toolCallbackFactory.wrap(privacyTestProbe.wrapTool(failingTool()));
         String toolInput = "\"synthetic-secret\"";
 
         try (PrivacySession session = privacyService.openSession()) {
@@ -268,55 +253,53 @@ class PrivacyTestProbeTest {
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("failure containing " + toolInput);
         }
-        assertThat(probe.toolCalls()).singleElement().satisfies(snapshot -> {
+        assertThat(privacyTestProbe.toolCalls()).singleElement().satisfies(snapshot -> {
             assertThat(snapshot.input()).isEqualTo(toolInput);
             assertThat(snapshot.output()).isNull();
             assertThat(snapshot.failureClassName()).isEqualTo(IllegalStateException.class.getName());
             assertThat(snapshot.toString()).doesNotContain("failure containing", "synthetic-secret");
         });
 
-        probe.close();
+        privacyTestProbe.wrapModel(new EchoModel()).call(new Prompt("early Alice"));
+        assertThat(privacyTestProbe.modelRequests()).hasSize(1);
 
-        assertThat(probe.modelRequests()).isEmpty();
-        assertThat(probe.toolCalls()).isEmpty();
+        privacyTestProbe.close();
 
-        probe.wrapModel(new EchoModel()).call(new Prompt("late Alice"));
+        assertThat(privacyTestProbe.modelRequests()).isEmpty();
+        assertThat(privacyTestProbe.toolCalls()).isEmpty();
 
-        assertThat(probe.modelRequests()).isEmpty();
+        privacyTestProbe.wrapModel(new EchoModel()).call(new Prompt("late Alice"));
+
+        assertThat(privacyTestProbe.modelRequests()).isEmpty();
     }
 
     @Test
-    void probeRejectsAlreadyWrappedToolToKeepRecorderInsideThePrivacyBoundary() {
-        PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        PrivacyToolCallbackFactory toolCallbackFactory = new PrivacyToolCallbackFactory(
-                privacyService,
-                ToolDisclosurePolicy.denyAll()
-        );
-        ToolCallback alreadyWrapped = toolCallbackFactory.wrap(customerLookup());
+    void probeRejectsAlreadyRecordedToolToAvoidDuplicateSnapshots() {
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService());
+        ToolCallback alreadyWrapped = privacyTestProbe.wrapTool(customerLookup());
 
-        assertThatThrownBy(() -> probe.wrapTool(alreadyWrapped, toolCallbackFactory))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("delegate must be an unwrapped tool callback");
+        assertThatThrownBy(() -> privacyTestProbe.wrapTool(alreadyWrapped))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("delegate must not already be wrapped by a PrivacyTestProbe");
     }
 
     @Test
     void probeRejectsAlreadyWrappedModelToAvoidDuplicateSnapshots() {
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService());
-        ChatModel wrapped = probe.wrapModel(new EchoModel());
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService());
+        ChatModel wrapped = privacyTestProbe.wrapModel(new EchoModel());
 
-        assertThatThrownBy(() -> probe.wrapModel(wrapped))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("delegate must be an unwrapped chat model");
+        assertThatThrownBy(() -> privacyTestProbe.wrapModel(wrapped))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("delegate must be an unwrapped chat model");
     }
 
     @Test
     void modelContentAssertionsFailWhenTheProbeRecordedNoModelRequest() {
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService());
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService());
 
-        assertThatThrownBy(() -> assertThatPrivacy(probe).modelRequestsDoNotContainRawValues("Alice"))
-                .isInstanceOf(AssertionError.class)
-                .hasMessageContaining("at least one recorded model request");
+        assertThatThrownBy(() -> assertThatPrivacy(privacyTestProbe).modelRequestsDoNotContainRawValues("Alice"))
+            .isInstanceOf(AssertionError.class)
+            .hasMessageContaining("at least one recorded model request");
     }
 
     private PrivacyService privacyService() {

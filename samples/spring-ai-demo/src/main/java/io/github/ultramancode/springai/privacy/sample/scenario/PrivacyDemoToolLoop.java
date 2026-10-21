@@ -1,8 +1,7 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -15,7 +14,6 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import reactor.core.publisher.Flux;
@@ -51,23 +49,20 @@ public final class PrivacyDemoToolLoop {
             CUSTOMER_ID_TOKEN_PATTERN
     );
 
-    private final PrivacySecurityChatClientFactory privacySecurityFactory;
-    private final PrivacyToolCallbackFactory toolCallbackFactory;
+    private final GuardrailsChatClientFactory guardrailsChatClientFactory;
     private final ToolDisclosurePolicy toolDisclosurePolicy;
     private final ToolCallingManager toolCallingManager;
     private final PrivacyDemoSecurityPolicy securityPolicy;
     private final ObjectMapper objectMapper;
 
     public PrivacyDemoToolLoop(
-            PrivacySecurityChatClientFactory privacySecurityFactory,
-            PrivacyToolCallbackFactory toolCallbackFactory,
-            ToolDisclosurePolicy toolDisclosurePolicy,
-            ToolCallingManager toolCallingManager,
-            PrivacyDemoSecurityPolicy securityPolicy,
-            ObjectMapper objectMapper
+        GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolDisclosurePolicy toolDisclosurePolicy,
+        ToolCallingManager toolCallingManager,
+        PrivacyDemoSecurityPolicy securityPolicy,
+        ObjectMapper objectMapper
     ) {
-        this.privacySecurityFactory = privacySecurityFactory;
-        this.toolCallbackFactory = toolCallbackFactory;
+        this.guardrailsChatClientFactory = guardrailsChatClientFactory;
         this.toolDisclosurePolicy = toolDisclosurePolicy;
         this.toolCallingManager = toolCallingManager;
         this.securityPolicy = securityPolicy;
@@ -98,59 +93,59 @@ public final class PrivacyDemoToolLoop {
     }
 
     private Attempt execute(String input, PrivacyDemoLocale locale) {
-        DemoToolLoopModel model = new DemoToolLoopModel(
-                this.objectMapper,
-                "CRM",
-                locale,
-                this.toolCallingManager
+        DemoToolLoopModel toolLoopModel = new DemoToolLoopModel(
+            this.objectMapper,
+            "CRM",
+            locale,
+            this.toolCallingManager
         );
-        PrivacyDemoCrmTool delegate = new PrivacyDemoCrmTool(this.objectMapper);
-        ToolCallback scopedTool = this.toolCallbackFactory.wrap(delegate);
+        PrivacyDemoCrmTool crmTool = new PrivacyDemoCrmTool(this.objectMapper);
 
-        ChatClient.Builder builder = this.privacySecurityFactory.builder(model)
-                .defaultTools(scopedTool);
+        ChatClient.Builder chatClientBuilder = this.guardrailsChatClientFactory.builder(toolLoopModel)
+            .defaultTools(crmTool);
         String finalResponse;
         try {
-            finalResponse = builder.build().prompt().user(input).call().content();
+            finalResponse = chatClientBuilder.build().prompt().user(input).call().content();
         }
         catch (AuthorizationDeniedException denial) {
-            return new Attempt(model, delegate, null, denial);
+            return new Attempt(toolLoopModel, crmTool, null, denial);
         }
 
-        List<String> allowedOriginalEntityTypes = this.toolDisclosurePolicy.scopeFor(delegate.getToolDefinition())
-                .entityTypes()
-                .stream()
-                .sorted()
-                .toList();
+        List<String> allowedOriginalEntityTypes = this.toolDisclosurePolicy
+            .getAllowedEntityTypes(crmTool.getToolDefinition())
+            .entityTypes()
+            .stream()
+            .sorted()
+            .toList();
         BoundaryEvidence boundaryEvidence = new BoundaryEvidence(
-                EvidenceCount.expectedNone(model.rawValueCount(), RAW_VALUES.size()),
-                EvidenceCount.expectedNone(
-                        delegate.deniedRawValueCount(),
-                        DENIED_TOOL_VALUES.size()
-                ),
-                EvidenceCount.expectedAll(
-                        delegate.allowedRawValueCount(),
-                        ALLOWED_TOOL_VALUES.size()
-                ),
-                EvidenceCount.expectedNone(
-                        model.rawToolResultValueCountAtModel(),
-                        RAW_VALUES.size()
-                )
+            EvidenceCount.expectedNone(toolLoopModel.rawValueCount(), RAW_VALUES.size()),
+            EvidenceCount.expectedNone(
+                crmTool.deniedRawValueCount(),
+                DENIED_TOOL_VALUES.size()
+            ),
+            EvidenceCount.expectedAll(
+                crmTool.allowedRawValueCount(),
+                ALLOWED_TOOL_VALUES.size()
+            ),
+            EvidenceCount.expectedNone(
+                toolLoopModel.rawToolResultValueCountAtModel(),
+                RAW_VALUES.size()
+            )
         );
 
         Result result = new Result(
-                model.calls(),
-                !model.rawPiiSeenByModel(),
-                model.protectedModelInput(),
-                model.issuedToolArguments(),
-                allowedOriginalEntityTypes,
-                delegate.receivedOnlyAllowedOriginals(),
-                delegate.lookupSucceededWithRestoredCustomerId(),
-                model.protectedToolResultSeenByModel(),
-                boundaryEvidence,
-                finalResponse
+            toolLoopModel.calls(),
+            !toolLoopModel.rawPiiSeenByModel(),
+            toolLoopModel.protectedModelInput(),
+            toolLoopModel.issuedToolArguments(),
+            allowedOriginalEntityTypes,
+            crmTool.receivedOnlyAllowedOriginals(),
+            crmTool.lookupSucceededWithRestoredCustomerId(),
+            toolLoopModel.protectedToolResultSeenByModel(),
+            boundaryEvidence,
+            finalResponse
         );
-        return new Attempt(model, delegate, result, null);
+        return new Attempt(toolLoopModel, crmTool, result, null);
     }
 
     record SecurityRun(
@@ -172,13 +167,13 @@ public final class PrivacyDemoToolLoop {
             String denialType = denial == null ? null : denial.getClass().getSimpleName();
 
             return new SecurityRun(
-                    role.authority(),
-                    attempt.model().exposedToolNames(),
-                    authenticatedRun.checks(),
-                    attempt.model().issuedToolArguments() != null,
-                    denialType,
-                    attempt.delegate().calls(),
-                    attempt.result()
+                role.authority(),
+                attempt.toolLoopModel().exposedToolNames(),
+                authenticatedRun.checks(),
+                attempt.toolLoopModel().issuedToolArguments() != null,
+                denialType,
+                attempt.crmTool().calls(),
+                attempt.result()
             );
         }
 
@@ -204,10 +199,10 @@ public final class PrivacyDemoToolLoop {
     }
 
     private record Attempt(
-            DemoToolLoopModel model,
-            PrivacyDemoCrmTool delegate,
-            Result result,
-            AuthorizationDeniedException denial
+        DemoToolLoopModel toolLoopModel,
+        PrivacyDemoCrmTool crmTool,
+        Result result,
+        AuthorizationDeniedException denial
     ) {
     }
 

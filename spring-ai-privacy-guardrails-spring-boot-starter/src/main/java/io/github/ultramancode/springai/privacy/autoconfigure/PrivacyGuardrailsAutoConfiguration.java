@@ -11,7 +11,6 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
-import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -200,31 +199,24 @@ public class PrivacyGuardrailsAutoConfiguration {
 
     @Bean
     @ConditionalOnBean(PrivacyService.class)
+    @ConditionalOnMissingBean
     PrivacyChatClientConfigurer privacyChatClientConfigurer(
-            PrivacyService privacyService,
-            PrivacyToolCallbackFactory toolCallbackFactory,
-            PrivacyGuardrailsProperties properties,
-            ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
+        PrivacyService privacyService,
+        PrivacyToolCallbackFactory toolCallbackFactory,
+        ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
     ) {
         PrivacyEnforcementObserver configuredEnforcementObserver = enforcementObserver
                 .getIfAvailable(PrivacyEnforcementObserver::noop);
-        PrivacyGuardrailsProperties.Output outputProperties = properties.getOutput();
-        PrivacyResponseInspectionLimits responseInspectionLimits =
-                properties.getResponseInspection().limits();
-        PrivacyChatClientConfigurer.Builder builder = PrivacyChatClientConfigurer.builder(privacyService)
-                .toolCallbackFactory(toolCallbackFactory)
-                .responseInspectionLimits(responseInspectionLimits)
-                .enforcementObserver(configuredEnforcementObserver);
-        if (outputProperties.isEnabled()) {
-            builder.outputProtection(outputProperties.getAction(), outputProperties.getBlockExceptionMessage());
-        }
-        return builder.build();
+        return PrivacyChatClientConfigurer.builder(privacyService)
+            .toolCallbackFactory(toolCallbackFactory)
+            .enforcementObserver(configuredEnforcementObserver)
+            .build();
     }
 
     @Bean
     @ConditionalOnMissingBean
-    ToolDisclosurePolicy toolDisclosurePolicy(PrivacyGuardrailsProperties properties) {
-        return ToolDisclosurePolicy.byToolName(properties.getTools().getDisclosures());
+    ToolDisclosurePolicy toolDisclosurePolicy() {
+        return ToolDisclosurePolicy.denyAll();
     }
 
     @Bean

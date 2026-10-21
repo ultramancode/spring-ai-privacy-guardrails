@@ -28,7 +28,7 @@ flowchart TD
 ```
 
 Detection offsets always refer to the caller-supplied input text. Analyzers
-return ranges, entity types, scores, and other evidence; `core` validates,
+return ranges, entity types, scores, and other evidence. The `core` module validates,
 canonicalizes, and resolves that evidence according to application policy.
 Mappings between opaque tokens and original values are managed per request
 through `PrivacySession`.
@@ -36,6 +36,10 @@ through `PrivacySession`.
 The library protects data that crosses supported model, tool, and output
 boundaries. The optional Spring Security integration can also authorize tool
 discovery and execution.
+
+Clients select privacy protection, content inspection and tool authorization through
+`GuardrailsChatClientFactory` and `GuardrailsPolicy`.
+See [Configuration](configuration.md) for setup.
 
 ## Module Structure
 
@@ -50,6 +54,12 @@ used independently or applied together to the same `ChatClient`.
 %%{init: {"flowchart": {"curve": "linear"}}}%%
 flowchart LR
     CORE["core"]
+    CLIENT["Client factory"] --> SAI
+    CLIENT --> INSPECT["Inspection integration"]
+    CLIENTBOOT["Client starter"] --> CLIENT
+    CLIENTBOOT --> BASE
+    CLIENTBOOT --> INSPECTBOOT["Inspection starter"]
+    INSPECTBOOT --> INSPECT
 
     PRES["Presidio integration"] --> CORE
     SAI["Spring AI integration"] --> CORE
@@ -79,14 +89,14 @@ The optional Spring Security integration uses Spring AI's tool-calling APIs and
 Spring Security Core. Its Spring Boot starter can be used independently of the
 base starter.
 
-Both integration modules depend on `spring-ai-privacy-guardrails-spring-ai-boundary`.
+The privacy, inspection and security integrations share
+`spring-ai-privacy-guardrails-spring-ai-boundary`.
 Before each model call, this shared module runs privacy protection, tool authorization,
 and content inspection in that order. Unconfigured stages are skipped.
 
-To use privacy protection and tool authorization together, add a privacy
-starter alongside the Spring Security starter and apply both capabilities to
-the same `ChatClient`. No Spring Security dependency is added to `core` or any
-existing privacy module.
+To use privacy protection and tool authorization together, add the client and
+Spring Security starters and select both features in the [client policy](configuration.md).
+The core and privacy modules do not depend on Spring Security.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
 Benchmarks and samples are repository-internal modules for performance
@@ -100,6 +110,7 @@ and are not part of the compatibility contract.
 
 | Role | Representative public APIs |
 | --- | --- |
+| Client assembly | `GuardrailsChatClientFactory`, `GuardrailsPolicy` |
 | Application API | `PrivacyService`, `PrivacySession` |
 | Analyzer extension | `PiiAnalyzer`, `RegexPiiMatchValidator` |
 | Tool policy | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
@@ -138,7 +149,7 @@ work such as an external service call, that work must also use an appropriate
 finite timeout.
 
 Analyzer selection, failure policy, and score thresholds are configured under
-[Detection and Resolution](configuration.md#detection-and-resolution), which
+[Detection and Resolution](privacy.md#detection-and-resolution), which
 also documents overlap-resolution behavior.
 
 ## Requests and Sessions
@@ -229,8 +240,8 @@ with incomplete protection.
 The privacy integration can be used with other Spring AI advisors. Changes to
 model input, tools, or responses made by an advisor outside the privacy
 boundary are outside the automatic protection scope. See
-[Apply Privacy Protection to ChatClient](configuration.md#apply-privacy-protection-to-chatclient)
-for the supported composition rules.
+[advisor configuration](configuration.md#advisor-configuration)
+for advisor registration.
 
 ## Model and Output
 
@@ -252,30 +263,29 @@ Apart from reasoning text explicitly supported by the library, response metadata
 and non-text content such as images and audio are not automatically protected.
 
 Output policy and streaming behavior are documented under
-[Output Policy and Streaming](configuration.md#output-policy-and-streaming).
+[Output Policy and Streaming](privacy.md#output-policy-and-streaming).
 
 ## Tool Execution
 
-`PrivacyToolCallbackFactory` is the public API for applying privacy protection
-to `ToolCallback` and `ToolCallbackProvider` instances. Protected tools use the
-current request session to restore only the original values they need and
-protect their results again after execution.
+When privacy is selected, `GuardrailsChatClientFactory` automatically protects
+registered `ToolCallback` and `ToolCallbackProvider` instances. For manual assembly,
+wrap them with `PrivacyToolCallbackFactory`. Protected tools use the current request
+session to restore only the permitted original values and protect their results
+again after execution.
 
 Original-value disclosure to tools is default-deny. Tool registration and
 permission to receive original values are separate concerns: only tools
 configured for specific entity types receive those originals immediately before
 execution.
 
-On a protected `ChatClient`'s standard tool path, callbacks that are not wrapped
-by `PrivacyToolCallbackFactory` are rejected. Separate execution paths that use
-a custom `ToolCallingManager` or `ToolCallbackResolver` are outside the automatic
-protection scope.
+Separate execution paths that use a custom `ToolCallingManager` or
+`ToolCallbackResolver` are outside the automatic protection scope.
 
 Logs written or exceptions raised inside a tool after original values have been
 disclosed are not re-protected and may contain those values.
 
 Detailed disclosure rules and the `returnDirect` flow are documented under
-[Per-Tool Original Disclosure](configuration.md#per-tool-original-disclosure).
+[Per-Tool Original Disclosure](privacy.md#per-tool-original-disclosure).
 
 ## Optional Tool Authorization Boundary
 
@@ -330,7 +340,7 @@ for the conditions under which text is sent to an external guard model.
 
 Library-owned privacy failures use `PrivacyGuardrailException` and
 `PrivacyFailureCode`. These failures do not include original PII or analyzer
-response bodies; they expose only limited diagnostic information such as the
+response bodies. They expose only limited diagnostic information such as the
 failure category and processing phase.
 
 `PiiAnalyzerFailureObserver` receives the same sanitized failure information.
@@ -339,7 +349,7 @@ operational diagnostics such as metrics, tracing, and logs.
 
 The optional `PrivacyEnforcementObserver` reports `PROTECTED`, `DISCLOSED`, and
 `BLOCKED` outcomes at the model, tool-input, tool-result, and application-output
-boundaries. Events contain only `boundary` and `outcome`; observer failures
+boundaries. Events contain only `boundary` and `outcome`. Observer failures
 cannot affect privacy enforcement.
 
 Exceptions raised by model providers, application tools, and external
@@ -349,14 +359,14 @@ whether they record sensitive values depends on the logging configuration of
 the component that produced them.
 
 Error codes and processing phases are documented under
-[Privacy Error Handling](configuration.md#privacy-error-handling).
+[Privacy Error Handling](privacy.md#privacy-error-handling).
 
 ## Resource Limits and Request Cleanup
 
 Privacy operations performed directly by the library, such as text
 transformation, structured-value traversal, analyzer-result retention, and
 response inspection, use processing bounds to keep memory use predictable. See
-[Configuration](configuration.md) for the main limits and related settings.
+[Privacy Protection](privacy.md) for the main limits and related settings.
 
 When a Spring AI streaming request is cancelled or fails, the library cleans
 up the request session and the privacy mappings it manages.
@@ -378,7 +388,7 @@ that PII did not reach the model, only required original values were disclosed
 to a tool, and the request session was cleaned up correctly.
 
 `PrivacyTestProbe` is a test-only API for verifying privacy-boundary behavior.
-See [Test Support](configuration.md#test-support) for usage.
+See [Test Support](privacy.md#test-support) for usage.
 
 ## Analyzer Integration
 
@@ -392,8 +402,7 @@ credentials, and deployment environment follow that service's configuration.
 When the application supplies a model, as with OpenNLP, the selected model can
 affect both detection coverage and quality.
 
-Available analyzer configurations are documented under
-[Starter Selection](configuration.md#starter-selection).
+See [Privacy Protection](privacy.md) for analyzer configuration.
 
 ## Stored Data
 
@@ -401,5 +410,5 @@ Available analyzer configurations are documented under
 is included in model or tool input. The library does not automatically rewrite
 data that is already stored.
 
-See [Stored Data and Diagnostics](configuration.md#stored-data-and-diagnostics)
+See [Stored Data and Diagnostics](privacy.md#stored-data-and-diagnostics)
 for the detailed scope.

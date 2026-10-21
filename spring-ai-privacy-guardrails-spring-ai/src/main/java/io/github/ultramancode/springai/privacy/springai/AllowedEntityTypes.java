@@ -10,14 +10,14 @@ import java.util.Set;
 /**
  * Canonical entity types that one tool is permitted to receive as original values.
  *
- * @param entityTypes immutable canonical entity types disclosed to the tool
+ * @param entityTypes immutable canonical entity types the tool may receive as original values
  */
-public record ToolDisclosureScope(Set<String> entityTypes) {
+public record AllowedEntityTypes(Set<String> entityTypes) {
 
-    private static final ToolDisclosureScope NONE = new ToolDisclosureScope(Set.of());
+    private static final AllowedEntityTypes NONE = new AllowedEntityTypes(Set.of());
 
     /** Validates and defensively copies the permitted canonical entity types. */
-    public ToolDisclosureScope {
+    public AllowedEntityTypes {
         Set<String> canonicalTypes = new LinkedHashSet<>();
         for (String entityType : Objects.requireNonNull(entityTypes, "entityTypes must not be null")) {
             canonicalTypes.add(EntityTypeRegistry.requireValidEntityType(entityType));
@@ -26,29 +26,30 @@ public record ToolDisclosureScope(Set<String> entityTypes) {
     }
 
     /**
-     * Returns the default-deny disclosure that reveals no original values.
+     * Returns an empty instance that permits no original values.
      *
-     * @return the empty disclosure
+     * @return empty allowed entity types
      */
-    public static ToolDisclosureScope none() {
+    public static AllowedEntityTypes none() {
         return NONE;
     }
 
     /**
-     * Creates a disclosure from application-supplied canonical entity types.
+     * Creates allowed entity types from application-supplied canonical names.
      *
      * @param entityTypes exact uppercase entity types the tool may receive as originals
-     * @return validated immutable disclosure
+     * @return validated immutable allowed entity types
+     * @throws IllegalArgumentException if an entity type is invalid or appears more than once
+     * @throws NullPointerException if {@code entityTypes} is null
      */
-    public static ToolDisclosureScope of(Collection<String> entityTypes) {
+    public static AllowedEntityTypes of(Collection<String> entityTypes) {
         Objects.requireNonNull(entityTypes, "entityTypes must not be null");
-        Set<String> canonicalTypes = new LinkedHashSet<>();
+        Set<String> uniqueEntityTypes = new LinkedHashSet<>();
         for (String entityType : entityTypes) {
-            String canonicalType = EntityTypeRegistry.requireValidEntityType(entityType);
-            if (!canonicalTypes.add(canonicalType)) {
+            if (!uniqueEntityTypes.add(entityType)) {
                 throw new IllegalArgumentException("entityTypes contain duplicates");
             }
         }
-        return new ToolDisclosureScope(canonicalTypes);
+        return new AllowedEntityTypes(uniqueEntityTypes);
     }
 }

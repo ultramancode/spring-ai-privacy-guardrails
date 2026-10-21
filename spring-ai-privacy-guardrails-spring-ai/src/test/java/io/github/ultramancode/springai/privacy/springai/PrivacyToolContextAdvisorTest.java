@@ -9,14 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
-import org.springframework.ai.chat.client.advisor.StructuredOutputValidationAdvisor;
-import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
-import org.springframework.ai.chat.client.advisor.api.ToolAdvisor;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
@@ -33,7 +29,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.withSettings;
 
 class PrivacyToolContextAdvisorTest {
 
@@ -263,65 +258,7 @@ class PrivacyToolContextAdvisorTest {
     }
 
     @Test
-    void toolAdvisorOrderIsApplicationOwned() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolContextAdvisor advisor = new PrivacyToolContextAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        ToolCallingAdvisor unsafe = mock(ToolCallingAdvisor.class);
-        when(unsafe.getOrder()).thenReturn(PrivacyToolContextAdvisor.DEFAULT_ORDER);
-        when(chain.getCallAdvisors()).thenReturn(List.of(unsafe));
-        when(chain.nextCall(any())).thenReturn(TestPrivacyServices.response("ok"));
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(advisor.adviseCall(dynamicToolRequest(session.handle()), chain)).isNotNull();
-        }
-        verify(chain).nextCall(any());
-    }
-
-    @Test
-    void differentToolAdvisorImplementationIsAllowed() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolContextAdvisor advisor = new PrivacyToolContextAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        CallAdvisor unsupported = mock(
-                CallAdvisor.class,
-                withSettings().extraInterfaces(ToolAdvisor.class)
-        );
-        when(unsupported.getOrder()).thenReturn(ToolCallingAdvisor.DEFAULT_ORDER);
-        when(chain.getCallAdvisors()).thenReturn(List.of(unsupported));
-        when(chain.nextCall(any())).thenReturn(TestPrivacyServices.response("ok"));
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(advisor.adviseCall(dynamicToolRequest(session.handle()), chain)).isNotNull();
-        }
-        verify(chain).nextCall(any());
-    }
-
-    @Test
-    void toolCallingAdvisorSubclassIsAllowed() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolContextAdvisor advisor = new PrivacyToolContextAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        ToolCallingAdvisor unsupportedSubclass = new ToolCallingAdvisor(
-                ToolCallingManager.builder().build(),
-                response -> response != null && response.hasToolCalls(),
-                ToolCallingAdvisor.DEFAULT_ORDER,
-                true
-        ) { };
-        when(chain.getCallAdvisors()).thenReturn(List.of(
-                unsupportedSubclass,
-                new PrivacyToolCallValidationAdvisor(service)
-        ));
-        when(chain.nextCall(any())).thenReturn(TestPrivacyServices.response("ok"));
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(advisor.adviseCall(dynamicToolRequest(session.handle()), chain)).isNotNull();
-        }
-        verify(chain).nextCall(any());
-    }
-
-    @Test
-    void largeToolRegistrationRemainsSupported() {
+    void acceptsLargeToolCallbackRegistrations() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(
                 service,
@@ -335,11 +272,12 @@ class PrivacyToolContextAdvisorTest {
                 .build();
         ChatClientRequest request = new ChatClientRequest(new Prompt("hello", options), Map.of());
 
+        List<String> expectedToolNames = callbacks.stream()
+            .map(callback -> callback.getToolDefinition().name())
+            .toList();
         assertThat(PrivacyToolContextAdvisor.requirePrivacyWrappedToolNames(
-                request,
-                service,
-                factory.provenance()
-        )).hasSize(callbacks.size());
+            request, service, factory.provenance()))
+            .containsExactlyInAnyOrderElementsOf(expectedToolNames);
     }
 
     @Test
@@ -371,47 +309,6 @@ class PrivacyToolContextAdvisorTest {
                 ))
                 .isInstanceOf(PrivacyGuardrailException.class)
                 .hasMessage("Tool callbacks changed after the privacy tool-context boundary");
-    }
-
-    @Test
-    void applicationAdvisorBetweenToolCallingAndExecutionBoundaryIsAllowed() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolContextAdvisor advisor = new PrivacyToolContextAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        CallAdvisor mutatingAdvisor = mock(CallAdvisor.class);
-        when(mutatingAdvisor.getOrder()).thenReturn(PrivacyToolCallValidationAdvisor.DEFAULT_ORDER);
-        when(chain.getCallAdvisors()).thenReturn(List.of(
-                ToolCallingAdvisor.builder().build(),
-                mutatingAdvisor,
-                new PrivacyToolCallValidationAdvisor(service)
-        ));
-        when(chain.nextCall(any())).thenReturn(TestPrivacyServices.response("ok"));
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(advisor.adviseCall(dynamicToolRequest(session.handle()), chain)).isNotNull();
-        }
-        verify(chain).nextCall(any());
-    }
-
-    @Test
-    void structuredOutputValidationMayRunInsideExecutionBoundary() {
-        PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolContextAdvisor advisor = new PrivacyToolContextAdvisor(service);
-        CallAdvisorChain chain = mock(CallAdvisorChain.class);
-        StructuredOutputValidationAdvisor structured = StructuredOutputValidationAdvisor.builder()
-                .outputJsonSchema("{\"type\":\"object\"}")
-                .build();
-        when(chain.getCallAdvisors()).thenReturn(List.of(
-                ToolCallingAdvisor.builder().build(),
-                new PrivacyToolCallValidationAdvisor(service),
-                structured
-        ));
-        when(chain.nextCall(any())).thenReturn(TestPrivacyServices.response("ok"));
-
-        try (PrivacySession session = service.openSession()) {
-            assertThat(advisor.adviseCall(dynamicToolRequest(session.handle()), chain)).isNotNull();
-        }
-        verify(chain).nextCall(any());
     }
 
     private ChatClientRequest dynamicToolRequest(PrivacyContextHandle handle) {

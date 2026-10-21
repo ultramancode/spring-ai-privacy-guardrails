@@ -105,8 +105,7 @@ for the corresponding reproducible automated coverage.
 
 For a step-by-step setup path, see [Getting Started](docs/getting-started.md).
 
-The following sections outline the protection options for a Spring AI
-application that already provides a `ChatModel` and `ChatClient.Builder`.
+The following sections use the client starter with an application-provided `ChatModel`.
 
 ### Choose a PII Analyzer
 
@@ -127,20 +126,20 @@ JVM and requires compatible models supplied by the application.
 
 ### Choose Starters
 
-Choose the starters for the capabilities your application needs.
+Start with the client starter and add analyzer or authorization starters as needed.
 
 | Need | Starter |
 | --- | --- |
-| Regex rules or custom analyzers | `spring-ai-privacy-guardrails-spring-boot-starter` |
+| Policy-based clients with privacy and optional inspection | `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` |
 | Presidio integration | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
 | Apache OpenNLP integration | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | Principal-aware tool discovery and execution | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
-| Content inspection with rules or a guard model | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` |
 
-The Presidio and OpenNLP starters already include the base Privacy Guardrails
-starter, so do not add it separately. Add the Spring Security starter by itself
-for tool authorization alone, or add it alongside a privacy starter to use both
-capabilities.
+The client, Presidio and OpenNLP starters include
+`spring-ai-privacy-guardrails-spring-boot-starter`, the base privacy starter.
+There is no need to add it separately.
+
+If you use only tool authorization, you do not need to configure a PII analyzer.
 
 Content inspection requires version `0.4.0` or later. Choose an inspector implementation and follow the
 [inspection setup](docs/inspection.md#set-up-input-inspection).
@@ -150,14 +149,14 @@ example below and the relevant guide to complete the setup.
 
 ### Dependency and Basic Configuration
 
-The examples below use version `0.3.0`.
+The examples below use version `0.4.0-SNAPSHOT`.
 
-To start without an external analyzer service, use the base starter with an
+To start without an external analyzer service, use the client starter with an
 application-specific regex rule.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
@@ -165,9 +164,6 @@ dependencies {
 spring:
   ai:
     privacy:
-      output:
-        enabled: true
-        action: tokenize
       regex:
         enabled: true
         rules:
@@ -176,9 +172,6 @@ spring:
             score: 0.90
 ```
 
-The `output` section is optional. When omitted, privacy output protection is
-disabled.
-
 This example rule is application-specific and detects only values in the
 `EMP-1234` format. It does not establish general PII-detection performance.
 Validate analyzers for production using data representative of your
@@ -186,26 +179,21 @@ environment.
 
 ### Protect a ChatClient
 
-Apply the starter-provided configuration to each `ChatClient.Builder` that you
-want to protect.
+Use the factory for clients that should follow the configured policy.
 
 ```java
 @Bean
-ChatClient privacyChatClient(
-        ChatClient.Builder builder,
-        PrivacyChatClientConfigurer privacyConfigurer
-) {
-    return privacyConfigurer.configure(builder).build();
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 }
 ```
 
-With at least one `PiiAnalyzer` bean available, the starter provides
-`PrivacyChatClientConfigurer`. Apply it to each client that needs privacy
-protection.
+The same factory supports inspection and tool authorization. See
+[Configuration](docs/configuration.md) for feature selection and client policies.
 
 Direct calls to a `ChatModel` are outside the automatic protection boundary.
-See [Configuration](docs/configuration.md) for derived clients, analyzer
-combinations, and failure policies.
+See [Privacy Protection](docs/privacy.md) for analyzer combinations and failure policies.
 
 ## Per-Tool Original Disclosure
 
@@ -214,38 +202,30 @@ deny-by-default. Original values are restored immediately before execution only
 when the policy lists both the exact, case-sensitive tool name and the required
 canonical entity types.
 
-```yaml
-spring:
-  ai:
-    privacy:
-      tools:
-        disclosures:
-          customerLookup:
-            - CUSTOMER_ID
+```java
+GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
+        .privacy(GuardrailsPolicy.Privacy.builder()
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
+                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+                .build())
+        .build();
 ```
 
-Wrap an existing Spring AI `ToolCallback` with `PrivacyToolCallbackFactory` and
-register the wrapped callback with a protected `ChatClient`.
+Register application tools and MCP providers directly:
 
 ```java
-ToolCallback protectedCustomerLookup =
-        toolCallbackFactory.wrap(customerLookupToolCallback);
+ChatClient chatClient = guardrails.builder(chatModel, toolPolicy)
+        .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
+        .build();
 ```
 
-Here, `customerLookupToolCallback` is the application's existing Spring AI
-`ToolCallback`.
-
-In the standard tool-execution path of a protected `ChatClient`, unwrapped
-callbacks are rejected before execution. Tool results are protected again
-before they are returned to the model or application.
-
-For a `ToolCallbackProvider` whose tool list changes at runtime, such as an MCP
-provider, use `wrapProvider(...)`. Combine multiple `ToolCallbackProvider`
-instances with `wrapProviders(...)`.
+Privacy applies to each request's resolved tools, including tools added with
+`.tools(...)` and refreshed provider lists. Tool results are protected again
+before reaching the model or application.
 
 Custom tool-execution paths outside Spring AI's standard registration flow
 require separate protection. See
-[Per-Tool Original Disclosure](docs/configuration.md#per-tool-original-disclosure)
+[Per-Tool Original Disclosure](docs/privacy.md#per-tool-original-disclosure)
 for the complete rules.
 
 ## Optional Spring Security Tool Authorization
@@ -257,15 +237,14 @@ original PII is restored.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.3.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
 
-The Security starter can be used without the base Privacy Guardrails starter.
-Provide an `AuthorizationManager<ToolAuthorizationContext>` bean and create
-clients with `ToolAuthorizationChatClientFactory`, or use
-`PrivacySecurityChatClientFactory` to include privacy protection. Other clients
-are unaffected. Authentication remains the application's responsibility.
+Provide an `AuthorizationManager<ToolAuthorizationContext>` bean and select
+`toolAuthorization(true)` in `GuardrailsPolicy`. Pass the policy to
+`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)`. Select privacy separately when needed.
+Authentication remains the application's responsibility.
 
 When combined with privacy protection, tool authorization and original-value
 disclosure remain separate policies. Authorization determines which tools the
@@ -292,7 +271,7 @@ required APIs, and supported paths.
   completed responses. Streaming responses are buffered for inspection, and
   managed session mappings are cleared on completion, failure, or cancellation.
 
-See [Configuration](docs/configuration.md) for detailed behavior and
+See [Privacy Protection](docs/privacy.md) for detailed behavior and
 [Architecture](docs/architecture.md) for request flow and module
 responsibilities.
 
@@ -304,7 +283,7 @@ application-output boundaries. Each event contains only `boundary`, identifying
 where it occurred, and `outcome`, describing the result at that boundary. It does
 not include PII, opaque tokens, payloads, tool names, or request identifiers.
 
-See [Privacy-Safe Runtime Observation](docs/configuration.md#privacy-safe-runtime-observation)
+See [Privacy-Safe Runtime Observation](docs/privacy.md#privacy-safe-runtime-observation)
 for registration, outcome semantics, and callback execution guidance.
 
 ## Library Modules
@@ -331,6 +310,8 @@ dependencies. Add test support separately in the application's test scope.
 | `spring-ai-privacy-guardrails-inspection-openai-compatible` | Calls guard models through OpenAI-compatible HTTP APIs |
 | `spring-ai-privacy-guardrails-inspection-spring-ai` | Model-input inspection and optional output inspection |
 | `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | Spring Boot configuration for inspecting selected clients |
+| `spring-ai-privacy-guardrails-chat-client` | Policy-based client assembly and automatic tool protection |
+| `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` | Spring Boot configuration for policy-based clients |
 | `spring-ai-privacy-guardrails-test` | Optional model and tool probes with AssertJ assertions |
 
 See [Architecture](docs/architecture.md) for module responsibilities and the
@@ -340,27 +321,25 @@ in [Evaluation](docs/evaluation.md#jmh-benchmarks).
 
 ## Compatibility and Status
 
-| Component | Current verified baseline |
+| Component | Minimum supported version |
 | --- | --- |
 | Java | 17 |
-| Spring AI | 2.0.1 |
-| Spring Boot | 4.1.1 |
-| Spring Security | 7.1.1 |
-| Presidio Analyzer | 2.2.364 |
-| Apache OpenNLP | 2.5.11 |
-| Gradle wrapper | 9.6.1 |
+| Spring AI | 2.0.0 |
+| Spring Boot | 4.0.0 |
+| Spring Security | 7.0.0 |
+
+Use Spring AI 2.0.x, Spring Boot 4.x and Spring Security 7.x. The Boot starter
+uses the Security version selected by the Spring Boot BOM.
 
 Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
-
-Spring AI maintains compatibility within the current `2.0.x` line, and `2.0.1`
-is recommended for new users.
 
 ## Documentation
 
 - [Getting Started](docs/getting-started.md): step-by-step starter selection and
   privacy-boundary setup
-- [Configuration](docs/configuration.md): starters, analyzers, tool policies,
-  and output policies
+- [Configuration](docs/configuration.md): dependencies, client creation and reusable policies
+- [Privacy Protection](docs/privacy.md): analyzers, tokenization, tool disclosure,
+  output protection and processing limits
 - [Spring Security Tool Authorization](docs/security.md): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
 - [Content Inspection](docs/inspection.md): opt-in rules, local ONNX classifiers and HTTP guard models

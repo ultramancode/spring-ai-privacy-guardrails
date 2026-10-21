@@ -1,7 +1,6 @@
 package io.github.ultramancode.springai.privacy.test;
 
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -70,21 +69,19 @@ public final class PrivacyTestProbe implements AutoCloseable {
     }
 
     /**
-     * Wraps a raw delegate tool in the correct order for privacy boundary testing.
-     * The recording wrapper is placed inside the privacy wrapper, so snapshots show
-     * what the delegate actually receives and returns.
+     * Records the input received and output returned by the original tool.
+     * Apply privacy protection outside this recorder to capture input after disclosure
+     * and output before privacy protection.
      *
      * @param delegate original unwrapped tool callback
-     * @param toolCallbackFactory privacy factory used by the system under test
-     * @return callback that records inside the privacy tool boundary
+     * @return recording tool callback
      */
-    public ToolCallback wrapTool(ToolCallback delegate, PrivacyToolCallbackFactory toolCallbackFactory) {
+    public ToolCallback wrapTool(ToolCallback delegate) {
         Objects.requireNonNull(delegate, "delegate must not be null");
-        Objects.requireNonNull(toolCallbackFactory, "toolCallbackFactory must not be null");
-        if (toolCallbackFactory.isWrapped(delegate)) {
-            throw new IllegalArgumentException("delegate must be an unwrapped tool callback");
+        if (delegate instanceof RecordingToolCallback) {
+            throw new IllegalArgumentException("delegate must not already be wrapped by a PrivacyTestProbe");
         }
-        return toolCallbackFactory.wrap(new RecordingToolCallback(delegate, this));
+        return new RecordingToolCallback(delegate, this);
     }
 
     /**

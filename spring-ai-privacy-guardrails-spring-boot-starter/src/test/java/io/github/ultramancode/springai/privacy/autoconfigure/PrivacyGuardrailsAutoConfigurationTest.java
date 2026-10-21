@@ -55,11 +55,9 @@ import reactor.core.publisher.Flux;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -91,11 +89,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
             String metadata = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             assertThat(metadata)
                     .contains("spring.ai.privacy.analysis.included-entity-types")
-                    .contains("spring.ai.privacy.tools.disclosures")
-                    .contains("spring.ai.privacy.response-inspection.max-stream-frames")
-                    .contains("spring.ai.privacy.response-inspection.max-characters")
-                    .contains("spring.ai.privacy.response-inspection.max-media-bytes")
-                    .contains("spring.ai.privacy.response-inspection.stream-idle-timeout")
                     .contains("\"name\": \"spring.ai.privacy.regex.rules\"")
                     .contains("\"type\": \"java.util.List<io.github.ultramancode.springai.privacy.autoconfigure."
                             + "PrivacyGuardrailsProperties$Regex$Rule>\"")
@@ -138,7 +131,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
         PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
         ModelRequestBoundaryConfigurer inspectionConfigurer =
-                (clientBuilder, boundarySpec) -> boundarySpec.inspection(inspectedRequest::set);
+            (clientBuilder, boundarySpec) -> boundarySpec.inspection((request, streamed) -> inspectedRequest.set(request));
 
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
@@ -245,9 +238,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
         assertThatThrownBy(() -> properties.getRegex().setRules(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("regex.rules must not be null");
-        assertThatThrownBy(() -> properties.getTools().setDisclosures(null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("tools.disclosures must not be null");
     }
 
     @Test
@@ -288,65 +278,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
         assertThatThrownBy(() -> processing.setMaxResultSpans(0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("processing.max-result-spans must be positive");
-    }
-
-    @Test
-    void responseInspectionLimitsArePositiveAndHaveOneValidatedConfigurationSource() {
-        PrivacyGuardrailsProperties.ResponseInspection inspection =
-                new PrivacyGuardrailsProperties().getResponseInspection();
-        inspection.setMaxStreamFrames(7);
-        inspection.setMaxCharacters(8);
-        inspection.setMaxMediaBytes(9);
-        inspection.setStreamIdleTimeout(Duration.ofSeconds(10));
-
-        assertThat(inspection.limits())
-                .extracting(
-                        "maxStreamFrames",
-                        "maxCharacters",
-                        "maxMediaBytes",
-                        "streamIdleTimeout"
-                )
-                .containsExactly(7, 8L, 9L, Duration.ofSeconds(10));
-        assertThatThrownBy(() -> inspection.setMaxStreamFrames(0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.max-stream-frames must be positive");
-        assertThatThrownBy(() -> inspection.setMaxCharacters(0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.max-characters must be positive");
-        assertThatThrownBy(() -> inspection.setMaxMediaBytes(0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.max-media-bytes must be positive");
-        assertThatThrownBy(() -> inspection.setStreamIdleTimeout(Duration.ZERO))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("response-inspection.stream-idle-timeout must be positive");
-    }
-
-    @Test
-    void responseInspectionPropertiesBindIndependentlyOfTheOptionalOutputPolicy() {
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
-        this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> analyzer)
-                .withPropertyValues(
-                        "spring.ai.privacy.output.enabled=false",
-                        "spring.ai.privacy.response-inspection.max-stream-frames=7",
-                        "spring.ai.privacy.response-inspection.max-characters=8",
-                        "spring.ai.privacy.response-inspection.max-media-bytes=9",
-                        "spring.ai.privacy.response-inspection.stream-idle-timeout=10s"
-                )
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    PrivacyGuardrailsProperties properties =
-                            context.getBean(PrivacyGuardrailsProperties.class);
-                    assertThat(properties.getOutput().isEnabled()).isFalse();
-                    assertThat(properties.getResponseInspection().limits())
-                            .extracting(
-                                    "maxStreamFrames",
-                                    "maxCharacters",
-                                    "maxMediaBytes",
-                                    "streamIdleTimeout"
-                            )
-                            .containsExactly(7, 8L, 9L, Duration.ofSeconds(10));
-                });
     }
 
     @Test
@@ -401,22 +332,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void toolDisclosuresRejectAmbiguousConfiguration() {
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of(
-                " customerLookup",
-                Set.of("CUSTOMER_ID")
-        )))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("tool disclosure names must not contain whitespace");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.byToolName(Map.of(
-                "customerLookup",
-                List.of("customer-id")
-        )))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("uppercase ASCII");
-    }
-
-    @Test
     void invalidRegexPreservesApplicationOwnedCompilationFailure() {
         PrivacyGuardrailsProperties properties = new PrivacyGuardrailsProperties();
         PrivacyGuardrailsProperties.Regex.Rule rule = new PrivacyGuardrailsProperties.Regex.Rule();
@@ -442,11 +357,10 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void explicitConfigurerRegistersTheCompleteEnabledAdvisorBundle() {
+    void defaultConfigurerRegistersInputAndToolProtection() {
         PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
                 .withBean(PiiAnalyzer.class, () -> analyzer)
-                .withPropertyValues("spring.ai.privacy.output.enabled=true")
                 .run(context -> {
                     ChatClient.Builder builder = mock(ChatClient.Builder.class);
                     PrivacyChatClientConfigurer configurer = context.getBean(PrivacyChatClientConfigurer.class);
@@ -460,7 +374,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             .containsExactly(
                                     "PrivacyLifecycleAdvisor",
                                     "PrivacyInputAdvisor",
-                                    "PrivacyOutputAdvisor",
                                     "PrivacyToolContextAdvisor",
                                     "PrivacyToolCallValidationAdvisor",
                                     "PrivacyAdvisorChainValidator"
@@ -565,83 +478,75 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void explicitConfigurerRunsCompleteToolLoopOutputPolicyAndSessionCleanup() {
+    void autoConfiguredBeansProtectTheToolLoopAndNotifyObservers() {
         AtomicReference<String> delegateToolInput = new AtomicReference<>();
         List<PrivacyEnforcementEvent> enforcementEvents = new CopyOnWriteArrayList<>();
         this.contextRunner
-                .withBean(RegexPiiAnalyzer.class, () -> new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.99, 0),
-                        new RegexPiiRule(
-                                "EMAIL_ADDRESS",
-                                "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
-                                0.95,
-                                0
-                        )
-                )))
-                .withBean(PrivacyEnforcementObserver.class, () -> enforcementEvents::add)
-                .withPropertyValues(
-                        "spring.ai.privacy.output.enabled=true",
-                        "spring.ai.privacy.tools.disclosures[customerLookup][0]=CUSTOMER_ID"
+            .withBean(RegexPiiAnalyzer.class, () -> new RegexPiiAnalyzer(List.of(
+                new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.99, 0),
+                new RegexPiiRule(
+                    "EMAIL_ADDRESS",
+                    "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+                    0.95,
+                    0
                 )
-                .run(context -> {
-                    StarterToolLoopModel model = new StarterToolLoopModel();
-                    ChatClient.Builder builder = ChatClient.builder(model);
-                    context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
-                    ToolCallbackProvider sourceProvider = () -> new ToolCallback[]{
-                            customerLookup(delegateToolInput)
-                    };
-                    ToolCallbackProvider protectedTools = context.getBean(PrivacyToolCallbackFactory.class)
-                            .wrapProvider(sourceProvider);
-                    ChatClient client = builder.defaultTools(protectedTools).build();
+            )))
+            .withBean(PrivacyEnforcementObserver.class, () -> enforcementEvents::add)
+            .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
+                Map.of("customerLookup", List.of("CUSTOMER_ID"))))
+            .run(context -> {
+                StarterToolLoopModel model = new StarterToolLoopModel();
+                ChatClient.Builder builder = ChatClient.builder(model);
+                context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
+                ToolCallbackProvider sourceProvider = () -> new ToolCallback[]{
+                    customerLookup(delegateToolInput)
+                };
+                ToolCallbackProvider protectedTools = context.getBean(PrivacyToolCallbackFactory.class)
+                    .wrapProvider(sourceProvider);
+                ChatClient client = builder.defaultTools(protectedTools).build();
 
-                    String result = client.prompt()
-                            .user("Find CUST-0042 for user@example.test")
-                            .call()
-                            .content();
+                String result = client.prompt()
+                    .user("Find CUST-0042 for user@example.test")
+                    .call()
+                    .content();
 
-                    assertThat(model.calls()).isEqualTo(2);
-                    assertThat(model.firstPrompt())
-                            .doesNotContain("CUST-0042", "user@example.test")
-                            .containsPattern(OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID"))
-                            .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
-                    assertThat(delegateToolInput.get())
-                            .contains("CUST-0042")
-                            .doesNotContain("user@example.test")
-                            .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
-                    assertThat(model.secondToolResult())
-                            .doesNotContain("CUST-9000", "result@example.test")
-                            .containsPattern(OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID"))
-                            .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
-                    assertThat(result)
-                            .doesNotContain("final@example.test")
-                            .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
-                    assertThat(enforcementEvents).contains(
-                            new PrivacyEnforcementEvent(
-                                    PrivacyEnforcementBoundary.MODEL,
-                                    PrivacyEnforcementOutcome.PROTECTED
-                            ),
-                            new PrivacyEnforcementEvent(
-                                    PrivacyEnforcementBoundary.TOOL_INPUT,
-                                    PrivacyEnforcementOutcome.DISCLOSED
-                            ),
-                            new PrivacyEnforcementEvent(
-                                    PrivacyEnforcementBoundary.TOOL_RESULT,
-                                    PrivacyEnforcementOutcome.PROTECTED
-                            ),
-                            new PrivacyEnforcementEvent(
-                                    PrivacyEnforcementBoundary.APPLICATION_OUTPUT,
-                                    PrivacyEnforcementOutcome.PROTECTED
-                            )
-                    );
-                    assertThat(enforcementEvents.toString()).doesNotContain(
-                            "CUST-0042",
-                            "user@example.test",
-                            "CUSTOMER_ID",
-                            "EMAIL_ADDRESS",
-                            "[PII_"
-                    );
-                    assertThat(context.getBean(PrivacyService.class).activeSessionCount()).isZero();
-                });
+                assertThat(model.calls()).isEqualTo(2);
+                assertThat(model.firstPrompt())
+                    .doesNotContain("CUST-0042", "user@example.test")
+                    .containsPattern(OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID"))
+                    .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
+                assertThat(delegateToolInput.get())
+                    .contains("CUST-0042")
+                    .doesNotContain("user@example.test")
+                    .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
+                assertThat(model.secondToolResult())
+                    .doesNotContain("CUST-9000", "result@example.test")
+                    .containsPattern(OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID"))
+                    .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
+                assertThat(result).isEqualTo("Contact final@example.test");
+                assertThat(enforcementEvents).contains(
+                    new PrivacyEnforcementEvent(
+                        PrivacyEnforcementBoundary.MODEL,
+                        PrivacyEnforcementOutcome.PROTECTED
+                    ),
+                    new PrivacyEnforcementEvent(
+                        PrivacyEnforcementBoundary.TOOL_INPUT,
+                        PrivacyEnforcementOutcome.DISCLOSED
+                    ),
+                    new PrivacyEnforcementEvent(
+                        PrivacyEnforcementBoundary.TOOL_RESULT,
+                        PrivacyEnforcementOutcome.PROTECTED
+                    )
+                );
+                assertThat(enforcementEvents.toString()).doesNotContain(
+                    "CUST-0042",
+                    "user@example.test",
+                    "CUSTOMER_ID",
+                    "EMAIL_ADDRESS",
+                    "[PII_"
+                );
+                assertThat(context.getBean(PrivacyService.class).activeSessionCount()).isZero();
+            });
     }
 
     @Test
@@ -838,7 +743,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationBindsResolutionAndToolDisclosurePolicies() {
+    void autoConfigurationBindsResolutionPolicyAndDeniesDisclosureByDefault() {
         PiiAnalyzer analyzer = new PiiAnalyzer() {
             @Override
             public List<PiiSpan> analyze(
@@ -855,27 +760,26 @@ class PrivacyGuardrailsAutoConfigurationTest {
             }
         };
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> analyzer)
-                .withPropertyValues(
-                        "spring.ai.privacy.analysis.mode=primary",
-                        "spring.ai.privacy.analysis.primary-provider=presidio",
-                        "spring.ai.privacy.analysis.failure-policy=require-primary",
-                        "spring.ai.privacy.analysis.provider-minimum-scores.presidio=0.72",
-                        "spring.ai.privacy.tools.disclosures[customerLookup][0]=CUSTOMER_ID"
-                )
-                .run(context -> {
-                    PiiResolutionPolicy policy = context.getBean(PiiResolutionPolicy.class);
-                    assertThat(policy.mode()).isEqualTo(PiiResolutionMode.PRIMARY);
-                    assertThat(policy.primaryProvider()).contains("PRESIDIO");
-                    assertThat(policy.failurePolicy()).isEqualTo(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY);
-                    assertThat(policy.providerMinimumScores()).containsEntry("PRESIDIO", 0.72);
+            .withBean(PiiAnalyzer.class, () -> analyzer)
+            .withPropertyValues(
+                "spring.ai.privacy.analysis.mode=primary",
+                "spring.ai.privacy.analysis.primary-provider=presidio",
+                "spring.ai.privacy.analysis.failure-policy=require-primary",
+                "spring.ai.privacy.analysis.provider-minimum-scores.presidio=0.72"
+            )
+            .run(context -> {
+                PiiResolutionPolicy policy = context.getBean(PiiResolutionPolicy.class);
+                assertThat(policy.mode()).isEqualTo(PiiResolutionMode.PRIMARY);
+                assertThat(policy.primaryProvider()).contains("PRESIDIO");
+                assertThat(policy.failurePolicy()).isEqualTo(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY);
+                assertThat(policy.providerMinimumScores()).containsEntry("PRESIDIO", 0.72);
 
-                    ToolDisclosurePolicy toolPolicy = context.getBean(ToolDisclosurePolicy.class);
-                    assertThat(toolPolicy.scopeFor(tool("customerLookup")).entityTypes())
-                            .containsExactly("CUSTOMER_ID");
-                    assertThat(toolPolicy.scopeFor(tool("externalSearch")).entityTypes())
-                            .isEmpty();
-                });
+                ToolDisclosurePolicy toolDisclosurePolicy = context.getBean(ToolDisclosurePolicy.class);
+                assertThat(toolDisclosurePolicy.getAllowedEntityTypes(tool("customerLookup")).entityTypes())
+                    .isEmpty();
+                assertThat(toolDisclosurePolicy.getAllowedEntityTypes(tool("externalSearch")).entityTypes())
+                    .isEmpty();
+            });
     }
 
     private ToolDefinition tool(String name) {

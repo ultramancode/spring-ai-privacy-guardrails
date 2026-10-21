@@ -1,12 +1,12 @@
 package io.github.ultramancode.springai.privacy.test;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -46,22 +46,20 @@ class PrivacySequentialToolIntegrationTest {
     @Test
     void chatClientExecutesTwoScopedToolsAndRetokenizesStructuredResultBetweenModelCalls() {
         PrivacyService privacyService = privacyService();
-        PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService);
-        PrivacyToolCallbackFactory toolCallbackFactory = new PrivacyToolCallbackFactory(
-                privacyService,
-                ToolDisclosurePolicy.byToolName(Map.of(
-                        "crmLookup", Set.of("CUSTOMER_ID"),
-                        "emailCustomer", Set.of("EMAIL_ADDRESS")
-                ))
-        );
-        SequentialToolModel model = new SequentialToolModel();
-        ToolCallback crmLookup = probe.wrapTool(crmLookup(), toolCallbackFactory);
-        ToolCallback emailCustomer = probe.wrapTool(emailCustomer(), toolCallbackFactory);
-        ChatClient chatClient = PrivacyChatClientConfigurer.builder(privacyService)
-                .build()
-                .configure(ChatClient.builder(probe.wrapModel(model)))
-                .defaultTools(crmLookup, emailCustomer)
-                .build();
+        PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
+        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
+                    "crmLookup", Set.of("CUSTOMER_ID"),
+                    "emailCustomer", Set.of("EMAIL_ADDRESS")
+                ))))
+            .build();
+        SequentialToolModel chatModel = new SequentialToolModel();
+        ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
+            .build()
+            .builder(privacyTestProbe.wrapModel(chatModel), guardrailsPolicy)
+            .defaultTools(privacyTestProbe.wrapTool(crmLookup()), privacyTestProbe.wrapTool(emailCustomer()))
+            .build();
 
         String response = chatClient.prompt()
                 .user("Look up " + CUSTOMER_ID + " and email the primary contact")
@@ -69,29 +67,27 @@ class PrivacySequentialToolIntegrationTest {
                 .content();
 
         assertThat(response).isEqualTo("Workflow complete");
-        assertThat(model.calls()).isEqualTo(3);
-        assertThatPrivacy(probe)
-                .hasModelRequestCount(3)
-                .hasToolCallCount(2)
-                .modelRequestsDoNotContainRawValues(CUSTOMER_ID, EMAIL_ADDRESS)
-                .modelRequestsContainOpaqueToken("CUSTOMER_ID")
-                .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
-                .toolInputsContain("crmLookup", CUSTOMER_ID)
-                .toolInputsDoNotContainRawValues("crmLookup", EMAIL_ADDRESS)
-                .toolOutputsContain("crmLookup", CUSTOMER_ID, EMAIL_ADDRESS)
-                .toolInputsContain("emailCustomer", EMAIL_ADDRESS)
-                .toolInputsDoNotContainRawValues("emailCustomer", CUSTOMER_ID)
-                .toolInputsContainOpaqueToken("emailCustomer", "CUSTOMER_ID")
-                .hasNoActivePrivacySessions();
+        assertThatPrivacy(privacyTestProbe)
+            .hasModelRequestCount(3)
+            .hasToolCallCount(2)
+            .modelRequestsDoNotContainRawValues(CUSTOMER_ID, EMAIL_ADDRESS)
+            .modelRequestsContainOpaqueToken("CUSTOMER_ID")
+            .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
+            .toolInputsContain("crmLookup", CUSTOMER_ID)
+            .toolOutputsContain("crmLookup", CUSTOMER_ID, EMAIL_ADDRESS)
+            .toolInputsContain("emailCustomer", EMAIL_ADDRESS)
+            .toolInputsDoNotContainRawValues("emailCustomer", CUSTOMER_ID)
+            .toolInputsContainOpaqueToken("emailCustomer", "CUSTOMER_ID")
+            .hasNoActivePrivacySessions();
 
-        assertThat(probe.toolCalls())
-                .filteredOn(call -> call.toolName().equals("emailCustomer"))
-                .singleElement()
-                .satisfies(call -> {
-                    Map<?, ?> input = new ObjectMapper().readValue(call.input(), Map.class);
-                    assertThat(input.get("email")).isEqualTo(EMAIL_ADDRESS);
-                    assertThat(input.get("customerId").toString()).matches(CUSTOMER_ID_TOKEN);
-                });
+        assertThat(privacyTestProbe.toolCalls())
+            .filteredOn(call -> call.toolName().equals("emailCustomer"))
+            .singleElement()
+            .satisfies(call -> {
+                Map<?, ?> input = new ObjectMapper().readValue(call.input(), Map.class);
+                assertThat(input.get("email")).isEqualTo(EMAIL_ADDRESS);
+                assertThat(input.get("customerId").toString()).matches(CUSTOMER_ID_TOKEN);
+            });
     }
 
     private PrivacyService privacyService() {
@@ -195,10 +191,6 @@ class PrivacySequentialToolIntegrationTest {
         @Override
         public ChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
-        }
-
-        int calls() {
-            return this.calls.get();
         }
 
         private ChatResponse requestCrmLookup(Prompt prompt) {

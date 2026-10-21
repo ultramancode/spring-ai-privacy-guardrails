@@ -37,8 +37,8 @@ application must manage service credentials and transport security, and check
 the data retention policies of remote analyzers and model providers.
 
 Custom analyzers, advisors, and tools are trusted application code. The library
-validates detection results and protects data at supported processing points;
-it does not restrict what that application code can do outside those points.
+validates detection results and protects data at supported processing points.
+It does not restrict what that application code can do outside those points.
 
 Spring Security integration relies on the application's authentication and tool
 authorization policy. When privacy protection is also configured, registering
@@ -63,9 +63,9 @@ opaque tokens for each tool.
 - **Encoded or compressed content:** Encoded or compressed content whose original text
   cannot be read directly must be converted by the application into text or supported
   JSON before inspection.
-- **Metadata and media:** Apart from [supported reasoning text](configuration.md#reasoning-text-protection),
+- **Metadata and media:** Apart from [supported reasoning text](privacy.md#reasoning-text-protection),
   response metadata and non-text content such as images and audio must be protected
-  separately. Media limits check data size only; they do not detect PII in media content.
+  separately. Media limits check data size only. They do not detect PII in media content.
 
 ### Tool Privacy and Authorization
 
@@ -78,9 +78,9 @@ opaque tokens for each tool.
 
 **Scope and considerations**
 
-- **Tool privacy protection:** Original-value disclosure and PII tokenization of tool
-  results apply to tools wrapped by `PrivacyToolCallbackFactory`. Other execution
-  paths must be protected separately.
+- **Tool privacy protection:** A privacy-enabled `GuardrailsChatClientFactory` client
+  protects Spring AI's resolved callbacks automatically. Direct configurer integrations
+  use `PrivacyToolCallbackFactory` explicitly. Other execution paths need separate protection.
 - **Custom execution paths:** The application must protect advisors that change data
   outside the privacy boundary and separate execution paths that use a custom
   `ToolCallingManager` or `ToolCallbackResolver`.
@@ -123,7 +123,7 @@ opaque tokens for each tool.
   cannot forcibly stop synchronous analyzer or tool code that is already running.
 
 Exact policies and processing bounds are documented in
-[Configuration](configuration.md).
+[Privacy Protection](privacy.md).
 
 ## Important Limitations
 
@@ -131,7 +131,7 @@ Privacy protection applies to content detected by the configured analyzers. It
 does not guarantee detection or classification of every sensitive value. Coverage
 depends on the analyzers and score thresholds. Allowing some analyzer failures
 lets processing continue with successful results, which may reduce coverage. See
-[Detection and Resolution](configuration.md#detection-and-resolution) for details.
+[Detection and Resolution](privacy.md#detection-and-resolution) for details.
 
 Replacing PII with opaque tokens does not guarantee anonymization. Opaque tokens and session handles
 (`PrivacyContextHandle`) must not be used as proof of user identity or permission.
@@ -140,9 +140,9 @@ Session cleanup releases the mappings held by the library. It does not delete
 data already saved in storage or strings and copies retained by other components.
 
 Spring Security integration controls which tools the model may discover and
-execute. When combined with privacy protection, the `tools.disclosures` settings
-still apply per tool and entity type; enabling authorization does not make those
-settings user-specific.
+execute. When combined with privacy protection, the `ToolDisclosurePolicy`
+still applies per tool and entity type. Enabling authorization does not make the
+disclosure policy user-specific.
 
 ## Areas Managed Separately
 

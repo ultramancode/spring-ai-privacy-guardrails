@@ -41,11 +41,12 @@ import static org.mockito.Mockito.when;
 class PrivacyToolCallValidationAdvisorTest {
 
     @Test
-    void defaultOrderIsRecommendedAndCustomOrdersAreApplicationOwned() {
+    void usesDefaultOrderAfterToolCallingOrCustomOrder() {
         PrivacyService service = TestPrivacyServices.privacyService();
 
         assertThat(new PrivacyToolCallValidationAdvisor(service).getOrder())
-                .isEqualTo(ToolCallingAdvisor.DEFAULT_ORDER + 1);
+                .isEqualTo(PrivacyToolCallValidationAdvisor.DEFAULT_ORDER)
+                .isGreaterThan(ToolCallingAdvisor.DEFAULT_ORDER);
         assertThat(new PrivacyToolCallValidationAdvisor(service, 1).getOrder()).isEqualTo(1);
         assertThat(new PrivacyToolCallValidationAdvisor(service, Integer.MIN_VALUE).getOrder())
                 .isEqualTo(Integer.MIN_VALUE);

@@ -14,6 +14,9 @@ java {
 }
 
 sourceSets {
+    chatClientStarter {
+        java.srcDir 'src/chatClientStarter/java'
+    }
     securityOnly {
         java.srcDir 'src/securityOnly/java'
     }
@@ -31,6 +34,7 @@ dependencies {
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:${providers.gradleProperty('privacyVersion').get()}"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     implementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
 
     securityOnlyImplementation enforcedPlatform(
@@ -39,6 +43,12 @@ dependencies {
     securityOnlyImplementation platform("org.springframework.ai:spring-ai-bom:${consumerSpringAiVersion.get()}")
     securityOnlyImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
     securityOnlyImplementation 'org.springframework.ai:spring-ai-autoconfigure-model-tool'
+
+    chatClientStarterImplementation enforcedPlatform(
+            "org.springframework.boot:spring-boot-dependencies:${consumerSpringBootVersion.get()}"
+    )
+    chatClientStarterImplementation platform("org.springframework.ai:spring-ai-bom:${consumerSpringAiVersion.get()}")
+    chatClientStarterImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:${providers.gradleProperty('privacyVersion').get()}"
 
     inspectionOnlyImplementation enforcedPlatform(
             "org.springframework.boot:spring-boot-dependencies:${consumerSpringBootVersion.get()}"
@@ -72,7 +82,7 @@ tasks.register('verifySpringBootAlignment') {
 tasks.register('verifySpringAiAlignment') {
     doLast {
         [configurations.runtimeClasspath, configurations.securityOnlyRuntimeClasspath,
-         configurations.inspectionOnlyRuntimeClasspath].each { configuration ->
+         configurations.inspectionOnlyRuntimeClasspath, configurations.chatClientStarterRuntimeClasspath].each { configuration ->
             Set<String> selectedVersions = configuration.incoming.resolutionResult.allComponents
                     .collect { component -> component.moduleVersion }
                     .findAll { module -> module != null && module.group == 'org.springframework.ai' }
@@ -155,4 +165,27 @@ tasks.register('inspectionOnlyRun', JavaExec) {
     dependsOn tasks.named('verifySpringAiAlignment')
     classpath = sourceSets.inspectionOnly.runtimeClasspath
     mainClass = 'example.InspectionOnlyPublishedArtifactConsumer'
+}
+
+tasks.register('verifyChatClientStarterDependencies') {
+    doLast {
+        Set<String> unwanted = configurations.chatClientStarterRuntimeClasspath.incoming.resolutionResult.allComponents
+                .collect { component -> component.moduleVersion }
+                .findAll { module -> module != null && (module.group == 'org.springframework.security'
+                        || module.group == 'com.microsoft.onnxruntime' || module.group.startsWith('ai.djl')
+                        || module.name.contains('presidio') || module.name.contains('opennlp')) }
+                .collect { module -> module.toString() }
+                .toSet()
+        if (!unwanted.isEmpty()) {
+            throw new GradleException("ChatClient starter resolved unselected optional integrations: ${unwanted}")
+        }
+    }
+}
+
+tasks.register('chatClientStarterSmokeTest', JavaExec) {
+    dependsOn tasks.named('chatClientStarterClasses')
+    dependsOn tasks.named('verifyChatClientStarterDependencies')
+    dependsOn tasks.named('verifySpringAiAlignment')
+    classpath = sourceSets.chatClientStarter.runtimeClasspath
+    mainClass = 'example.ChatClientStarterConsumer'
 }

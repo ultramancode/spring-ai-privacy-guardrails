@@ -1,6 +1,7 @@
 package example;
 
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
@@ -9,10 +10,9 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
-import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
-import io.github.ultramancode.springai.privacy.test.ToolCallSnapshot;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -42,13 +42,29 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 
 @SpringBootConfiguration
 @EnableAutoConfiguration
 public class PublishedArtifactConsumer {
+
+    @Bean
+    GuardrailsPolicy guardrailsPolicy() {
+        ToolDisclosurePolicy disclosure = ToolDisclosurePolicy.allowEntityTypesByToolName(
+            Map.of("customerLookup", List.of("CUSTOMER_ID")));
+        GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+            .toolDisclosurePolicy(disclosure)
+            .outputProtection().tokenize()
+            .build();
+        return GuardrailsPolicy.builder()
+            .privacy(privacyPolicy)
+            .toolAuthorization(true)
+            .build();
+    }
 
     @Bean
     PublishedAuthorizationChecks publishedAuthorizationChecks() {
@@ -67,24 +83,22 @@ public class PublishedArtifactConsumer {
 
     public static void main(String[] args) {
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
-                PublishedArtifactConsumer.class
+            PublishedArtifactConsumer.class
         )
-                .web(WebApplicationType.NONE)
-                .properties(
-                        "spring.main.banner-mode=off",
-                        "logging.level.root=ERROR",
-                        "spring.ai.privacy.regex.enabled=true",
-                        "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
-                        "spring.ai.privacy.regex.rules[0].pattern="
-                                + "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
-                        "spring.ai.privacy.regex.rules[0].score=0.95",
-                        "spring.ai.privacy.regex.rules[1].entity-type=CUSTOMER_ID",
-                        "spring.ai.privacy.regex.rules[1].pattern=\\bCUST-\\d{4}\\b",
-                        "spring.ai.privacy.regex.rules[1].score=0.99",
-                        "spring.ai.privacy.tools.disclosures[customerLookup][0]=CUSTOMER_ID",
-                        "spring.ai.privacy.output.enabled=true"
-                )
-                .run(args)) {
+            .web(WebApplicationType.NONE)
+            .properties(
+                "spring.main.banner-mode=off",
+                "logging.level.root=ERROR",
+                "spring.ai.privacy.regex.enabled=true",
+                "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
+                "spring.ai.privacy.regex.rules[0].pattern="
+                    + "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+                "spring.ai.privacy.regex.rules[0].score=0.95",
+                "spring.ai.privacy.regex.rules[1].entity-type=CUSTOMER_ID",
+                "spring.ai.privacy.regex.rules[1].pattern=\\bCUST-\\d{4}\\b",
+                "spring.ai.privacy.regex.rules[1].score=0.99"
+            )
+            .run(args)) {
             verifyRuntime(context);
         }
     }
@@ -93,7 +107,7 @@ public class PublishedArtifactConsumer {
         context.getBean(PrivacyGuardrailsAutoConfiguration.class);
         context.getBean(RegexPiiAnalyzer.class);
         context.getBean(PrivacyChatClientConfigurer.class);
-        context.getBean(PrivacySecurityChatClientFactory.class);
+        context.getBean(GuardrailsChatClientFactory.class);
         PrivacyService privacyService = context.getBean(PrivacyService.class);
 
         String tokenized;
@@ -114,7 +128,6 @@ public class PublishedArtifactConsumer {
             ConfigurableApplicationContext context,
             PrivacyService privacyService
     ) {
-        PrivacyToolCallbackFactory toolCallbackFactory = context.getBean(PrivacyToolCallbackFactory.class);
         SpringSecurityToolBoundary toolBoundary = context.getBean(
                 SpringSecurityToolBoundary.class
         );
@@ -128,17 +141,15 @@ public class PublishedArtifactConsumer {
                 PublishedAuthorizationChecks.class
         );
         AtomicInteger deniedToolCalls = new AtomicInteger();
-        try (PrivacyTestProbe probe = PrivacyTestProbe.create(privacyService)) {
-            ToolCallback protectedTool = probe.wrapTool(customerLookup(), toolCallbackFactory);
-            ToolCallback deniedTool = probe.wrapTool(
-                    adminDelete(deniedToolCalls),
-                    toolCallbackFactory
+        try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService)) {
+            AtomicReference<CustomerLookupRequest> toolInput = new AtomicReference<>();
+            ToolCallback customerTool = customerLookup(toolInput);
+            ToolCallback deniedTool = adminDelete(deniedToolCalls);
+            ChatModel chatModel = privacyTestProbe.wrapModel(
+                new PublishedToolLoopModel(upstreamManager)
             );
-            ChatModel model = probe.wrapModel(
-                    new PublishedToolLoopModel(upstreamManager)
-            );
-            ChatClient.Builder builder = context.getBean(PrivacySecurityChatClientFactory.class)
-                    .builder(model).defaultTools(protectedTool, deniedTool);
+            ChatClient.Builder chatClientBuilder = context.getBean(GuardrailsChatClientFactory.class)
+                .builder(chatModel).defaultTools(customerTool, deniedTool);
             SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
             securityContext.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
                     "published-consumer",
@@ -148,33 +159,30 @@ public class PublishedArtifactConsumer {
             SecurityContextHolder.setContext(securityContext);
             String finalResponse;
             try {
-                finalResponse = builder.build()
-                        .prompt()
-                        .user("Find CUST-0042 for alice@example.com")
-                        .call()
-                        .content();
+                finalResponse = chatClientBuilder.build()
+                    .prompt()
+                    .user("Find CUST-0042 for alice@example.com")
+                    .call()
+                    .content();
             } finally {
                 SecurityContextHolder.clearContext();
             }
 
-            if (probe.modelRequests().size() != 2 || probe.toolCalls().size() != 1) {
-                throw new IllegalStateException("Published configurer did not execute one complete tool loop");
+            CustomerLookupRequest input = toolInput.get();
+            if (privacyTestProbe.modelRequests().size() != 2 || input == null || deniedToolCalls.get() != 0) {
+                throw new IllegalStateException("Published client did not preserve the authorized tool loop");
             }
-            if (deniedToolCalls.get() != 0) {
-                throw new IllegalStateException("Published Security starter executed a denied tool");
+            if (!input.customerId().equals("CUST-0042") || input.email().contains("alice@example.com")) {
+                throw new IllegalStateException("Published client violated scoped disclosure");
             }
-            ToolCallSnapshot call = probe.toolCalls().get(0);
-            if (!call.input().contains("CUST-0042") || call.input().contains("alice@example.com")) {
-                throw new IllegalStateException("Published tool wrapper violated scoped disclosure");
-            }
-            boolean modelSawRaw = probe.modelRequests().stream()
-                    .flatMap(request -> request.modelVisibleContent().stream())
-                    .anyMatch(content -> content.contains("CUST-0042")
-                            || content.contains("alice@example.com")
-                            || content.contains("CUST-9000")
-                            || content.contains("result@example.com"));
+            boolean modelSawRaw = privacyTestProbe.modelRequests().stream()
+                .flatMap(request -> request.modelVisibleContent().stream())
+                .anyMatch(content -> content.contains("CUST-0042")
+                    || content.contains("alice@example.com")
+                    || content.contains("CUST-9000")
+                    || content.contains("result@example.com"));
             if (modelSawRaw) {
-                throw new IllegalStateException("Published configurer exposed raw PII to the model");
+                throw new IllegalStateException("Published client exposed raw PII to the model");
             }
             if (finalResponse.contains("final@example.com")
                     || !OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS").matcher(finalResponse).find()) {
@@ -187,14 +195,17 @@ public class PublishedArtifactConsumer {
         }
     }
 
-    private static ToolCallback customerLookup() {
+    private static ToolCallback customerLookup(AtomicReference<CustomerLookupRequest> input) {
         return FunctionToolCallback.builder(
-                        "customerLookup",
-                        (CustomerLookupRequest ignored) -> "processed CUST-9000 for result@example.com"
-                )
-                .description("Returns one synthetic customer")
-                .inputType(CustomerLookupRequest.class)
-                .build();
+            "customerLookup",
+            (CustomerLookupRequest request) -> {
+                input.set(request);
+                return "processed CUST-9000 for result@example.com";
+            }
+        )
+            .description("Returns one synthetic customer")
+            .inputType(CustomerLookupRequest.class)
+            .build();
     }
 
     private static ToolCallback adminDelete(AtomicInteger calls) {

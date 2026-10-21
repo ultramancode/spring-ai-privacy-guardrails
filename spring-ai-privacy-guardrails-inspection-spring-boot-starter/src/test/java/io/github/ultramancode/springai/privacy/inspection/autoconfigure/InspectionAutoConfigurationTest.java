@@ -21,6 +21,7 @@ import io.github.ultramancode.springai.privacy.inspection.rules.InspectionRule;
 import io.github.ultramancode.springai.privacy.inspection.rules.RuleBasedContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionBlockedException;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionExecution;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,8 +59,10 @@ class InspectionAutoConfigurationTest {
             new ApplicationContextRunner()
                     .withConfiguration(AutoConfigurations.of(InspectionAutoConfiguration.class));
 
-    private ContentInspector rules() {
-        return new RuleBasedContentInspector("application-rules", List.of(InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack")));
+    private ContentInspector ruleBasedInspector() {
+        InspectionRule attackRule = InspectionRule.literal(
+            "attack", InspectionFinding.Category.PROMPT_INJECTION, "attack");
+        return new RuleBasedContentInspector("application-rules", List.of(attackRule));
     }
 
     @Test
@@ -71,17 +74,11 @@ class InspectionAutoConfigurationTest {
                     new String(resource.readAllBytes(), StandardCharsets.UTF_8));
             List<?> properties = (List<?>) metadata.get("properties");
             assertThat(properties)
-                    .extracting(property -> (String) ((Map<?, ?>) property).get("name"))
-                    .containsExactlyInAnyOrder(
-                            "spring.ai.inspection.max-segments",
-                            "spring.ai.inspection.max-characters",
-                            "spring.ai.inspection.timeout",
-                            "spring.ai.inspection.failure-policy",
-                            "spring.ai.inspection.failure-policy-overrides",
-                            "spring.ai.inspection.pii-token-simplification-inspectors",
-                            "spring.ai.inspection.output.enabled",
-                            "spring.ai.inspection.output.max-frames",
-                            "spring.ai.inspection.output.stream-timeout");
+                .extracting(property -> (String) ((Map<?, ?>) property).get("name"))
+                .containsExactlyInAnyOrder(
+                    "spring.ai.inspection.failure-policy",
+                    "spring.ai.inspection.failure-policy-overrides",
+                    "spring.ai.inspection.pii-token-simplification-inspectors");
             for (Object property : properties) {
                 assertThat(((Map<?, ?>) property).get("description"))
                         .isInstanceOfSatisfying(String.class, description -> assertThat(description).isNotBlank());
@@ -97,49 +94,6 @@ class InspectionAutoConfigurationTest {
                 .doesNotHaveBean(InspectionChatClientConfigurer.class));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void outputInspectionRequiresExplicitOptIn(boolean enabled) {
-        ChatModel model = new ChatModel() {
-            public ChatResponse call(Prompt prompt) {
-                return new ChatResponse(List.of(new Generation(new AssistantMessage("attack"))));
-            }
-        };
-        ApplicationContextRunner configuredRunner = runner.withBean(ContentInspector.class, this::rules);
-        if (enabled) {
-            configuredRunner = configuredRunner.withPropertyValues("spring.ai.inspection.output.enabled=true");
-        }
-        configuredRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-            ChatClient client = context.getBean(InspectionChatClientConfigurer.class)
-                    .configure(ChatClient.builder(model)).build();
-            if (enabled) {
-                assertThatThrownBy(() -> client.prompt().user("hello").call().content())
-                        .isInstanceOf(InspectionBlockedException.class);
-            } else {
-                assertThat(client.prompt().user("hello").call().content()).isEqualTo("attack");
-            }
-        });
-    }
-
-    @ParameterizedTest(name = "{0}")
-    @CsvSource({
-            "max-frames=0, Maximum stream frame count must be positive",
-            "stream-timeout=0s, Stream timeout must be positive",
-            "stream-timeout=-1s, Stream timeout must be positive"
-    })
-    void invalidEnabledOutputBudgetsFailStartup(String setting, String expectedMessage) {
-        runner.withPropertyValues("spring.ai.inspection.output.enabled=true",
-                        "spring.ai.inspection.output." + setting)
-                .withBean(ContentInspector.class, this::rules)
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure())
-                            .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                            .hasRootCauseMessage(expectedMessage);
-                });
-    }
-
     @Test
     void inspectsOnlyConfiguredClientsWhenInspectorsAreAvailable() {
         AtomicInteger modelCalls = new AtomicInteger();
@@ -150,7 +104,7 @@ class InspectionAutoConfigurationTest {
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
             }
         };
-        runner.withBean(ContentInspector.class, this::rules).run(context -> {
+        runner.withBean(ContentInspector.class, this::ruleBasedInspector).run(context -> {
             assertThat(context)
                     .hasNotFailed()
                     .hasSingleBean(InspectionService.class)
@@ -173,7 +127,7 @@ class InspectionAutoConfigurationTest {
     @ValueSource(booleans = {false, true})
     void usesCustomServiceWithOrWithoutInspectorBeans(boolean registerInspectorBean) {
         InspectionService service = new InspectionService(
-                List.of(rules()), (inspectorId, findings) -> InspectionDecision.ALLOW,
+                List.of(ruleBasedInspector()), (inspectorId, findings) -> InspectionDecision.ALLOW,
                 InspectionFailurePolicy.FAIL_CLOSED);
         ChatModel model = new ChatModel() {
             @Override
@@ -183,7 +137,7 @@ class InspectionAutoConfigurationTest {
         };
         ApplicationContextRunner configuredRunner = runner.withBean(InspectionService.class, () -> service);
         if (registerInspectorBean) {
-            configuredRunner = configuredRunner.withBean(ContentInspector.class, this::rules);
+            configuredRunner = configuredRunner.withBean(ContentInspector.class, this::ruleBasedInspector);
         }
         configuredRunner.run(context -> {
             assertThat(context)
@@ -230,9 +184,9 @@ class InspectionAutoConfigurationTest {
                     assertThat(context.getBean(InspectionProperties.class).getFailurePolicyOverrides())
                             .containsEntry(inspectorId, overridePolicy);
                     InspectionRequest request = new InspectionRequest(
-                            List.of(new ContentSegment("s1", ContentSegment.Role.USER,
-                                    ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "hello")),
-                            context.getBean(InspectionProperties.class).limits());
+                        List.of(new ContentSegment("s1", ContentSegment.Role.USER,
+                            ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "hello")),
+                        InspectionLimits.defaults());
 
                     InspectionReport report = context.getBean(InspectionService.class).inspect(request);
 
@@ -246,7 +200,7 @@ class InspectionAutoConfigurationTest {
     void unknownInspectorFailurePolicyOverrideFailsStartup() {
         runner.withPropertyValues(
                         "spring.ai.inspection.failure-policy-overrides[unknown]=FAIL_OPEN")
-                .withBean(ContentInspector.class, this::rules)
+                .withBean(ContentInspector.class, this::ruleBasedInspector)
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
@@ -258,7 +212,7 @@ class InspectionAutoConfigurationTest {
     @Test
     void runsWithoutPrivacyDependency() {
         runner.withClassLoader(new FilteredClassLoader("io.github.ultramancode.springai.privacy.springai"))
-                .withBean(ContentInspector.class, this::rules)
+                .withBean(ContentInspector.class, this::ruleBasedInspector)
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .hasSingleBean(InspectionChatClientConfigurer.class));
@@ -302,29 +256,12 @@ class InspectionAutoConfigurationTest {
     @Test
     void unknownPiiTokenSimplificationInspectorFailsStartup() {
         runner.withPropertyValues("spring.ai.inspection.pii-token-simplification-inspectors=unknown")
-                .withBean(ContentInspector.class, this::rules)
+                .withBean(ContentInspector.class, this::ruleBasedInspector)
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasRootCauseInstanceOf(IllegalArgumentException.class)
                             .hasRootCauseMessage("PII token simplification must reference configured inspector IDs");
-                });
-    }
-
-    @ParameterizedTest(name = "{0}")
-    @CsvSource({
-            "max-segments=0, maxSegments must be positive",
-            "max-characters=0, maxCharacters must be positive",
-            "timeout=0s, timeout must be positive"
-    })
-    void invalidLimitsFailStartup(String property, String expectedMessage) {
-        runner.withPropertyValues("spring.ai.inspection." + property)
-                .withBean(ContentInspector.class, this::rules)
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure())
-                            .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                            .hasRootCauseMessage(expectedMessage);
                 });
     }
 
@@ -348,7 +285,6 @@ class InspectionAutoConfigurationTest {
                 return Flux.defer(() -> Flux.just(call(prompt)));
             }
         };
-        // The same inspector requires completed Privacy processing for both input and output.
         ContentInspector protectedInspector = new ContentInspector() {
             @Override
             public String inspectorId() {
@@ -374,9 +310,7 @@ class InspectionAutoConfigurationTest {
                         List.of());
             }
         };
-        // Enable output inspection and Privacy output protection separately.
         runner.withConfiguration(AutoConfigurations.of(PrivacyGuardrailsAutoConfiguration.class))
-                .withPropertyValues("spring.ai.inspection.output.enabled=true", "spring.ai.privacy.output.enabled=true")
                 .withBean(ContentInspector.class, () -> protectedInspector)
                 .withBean(PiiAnalyzer.class, () -> analyzer)
                 .run(context -> {
@@ -397,8 +331,7 @@ class InspectionAutoConfigurationTest {
                         result = request.call().content();
                     }
                     assertThat(result).isEqualTo("done");
-                    // Inspect once before the model call and once before delivering its output.
-                    assertThat(inspections).hasValue(2);
+                    assertThat(inspections).hasValue(1);
                 });
     }
 
@@ -431,12 +364,12 @@ class InspectionAutoConfigurationTest {
             }
         };
         InspectionObserver observer = new InspectionObserver() {
-            public void onInspection(InspectionReport report) {
+            public void onInspection(InspectionReport report, InspectionExecution execution) {
                 observedReport.set(report);
                 throw new IllegalStateException("observer unavailable");
             }
 
-            public void onFailure(InspectionException failure) {
+            public void onFailure(InspectionException failure, InspectionExecution execution) {
                 observedFailure.set(failure);
                 throw new IllegalStateException("observer unavailable");
             }

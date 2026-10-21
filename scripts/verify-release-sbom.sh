@@ -41,6 +41,8 @@ jq -e \
       .type == "vcs" and .url == $public_vcs)
     and (
       def expected_modules: [
+        "spring-ai-privacy-guardrails-chat-client",
+        "spring-ai-privacy-guardrails-chat-client-spring-boot-starter",
         "spring-ai-privacy-guardrails-core",
         "spring-ai-privacy-guardrails-inspection-core",
         "spring-ai-privacy-guardrails-inspection-onnx",

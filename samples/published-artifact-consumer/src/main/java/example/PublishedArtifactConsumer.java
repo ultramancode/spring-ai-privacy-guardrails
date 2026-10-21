@@ -182,7 +182,7 @@ public class PublishedArtifactConsumer {
                     || content.contains("CUST-9000")
                     || content.contains("result@example.com"));
             if (modelSawRaw) {
-                throw new IllegalStateException("Published configurer exposed raw PII to the model");
+                throw new IllegalStateException("Published client exposed raw PII to the model");
             }
             if (finalResponse.contains("final@example.com")
                     || !OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS").matcher(finalResponse).find()) {

@@ -39,16 +39,17 @@ public record AllowedEntityTypes(Set<String> entityTypes) {
      *
      * @param entityTypes exact uppercase entity types the tool may receive as originals
      * @return validated immutable allowed entity types
+     * @throws IllegalArgumentException if an entity type is invalid or appears more than once
+     * @throws NullPointerException if {@code entityTypes} is null
      */
     public static AllowedEntityTypes of(Collection<String> entityTypes) {
         Objects.requireNonNull(entityTypes, "entityTypes must not be null");
-        Set<String> canonicalTypes = new LinkedHashSet<>();
+        Set<String> uniqueEntityTypes = new LinkedHashSet<>();
         for (String entityType : entityTypes) {
-            String canonicalType = EntityTypeRegistry.requireValidEntityType(entityType);
-            if (!canonicalTypes.add(canonicalType)) {
+            if (!uniqueEntityTypes.add(entityType)) {
                 throw new IllegalArgumentException("entityTypes contain duplicates");
             }
         }
-        return new AllowedEntityTypes(canonicalTypes);
+        return new AllowedEntityTypes(uniqueEntityTypes);
     }
 }

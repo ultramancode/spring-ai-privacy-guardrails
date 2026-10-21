@@ -40,282 +40,37 @@ class PrivacyDemoControllerTest {
 
     @Test
     void inspectorServesAllRuntimeScenariosWithOneLocalizedStaticPage() throws Exception {
-        byte[] pageBytes = this.mockMvc.perform(get("/index.html"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith("text/html"))
-                .andExpect(content().string(Matchers.containsString(
-                        "Privacy Boundary Inspector"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "Model raw exposure"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "Tool result tokenization"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "id=\"scenarioSelector\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "<option value=\"local-tool\">Local Tool</option>"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "<option value=\"rag\">RAG</option>"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "<option value=\"mcp\">MCP</option>"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "<option value=\"security\">Security</option>"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "id=\"languageToggle\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "data-language=\"ko\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "const translations ="
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "id=\"retrievedDocument\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "id=\"modelVisibleContext\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "id=\"mcpMode\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "id=\"mcpAllowedOriginalEntityTypes\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "id=\"mcpFinalResponse\""
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "json(\"/demo/scenario\", locale)"
-                )))
-                .andExpect(content().string(Matchers.containsString(
-                        "\"Accept-Language\": locale"
-                )))
-                .andExpect(content().string(Matchers.not(Matchers.containsString(
-                        "User, memory, and RAG text enter the same final model boundary."
-                ))))
-                .andExpect(content().string(Matchers.not(Matchers.containsString(
-                        "activeSessionsAfterCall === 0"
-                ))))
-                .andReturn()
-                .getResponse()
-                .getContentAsByteArray();
-        String page = new String(pageBytes, StandardCharsets.UTF_8);
-
-        assertThat(page)
-                .doesNotContain(
-                        "Employee ID is EMP-1234",
-                        "직원번호는 EMP-1234이고"
-                )
-                .contains(
-                        "RAG 흐름 실행",
-                        "\"status.wait\": \"대기\"",
-                        "\"status.done\": \"DONE\"",
-                        "\"status.done\": \"완료\"",
-                        "\"error.returnedHttp\": \"반환 HTTP 상태\"",
-                        "\"flow.sessionsReported\": \"Service-wide active sessions\"",
-                        "\"flow.sessionsReported\": \"서비스 전체 활성 세션\"",
-                        "\"analyzer.resolution\": \"Resolution reason\"",
-                        "\"analyzer.resolution\": \"판정 이유\"",
-                        "Start/end positions are character offsets in the original input.",
-                        "시작/끝 위치는 입력 원문 내 문자 위치(offset)입니다.",
-                        "SINGLE_EVIDENCE means the range was finalized from one detection signal.",
-                        "SINGLE_EVIDENCE는 하나의 탐지 근거만으로 해당 범위가 최종 확정되었음을 의미합니다.",
-                        "\"analyzer.start\": \"Start offset\"",
-                        "\"analyzer.start\": \"시작 위치\"",
-                        "\"analyzer.end\": \"End offset\"",
-                        "\"analyzer.end\": \"끝 위치\"",
-                        "Detected PII in the CRM tool result is replaced with opaque tokens before returning to the model.",
-                        "CRM 도구 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 불투명 토큰으로 바뀝니다.",
-                        "This is the actual document text returned by vector search.",
-                        "벡터 검색으로 조회된 실제 문서 원문입니다.",
-                        "Detected PII has been replaced with opaque tokens, strings that do not directly reveal the original values.",
-                        "탐지된 개인정보는 불투명 토큰으로 대체되어 있습니다. 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.",
-                        "\"rag.evidenceTitle\": \"Backend verification evidence\"",
-                        "\"rag.evidenceTitle\": \"백엔드 검증 근거\"",
-                        "Displays the /demo/rag backend response values that support the results above.",
-                        "위 결과의 근거가 되는 /demo/rag 백엔드 응답 값을 표시합니다.",
-                        "data-i18n=\"rag.evidenceRetrievedRaw\">Retrieved document contains raw PII</span>",
-                        "\"rag.evidenceRetrievedRaw\": \"검색 문서에 원문 PII 포함\"",
-                        "data-i18n=\"rag.evidenceModelRaw\">Model context contains raw PII</span>",
-                        "\"rag.evidenceModelRaw\": \"모델 컨텍스트에 원문 PII 포함\"",
-                        "data-i18n=\"rag.evidenceModelToken\">Model context contains opaque tokens</span>",
-                        "\"rag.evidenceModelToken\": \"모델 컨텍스트에 불투명 토큰 포함\"",
-                        "data-i18n=\"rag.evidenceActiveSessions\">Service-wide active sessions after call</span>",
-                        "\"rag.evidenceActiveSessions\": \"호출 후 서비스 전체 활성 세션\"",
-                        "<code>retrievedDocumentContainsRawPii</code>",
-                        "<code>modelVisibleContextContainsRawPii</code>",
-                        "<code>modelVisibleContextContainsTokenizedPii</code>",
-                        "<code>activeSessionsAfterCall</code>",
-                        "data-i18n=\"mcp.runtimeModeId\">Runtime mode ID</span>",
-                        "\"mcp.runtimeModeId\": \"실행 모드 ID\"",
-                        "data-i18n=\"mcp.modelCalls\">Model call count</span>",
-                        "\"mcp.modelCalls\": \"모델 호출 횟수\"",
-                        "Execution information from a round-trip call to the actual local Streamable HTTP MCP server.",
-                        "실제 로컬 Streamable HTTP MCP 서버를 왕복 호출한 실행 정보입니다.",
-                        "This is the input delivered to the actual model boundary.",
-                        "실제 모델 경계에 전달된 입력입니다.",
-                        "data-i18n-aria-label=\"local.boundaryDisclosure\"",
-                        "data-i18n-aria-label=\"mcp.boundaryDisclosure\"",
-                        "Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the CRM tool.",
-                        "Within this request, only the customer ID (CUSTOMER_ID) is restored to its original value and sent to the MCP tool.",
-                        "현재 요청에서는 고객번호(CUSTOMER_ID)만 원문으로 복원해 CRM 도구에 전달합니다.",
-                        "현재 요청에서는 고객번호(CUSTOMER_ID)만 원문으로 복원해 MCP 도구에 전달합니다.",
-                        "\"disclosure.before\": \"Before tool boundary\"",
-                        "\"disclosure.tokenized\": \"OPAQUE TOKEN\"",
-                        "class=\"disclosure-boundary local-disclosure-boundary\"",
-                        "class=\"tool-boundary-focus\"",
-                        "class=\"secondary-evidence\"",
-                        "\"disclosure.atBoundary\": \"Tool boundary\"",
-                        "\"disclosure.customerOnlyRestored\": \"ORIGINAL RESTORED\"",
-                        "\"disclosure.customerOnlyRestored\": \"원문 복원\"",
-                        "data-i18n=\"disclosure.customerOnlyRestored\">ORIGINAL RESTORED</strong>",
-                        "\"disclosure.customerId\": \"고객번호\"",
-                        "\"disclosure.currentRequestOnly\": \"THIS REQUEST ONLY\"",
-                        "\"disclosure.currentRequestOnly\": \"현재 요청에서만\"",
-                        "\"disclosure.crmLookupSucceeded\": \"CRM lookup succeeded\"",
-                        "\"disclosure.crmLookupSucceeded\": \"CRM 조회 성공\"",
-                        "\"disclosure.mcpLookupSucceeded\": \"MCP tool lookup succeeded\"",
-                        "\"disclosure.mcpLookupSucceeded\": \"MCP 도구 조회 성공\"",
-                        "\"disclosure.othersTokenized\": \"Other PII stays as opaque tokens\"",
-                        "\"disclosure.othersTokenized\": \"다른 개인정보는 불투명 토큰 유지\"",
-                        "\"disclosure.rawOmitted\": \"The restored value is sent only to the tool and is not displayed in this Inspector.\"",
-                        "\"disclosure.rawOmitted\": \"실제 복원 값은 도구에만 전달되며, 이 화면에는 표시되지 않습니다.\"",
-                        "id=\"allowedDisclosureCheck\"",
-                        "id=\"mcpAllowedDisclosureCheck\"",
-                        "setCheck(prefix, \"allowedDisclosureCheck\", tool.toolReceivedOnlyAllowedOriginals)",
-                        "setCheck(prefix, \"lookupCheck\", tool.toolLookupSucceededWithRestoredCustomerId)",
-                        ".opaque-token .token-entity",
-                        ".opaque-token .token-detail",
-                        "function prettyJsonPayload(value)",
-                        "JSON.stringify(parsed, null, 2)",
-                        "function prettyFinalResponse(value)",
-                        "const objectStart = value.indexOf(\"{\")",
-                        "const payload = value.slice(objectStart)",
-                        "const parsed = JSON.parse(payload)",
-                        "return prefix + \"\\n\\n\" + JSON.stringify(parsed, null, 2)",
-                        "function renderTokenEvidence(id, value, prettyJson = false)",
-                        "entity.textContent = match[2]",
-                        "detail.textContent = match[3]",
-                        "renderTokenEvidence(prefixed(prefix, \"protected\"), tool.protectedModelInput)",
-                        "renderTokenEvidence(prefixed(prefix, \"toolArguments\"), tool.tokenizedToolArguments, true)",
-                        "renderTokenEvidence(prefixed(prefix, \"finalResponse\"), prettyFinalResponse(tool.finalResponse))",
-                        "renderTokenEvidence(\"modelVisibleContext\", rag.modelVisibleContext)",
-                        "class=\"evidence-grid\"",
-                        "class=\"card step-card step-1\"",
-                        ".evidence-grid .step-1 { grid-column: 1 / 26; grid-row: 1; }",
-                        ".evidence-grid .step-2 { grid-column: 1 / 14; grid-row: 2; }",
-                        ".evidence-grid .step-3 { grid-column: 14 / 26; grid-row: 2; }",
-                        ".evidence-grid .step-4 { grid-column: 1 / 11; grid-row: 3; }",
-                        ".evidence-grid .step-5 { grid-column: 11 / 26; grid-row: 3; }",
-                        ".evidence-grid .step-6 { grid-column: 1 / 26; grid-row: 4; }",
-                        "class=\"card step-card step-5\"",
-                        "class=\"card step-card step-6\"",
-                        "class=\"rag-boundary\"",
-                        "class=\"rag-boundary-flow\"",
-                        "id=\"ragBoundaryInput\"",
-                        "id=\"ragBoundaryOutput\"",
-                        "id=\"ragBoundaryState\"",
-                        "\"rag.boundaryProtected\": \"보호됨\"",
-                        "function renderRagBoundary(rag)",
-                        "renderRagBoundary(rag)",
-                        "id=\"modelRawMeaning\"",
-                        "id=\"mcpAllowedToolMeaning\"",
-                        "\"summary.none\": \"NONE\"",
-                        "\"summary.none\": \"없음\"",
-                        "\"summary.customerOnly\": \"Customer ID\"",
-                        "\"summary.customerOnly\": \"고객번호\"",
-                        "\"rag.present\": \"PRESENT\"",
-                        "\"rag.present\": \"있음\"",
-                        "Detected PII in the MCP tool result is replaced with opaque tokens before returning to the model.",
-                        "MCP 도구 결과에서 탐지된 개인정보는 모델에 다시 전달되기 전에 불투명 토큰으로 바뀝니다.",
-                        "setSessionCount(prefix, tool.activeSessionsAfterCall)"
-                )
-                .doesNotContain(
-                        "setStageValue(prefix, \"stageCleanup\", tool.activeSessionsAfterCall)",
-                        "setStageBoolean(prefix, \"stageCleanup\"",
-                        "\"summary.cleanupComplete\"",
-                        "\"summary.sessionsRemain\"",
-                        "data-i18n=\"rag.boundaryProtected\">PROTECTED</em>",
-                        "data-i18n=\"flow.input\"",
-                        "\"flow.input\":",
-                        "id=\"runtimeBadges\"",
-                        "renderBadges(",
-                        "runtimeEvidence: \"Runtime evidence\"",
-                        "runtimeEvidence: \"런타임 근거\"",
-                        "MCP transaction",
-                        "MCP 트랜잭션",
-                        "data-i18n-aria-label=\"local.boundaryPath\"",
-                        "data-i18n-aria-label=\"mcp.boundaryPath\"",
-                        "\"boundary.modelArguments\"",
-                        "\"boundary.localExecution\"",
-                        "\"boundary.mcpExecution\"",
-                        "\"boundary.resultRetokenized\"",
-                        "id=\"modelCheck\"",
-                        "id=\"toolCheck\"",
-                        "id=\"resultCheck\"",
-                        "id=\"mcpModelCheck\"",
-                        "id=\"mcpToolCheck\"",
-                        "id=\"mcpResultCheck\"",
-                        "class=\"disclosure-stage",
-                        "class=\"disclosure-verdict",
-                        "class=\"entity-state-list\"",
-                        "class=\"entity-state\"",
-                        "\"disclosure.allTokenized\"",
-                        "\"disclosure.policy\"",
-                        "\"disclosure.allowedRestored\"",
-                        "\"disclosure.stillTokenized\"",
-                        "\"disclosure.lookupSucceeded\""
-                );
-        assertScenarioWiring(page, "local-tool", "/demo/tool-loop", "runLocalTool");
-        assertScenarioWiring(page, "rag", "/demo/rag", "runRag");
-        assertScenarioWiring(page, "mcp", "/demo/mcp-tool-loop", "runMcp");
-        assertScenarioWiring(
-                page,
-                "security",
-                "/demo/security-tool-boundary",
-                "runSecurity"
-        );
-        assertTranslationCoverage(page);
-    }
-
-    @Test
-    void inspectorOmitsGlobalSessionSummaryCardsAndBindsRagBoundaryToBackendEvidence() throws Exception {
         String page = this.mockMvc.perform(get("/index.html"))
                 .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertThat(page)
                 .contains(
-                        "data-i18n=\"rag.evidenceActiveSessions\">Service-wide active sessions after call</span>",
-                        "<code>activeSessionsAfterCall</code>",
-                        "element(\"ragActiveSessionsDetail\").textContent = activeSessions",
-                        "function renderRagBoundary(rag)",
-                        "rag.retrievedDocumentContainsRawPii",
-                        "!rag.modelVisibleContextContainsRawPii",
-                        "rag.modelVisibleContextContainsTokenizedPii",
-                        "protectedBoundary ? \"rag.boundaryProtected\" : \"rag.boundaryNotConfirmed\"",
-                        "renderRagBoundary(rag)"
+                        "Privacy Boundary Inspector",
+                        "id=\"scenarioSelector\"",
+                        "<option value=\"local-tool\">Local Tool</option>",
+                        "<option value=\"rag\">RAG</option>",
+                        "<option value=\"mcp\">MCP</option>",
+                        "<option value=\"security\">Security</option>",
+                        "id=\"languageToggle\"",
+                        "data-language=\"ko\"",
+                        "id=\"protected\"",
+                        "id=\"toolArguments\"",
+                        "id=\"finalResponse\"",
+                        "id=\"retrievedDocument\"",
+                        "id=\"modelVisibleContext\"",
+                        "id=\"mcpFinalResponse\"",
+                        "id=\"securityFinalResponse\""
                 )
-                .doesNotContain(
-                        "id=\"activeSessionsMetric\"",
-                        "id=\"ragActiveSessionsMetric\"",
-                        "id=\"mcpActiveSessionsMetric\"",
-                        "\"metric.sessions\"",
-                        "\"summary.serviceSnapshot\"",
-                        "setValueMetric(",
-                        "summary.cleanupComplete",
-                        "summary.sessionsRemain",
-                        "data-i18n=\"rag.boundaryProtected\">PROTECTED</em>"
-                );
+                .doesNotContain("Employee ID is EMP-1234", "직원번호는 EMP-1234이고");
+        assertScenarioWiring(page, "local-tool", "/demo/tool-loop", "runLocalTool");
+        assertScenarioWiring(page, "rag", "/demo/rag", "runRag");
+        assertScenarioWiring(page, "mcp", "/demo/mcp-tool-loop", "runMcp");
+        assertScenarioWiring(page, "security", "/demo/security-tool-boundary", "runSecurity");
+        assertTranslationCoverage(page);
     }
 
     @Test

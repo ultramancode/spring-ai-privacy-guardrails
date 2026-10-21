@@ -1,12 +1,14 @@
 package io.github.ultramancode.springai.privacy.security;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.security.SecurityToolBoundaryTestFixtures.DefinitionResolvingModel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -64,8 +66,8 @@ import static org.mockito.Mockito.when;
 
 class SpringSecurityToolSearchIntegrationTest {
 
-    private static final Pattern PERSON_TOKEN =
-            OpaquePiiTokenFormat.patternForEntityType("PERSON");
+    private static final Pattern PERSON_TOKEN_PATTERN =
+        OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
     @AfterEach
     void clearSecurityContext() {
@@ -192,18 +194,10 @@ class SpringSecurityToolSearchIntegrationTest {
         assertThat(boundary.activeSessionCount()).isZero();
     }
 
-    @Test
-    void toolSearchProtectsModelGeneratedPiiAndIndexesOnlyAuthorizedDefinitions() {
-        verifyAuthorizedToolSearchProtectsPii(false);
-    }
-
-    @Test
-    void streamingToolSearchProtectsModelGeneratedPiiAndIndexesOnlyAuthorizedDefinitions() {
-        verifyAuthorizedToolSearchProtectsPii(true);
-    }
-
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     @SuppressWarnings("unchecked")
-    private void verifyAuthorizedToolSearchProtectsPii(boolean streaming) {
+    void toolSearchProtectsModelGeneratedPiiAndIndexesOnlyAuthorizedDefinitions(boolean streaming) {
         List<String> authorizationChecks = new ArrayList<>();
         AuthorizationManager<ToolAuthorizationContext> customerLookupOnlyPolicy =
                 (authentication, context) -> {
@@ -263,10 +257,16 @@ class SpringSecurityToolSearchIntegrationTest {
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "alice-session"))
                 // The test model introduces Alice in the search arguments.
                 .user("Find a customer");
-        String response = streaming
-                ? request.stream().content().collectList()
-                        .map(parts -> String.join("", parts)).block(Duration.ofSeconds(5))
-                : request.call().content();
+        String response;
+        if (streaming) {
+            response = request.stream()
+                .content()
+                .collectList()
+                .map(parts -> String.join("", parts))
+                .block(Duration.ofSeconds(5));
+        } else {
+            response = request.call().content();
+        }
         assertThat(response).isEqualTo("done");
         // Only definition-authorized business tools may be indexed and exposed.
         ArgumentCaptor<List<ToolReference>> indexedToolReferences =
@@ -290,8 +290,9 @@ class SpringSecurityToolSearchIntegrationTest {
                 ArgumentCaptor.forClass(ToolSearchRequest.class);
         verify(index).search(searchRequestCaptor.capture());
         assertThat(searchRequestCaptor.getValue().sessionId()).isEqualTo("alice-session");
-        assertThat(searchRequestCaptor.getValue().query()).doesNotContain("Alice");
-        assertThat(PERSON_TOKEN.matcher(searchRequestCaptor.getValue().query()).find()).isTrue();
+        assertThat(searchRequestCaptor.getValue().query())
+            .doesNotContain("Alice")
+            .containsPattern(PERSON_TOKEN_PATTERN);
         assertThat(customerLookupInput.get()).isEqualTo("{\"name\":\"Alice\"}");
 
         assertThat(model.callCount()).isEqualTo(3);
@@ -370,22 +371,22 @@ class SpringSecurityToolSearchIntegrationTest {
     }
 
     private static CallAdvisor toolSearchToolCallbackAndSessionMarkerInjectionAdvisor(
-            ToolCallback callback
+        ToolCallback toolCallback
     ) {
         return new CallAdvisor() {
             @Override
             public ChatClientResponse adviseCall(
-                    ChatClientRequest request,
-                    CallAdvisorChain chain
+                ChatClientRequest request,
+                CallAdvisorChain chain
             ) {
-                ToolCallingChatOptions options =
-                        (ToolCallingChatOptions) request.prompt().getOptions();
-                ToolCallingChatOptions mutated = options.mutate()
-                        .toolCallbacks(List.of(callback))
-                        .toolContext("toolSearchToolSessionId", "test-session")
-                        .build();
-                Prompt prompt = new Prompt(request.prompt().getInstructions(), mutated);
-                return chain.nextCall(request.mutate().prompt(prompt).build());
+                ToolCallingChatOptions toolCallingOptions =
+                    (ToolCallingChatOptions) request.prompt().getOptions();
+                ToolCallingChatOptions updatedToolCallingOptions = toolCallingOptions.mutate()
+                    .toolCallbacks(List.of(toolCallback))
+                    .toolContext("toolSearchToolSessionId", "test-session")
+                    .build();
+                Prompt updatedPrompt = new Prompt(request.prompt().getInstructions(), updatedToolCallingOptions);
+                return chain.nextCall(request.mutate().prompt(updatedPrompt).build());
             }
 
             @Override
@@ -402,77 +403,80 @@ class SpringSecurityToolSearchIntegrationTest {
 
     private static final class ToolSearchLoopModel implements ChatModel {
 
-        private final ToolCallingManager manager;
+        private final ToolCallingManager toolCallingManager;
         private final String businessToolName;
         private final List<Set<String>> exposedToolNames = new ArrayList<>();
         private final AtomicInteger callCount = new AtomicInteger();
 
         private ToolSearchLoopModel(
-                ToolCallingManager manager,
-                String businessToolName
+            ToolCallingManager toolCallingManager,
+            String businessToolName
         ) {
-            this.manager = manager;
+            this.toolCallingManager = toolCallingManager;
             this.businessToolName = businessToolName;
         }
 
         @Override
         public ChatResponse call(Prompt prompt) {
             this.callCount.incrementAndGet();
-            ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
-            List<ToolDefinition> definitions = this.manager.resolveToolDefinitions(options);
+            ToolCallingChatOptions toolCallingOptions = (ToolCallingChatOptions) prompt.getOptions();
+            List<ToolDefinition> definitions = this.toolCallingManager.resolveToolDefinitions(toolCallingOptions);
             this.exposedToolNames.add(definitions.stream()
-                    .map(ToolDefinition::name)
-                    .collect(Collectors.toSet()));
+                .map(ToolDefinition::name)
+                .collect(Collectors.toSet()));
             if (hasToolResponse(prompt, this.businessToolName)) {
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
             }
 
-            String person = prompt.getInstructions().stream()
-                    .map(Message::getText)
-                    .map(PERSON_TOKEN::matcher)
-                    .filter(Matcher::find)
-                    .map(Matcher::group)
-                    .findFirst()
-                    .orElse("Alice");
+            String toolArgumentName = "Alice";
+            for (Message message : prompt.getInstructions()) {
+                Matcher personTokenMatcher = PERSON_TOKEN_PATTERN.matcher(message.getText());
+                if (personTokenMatcher.find()) {
+                    toolArgumentName = personTokenMatcher.group();
+                    break;
+                }
+            }
             if (!hasToolResponse(prompt, "toolSearchTool")) {
-                ToolDefinition controlDefinition = definitions.stream()
-                        .filter(definition -> definition.name().equals("toolSearchTool"))
-                        .findFirst()
-                        .orElseThrow();
-                String queryParameter = controlDefinition.inputSchema().contains("\"query\"")
-                        ? "query"
-                        : "arg0";
+                ToolDefinition searchToolDefinition = definitions.stream()
+                    .filter(definition -> definition.name().equals("toolSearchTool"))
+                    .findFirst()
+                    .orElseThrow();
+                // Spring AI 2.0.0 exposes this parameter as arg0 instead of query.
+                String queryParameterName = "query";
+                if (!searchToolDefinition.inputSchema().contains("\"query\"")) {
+                    queryParameterName = "arg0";
+                }
                 return toolCallResponse(
-                        "toolSearchTool",
-                        "{\"" + queryParameter + "\":\"Find customer " + person + "\"}"
+                    "toolSearchTool",
+                    "{\"" + queryParameterName + "\":\"Find customer " + toolArgumentName + "\"}"
                 );
             }
             return toolCallResponse(
-                    this.businessToolName,
-                    "{\"name\":\"" + person + "\"}"
+                this.businessToolName,
+                "{\"name\":\"" + toolArgumentName + "\"}"
             );
         }
 
-        private static boolean hasToolResponse(Prompt prompt, String name) {
+        private static boolean hasToolResponse(Prompt prompt, String toolName) {
             return prompt.getInstructions().stream()
-                    .filter(ToolResponseMessage.class::isInstance)
-                    .map(ToolResponseMessage.class::cast)
-                    .flatMap(message -> message.getResponses().stream())
-                    .anyMatch(response -> response.name().equals(name));
+                .filter(ToolResponseMessage.class::isInstance)
+                .map(ToolResponseMessage.class::cast)
+                .flatMap(message -> message.getResponses().stream())
+                .anyMatch(response -> response.name().equals(toolName));
         }
 
-        private static ChatResponse toolCallResponse(String name, String arguments) {
-            AssistantMessage.ToolCall call = new AssistantMessage.ToolCall(
-                    "call-" + name,
-                    "function",
-                    name,
-                    arguments
+        private static ChatResponse toolCallResponse(String toolName, String arguments) {
+            AssistantMessage.ToolCall toolCall = new AssistantMessage.ToolCall(
+                "call-" + toolName,
+                "function",
+                toolName,
+                arguments
             );
-            AssistantMessage response = AssistantMessage.builder()
-                    .content("")
-                    .toolCalls(List.of(call))
-                    .build();
-            return new ChatResponse(List.of(new Generation(response)));
+            AssistantMessage assistantMessage = AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(toolCall))
+                .build();
+            return new ChatResponse(List.of(new Generation(assistantMessage)));
         }
 
         @Override
@@ -496,25 +500,25 @@ class SpringSecurityToolSearchIntegrationTest {
 
     private static final class ToolSearchCallbackReplacementModel implements ChatModel {
 
-        private final ToolCallingManager manager;
+        private final ToolCallingManager toolCallingManager;
         private final ToolCallback replacementToolSearchToolCallback;
 
         private ToolSearchCallbackReplacementModel(
-                ToolCallingManager manager,
-                ToolCallback replacementToolSearchToolCallback
+            ToolCallingManager toolCallingManager,
+            ToolCallback replacementToolSearchToolCallback
         ) {
-            this.manager = manager;
+            this.toolCallingManager = toolCallingManager;
             this.replacementToolSearchToolCallback = replacementToolSearchToolCallback;
         }
 
         @Override
         public ChatResponse call(Prompt prompt) {
-            ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
-            this.manager.resolveToolDefinitions(options);
-            ToolCallingChatOptions replaced = options.mutate()
-                    .toolCallbacks(List.of(this.replacementToolSearchToolCallback))
-                    .build();
-            this.manager.resolveToolDefinitions(replaced);
+            ToolCallingChatOptions toolCallingOptions = (ToolCallingChatOptions) prompt.getOptions();
+            this.toolCallingManager.resolveToolDefinitions(toolCallingOptions);
+            ToolCallingChatOptions replacementToolCallingOptions = toolCallingOptions.mutate()
+                .toolCallbacks(List.of(this.replacementToolSearchToolCallback))
+                .build();
+            this.toolCallingManager.resolveToolDefinitions(replacementToolCallingOptions);
             throw new AssertionError("Tool Search callback replacement should fail closed");
         }
 

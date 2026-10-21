@@ -135,9 +135,11 @@ Start with the client starter and add analyzer or authorization starters as need
 | Apache OpenNLP integration | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | Principal-aware tool discovery and execution | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
 
-The client, Presidio and OpenNLP starters include the base privacy starter.
-There is no need to add it separately. Selecting only tool authorization does not
-require an analyzer.
+The client, Presidio and OpenNLP starters include
+`spring-ai-privacy-guardrails-spring-boot-starter`, the base privacy starter.
+There is no need to add it separately.
+
+If you use only tool authorization, you do not need to configure a PII analyzer.
 
 Content inspection requires version `0.4.0` or later. Choose an inspector implementation and follow the
 [inspection setup](docs/inspection.md#set-up-input-inspection).

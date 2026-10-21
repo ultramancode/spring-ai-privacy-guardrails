@@ -19,7 +19,7 @@ import java.util.Objects;
 /** Tokenizes prompt messages inside the request session owned by {@link PrivacyLifecycleAdvisor}. */
 public final class PrivacyInputAdvisor implements CallAdvisor, StreamAdvisor {
 
-    /** Tested position after default chat memory and before tool calling. */
+    /** Default request order after standard chat memory and before tool calling. */
     public static final int DEFAULT_ORDER = Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER + 50;
 
     private final PrivacyService privacyService;

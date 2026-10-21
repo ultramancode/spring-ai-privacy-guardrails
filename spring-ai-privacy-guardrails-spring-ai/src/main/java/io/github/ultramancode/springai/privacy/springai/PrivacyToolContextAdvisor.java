@@ -24,15 +24,17 @@ import java.util.Set;
 
 /**
  * Makes the current privacy session available to tools and validates registered callbacks.
- * Register this advisor when tools can be supplied or injected dynamically. Wrap application
- * tool callbacks with {@link PrivacyToolCallbackFactory}. Spring AI Tool Search is also
- * supported. {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
+ * Tool callbacks must be wrapped by {@link PrivacyToolCallbackFactory}.
+ * Automatic wrapping can be enabled through
+ * {@link PrivacyChatClientConfigurer.Builder#autoWrapToolCallbacks(boolean)}.
+ * Spring AI Tool Search is also supported.
+ * {@link PrivacyToolCallValidationAdvisor} protects its search arguments.
  * When customizing advisor order, ensure that custom advisors do not mutate tool options
  * after the final privacy check.
  */
 public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvisor {
 
-    /** Tested position immediately before Spring AI captures tool execution options. */
+    /** Default request order immediately before the tool-calling advisor. */
     public static final int DEFAULT_ORDER = ToolCallingAdvisor.DEFAULT_ORDER - 1;
     private static final String UNWRAPPED_TOOL_MESSAGE =
             "PrivacyToolContextAdvisor rejected a tool callback outside the privacy boundary";
@@ -96,7 +98,7 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
             int order
     ) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
-        if (expectedFactory != null && !expectedFactory.usesPrivacyService(privacyService)) {
+        if (expectedFactory != null && !expectedFactory.usesSamePrivacyService(privacyService)) {
             throw new IllegalArgumentException("expectedFactory must use the same PrivacyService");
         }
         this.expectedFactoryProvenance = expectedFactory == null ? null : expectedFactory.provenance();
@@ -177,7 +179,7 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
                         UNWRAPPED_TOOL_MESSAGE
                 );
             }
-            if (expectedService != null && !wrapper.usesPrivacyService(expectedService)) {
+            if (expectedService != null && !wrapper.usesSamePrivacyService(expectedService)) {
                 throw new PrivacyGuardrailException(
                         PrivacyFailureCode.TRANSFORMATION_CONFLICT,
                         PrivacyPhase.TOOL_INPUT,

@@ -59,8 +59,10 @@ class InspectionAutoConfigurationTest {
             new ApplicationContextRunner()
                     .withConfiguration(AutoConfigurations.of(InspectionAutoConfiguration.class));
 
-    private ContentInspector rules() {
-        return new RuleBasedContentInspector("application-rules", List.of(InspectionRule.literal("attack", InspectionFinding.Category.PROMPT_INJECTION, "attack")));
+    private ContentInspector ruleBasedInspector() {
+        InspectionRule attackRule = InspectionRule.literal(
+            "attack", InspectionFinding.Category.PROMPT_INJECTION, "attack");
+        return new RuleBasedContentInspector("application-rules", List.of(attackRule));
     }
 
     @Test
@@ -102,7 +104,7 @@ class InspectionAutoConfigurationTest {
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
             }
         };
-        runner.withBean(ContentInspector.class, this::rules).run(context -> {
+        runner.withBean(ContentInspector.class, this::ruleBasedInspector).run(context -> {
             assertThat(context)
                     .hasNotFailed()
                     .hasSingleBean(InspectionService.class)
@@ -125,7 +127,7 @@ class InspectionAutoConfigurationTest {
     @ValueSource(booleans = {false, true})
     void usesCustomServiceWithOrWithoutInspectorBeans(boolean registerInspectorBean) {
         InspectionService service = new InspectionService(
-                List.of(rules()), (inspectorId, findings) -> InspectionDecision.ALLOW,
+                List.of(ruleBasedInspector()), (inspectorId, findings) -> InspectionDecision.ALLOW,
                 InspectionFailurePolicy.FAIL_CLOSED);
         ChatModel model = new ChatModel() {
             @Override
@@ -135,7 +137,7 @@ class InspectionAutoConfigurationTest {
         };
         ApplicationContextRunner configuredRunner = runner.withBean(InspectionService.class, () -> service);
         if (registerInspectorBean) {
-            configuredRunner = configuredRunner.withBean(ContentInspector.class, this::rules);
+            configuredRunner = configuredRunner.withBean(ContentInspector.class, this::ruleBasedInspector);
         }
         configuredRunner.run(context -> {
             assertThat(context)
@@ -198,7 +200,7 @@ class InspectionAutoConfigurationTest {
     void unknownInspectorFailurePolicyOverrideFailsStartup() {
         runner.withPropertyValues(
                         "spring.ai.inspection.failure-policy-overrides[unknown]=FAIL_OPEN")
-                .withBean(ContentInspector.class, this::rules)
+                .withBean(ContentInspector.class, this::ruleBasedInspector)
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
@@ -210,7 +212,7 @@ class InspectionAutoConfigurationTest {
     @Test
     void runsWithoutPrivacyDependency() {
         runner.withClassLoader(new FilteredClassLoader("io.github.ultramancode.springai.privacy.springai"))
-                .withBean(ContentInspector.class, this::rules)
+                .withBean(ContentInspector.class, this::ruleBasedInspector)
                 .run(context -> assertThat(context)
                         .hasNotFailed()
                         .hasSingleBean(InspectionChatClientConfigurer.class));
@@ -254,7 +256,7 @@ class InspectionAutoConfigurationTest {
     @Test
     void unknownPiiTokenSimplificationInspectorFailsStartup() {
         runner.withPropertyValues("spring.ai.inspection.pii-token-simplification-inspectors=unknown")
-                .withBean(ContentInspector.class, this::rules)
+                .withBean(ContentInspector.class, this::ruleBasedInspector)
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())

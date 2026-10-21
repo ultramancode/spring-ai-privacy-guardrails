@@ -43,13 +43,15 @@ public interface ModelRequestBoundaryConfigurer extends UnaryOperator<ChatClient
 
     /**
      * Returns a new configurer that applies this configuration and sets whether
-     * application advisors may run after an inspection boundary. The current configurer is unchanged.
+     * application advisors may run after the model request inspection boundary.
+     * The current configurer is unchanged.
      *
-     * <p>When allowed advisors are present, boundary execution logs a warning.
-     * Content changed by those advisors is outside the final-inspection guarantee.
+     * <p>Application advisors after inspection are rejected by default.
+     * When allowed advisors are present, boundary execution logs a warning.
+     * Changes these advisors make to model input are not inspected again before the model call.
      * This option does not bypass stage rejections or other chain validation.</p>
      *
-     * @param allow whether to allow application advisors after an inspection boundary
+     * @param allow whether to allow application advisors after the model request inspection boundary
      * @return a new configurer with the selected setting
      */
     default ModelRequestBoundaryConfigurer allowAdvisorsAfterBoundary(boolean allow) {

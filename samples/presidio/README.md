@@ -6,7 +6,7 @@ digest for reproducible smoke tests. Run the commands below from the repository
 root in a Linux shell.
 
 The pinned image uses spaCy `en_core_web_lg`. Presidio combines its NLP pipeline
-with pattern-, context-, and checksum-based recognizers; this adapter reports
+with pattern-, context-, and checksum-based recognizers. This adapter reports
 their combined output as provider `PRESIDIO`.
 
 ## Start
@@ -66,7 +66,7 @@ curl -X POST http://localhost:5002/analyze \
 ```
 
 Presidio should return entities such as `PERSON` and `EMAIL_ADDRESS`. Results
-depend on the image, model, language, and recognizers; calibrate production
+depend on the image, model, language, and recognizers. Calibrate production
 configurations against representative synthetic data.
 
 Run the adapter and sample-profile live integration tests:

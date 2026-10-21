@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: 57b45b18a24cb961eb2a7a254b1cc9f68addf1d2c02cc80f8adb4555ff0f732f -->
+<!-- i18n-source-sha256: 7415de4ad4ac338adf3eb3323d6c8e2e72eb657f0a5b6dd231ed0622cad68e2c -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에

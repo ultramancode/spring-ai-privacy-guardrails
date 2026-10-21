@@ -1,15 +1,14 @@
 package io.github.ultramancode.springai.privacy.security.autoconfigure;
 
-import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
-import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
 import org.springframework.ai.chat.client.ChatClientCustomizer;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.observation.AdvisorObservationConvention;
 import org.springframework.ai.chat.client.observation.ChatClientObservationConvention;
-import io.micrometer.observation.ObservationRegistry;
-import org.springframework.core.env.Environment;
 import org.springframework.ai.model.tool.DefaultToolCallingManager;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.ObjectProvider;
@@ -19,6 +18,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.core.env.Environment;
 import org.springframework.security.authorization.AuthorizationManager;
 
 import java.util.List;
@@ -28,10 +28,10 @@ import java.util.List;
  * replacing the application's existing {@link ToolCallingManager}.
  */
 @AutoConfiguration(
-        afterName = {
-                "org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration",
-                "org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration"
-        }
+    afterName = {
+        "org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration",
+        "org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration"
+    }
 )
 @ConditionalOnClass({AuthorizationManager.class, ToolCallingManager.class})
 public class ToolAuthorizationAutoConfiguration {
@@ -40,69 +40,69 @@ public class ToolAuthorizationAutoConfiguration {
     @Conditional(ToolAuthorizationPolicyCondition.class)
     @ConditionalOnMissingBean
     SpringSecurityToolBoundary springSecurityToolBoundary(
-            AuthorizationManager<ToolAuthorizationContext> authorizationManager,
-            ObjectProvider<ToolCallingManager> toolCallingManagers
+        AuthorizationManager<ToolAuthorizationContext> authorizationManager,
+        ObjectProvider<ToolCallingManager> toolCallingManagers
     ) {
         return SpringSecurityToolBoundary.builder(
-                resolveDefaultToolCallingManager(toolCallingManagers),
-                authorizationManager
+            resolveDefaultToolCallingManager(toolCallingManagers),
+            authorizationManager
         ).build();
     }
 
     @Bean
     @ConditionalOnBean(SpringSecurityToolBoundary.class)
-    // Apply Spring AI 2.0's deprecated ChatClientCustomizer before ChatClientBuilderCustomizer
-    // to preserve existing application customizations and Spring AI's application order.
+    @ConditionalOnMissingBean
+    // Match Spring AI's customizer application order.
     @SuppressWarnings("removal")
     ToolAuthorizationChatClientFactory toolAuthorizationChatClientFactory(
-            SpringSecurityToolBoundary boundary,
-            ObjectProvider<ToolCallingAdvisor.Builder<?>> toolCallingAdvisorBuilder,
-            ObjectProvider<ObservationRegistry> observationRegistry,
-            ObjectProvider<ChatClientObservationConvention> chatClientObservationConvention,
-            ObjectProvider<AdvisorObservationConvention> advisorObservationConvention,
-            ObjectProvider<ChatClientCustomizer> legacyCustomizers,
-            ObjectProvider<ChatClientBuilderCustomizer> customizers,
-            Environment environment
+        SpringSecurityToolBoundary toolAuthorizationBoundary,
+        ObjectProvider<ToolCallingAdvisor.Builder<?>> toolCallingAdvisorBuilder,
+        ObjectProvider<ObservationRegistry> observationRegistry,
+        ObjectProvider<ChatClientObservationConvention> chatClientObservationConvention,
+        ObjectProvider<AdvisorObservationConvention> advisorObservationConvention,
+        ObjectProvider<ChatClientCustomizer> chatClientCustomizers,
+        ObjectProvider<ChatClientBuilderCustomizer> chatClientBuilderCustomizers,
+        Environment environment
     ) {
         ToolCallingAdvisor.Builder<?> defaultToolAdvisorBuilder = toolCallingAdvisorBuilder.getIfAvailable(() -> {
-            int toolOrder = environment.getProperty(
-                    "spring.ai.chat.client.tool-calling.advisor-order", Integer.class, ToolCallingAdvisor.DEFAULT_ORDER);
-            return ToolCallingAdvisor.builder().advisorOrder(toolOrder);
+            int toolAdvisorOrder = environment.getProperty(
+                "spring.ai.chat.client.tool-calling.advisor-order", Integer.class, ToolCallingAdvisor.DEFAULT_ORDER);
+            return ToolCallingAdvisor.builder().advisorOrder(toolAdvisorOrder);
         });
         return ToolAuthorizationChatClientFactory.builder()
-                .toolAuthorizationBoundary(boundary)
-                .toolAdvisorBuilder(defaultToolAdvisorBuilder)
-                .observationRegistry(observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP))
-                .chatClientObservationConvention(chatClientObservationConvention.getIfUnique())
-                .advisorObservationConvention(advisorObservationConvention.getIfUnique())
-                .clientCustomizer(chatClientBuilder -> {
-                    legacyCustomizers.orderedStream()
-                            .forEach(chatClientCustomizer -> chatClientCustomizer.customize(chatClientBuilder));
-                    customizers.orderedStream()
-                            .forEach(chatClientBuilderCustomizer -> chatClientBuilderCustomizer.customize(chatClientBuilder));
-                    return chatClientBuilder;
-                })
-                .autoRegisterToolAdvisor(environment.getProperty(
-                        "spring.ai.chat.client.tool-calling.enabled", Boolean.class, true))
-                .build();
+            .toolAuthorizationBoundary(toolAuthorizationBoundary)
+            .toolAdvisorBuilder(defaultToolAdvisorBuilder)
+            .observationRegistry(observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP))
+            .chatClientObservationConvention(chatClientObservationConvention.getIfUnique())
+            .advisorObservationConvention(advisorObservationConvention.getIfUnique())
+            .clientCustomizer(chatClientBuilder -> {
+                chatClientCustomizers.orderedStream()
+                    .forEach(chatClientCustomizer -> chatClientCustomizer.customize(chatClientBuilder));
+                chatClientBuilderCustomizers.orderedStream()
+                    .forEach(chatClientBuilderCustomizer -> chatClientBuilderCustomizer.customize(chatClientBuilder));
+                return chatClientBuilder;
+            })
+            .autoRegisterToolAdvisor(environment.getProperty(
+                "spring.ai.chat.client.tool-calling.enabled", Boolean.class, true))
+            .build();
     }
 
     private static ToolCallingManager resolveDefaultToolCallingManager(
-            ObjectProvider<ToolCallingManager> toolCallingManagers) {
+        ObjectProvider<ToolCallingManager> toolCallingManagers) {
         // Use the injected provider to include parent beans and respect autowire candidate settings.
         List<ToolCallingManager> defaultManagerCandidates = toolCallingManagers.stream()
-                .filter(DefaultToolCallingManager.class::isInstance)
-                .toList();
+            .filter(DefaultToolCallingManager.class::isInstance)
+            .toList();
         if (defaultManagerCandidates.isEmpty()) {
             throw new IllegalStateException(
-                    "Tool authorization auto-configuration requires a DefaultToolCallingManager bean. "
-                            + "Provide an explicit SpringSecurityToolBoundary to use another ToolCallingManager"
+                "Tool authorization auto-configuration requires a DefaultToolCallingManager bean. "
+                    + "Provide an explicit SpringSecurityToolBoundary to use another ToolCallingManager"
             );
         }
         if (defaultManagerCandidates.size() > 1) {
             throw new IllegalStateException(
-                    "Tool authorization found multiple Spring AI DefaultToolCallingManager "
-                            + "candidates. Provide an explicit SpringSecurityToolBoundary"
+                "Tool authorization found multiple Spring AI DefaultToolCallingManager "
+                    + "candidates. Provide an explicit SpringSecurityToolBoundary"
             );
         }
         return defaultManagerCandidates.get(0);

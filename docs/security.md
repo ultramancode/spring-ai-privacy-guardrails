@@ -163,7 +163,7 @@ GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
                 .build())
         .toolAuthorization(true)
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -215,7 +215,7 @@ ChatClient customToolAdvisorClient(
 }
 ```
 
-`100` is an example value; choose an execution order that fits the other advisors
+`100` is an example value. Choose an execution order that fits the other advisors
 in your application. Orders incompatible with the protection setup are rejected.
 
 The factory supports `ToolCallingAdvisor.Builder<?>` and its subclasses.
@@ -272,37 +272,15 @@ final class CustomToolCallingAdvisor extends ToolCallingAdvisor {
 }
 ```
 
-`super.copy()` calls `copy()` in the parent class, `ToolCallingAdvisor.Builder`.
-The three methods have the following roles:
-
-| Method | Role in this example |
-| --- | --- |
-| `copy()` | Delegates copying to the parent's `copy()` and returns the result as this example's `Builder` type. |
-| `newCopy()` | Called by the parent's `copy()`. Creates the new `Builder` that will receive the copied settings. |
-| `build()` | Reads the `ToolCallingManager` set by the factory through `getToolCallingManager()` and passes it, along with the remaining settings, to the `CustomToolCallingAdvisor` constructor. |
-
-The factory sets the authorization-aware `ToolCallingManager` on the builder.
-Your `build()` implementation reads it through `getToolCallingManager()` and
-passes it to the advisor constructor. The `manager` variable above holds this value.
-
-The constructor passes that same `ToolCallingManager` to the parent
-`ToolCallingAdvisor` as the first argument of `super(manager, checker, order, history)`.
-The remaining three arguments configure tool execution eligibility, advisor
-execution order, and conversation history. The parent advisor uses the supplied
-`ToolCallingManager` to call tools.
-
-The parent's `copy()` copies the `ToolCallingManager`, execution eligibility checker,
-execution order, and conversation history setting into the new builder.
-
-If your builder adds configuration fields, assign their values to the copy
-returned by `super.copy()` inside your `copy()` implementation, then return that
-copy. As shown above, `newCopy()` is responsible for creating the new builder.
+The inherited `copy()` copies the standard advisor settings into the builder
+created by `newCopy()`. If your builder adds configuration fields, copy those
+fields in your `copy()` implementation as well.
 
 Pass this builder to the factory when creating the client:
 
 ```java
-ChatClient chatClient = authorizationFactory
-        .builder(chatModel, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
+ChatClient chatClient = guardrailsChatClientFactory
+        .builder(chatModel, guardrailsPolicy, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -447,7 +425,7 @@ When privacy protection is also used, detected PII in the search query is
 replaced with **opaque tokens** before the search runs. These replacement
 strings do not directly reveal the original values.
 
-The library allows the tool that performs the search; the application's
+The library allows the tool that performs the search. The application's
 authorization policy applies to the tools being searched. Tool replacements
 and unsupported additions during a request are rejected before execution.
 

@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrivacyToolCallbackContractTest {
     @Test
-    void factoryRejectsAlreadyWrappedCallbacksInsteadOfSilentlyKeepingAnotherPolicy() {
+    void factoryRejectsAlreadyWrappedCallbacks() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyToolCallbackFactory factory = new PrivacyToolCallbackFactory(service, ToolDisclosurePolicy.denyAll());
         ToolCallback wrapped = factory.wrap(delegate(input -> "ok"));

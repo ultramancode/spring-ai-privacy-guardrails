@@ -59,6 +59,27 @@ class ToolAuthorizationAutoConfigurationTest {
         });
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"customAuthorizationFactory", "toolAuthorizationChatClientFactory"})
+    void usesUserDefinedFactoryWithoutCreatingAnother(String factoryBeanName) {
+        SpringSecurityToolBoundary toolAuthorizationBoundary = SpringSecurityToolBoundary.builder(
+            mock(ToolCallingManager.class),
+            (authentication, context) -> new AuthorizationDecision(true)
+        ).build();
+        ToolAuthorizationChatClientFactory customFactory = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(toolAuthorizationBoundary)
+            .build();
+
+        this.contextRunner
+            .withBean(SpringSecurityToolBoundary.class, () -> toolAuthorizationBoundary)
+            .withBean(factoryBeanName, ToolAuthorizationChatClientFactory.class, () -> customFactory)
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasSingleBean(ToolAuthorizationChatClientFactory.class);
+                assertThat(context.getBean(ToolAuthorizationChatClientFactory.class)).isSameAs(customFactory);
+            });
+    }
+
     @Test
     void createsDistinctBuildersForTheSameModel() {
         this.contextRunner.run(context -> {

@@ -23,6 +23,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
+import org.springframework.ai.chat.client.ChatClientCustomizer;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -42,6 +43,7 @@ import org.springframework.security.authorization.AuthorizationDecision;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -95,6 +97,34 @@ class GuardrailsAutoConfigurationTest {
                     .isEqualTo("[REDACTED_PERSON]");
                 assertThat(chatModel.lastPrompt.getSystemMessage().getText()).isEqualTo("Be concise");
                 assertThat(observations).hasValueGreaterThan(0);
+            });
+    }
+
+    @Test
+    @SuppressWarnings("removal")
+    void appliesClientCustomizersBeforeBuilderCustomizers() {
+        EchoModel chatModel = new EchoModel();
+        List<String> customizerInvocations = new ArrayList<>();
+        runner.withBean(PrivacyService.class, GuardrailsAutoConfigurationTest::privacyService)
+            .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder().privacy().build())
+            .withBean(ChatClientCustomizer.class, () -> chatClientBuilder -> {
+                customizerInvocations.add("client");
+                chatClientBuilder.defaultSystem("Client system");
+                chatClientBuilder.defaultUser("Default user");
+            })
+            .withBean(ChatClientBuilderCustomizer.class, () -> chatClientBuilder -> {
+                customizerInvocations.add("builder");
+                chatClientBuilder.defaultSystem("Builder system");
+            })
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                ChatClient chatClient = context.getBean(GuardrailsChatClientFactory.class)
+                    .builder(chatModel)
+                    .build();
+
+                assertThat(customizerInvocations).containsExactly("client", "builder");
+                assertThat(chatClient.prompt().call().content()).isEqualTo("Default user");
+                assertThat(chatModel.lastPrompt.getSystemMessage().getText()).isEqualTo("Builder system");
             });
     }
 

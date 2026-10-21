@@ -24,13 +24,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Configures application-facing output protection. The {@link PrivacyLifecycleAdvisor}
- * owns the single response-protection pass at the point where control returns to the
- * lifecycle advisor. Return-direct tool generations are identified from Spring AI's
- * final generation metadata, restored internally, and then subjected to the configured
- * output action. The default order is part of the tested standard layout. Applications
- * using custom advisor composition own any response mutations performed outside the
- * lifecycle boundary.
+ * Configures privacy protection for final output, including {@code returnDirect} tool results.
+ * The {@link PrivacyLifecycleAdvisor} applies the configured output action before
+ * closing the privacy session.
+ *
+ * <p>Response changes made outside the lifecycle advisor's position are not covered
+ * by this protection.</p>
  */
 public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
 
@@ -40,7 +39,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
     /** Default non-sensitive message used when output is blocked. */
     public static final String DEFAULT_BLOCK_EXCEPTION_MESSAGE = "Response blocked by privacy guardrail.";
 
-    /** Tested position immediately outside Spring AI tool calling. */
+    /** Default position before the tool-context and tool-calling advisors in request order. */
     public static final int DEFAULT_ORDER = ToolCallingAdvisor.DEFAULT_ORDER - 2;
 
     private final PrivacyService privacyService;

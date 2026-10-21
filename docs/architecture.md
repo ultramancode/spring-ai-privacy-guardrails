@@ -28,7 +28,7 @@ flowchart TD
 ```
 
 Detection offsets always refer to the caller-supplied input text. Analyzers
-return ranges, entity types, scores, and other evidence; `core` validates,
+return ranges, entity types, scores, and other evidence. The `core` module validates,
 canonicalizes, and resolves that evidence according to application policy.
 Mappings between opaque tokens and original values are managed per request
 through `PrivacySession`.
@@ -340,7 +340,7 @@ for the conditions under which text is sent to an external guard model.
 
 Library-owned privacy failures use `PrivacyGuardrailException` and
 `PrivacyFailureCode`. These failures do not include original PII or analyzer
-response bodies; they expose only limited diagnostic information such as the
+response bodies. They expose only limited diagnostic information such as the
 failure category and processing phase.
 
 `PiiAnalyzerFailureObserver` receives the same sanitized failure information.
@@ -349,7 +349,7 @@ operational diagnostics such as metrics, tracing, and logs.
 
 The optional `PrivacyEnforcementObserver` reports `PROTECTED`, `DISCLOSED`, and
 `BLOCKED` outcomes at the model, tool-input, tool-result, and application-output
-boundaries. Events contain only `boundary` and `outcome`; observer failures
+boundaries. Events contain only `boundary` and `outcome`. Observer failures
 cannot affect privacy enforcement.
 
 Exceptions raised by model providers, application tools, and external

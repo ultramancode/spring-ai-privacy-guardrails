@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: d8f185af68785a99f831cb801c835a8d9115984640e0f633881c73f1b57ca0c0 -->
+<!-- i18n-source-sha256: 02bd9ea94a491d521f77b8a0bcdc3c47a79fde9889b224fc9bd19d03c786ddd9 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -157,7 +157,7 @@ GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
                 .build())
         .toolAuthorization(true)
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -263,36 +263,15 @@ final class CustomToolCallingAdvisor extends ToolCallingAdvisor {
 }
 ```
 
-`super.copy()`는 부모 클래스인 `ToolCallingAdvisor.Builder`의 `copy()`를 뜻합니다.
-세 메서드의 역할은 다음과 같습니다.
-
-| 메서드 | 이 예시에서 하는 일 |
-| --- | --- |
-| `copy()` | 부모의 `copy()`에 복사를 맡기고, 결과를 이 예시의 `Builder` 타입으로 반환합니다. |
-| `newCopy()` | 부모의 `copy()`가 호출합니다. 설정을 복사해 넣을 새 `Builder`를 만듭니다. |
-| `build()` | `getToolCallingManager()`로 Factory가 설정한 `ToolCallingManager`를 읽어, 나머지 설정과 함께 `CustomToolCallingAdvisor` 생성자에 전달합니다. |
-
-Factory가 builder에 권한 검사용 `ToolCallingManager`를 설정하면, 직접 작성한
-`build()`는 `getToolCallingManager()`로 그 값을 받아 Advisor 생성자에 넘깁니다. 위 코드의
-`manager` 변수가 그 값입니다.
-
-생성자는 `super(manager, checker, order, history)`의 첫 번째 인자로 같은
-`ToolCallingManager`를 부모 `ToolCallingAdvisor`에 전달합니다. 나머지 세 인자는 도구
-실행 조건, Advisor 실행 순서, 대화 기록 사용 여부입니다. 부모 Advisor는 전달받은
-`ToolCallingManager`로 도구를 호출합니다.
-
-`ToolCallingManager`, 실행 조건, 실행 순서, 대화 기록 설정은 부모의 `copy()`가
-새 builder에 복사합니다.
-
-builder에 별도 설정 필드를 추가했다면, `copy()`에서 `super.copy()`로 얻은 복사본에
-해당 필드의 값을 옮긴 뒤 반환하세요. `newCopy()`는 위 예시처럼 새 builder를 생성하는
-역할을 맡습니다.
+부모의 `copy()`는 `newCopy()`로 생성한 builder에 기본 Advisor 설정을 복사합니다.
+builder에 별도 설정 필드를 추가했다면, 직접 구현한 `copy()`에서 해당 필드도
+복사하세요.
 
 클라이언트를 만들 때는 이 builder를 Factory에 전달합니다.
 
 ```java
-ChatClient chatClient = authorizationFactory
-        .builder(chatModel, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
+ChatClient chatClient = guardrailsChatClientFactory
+        .builder(chatModel, guardrailsPolicy, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
         .defaultTools(customerLookupToolCallback)
         .build();
 ```

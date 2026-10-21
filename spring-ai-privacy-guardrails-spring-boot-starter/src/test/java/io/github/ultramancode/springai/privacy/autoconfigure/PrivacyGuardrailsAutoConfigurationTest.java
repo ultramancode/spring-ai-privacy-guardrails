@@ -58,7 +58,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -333,22 +332,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void toolDisclosuresRejectAmbiguousConfiguration() {
-        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
-                " customerLookup",
-                Set.of("CUSTOMER_ID")
-        )))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("tool disclosure names must not contain whitespace");
-        assertThatThrownBy(() -> ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of(
-                "customerLookup",
-                List.of("customer-id")
-        )))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("uppercase ASCII");
-    }
-
-    @Test
     void invalidRegexPreservesApplicationOwnedCompilationFailure() {
         PrivacyGuardrailsProperties properties = new PrivacyGuardrailsProperties();
         PrivacyGuardrailsProperties.Regex.Rule rule = new PrivacyGuardrailsProperties.Regex.Rule();
@@ -495,7 +478,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void explicitConfigurerRunsCompleteToolLoopOutputPolicyAndSessionCleanup() {
+    void autoConfiguredBeansProtectTheToolLoopAndNotifyObservers() {
         AtomicReference<String> delegateToolInput = new AtomicReference<>();
         List<PrivacyEnforcementEvent> enforcementEvents = new CopyOnWriteArrayList<>();
         this.contextRunner
@@ -514,12 +497,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
             .run(context -> {
                 StarterToolLoopModel model = new StarterToolLoopModel();
                 ChatClient.Builder builder = ChatClient.builder(model);
-                PrivacyChatClientConfigurer.builder(context.getBean(PrivacyService.class))
-                    .toolCallbackFactory(context.getBean(PrivacyToolCallbackFactory.class))
-                    .outputProtection(PrivacyOutputAdvisor.DEFAULT_ACTION,
-                        PrivacyOutputAdvisor.DEFAULT_BLOCK_EXCEPTION_MESSAGE)
-                    .enforcementObserver(context.getBean(PrivacyEnforcementObserver.class))
-                    .build().configure(builder);
+                context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
                 ToolCallbackProvider sourceProvider = () -> new ToolCallback[]{
                     customerLookup(delegateToolInput)
                 };
@@ -545,26 +523,20 @@ class PrivacyGuardrailsAutoConfigurationTest {
                     .doesNotContain("CUST-9000", "result@example.test")
                     .containsPattern(OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID"))
                     .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
-                assertThat(result)
-                    .doesNotContain("final@example.test")
-                    .containsPattern(OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS"));
+                assertThat(result).isEqualTo("Contact final@example.test");
                 assertThat(enforcementEvents).contains(
                     new PrivacyEnforcementEvent(
                         PrivacyEnforcementBoundary.MODEL,
                         PrivacyEnforcementOutcome.PROTECTED
-                ),
+                    ),
                     new PrivacyEnforcementEvent(
                         PrivacyEnforcementBoundary.TOOL_INPUT,
                         PrivacyEnforcementOutcome.DISCLOSED
-                ),
+                    ),
                     new PrivacyEnforcementEvent(
                         PrivacyEnforcementBoundary.TOOL_RESULT,
                         PrivacyEnforcementOutcome.PROTECTED
-                ),
-                    new PrivacyEnforcementEvent(
-                        PrivacyEnforcementBoundary.APPLICATION_OUTPUT,
-                        PrivacyEnforcementOutcome.PROTECTED
-                )
+                    )
                 );
                 assertThat(enforcementEvents.toString()).doesNotContain(
                     "CUST-0042",

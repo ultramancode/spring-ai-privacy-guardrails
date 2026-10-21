@@ -63,12 +63,12 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
         return this.toolMetadata;
     }
 
-    boolean usesPrivacyService(PrivacyService expected) {
-        return this.privacyService == expected;
+    boolean usesSamePrivacyService(PrivacyService expectedPrivacyService) {
+        return this.privacyService == expectedPrivacyService;
     }
 
-    boolean hasFactoryProvenance(PrivacyToolCallbackFactory.Provenance expected) {
-        return this.factoryProvenance == expected;
+    boolean hasFactoryProvenance(PrivacyToolCallbackFactory.Provenance expectedFactoryProvenance) {
+        return this.factoryProvenance == expectedFactoryProvenance;
     }
 
     @Override
@@ -220,9 +220,9 @@ final class PrivacyToolCallbackWrapper implements ToolCallback {
     }
 
     private static PrivacyGuardrailException toolContractViolation(
-            PrivacyFailureCode code,
+            PrivacyFailureCode failureCode,
             String safeMessage
     ) {
-        return new PrivacyGuardrailException(code, PrivacyPhase.TOOL_INPUT, safeMessage);
+        return new PrivacyGuardrailException(failureCode, PrivacyPhase.TOOL_INPUT, safeMessage);
     }
 }

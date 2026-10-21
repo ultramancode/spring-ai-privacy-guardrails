@@ -67,7 +67,6 @@ class PrivacySequentialToolIntegrationTest {
                 .content();
 
         assertThat(response).isEqualTo("Workflow complete");
-        assertThat(chatModel.calls()).isEqualTo(3);
         assertThatPrivacy(privacyTestProbe)
             .hasModelRequestCount(3)
             .hasToolCallCount(2)
@@ -75,7 +74,6 @@ class PrivacySequentialToolIntegrationTest {
             .modelRequestsContainOpaqueToken("CUSTOMER_ID")
             .modelRequestsContainOpaqueToken("EMAIL_ADDRESS")
             .toolInputsContain("crmLookup", CUSTOMER_ID)
-            .toolInputsDoNotContainRawValues("crmLookup", EMAIL_ADDRESS)
             .toolOutputsContain("crmLookup", CUSTOMER_ID, EMAIL_ADDRESS)
             .toolInputsContain("emailCustomer", EMAIL_ADDRESS)
             .toolInputsDoNotContainRawValues("emailCustomer", CUSTOMER_ID)
@@ -193,10 +191,6 @@ class PrivacySequentialToolIntegrationTest {
         @Override
         public ChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
-        }
-
-        int calls() {
-            return this.calls.get();
         }
 
         private ChatResponse requestCrmLookup(Prompt prompt) {

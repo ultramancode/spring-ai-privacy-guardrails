@@ -11,6 +11,7 @@ import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
@@ -62,7 +63,10 @@ class PrivacyInputAdvisorTest {
     void defaultOrderRunsAfterSpringAiMemoryAndBeforeToolCalling() {
         PrivacyInputAdvisor advisor = new PrivacyInputAdvisor(privacyService());
 
-        assertThat(advisor.getOrder()).isEqualTo(Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER + 50);
+        assertThat(advisor.getOrder())
+            .isEqualTo(PrivacyInputAdvisor.DEFAULT_ORDER)
+            .isGreaterThan(Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER)
+            .isLessThan(ToolCallingAdvisor.DEFAULT_ORDER);
         assertThat(new PrivacyInputAdvisor(TestPrivacyServices.privacyService(), 123).getOrder())
                 .isEqualTo(123);
     }
@@ -135,14 +139,22 @@ class PrivacyInputAdvisorTest {
             ChatClientRequest updated = invocation.getArgument(0);
             PrivacyContextHandle handle = PrivacyRequestContextSupport.findHandle(updated).orElseThrow();
             List<Message> messages = updated.prompt().getInstructions();
+            AssistantMessage assistant = (AssistantMessage) messages.get(2);
+            ToolResponseMessage tool = (ToolResponseMessage) messages.get(3);
+            List<String> protectedTexts = List.of(
+                messages.get(0).getText(),
+                messages.get(1).getText(),
+                assistant.getText(),
+                assistant.getToolCalls().get(0).arguments(),
+                tool.getResponses().get(0).responseData());
+
+            assertThat(protectedTexts).allSatisfy(text -> assertThat(text).doesNotContain("Alice"));
 
             assertThat(service.detokenize(handle, messages.get(0).getText())).isEqualTo("System for Alice");
             assertThat(service.detokenize(handle, messages.get(1).getText())).isEqualTo("Alice asks");
-            AssistantMessage assistant = (AssistantMessage) messages.get(2);
             assertThat(service.detokenize(handle, assistant.getText())).isEqualTo("Alice replied");
             assertThat(service.detokenize(handle, assistant.getToolCalls().get(0).arguments()))
                     .isEqualTo("{\"name\":\"Alice\"}");
-            ToolResponseMessage tool = (ToolResponseMessage) messages.get(3);
             assertThat(service.detokenize(handle, tool.getResponses().get(0).responseData()))
                     .isEqualTo("Alice result");
             return response("ok");

@@ -141,6 +141,10 @@ ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrail
 uses only the policy passed to that call. If the factory has no default policy,
 pass one explicitly.
 
+Use `ChatClientBuilderCustomizer` beans to set shared client defaults.
+The factory applies `ChatClientCustomizer` beans first, followed by
+`ChatClientBuilderCustomizer` beans. Within each type, Spring bean ordering is respected.
+
 ## Advisor configuration
 
 Supply a tool advisor builder to customize its order or use Tool Search:

@@ -44,7 +44,7 @@ configured under `spring.ai.privacy`.
 | `processing.max-value-tree-nodes` | `100000` | Maximum node count in a value tree or JSON document, including containers, scalar values, and map keys. |
 | `processing.max-depth` | `128` | Maximum nesting depth in a value tree or JSON document. |
 | `processing.max-analysis-segments` | `100000` | Maximum number of texts in one batch analysis. |
-| `processing.max-result-spans` | `100000` | Maximum raw spans accepted from analyzers or callers in one analysis. Newly produced analyzer spans are summed across session batches; reused results are not counted again. |
+| `processing.max-result-spans` | `100000` | Maximum raw spans accepted from analyzers or callers in one analysis. Newly produced analyzer spans are summed across session batches. Reused results are not counted again. |
 | `regex.enabled` | `false` | Enables application-supplied Regex rules. |
 | `regex.rules[].entity-type` | required per rule | Canonical entity type assigned to each rule match. |
 | `regex.rules[].pattern` | required per rule | Java regular expression evaluated against source text. |
@@ -117,7 +117,7 @@ Analyzer execution failures are handled according to
 `analysis.failure-policy`. With `REQUIRE_ALL`, request processing fails if any
 analyzer fails. `REQUIRE_PRIMARY` requires the primary analyzer to succeed but
 tolerates other analyzer failures. `ALLOW_PARTIAL` uses results from the
-analyzers that succeeded, which may reduce protection coverage; the request
+analyzers that succeeded, which may reduce protection coverage. The request
 still fails when every analyzer fails.
 
 The following configuration runs Presidio and an application-specific Regex
@@ -248,7 +248,7 @@ spring:
             validator-id: customer-id-check
 ```
 
-Each rule requires `entity-type` and `pattern`; `score` defaults to `0.85` and
+Each rule requires `entity-type` and `pattern`. `score` defaults to `0.85` and
 `capture-group` to `0`. `validator-id` is optional and refers to the stable ID
 returned by an application-provided `RegexPiiMatchValidator`, not its Spring
 bean name:
@@ -271,13 +271,13 @@ RegexPiiMatchValidator customerIdMatchValidator() {
 ```
 
 `CustomerIds.hasValidChecksum(...)` represents application-provided validation
-logic; supply your own implementation.
+logic. Supply your own implementation.
 
 Validator IDs use lowercase ASCII letters and digits separated by single
 hyphens. They are resolved at startup. Blank, malformed, or unknown IDs, and
 duplicate IDs exposed by two or more validator beans, fail startup. Multiple
 rules may reference the same validator ID. `isValid()` receives exactly the
-candidate selected by `capture-group`; `true` keeps the existing span and score,
+candidate selected by `capture-group`. Returning `true` keeps the existing span and score,
 and `false` excludes the candidate. Exceptions follow the configured analyzer
 failure policy.
 
@@ -311,17 +311,17 @@ spring:
 ```
 
 Set `analyzer-url` to the Presidio server's HTTP(S) address. The default is
-`http://localhost:5002`; change it if your server runs at a different address.
+`http://localhost:5002`. Change it if your server runs at a different address.
 When credentials are required, keep them out of the URL and use `headers`
 together with the application's secret-management facilities.
 
 Use Presidio Analyzer 2.2.361 or later to analyze structured JSON. Texts are
-sent in batches to reduce network requests; large inputs may require multiple
+sent in batches to reduce network requests. Large inputs may require multiple
 requests. Each text is analyzed independently.
 
 `timeout` applies to each HTTP request through complete Presidio response-body
 receipt. Transport failures, `timeout` expiration, HTTP 408/429 responses, and
-5xx responses are retried according to `max-retries`; other 4xx responses fail
+5xx responses are retried according to `max-retries`. Other 4xx responses fail
 immediately.
 
 `max-response-depth` applies to Presidio responses. Use `processing.max-depth`
@@ -573,8 +573,8 @@ try (PrivacySession session = privacyService.openSession()) {
 }
 ```
 
-Only the types passed as the third argument to `detokenize(...)` are restored;
-opaque tokens for other types remain protected. Choose these types according to the
+Only the types passed as the third argument to `detokenize(...)` are restored.
+Opaque tokens for other types remain protected. Choose these types according to the
 application's disclosure policy. Once the try block ends and the session closes,
 its opaque tokens can no longer be restored. Passing an unknown or closed session
 `handle` raises an error.
@@ -586,7 +586,7 @@ and numeric values of type `Byte`, `Short`, `Integer`, `Long`, `BigInteger`,
 
 These methods do not modify the input objects. They return new transformed
 `Map` and `List` containers. Unsupported values, non-string `Map` keys, or
-reference cycles raise `TRANSFORMATION_CONFLICT`; size-limit violations raise
+reference cycles raise `TRANSFORMATION_CONFLICT`. Size-limit violations raise
 `PAYLOAD_LIMIT_EXCEEDED`.
 
 Plain Java objects and Jackson `JsonNode` values cannot be passed directly to
@@ -692,7 +692,7 @@ processing completes. `boundary()` identifies where the event occurred, and
 `outcome()` describes the result at that boundary. A single request may therefore
 produce multiple events. If a request does not pass through a boundary, no event
 is delivered for that boundary. Output-policy blocking produces a `BLOCKED`
-event; events for other processing failures are not provided.
+event. Events for other processing failures are not provided.
 
 `PrivacyEnforcementEvent` intentionally contains only `boundary()` and
 `outcome()`. It never includes raw PII, opaque tokens, entity types, payloads,

@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
 class PrivacyLifecycleAdvisorTest {
 
     @Test
-    void customOrderIsApplicationOwned() {
+    void usesDefaultOrderUnlessCustomOrderIsProvided() {
         PrivacyService service = TestPrivacyServices.privacyService();
 
         assertThat(new PrivacyLifecycleAdvisor(service).getOrder())
@@ -49,7 +49,7 @@ class PrivacyLifecycleAdvisorTest {
     }
 
     @Test
-    void adviseCallReappliesOutputPolicyAfterEveryInnerAdvisorAndCleansContext() {
+    void adviseCallProtectsDownstreamResponseAndCleansContext() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyLifecycleAdvisor lifecycle = new PrivacyLifecycleAdvisor(service);
         PrivacyOutputAdvisor output = new PrivacyOutputAdvisor(service);
@@ -57,7 +57,7 @@ class PrivacyLifecycleAdvisorTest {
         when(chain.nextCall(any())).thenAnswer(invocation -> {
             ChatClientRequest active = invocation.getArgument(0);
             return new ChatClientResponse(
-                    TestPrivacyServices.response("Alice added after output policy").chatResponse(),
+                    TestPrivacyServices.response("Alice from an inner advisor").chatResponse(),
                     active.context()
             );
         });
@@ -66,14 +66,14 @@ class PrivacyLifecycleAdvisorTest {
 
         assertThat(result.chatResponse().getResult().getOutput().getText())
                 .matches(OpaquePiiTokenFormat.patternForEntityType("PERSON").pattern()
-                        + " added after output policy")
+                        + " from an inner advisor")
                 .doesNotContain("Alice");
         assertThat(result.context()).isEmpty();
         assertThat(service.activeSessionCount()).isZero();
     }
 
     @Test
-    void adviseStreamReappliesOutputPolicyToSplitPiiAddedAfterInnerOutputPolicy() {
+    void adviseStreamProtectsPiiSplitAcrossResponseFrames() {
         PrivacyService service = TestPrivacyServices.privacyService();
         PrivacyLifecycleAdvisor lifecycle = new PrivacyLifecycleAdvisor(service);
         PrivacyOutputAdvisor output = new PrivacyOutputAdvisor(service);
@@ -200,11 +200,6 @@ class PrivacyLifecycleAdvisorTest {
 
         assertThat(upstreamCancelled).isTrue();
         assertThat(subscriberResponses).isEmpty();
-        assertThat(subscriberResponses)
-                .noneSatisfy(response -> assertThat(response.chatResponse()
-                        .getResult()
-                        .getOutput()
-                        .getText()).contains("Alice"));
         assertThat(service.activeSessionCount()).isZero();
         assertThatThrownBy(() -> service.detokenize(activeHandle.get(), sessionToken.get()))
                 .isInstanceOf(PrivacyGuardrailException.class)

@@ -260,6 +260,9 @@ class PrivacyTestProbeTest {
             assertThat(snapshot.toString()).doesNotContain("failure containing", "synthetic-secret");
         });
 
+        privacyTestProbe.wrapModel(new EchoModel()).call(new Prompt("early Alice"));
+        assertThat(privacyTestProbe.modelRequests()).hasSize(1);
+
         privacyTestProbe.close();
 
         assertThat(privacyTestProbe.modelRequests()).isEmpty();

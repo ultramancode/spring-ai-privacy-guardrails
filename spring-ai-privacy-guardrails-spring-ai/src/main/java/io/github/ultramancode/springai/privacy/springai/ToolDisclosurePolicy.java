@@ -51,9 +51,13 @@ public interface ToolDisclosurePolicy {
             validatedEntityTypesByToolName.put(validatedToolName, allowedEntityTypes);
         });
         Map<String, AllowedEntityTypes> allowedEntityTypesByToolName = Map.copyOf(validatedEntityTypesByToolName);
-        return toolDefinition -> toolDefinition == null
-                ? AllowedEntityTypes.none()
-                : allowedEntityTypesByToolName.getOrDefault(toolDefinition.name(), AllowedEntityTypes.none());
+        return toolDefinition -> {
+            if (toolDefinition == null) {
+                return AllowedEntityTypes.none();
+            }
+
+            return allowedEntityTypesByToolName.getOrDefault(toolDefinition.name(), AllowedEntityTypes.none());
+        };
     }
 
     private static String requireValidToolName(String toolName) {

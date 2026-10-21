@@ -116,7 +116,7 @@ abstract class ToolAuthorizationIntegrationTestSupport {
 
     protected static String toolSearchQueryParameter(String request) {
         // The simulated model must follow the actual schema: 2.0.0 exposes arg0,
-        // while 2.0.1 exposes query. This is test response construction, not a runtime workaround.
+        // while 2.0.1 exposes query.
         for (JsonNode tool : JsonMapper.builder().build().readTree(request).path("tools")) {
             JsonNode function = tool.path("function");
             if ("toolSearchTool".equals(function.path("name").asString())) {

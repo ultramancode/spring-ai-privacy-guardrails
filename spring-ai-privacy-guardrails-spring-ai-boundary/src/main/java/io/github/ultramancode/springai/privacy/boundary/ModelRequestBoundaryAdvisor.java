@@ -102,7 +102,7 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
             }
             if (warnAboutAdvisorsAfterBoundary) {
                 logger.warn("Advisors after the model request boundary were explicitly allowed: {}. "
-                        + "Their changes are outside the final-inspection guarantee.", downstreamAdvisorDescriptions);
+                        + "Their changes to model input are not inspected again before the model call.", downstreamAdvisorDescriptions);
             }
         }
     }

@@ -51,39 +51,46 @@ class SpringSecurityToolBoundaryIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
-    void factoryInspectionReceivesProtectedMessagesAndOnlyAuthorizedTools(boolean streaming, boolean customToolOrder) {
-        SpringSecurityToolBoundary boundary = boundary((authentication, context) ->
-                new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup")));
-        PrivacyService service = privacyService();
-        PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(service, Set.of("customerLookup"));
-        PrivacyChatClientConfigurer privacyConfigurer = new PrivacyChatClientConfigurer(service, toolCallbackFactory);
-        ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatClientFactory.builder()
-            .toolAuthorizationBoundary(boundary)
+    void factoryInspectionReceivesProtectedMessagesAndOnlyAuthorizedTools(
+        boolean streaming,
+        boolean useCustomToolAdvisorOrder
+    ) {
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary((authentication, context) ->
+            new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup")));
+        PrivacyService privacyService = privacyService();
+        PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(privacyService, Set.of("customerLookup"));
+        PrivacyChatClientConfigurer privacyConfigurer =
+            new PrivacyChatClientConfigurer(privacyService, toolCallbackFactory);
+        ToolAuthorizationChatClientFactory toolAuthorizationFactory = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(toolAuthorizationBoundary)
             .build();
         PrivacySecurityChatClientFactory privacySecurityFactory =
-                new PrivacySecurityChatClientFactory(privacyConfigurer, authorizationFactory);
-        DefinitionResolvingModel model = new DefinitionResolvingModel(ToolCallingManager.builder().build());
+            new PrivacySecurityChatClientFactory(privacyConfigurer, toolAuthorizationFactory);
+        DefinitionResolvingModel chatModel = new DefinitionResolvingModel(ToolCallingManager.builder().build());
         AtomicReference<ChatClientRequest> inspectedRequest = new AtomicReference<>();
-        ModelRequestBoundaryConfigurer inspectionConfigurer =
-            (clientBuilder, boundarySpec) -> boundarySpec.inspection((request, streamed) -> inspectedRequest.set(request));
+        ModelRequestBoundaryConfigurer inspectionConfigurer = (chatClientBuilder, boundarySpec) ->
+            boundarySpec.inspection((request, ignoredStreaming) -> inspectedRequest.set(request));
 
-        ChatClient.Builder clientBuilder;
-        if (customToolOrder) {
+        ChatClient.Builder chatClientBuilder;
+        if (useCustomToolAdvisorOrder) {
             ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
-            clientBuilder = privacySecurityFactory.builder(model, toolAdvisorBuilder, inspectionConfigurer);
+            chatClientBuilder = privacySecurityFactory.builder(chatModel, toolAdvisorBuilder, inspectionConfigurer);
         } else {
-            clientBuilder = privacySecurityFactory.builderWithBoundary(model, inspectionConfigurer);
+            chatClientBuilder = privacySecurityFactory.builderWithBoundary(chatModel, inspectionConfigurer);
         }
         ToolCallback customerLookup = toolCallbackFactory.wrap(tool("customerLookup", ignored -> { }));
         ToolCallback adminDelete = toolCallbackFactory.wrap(tool("adminDelete", ignored -> { }));
-        ChatClient client = clientBuilder.defaultTools(customerLookup, adminDelete).build();
+        ChatClient chatClient = chatClientBuilder.defaultTools(customerLookup, adminDelete).build();
         useAuthentication(authentication("alice"));
 
-        ChatClient.ChatClientRequestSpec request = client.prompt().user("Find Alice");
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().user("Find Alice");
         String result;
         if (streaming) {
-            result = request.stream().content().collectList()
-                    .map(parts -> String.join("", parts)).block(Duration.ofSeconds(5));
+            result = request.stream()
+                .content()
+                .collectList()
+                .map(parts -> String.join("", parts))
+                .block(Duration.ofSeconds(5));
         } else {
             result = request.call().content();
         }
@@ -92,232 +99,226 @@ class SpringSecurityToolBoundaryIntegrationTest {
         ChatClientRequest protectedRequest = inspectedRequest.get();
         assertThat(protectedRequest).isNotNull();
         assertThat(protectedRequest.prompt().getContents())
-                .doesNotContain("Alice")
-                .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+            .doesNotContain("Alice")
+            .containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
         ToolCallingChatOptions authorizedOptions = (ToolCallingChatOptions) protectedRequest.prompt().getOptions();
         assertThat(authorizedOptions.getToolCallbacks())
-                .extracting(callback -> callback.getToolDefinition().name())
-                .containsExactly("customerLookup");
+            .extracting(callback -> callback.getToolDefinition().name())
+            .containsExactly("customerLookup");
     }
 
     @Test
     void filtersDefinitionsAndReauthorizesImmediatelyBeforePiiDisclosure() {
         AtomicInteger definitionAuthorizationChecks = new AtomicInteger();
         AtomicInteger executionAuthorizationChecks = new AtomicInteger();
-        AuthorizationManager<ToolAuthorizationContext> policy = (authentication, context) -> {
+        AuthorizationManager<ToolAuthorizationContext> authorizationManager = (authentication, context) -> {
             if (context.phase() == ToolAuthorizationPhase.DEFINITION) {
                 definitionAuthorizationChecks.incrementAndGet();
-                return new AuthorizationDecision(
-                        context.toolDefinition().name().equals("customerLookup")
-                );
+                return new AuthorizationDecision(context.toolDefinition().name().equals("customerLookup"));
             }
             executionAuthorizationChecks.incrementAndGet();
             return new AuthorizationDecision(true);
         };
-        SpringSecurityToolBoundary boundary = boundary(policy);
-        PrivacyService service = privacyService();
-        PrivacyToolCallbackFactory factory = privacyFactory(service, Set.of("customerLookup"));
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(authorizationManager);
+        PrivacyService privacyService = privacyService();
+        PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(privacyService, Set.of("customerLookup"));
         AtomicReference<String> customerLookupInput = new AtomicReference<>();
         AtomicReference<Map<String, Object>> customerLookupToolContext = new AtomicReference<>();
         AtomicInteger adminDeleteCalls = new AtomicInteger();
-        ToolCallback authorizedCustomerLookup = factory.wrap(contextAwareTool(
-                "customerLookup",
-                (input, context) -> {
-                    assertThat(executionAuthorizationChecks).hasValue(2);
-                    customerLookupInput.set(input);
-                    customerLookupToolContext.set(context.getContext());
-                }
+        ToolCallback authorizedCustomerLookup = toolCallbackFactory.wrap(contextAwareTool(
+            "customerLookup",
+            (input, context) -> {
+                assertThat(executionAuthorizationChecks).hasValue(2);
+                customerLookupInput.set(input);
+                customerLookupToolContext.set(context.getContext());
+            }
         ));
-        ToolCallback unauthorizedAdminDelete = factory.wrap(tool(
-                "adminDelete",
-                input -> adminDeleteCalls.incrementAndGet()
+        ToolCallback unauthorizedAdminDelete = toolCallbackFactory.wrap(tool(
+            "adminDelete",
+            input -> adminDeleteCalls.incrementAndGet()
         ));
-        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
-                boundary.toolCallingManager(),
-                List.of("customerLookup")
+        ResolvingToolLoopModel chatModel = new ResolvingToolLoopModel(
+            toolAuthorizationBoundary.toolCallingManager(),
+            List.of("customerLookup")
         );
         ChatClient chatClient = securedClient(
-                service,
-                factory,
-                boundary,
-                model,
-                authorizedCustomerLookup,
-                unauthorizedAdminDelete
+            privacyService,
+            toolCallbackFactory,
+            toolAuthorizationBoundary,
+            chatModel,
+            authorizedCustomerLookup,
+            unauthorizedAdminDelete
         );
         useAuthentication(authentication("alice"));
 
         String result = chatClient.prompt()
-                .user("Find Alice")
-                .toolContext(Map.of("tenant", "acme"))
-                .call()
-                .content();
+            .user("Find Alice")
+            .toolContext(Map.of("tenant", "acme"))
+            .call()
+            .content();
 
         assertThat(result).isEqualTo("done");
-        assertThat(model.exposedToolNames()).containsOnly("customerLookup");
+        assertThat(chatModel.exposedToolNames()).containsOnly("customerLookup");
         assertThat(customerLookupInput.get()).isEqualTo("{\"name\":\"Alice\"}");
         assertThat(customerLookupToolContext.get())
-                .containsEntry("tenant", "acme")
-                .doesNotContainKey(
-                        ToolAuthorizationSessionRegistry.TOOL_AUTHORIZATION_SESSION_HANDLE_KEY
-                );
+            .containsEntry("tenant", "acme")
+            .doesNotContainKey(ToolAuthorizationSessionRegistry.TOOL_AUTHORIZATION_SESSION_HANDLE_KEY);
         assertThat(adminDeleteCalls).hasValue(0);
         assertThat(definitionAuthorizationChecks).hasValueGreaterThanOrEqualTo(1);
-        assertThat(executionAuthorizationChecks).hasValue(2);
-        assertThat(boundary.activeSessionCount()).isZero();
-        assertThat(service.activeSessionCount()).isZero();
+        assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @Test
     void rejectsWhenCallbackReauthorizationFailsBeforePiiDisclosure() {
         AtomicInteger executionAuthorizationChecks = new AtomicInteger();
-        AuthorizationManager<ToolAuthorizationContext> policy = (authentication, context) -> {
+        AuthorizationManager<ToolAuthorizationContext> authorizationManager = (authentication, context) -> {
             if (context.phase() == ToolAuthorizationPhase.DEFINITION) {
                 return new AuthorizationDecision(true);
             }
             // Permit the manager precheck, then deny callback-level reauthorization.
-            return new AuthorizationDecision(
-                    executionAuthorizationChecks.incrementAndGet() == 1
-            );
+            return new AuthorizationDecision(executionAuthorizationChecks.incrementAndGet() == 1);
         };
-        SpringSecurityToolBoundary boundary = boundary(policy);
-        PrivacyService service = privacyService();
-        PrivacyToolCallbackFactory factory = privacyFactory(service, Set.of("customerLookup"));
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(authorizationManager);
+        PrivacyService privacyService = privacyService();
+        PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(privacyService, Set.of("customerLookup"));
         AtomicReference<String> disclosedInput = new AtomicReference<>();
-        ToolCallback protectedTool = factory.wrap(tool("customerLookup", disclosedInput::set));
-        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
-                boundary.toolCallingManager(),
-                List.of("customerLookup")
+        ToolCallback protectedTool = toolCallbackFactory.wrap(tool("customerLookup", disclosedInput::set));
+        ResolvingToolLoopModel chatModel = new ResolvingToolLoopModel(
+            toolAuthorizationBoundary.toolCallingManager(),
+            List.of("customerLookup")
         );
-        ChatClient chatClient = securedClient(service, factory, boundary, model, protectedTool);
+        ChatClient chatClient = securedClient(
+            privacyService, toolCallbackFactory, toolAuthorizationBoundary, chatModel, protectedTool
+        );
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("Tool execution was not authorized");
+            .isInstanceOf(AuthorizationDeniedException.class)
+            .hasMessage("Tool execution was not authorized");
         assertThat(executionAuthorizationChecks).hasValue(2);
         assertThat(disclosedInput).hasNullValue();
-        assertThat(boundary.activeSessionCount()).isZero();
-        assertThat(service.activeSessionCount()).isZero();
+        assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @Test
     void rejectsAHiddenToolNameEvenWhenTheModelHallucinatesIt() {
         AtomicInteger businessToolCalls = new AtomicInteger();
         AuthorizationManager<ToolAuthorizationContext> customerLookupDefinitionPolicy =
-                (authentication, context) -> new AuthorizationDecision(
-                        context.phase() == ToolAuthorizationPhase.EXECUTION
-                                || context.toolDefinition().name().equals("customerLookup")
-                );
-        SpringSecurityToolBoundary boundary = boundary(customerLookupDefinitionPolicy);
-        PrivacyService service = privacyService();
-        PrivacyToolCallbackFactory factory = privacyFactory(
-                service,
-                Set.of("customerLookup", "adminDelete")
+            (authentication, context) -> new AuthorizationDecision(
+                context.phase() == ToolAuthorizationPhase.EXECUTION
+                    || context.toolDefinition().name().equals("customerLookup")
+            );
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(customerLookupDefinitionPolicy);
+        PrivacyService privacyService = privacyService();
+        PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(
+            privacyService,
+            Set.of("customerLookup", "adminDelete")
         );
-        ToolCallback authorizedCustomerLookup = factory.wrap(tool(
-                "customerLookup",
-                ignored -> businessToolCalls.incrementAndGet()
+        ToolCallback authorizedCustomerLookup = toolCallbackFactory.wrap(tool(
+            "customerLookup",
+            ignored -> businessToolCalls.incrementAndGet()
         ));
-        ToolCallback hiddenAdminDelete = factory.wrap(tool(
-                "adminDelete",
-                ignored -> businessToolCalls.incrementAndGet()
+        ToolCallback hiddenAdminDelete = toolCallbackFactory.wrap(tool(
+            "adminDelete",
+            ignored -> businessToolCalls.incrementAndGet()
         ));
-        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
-                boundary.toolCallingManager(),
-                List.of("adminDelete")
+        ResolvingToolLoopModel chatModel = new ResolvingToolLoopModel(
+            toolAuthorizationBoundary.toolCallingManager(),
+            List.of("adminDelete")
         );
         ChatClient chatClient = securedClient(
-                service,
-                factory,
-                boundary,
-                model,
-                authorizedCustomerLookup,
-                hiddenAdminDelete
+            privacyService,
+            toolCallbackFactory,
+            toolAuthorizationBoundary,
+            chatModel,
+            authorizedCustomerLookup,
+            hiddenAdminDelete
         );
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("A model-requested tool was not exposed by the authorization boundary");
-        assertThat(model.exposedToolNames()).containsOnly("customerLookup");
+            .isInstanceOf(AuthorizationDeniedException.class)
+            .hasMessage("A model-requested tool was not exposed by the authorization boundary");
+        assertThat(chatModel.exposedToolNames()).containsOnly("customerLookup");
         assertThat(businessToolCalls).hasValue(0);
-        assertThat(boundary.activeSessionCount()).isZero();
-        assertThat(service.activeSessionCount()).isZero();
+        assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     @Test
     void rejectsAnUndeclaredToolBeforeADelegateResolverFallbackCanRun() {
         ToolCallingManager resolverFallbackDelegate = mock(ToolCallingManager.class);
         AuthorizationManager<ToolAuthorizationContext> allowAllPolicy =
-                (authentication, context) -> new AuthorizationDecision(true);
-        SpringSecurityToolBoundary boundary = SpringSecurityToolBoundary.builder(
-                resolverFallbackDelegate,
-                allowAllPolicy
+            (authentication, context) -> new AuthorizationDecision(true);
+        SpringSecurityToolBoundary toolAuthorizationBoundary = SpringSecurityToolBoundary.builder(
+            resolverFallbackDelegate,
+            allowAllPolicy
         ).build();
-        ToolCallback declaredCustomerLookup = tool("customerLookup", ignored -> {
-        });
-        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
-                boundary.toolCallingManager(),
-                List.of("resolverOnlyTool")
+        ToolCallback declaredCustomerLookup = tool("customerLookup", ignored -> { });
+        ResolvingToolLoopModel chatModel = new ResolvingToolLoopModel(
+            toolAuthorizationBoundary.toolCallingManager(),
+            List.of("resolverOnlyTool")
         );
         ToolCallingAdvisor toolCallingAdvisor = ToolCallingAdvisor.builder()
-                .toolCallingManager(boundary.toolCallingManager())
-                .build();
-        ChatClient chatClient = ChatClient.builder(model)
-                .defaultAdvisors(boundary.toolAuthorizationAdvisor(), toolCallingAdvisor)
-                .defaultTools(declaredCustomerLookup)
-                .build();
+            .toolCallingManager(toolAuthorizationBoundary.toolCallingManager())
+            .build();
+        ChatClient chatClient = ChatClient.builder(chatModel)
+            .defaultAdvisors(toolAuthorizationBoundary.toolAuthorizationAdvisor(), toolCallingAdvisor)
+            .defaultTools(declaredCustomerLookup)
+            .build();
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("A model-requested tool was not exposed by the authorization boundary");
-        assertThat(model.exposedToolNames()).containsOnly("customerLookup");
+            .isInstanceOf(AuthorizationDeniedException.class)
+            .hasMessage("A model-requested tool was not exposed by the authorization boundary");
+        assertThat(chatModel.exposedToolNames()).containsOnly("customerLookup");
         verifyNoInteractions(resolverFallbackDelegate);
-        assertThat(boundary.activeSessionCount()).isZero();
+        assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
     }
 
     @Test
     void preauthorizesTheWholeBatchBeforeAnyToolCanExecute() {
         AtomicInteger executedToolCalls = new AtomicInteger();
         AuthorizationManager<ToolAuthorizationContext> readCustomerExecutionPolicy =
-                (authentication, context) -> new AuthorizationDecision(
-                        context.phase() == ToolAuthorizationPhase.DEFINITION
-                                || context.toolDefinition().name().equals("readCustomer")
-                );
-        SpringSecurityToolBoundary boundary = boundary(readCustomerExecutionPolicy);
-        PrivacyService service = privacyService();
-        PrivacyToolCallbackFactory factory = privacyFactory(
-                service,
-                Set.of("readCustomer", "deleteCustomer")
+            (authentication, context) -> new AuthorizationDecision(
+                context.phase() == ToolAuthorizationPhase.DEFINITION
+                    || context.toolDefinition().name().equals("readCustomer")
+            );
+        SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(readCustomerExecutionPolicy);
+        PrivacyService privacyService = privacyService();
+        PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(
+            privacyService,
+            Set.of("readCustomer", "deleteCustomer")
         );
-        ToolCallback readCustomer = factory.wrap(tool(
-                "readCustomer",
-                ignored -> executedToolCalls.incrementAndGet()
+        ToolCallback readCustomer = toolCallbackFactory.wrap(tool(
+            "readCustomer",
+            ignored -> executedToolCalls.incrementAndGet()
         ));
-        ToolCallback deleteCustomer = factory.wrap(tool(
-                "deleteCustomer",
-                ignored -> executedToolCalls.incrementAndGet()
+        ToolCallback deleteCustomer = toolCallbackFactory.wrap(tool(
+            "deleteCustomer",
+            ignored -> executedToolCalls.incrementAndGet()
         ));
-        ResolvingToolLoopModel model = new ResolvingToolLoopModel(
-                boundary.toolCallingManager(),
-                List.of("readCustomer", "deleteCustomer")
+        ResolvingToolLoopModel chatModel = new ResolvingToolLoopModel(
+            toolAuthorizationBoundary.toolCallingManager(),
+            List.of("readCustomer", "deleteCustomer")
         );
         ChatClient chatClient = securedClient(
-                service,
-                factory,
-                boundary,
-                model,
-                readCustomer,
-                deleteCustomer
+            privacyService,
+            toolCallbackFactory,
+            toolAuthorizationBoundary,
+            chatModel,
+            readCustomer,
+            deleteCustomer
         );
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("Tool execution was not authorized");
+            .isInstanceOf(AuthorizationDeniedException.class)
+            .hasMessage("Tool execution was not authorized");
         assertThat(executedToolCalls).hasValue(0);
-        assertThat(boundary.activeSessionCount()).isZero();
-        assertThat(service.activeSessionCount()).isZero();
+        assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
+        assertThat(privacyService.activeSessionCount()).isZero();
     }
 }

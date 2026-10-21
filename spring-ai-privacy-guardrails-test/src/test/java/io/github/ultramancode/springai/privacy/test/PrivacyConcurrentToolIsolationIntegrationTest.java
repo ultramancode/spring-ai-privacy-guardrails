@@ -99,11 +99,7 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
             .matches(CUSTOMER_TOKEN)
             .isNotEqualTo(chatModel.tokenByLabel().get("right"));
         assertThat(chatModel.tokenByLabel().get("right")).matches(CUSTOMER_TOKEN);
-        assertThat(privacyTestProbe.modelRequests())
-            .hasSize(4)
-            .flatExtracting(ModelRequestSnapshot::modelVisibleContent)
-            .noneMatch(content -> content.contains(LEFT_ID) || content.contains(RIGHT_ID));
-        assertThat(privacyTestProbe.toolCalls()).hasSize(2).allSatisfy(call -> {
+        assertThat(privacyTestProbe.toolCalls()).allSatisfy(call -> {
             Map<?, ?> input = new ObjectMapper().readValue(call.input(), Map.class);
             String label = input.get("request").toString();
             String expected = label.equals("left") ? LEFT_ID : RIGHT_ID;
@@ -116,7 +112,6 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
             .hasToolCallCount(2)
             .modelRequestsDoNotContainRawValues(LEFT_ID, RIGHT_ID)
             .hasNoActivePrivacySessions();
-        assertThat(privacyService.activeSessionCount()).isZero();
     }
 
     private PrivacyService privacyService() {

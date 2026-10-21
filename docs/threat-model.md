@@ -37,8 +37,8 @@ application must manage service credentials and transport security, and check
 the data retention policies of remote analyzers and model providers.
 
 Custom analyzers, advisors, and tools are trusted application code. The library
-validates detection results and protects data at supported processing points;
-it does not restrict what that application code can do outside those points.
+validates detection results and protects data at supported processing points.
+It does not restrict what that application code can do outside those points.
 
 Spring Security integration relies on the application's authentication and tool
 authorization policy. When privacy protection is also configured, registering
@@ -65,7 +65,7 @@ opaque tokens for each tool.
   JSON before inspection.
 - **Metadata and media:** Apart from [supported reasoning text](privacy.md#reasoning-text-protection),
   response metadata and non-text content such as images and audio must be protected
-  separately. Media limits check data size only; they do not detect PII in media content.
+  separately. Media limits check data size only. They do not detect PII in media content.
 
 ### Tool Privacy and Authorization
 

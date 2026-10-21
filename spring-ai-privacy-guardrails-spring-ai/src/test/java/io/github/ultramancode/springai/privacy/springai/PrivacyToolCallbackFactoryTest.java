@@ -41,7 +41,7 @@ class PrivacyToolCallbackFactoryTest {
         List<ToolCallback> wrapped = factory.wrapAll(List.of(first, second));
 
         assertThat(wrapped)
-                .allMatch(PrivacyToolCallbackWrapper.class::isInstance)
+                .allMatch(factory::isWrapped)
                 .extracting(callback -> callback.getToolDefinition().name())
                 .containsExactly("first", "second");
         assertThatThrownBy(() -> wrapped.add(tool("third")))
@@ -119,11 +119,11 @@ class PrivacyToolCallbackFactoryTest {
         ToolCallback[] second = protectedProvider.getToolCallbacks();
 
         assertThat(first)
-                .allMatch(PrivacyToolCallbackWrapper.class::isInstance)
+                .allMatch(factory::isWrapped)
                 .extracting(callback -> callback.getToolDefinition().name())
                 .containsExactly("customerLookup", "knowledgeSearch");
         assertThat(second)
-                .allMatch(PrivacyToolCallbackWrapper.class::isInstance)
+                .allMatch(factory::isWrapped)
                 .extracting(callback -> callback.getToolDefinition().name())
                 .containsExactly("ticketLookup");
     }
@@ -144,7 +144,7 @@ class PrivacyToolCallbackFactoryTest {
         ToolCallbackProvider combined = factory.wrapProviders(first, second);
 
         assertThat(combined.getToolCallbacks())
-                .allMatch(PrivacyToolCallbackWrapper.class::isInstance)
+                .allMatch(factory::isWrapped)
                 .extracting(callback -> callback.getToolDefinition().name())
                 .containsExactly("customerLookup", "knowledgeSearch", "ticketLookup");
         assertThat(firstResolutions).hasValue(1);

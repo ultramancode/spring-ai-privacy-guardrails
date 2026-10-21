@@ -205,7 +205,7 @@ public final class GuardrailsChatClientFactory {
             ToolAuthorizationConfiguration toolAuthorizationConfiguration = Objects.requireNonNull(
                 toolAuthorizationConfigurer.configure(clientToolAdvisorBuilder), "toolAuthorizationConfiguration");
             clientToolAdvisorBuilder = toolAuthorizationConfiguration.toolAdvisorBuilder();
-            modelRequestBoundaryConfigurers.add(toolAuthorizationConfiguration.boundaryConfigurer());
+            modelRequestBoundaryConfigurers.add(toolAuthorizationConfiguration.modelRequestBoundaryConfigurer());
         }
         if (guardrailsPolicy.privacy() != null) {
             modelRequestBoundaryConfigurers.add(createPrivacyConfigurer(
@@ -244,7 +244,7 @@ public final class GuardrailsChatClientFactory {
             privacyService, privacyPolicy.toolDisclosurePolicy(), privacyObserver);
         PrivacyChatClientConfigurer.Builder privacyConfigurerBuilder =
             PrivacyChatClientConfigurer.builder(privacyService)
-                .toolCallbackFactory(privacyToolCallbackFactory).automaticallyWrapTools(true)
+                .toolCallbackFactory(privacyToolCallbackFactory).autoWrapToolCallbacks(true)
                 .responseInspectionLimits(privacyPolicy.responseLimits()).enforcementObserver(privacyObserver);
         GuardrailsPolicy.OutputProtection outputProtection = privacyPolicy.outputProtection();
         if (outputProtection != null) {

@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: ef7bdbfc5c888cf53a2f31ecd477e5a926b32bca870c5115a341784dd4524ac7 -->
+<!-- i18n-source-sha256: 43dbbb7e913e8c33e747015622e3cb0898cf48c099cb759a842a4715adf835be -->
 
 ## 책임 범위
 

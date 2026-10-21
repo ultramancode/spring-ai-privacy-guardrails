@@ -16,10 +16,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ToolAuthorizationChatClientFactoryTest {
+
     @Test
     void requiresAuthorizationBoundary() {
-        assertThatThrownBy(() -> ToolAuthorizationChatClientFactory.builder()
-            .build())
+        assertThatThrownBy(() -> ToolAuthorizationChatClientFactory.builder().build())
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("SpringSecurityToolBoundary");
     }
@@ -36,8 +36,7 @@ class ToolAuthorizationChatClientFactoryTest {
         suppliedToolAdvisorBuilder.advisorOrder(Ordered.HIGHEST_PRECEDENCE);
         ToolAuthorizationChatClientFactory originalFactory = factoryBuilder.build();
         ToolAuthorizationChatClientFactory updatedFactory = factoryBuilder
-            .toolAdvisorBuilder(ToolCallingAdvisor.builder()
-                .advisorOrder(200))
+            .toolAdvisorBuilder(ToolCallingAdvisor.builder().advisorOrder(200))
             .clientCustomizer(chatClientBuilder -> chatClientBuilder.defaultSystem("updated"))
             .build();
         ChatModel systemMessageModel = prompt -> new ChatResponse(List.of(
@@ -55,11 +54,7 @@ class ToolAuthorizationChatClientFactoryTest {
             .user("hello")
             .call()
             .content()).isEqualTo("updated");
-        assertThat(originalFactory.builder(systemMessageModel)
-            .build()
-            .prompt()
-            .user("hello")
-            .call()
-            .content()).isEqualTo("original");
+        assertThat(originalFactory.defaultToolAdvisorBuilder().getAdvisorOrder()).isEqualTo(100);
+        assertThat(updatedFactory.defaultToolAdvisorBuilder().getAdvisorOrder()).isEqualTo(200);
     }
 }

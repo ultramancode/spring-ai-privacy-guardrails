@@ -8,7 +8,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: df21482c6a3036f194456a792be63ebc413ca0499f72a45238daab8e6e313930 -->
+<!-- i18n-source-sha256: 7f4de0253fc33de2cee65bde4dc5630a088a4b3b1b69d8c19bca86b1b5810f44 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
@@ -139,6 +139,10 @@ ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrail
 
 `builder(chatModel)`은 Factory의 기본 정책을 사용합니다. `builder(chatModel, policy)`는
 해당 호출에 전달한 정책만 사용합니다. Factory에 기본 정책이 없으면 정책을 직접 전달하세요.
+
+공통 클라이언트 기본값은 `ChatClientBuilderCustomizer` 빈으로 설정할 수 있습니다.
+Factory는 `ChatClientCustomizer` 빈을 먼저 적용한 뒤 `ChatClientBuilderCustomizer` 빈을
+적용합니다. 각 타입 안에서는 Spring의 빈 정렬 순서를 따릅니다.
 
 ## Advisor 구성
 

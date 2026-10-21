@@ -1,8 +1,7 @@
 package io.github.ultramancode.springai.privacy.sample.scenario;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -66,10 +65,7 @@ class OpenAiCompatibleLiveIntegrationTest {
     private ChatModel chatModel;
 
     @Autowired
-    private PrivacyChatClientConfigurer privacyConfigurer;
-
-    @Autowired
-    private PrivacyToolCallbackFactory toolCallbackFactory;
+    private GuardrailsChatClientFactory guardrailsChatClientFactory;
 
     @Autowired
     private PrivacyService privacyService;
@@ -139,8 +135,8 @@ class OpenAiCompatibleLiveIntegrationTest {
         long startedAt = System.nanoTime();
         try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(this.privacyService)) {
             PrivacyDemoCrmTool delegate = new PrivacyDemoCrmTool(this.objectMapper);
-            ToolCallback protectedTool = this.toolCallbackFactory.wrap(privacyTestProbe.wrapTool(delegate));
-            ChatClient chatClient = protectedClient(privacyTestProbe, protectedTool);
+            ToolCallback recordingTool = privacyTestProbe.wrapTool(delegate);
+            ChatClient chatClient = protectedClient(privacyTestProbe, recordingTool);
 
             String response = chatClient.prompt()
                     .system("""
@@ -198,8 +194,8 @@ class OpenAiCompatibleLiveIntegrationTest {
     void returnDirectToolResultStillPassesTheProtectedApplicationBoundary() {
         long startedAt = System.nanoTime();
         try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(this.privacyService)) {
-            ToolCallback protectedTool = this.toolCallbackFactory.wrap(privacyTestProbe.wrapTool(returnDirectTool()));
-            ChatClient chatClient = protectedClient(privacyTestProbe, protectedTool);
+            ToolCallback recordingTool = privacyTestProbe.wrapTool(returnDirectTool());
+            ChatClient chatClient = protectedClient(privacyTestProbe, recordingTool);
 
             String response = chatClient.prompt()
                     .system("""
@@ -230,11 +226,12 @@ class OpenAiCompatibleLiveIntegrationTest {
     }
 
     private ChatClient protectedClient(PrivacyTestProbe privacyTestProbe, ToolCallback... tools) {
-        ChatClient.Builder chatClientBuilder = ChatClient.builder(privacyTestProbe.wrapModel(this.chatModel));
+        ChatClient.Builder chatClientBuilder = this.guardrailsChatClientFactory
+            .builder(privacyTestProbe.wrapModel(this.chatModel));
         if (tools.length > 0) {
             chatClientBuilder.defaultTools((Object[]) tools);
         }
-        return this.privacyConfigurer.configure(chatClientBuilder).build();
+        return chatClientBuilder.build();
     }
 
     private ToolCallback returnDirectTool() {

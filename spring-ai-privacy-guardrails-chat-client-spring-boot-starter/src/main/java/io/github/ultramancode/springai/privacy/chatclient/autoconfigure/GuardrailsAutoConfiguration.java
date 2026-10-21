@@ -10,6 +10,7 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserv
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClientBuilderCustomizer;
+import org.springframework.ai.chat.client.ChatClientCustomizer;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.observation.AdvisorObservationConvention;
 import org.springframework.ai.chat.client.observation.ChatClientObservationConvention;
@@ -34,6 +35,7 @@ import org.springframework.core.env.Environment;
 public class GuardrailsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
+    @SuppressWarnings("removal")
     GuardrailsChatClientFactory guardrailsChatClientFactory(
         ObjectProvider<PrivacyService> privacyServiceProvider,
         ObjectProvider<InspectionService> inspectionServiceProvider,
@@ -46,6 +48,7 @@ public class GuardrailsAutoConfiguration {
         ObjectProvider<ObservationRegistry> observationRegistryProvider,
         ObjectProvider<ChatClientObservationConvention> chatClientObservationConventionProvider,
         ObjectProvider<AdvisorObservationConvention> advisorObservationConventionProvider,
+        ObjectProvider<ChatClientCustomizer> chatClientCustomizers,
         ObjectProvider<ChatClientBuilderCustomizer> chatClientBuilderCustomizers,
         Environment environment) {
         ObservationRegistry observationRegistry = observationRegistryProvider.getIfUnique(() -> ObservationRegistry.NOOP);
@@ -65,6 +68,8 @@ public class GuardrailsAutoConfiguration {
                 if (!environment.getProperty("spring.ai.chat.client.tool-calling.enabled", Boolean.class, true)) {
                     chatClientBuilder.defaultAdvisors(AdvisorParams.toolCallingAdvisorAutoRegister(false));
                 }
+                chatClientCustomizers.orderedStream()
+                    .forEach(chatClientCustomizer -> chatClientCustomizer.customize(chatClientBuilder));
                 chatClientBuilderCustomizers.orderedStream()
                     .forEach(chatClientBuilderCustomizer -> chatClientBuilderCustomizer.customize(chatClientBuilder));
                 return chatClientBuilder;

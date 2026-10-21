@@ -367,10 +367,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
                     candidate,
                     systemEnvironmentMapping
             )) {
-                String candidateComparison = variant.consumedElements() == 1
-                        ? candidateUniform
-                        : candidate;
-                if (variant.comparison().equals(candidateComparison)) {
+                if (variant.comparison().equals(candidateUniform)) {
                     return Optional.of(new SegmentMatch(
                             variant.display(),
                             candidate,
@@ -380,7 +377,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
                 }
                 int distance = levenshteinDistance(
                         variant.comparison(),
-                        candidateComparison
+                        candidateUniform
                 );
                 SegmentMatch match = new SegmentMatch(
                         variant.display(),
@@ -400,9 +397,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
         if (tied || closest == null) {
             return Optional.empty();
         }
-        String thresholdCandidate = closest.consumedElements() == 1
-                ? toUniformForm(closest.expected())
-                : closest.expected();
+        String thresholdCandidate = toUniformForm(closest.expected());
         if (closestDistance > typoThreshold(thresholdCandidate)) {
             return Optional.empty();
         }
@@ -419,37 +414,33 @@ final class PrivacyConfigurationPropertyDiagnostics {
             String candidate,
             boolean systemEnvironmentMapping
     ) {
-        List<SegmentVariant> variants = new ArrayList<>(2);
-        int candidateElements = candidate.split("-").length;
+        int candidateWordCount = candidate.split("-").length;
+        List<SegmentVariant> variants = new ArrayList<>(candidateWordCount);
         String singleDisplay = dashedElement(name, propertyIndex);
+        String singleComparison = uniformElement(name, propertyIndex);
         variants.add(new SegmentVariant(
                 singleDisplay,
-                uniformElement(name, propertyIndex),
+                singleComparison,
                 1
         ));
 
-        if (!systemEnvironmentMapping
-                || candidateElements == 1
-                || propertyIndex + candidateElements > name.getNumberOfElements()) {
+        int elementsToJoin = Math.min(candidateWordCount, name.getNumberOfElements() - propertyIndex);
+        if (!systemEnvironmentMapping || elementsToJoin < 2) {
             return variants;
         }
-        StringBuilder joinedDisplay = new StringBuilder();
-        for (int offset = 0; offset < candidateElements; offset++) {
+        StringBuilder joinedDisplay = new StringBuilder(singleDisplay);
+        StringBuilder joinedComparison = new StringBuilder(singleComparison);
+        for (int offset = 1; offset < elementsToJoin; offset++) {
             int elementIndex = propertyIndex + offset;
             if (name.isNumericIndex(elementIndex)) {
                 return variants;
             }
-            if (!joinedDisplay.isEmpty()) {
-                joinedDisplay.append('-');
-            }
-            joinedDisplay.append(dashedElement(name, elementIndex));
-        }
-        String display = joinedDisplay.toString();
-        if (!display.equals(singleDisplay)) {
+            joinedDisplay.append('-').append(dashedElement(name, elementIndex));
+            joinedComparison.append(uniformElement(name, elementIndex));
             variants.add(new SegmentVariant(
-                    display,
-                    display,
-                    candidateElements
+                    joinedDisplay.toString(),
+                    joinedComparison.toString(),
+                    offset + 1
             ));
         }
         return variants;

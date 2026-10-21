@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 78ea2a0d79592b6c91e150b7c78ae854ca8e2622bf95932e737a3d5a0779e9cb -->
+<!-- i18n-source-sha256: 2e479ad546f9553d79ac73eacc91e2041a56d81c548db10caa0dd89ec7415c91 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -135,8 +135,11 @@ Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니�
 | Apache OpenNLP 연동 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
 | 사용자별 도구 공개·실행 권한 검사 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
 
-클라이언트, Presidio와 OpenNLP 스타터에는 기본 개인정보 보호 스타터가 포함됩니다.
-기본 스타터를 따로 추가할 필요는 없습니다. 도구 권한 검사만 선택하면 분석기는 필요하지 않습니다.
+클라이언트, Presidio와 OpenNLP 스타터에는
+`spring-ai-privacy-guardrails-spring-boot-starter`가 포함됩니다.
+이 기본 개인정보 보호 스타터를 별도로 추가할 필요는 없습니다.
+
+도구 권한 검사만 사용하는 경우에는 PII 분석기를 설정할 필요가 없습니다.
 
 콘텐츠 검사는 `0.4.0` 이상에서 사용할 수 있으며, 검사기 구현도 선택해야 합니다.
 [검사 설정 안내](docs/ko/inspection.md#입력-검사-설정)에서 설정 방법을 확인하세요.

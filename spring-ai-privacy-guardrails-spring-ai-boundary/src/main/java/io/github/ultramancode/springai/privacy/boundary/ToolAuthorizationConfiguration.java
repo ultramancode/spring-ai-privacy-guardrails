@@ -9,14 +9,14 @@ import java.util.Objects;
  * Apply both components to the same client builder.
  *
  * @param toolAdvisorBuilder builder that applies authorization to tool execution
- * @param boundaryConfigurer registers authorization lifecycle, definition filtering and advisor validation
+ * @param modelRequestBoundaryConfigurer registers authorization lifecycle, definition filtering and advisor validation
  */
 public record ToolAuthorizationConfiguration(
     ToolCallingAdvisor.Builder<?> toolAdvisorBuilder,
-    ModelRequestBoundaryConfigurer boundaryConfigurer) {
+    ModelRequestBoundaryConfigurer modelRequestBoundaryConfigurer) {
 
     public ToolAuthorizationConfiguration {
         Objects.requireNonNull(toolAdvisorBuilder, "toolAdvisorBuilder");
-        Objects.requireNonNull(boundaryConfigurer, "boundaryConfigurer");
+        Objects.requireNonNull(modelRequestBoundaryConfigurer, "modelRequestBoundaryConfigurer");
     }
 }

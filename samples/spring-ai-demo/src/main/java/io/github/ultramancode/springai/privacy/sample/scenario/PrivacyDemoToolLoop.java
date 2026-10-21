@@ -201,8 +201,8 @@ public final class PrivacyDemoToolLoop {
     private record Attempt(
         DemoToolLoopModel toolLoopModel,
         PrivacyDemoCrmTool crmTool,
-            Result result,
-            AuthorizationDeniedException denial
+        Result result,
+        AuthorizationDeniedException denial
     ) {
     }
 

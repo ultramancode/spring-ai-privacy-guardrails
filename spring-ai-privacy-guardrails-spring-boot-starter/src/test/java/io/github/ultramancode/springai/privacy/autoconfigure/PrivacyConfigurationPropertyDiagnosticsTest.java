@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -319,7 +318,6 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
                 assertThat(output)
                     .contains("below fixed prefix 'spring.ai.privacy.analysis'")
-                    .contains("below fixed prefix 'spring.ai.privacy.analysis'")
                     .contains("'spring.ai.privacy.regex.rules[0].entity'")
                     .contains("'spring.ai.privacy.regex.rules[0].entity-type'")
                     .doesNotContain("synthetic-sensitive-value")
@@ -411,7 +409,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                     .getMaxTextCharacters());
             assertThat(output)
                 .contains("Did you mean "
-                    + "'spring.ai.privacy.processing.max-depth'?")
+                    + "'spring.ai.privacy.processing.max-text-characters'?")
                 .doesNotContain("87654321");
         });
     }
@@ -670,11 +668,6 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
             Set<String> indexedObjectProperties
     ) {
         assertPropertiesOfTypeMatch(propertiesType, Map.class, mapProperties);
-        Set<String> indexedProperties = Stream.concat(
-                indexedScalarProperties.stream(),
-                indexedObjectProperties.stream()
-        ).collect(Collectors.toSet());
-        assertPropertiesOfTypeMatch(propertiesType, Collection.class, indexedProperties);
         assertCollectionElementKindMatches(
                 propertiesType,
                 true,

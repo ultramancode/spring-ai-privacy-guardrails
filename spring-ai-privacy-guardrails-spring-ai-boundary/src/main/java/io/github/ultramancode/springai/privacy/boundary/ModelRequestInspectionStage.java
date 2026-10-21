@@ -10,7 +10,7 @@ public interface ModelRequestInspectionStage {
 
     /**
      * Inspects the request without replacing it.
-     * Returning normally allows request processing to continue.
+     * Request processing continues when inspection completes without throwing an exception.
      * Throw a runtime exception to stop the request before the model call.
      *
      * @param chatClientRequest the request about to be sent to the model

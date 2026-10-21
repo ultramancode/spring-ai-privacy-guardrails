@@ -22,11 +22,11 @@ public final class PrivacyChatClientConfigurer
         implements ModelRequestBoundaryConfigurer, IntFunction<ModelRequestBoundaryConfigurer> {
     private final PrivacyService privacyService;
     private final PrivacyToolCallbackFactory expectedToolCallbackFactory;
-    private final boolean automaticallyWrapTools;
+    private final boolean autoWrapToolCallbacksEnabled;
     // Null means output protection is disabled.
     private final PrivacyOutputAction outputAction;
     private final String outputBlockMessage;
-    private final PrivacyResponseInspectionLimits responseLimits;
+    private final PrivacyResponseInspectionLimits responseInspectionLimits;
     private final PrivacyEnforcementObserver enforcementObserver;
     private final WeakHashMap<ChatClient.Builder, Boolean> configuredBuilders = new WeakHashMap<>();
 
@@ -47,10 +47,10 @@ public final class PrivacyChatClientConfigurer
     private PrivacyChatClientConfigurer(Builder privacyConfigurerBuilder) {
         this.privacyService = privacyConfigurerBuilder.privacyService;
         this.expectedToolCallbackFactory = privacyConfigurerBuilder.expectedToolCallbackFactory;
-        this.automaticallyWrapTools = privacyConfigurerBuilder.automaticallyWrapTools;
+        this.autoWrapToolCallbacksEnabled = privacyConfigurerBuilder.autoWrapToolCallbacksEnabled;
         this.outputAction = privacyConfigurerBuilder.outputAction;
         this.outputBlockMessage = privacyConfigurerBuilder.outputBlockMessage;
-        this.responseLimits = privacyConfigurerBuilder.responseLimits;
+        this.responseInspectionLimits = privacyConfigurerBuilder.responseInspectionLimits;
         this.enforcementObserver = privacyConfigurerBuilder.enforcementObserver;
     }
 
@@ -123,7 +123,7 @@ public final class PrivacyChatClientConfigurer
      * @see #forToolAdvisorOrder(int)
      */
     private void contributeToBoundary(ChatClient.Builder chatClientBuilder, ModelRequestBoundarySpec boundarySpec, int toolOrder) {
-        Objects.requireNonNull(chatClientBuilder, "clientBuilder");
+        Objects.requireNonNull(chatClientBuilder, "chatClientBuilder");
         synchronized (configuredBuilders) {
             if (configuredBuilders.containsKey(chatClientBuilder)) {
                 throw new IllegalStateException("PrivacyChatClientConfigurer cannot configure the same ChatClient.Builder more than once");
@@ -132,18 +132,18 @@ public final class PrivacyChatClientConfigurer
                 new PrivacyModelRequestStage(privacyService, expectedToolCallbackFactory, enforcementObserver);
             boundarySpec.privacy(privacyStage);
             List<Advisor> advisors = new ArrayList<>();
-            PrivacyToolCallbackFactory automaticToolCallbackFactory = null;
-            if (automaticallyWrapTools) {
-                automaticToolCallbackFactory = expectedToolCallbackFactory;
+            PrivacyToolCallbackFactory autoWrappingToolCallbackFactory = null;
+            if (autoWrapToolCallbacksEnabled) {
+                autoWrappingToolCallbackFactory = expectedToolCallbackFactory;
             }
-            advisors.add(new PrivacyLifecycleAdvisor(privacyService, automaticToolCallbackFactory));
+            advisors.add(new PrivacyLifecycleAdvisor(privacyService, autoWrappingToolCallbackFactory));
             advisors.add(new PrivacyInputAdvisor(privacyService));
             if (outputAction != null) {
                 advisors.add(new PrivacyOutputAdvisor(privacyService, outputAction, outputBlockMessage,
-                    responseLimits, enforcementObserver, toolOrder - 2));
+                    responseInspectionLimits, enforcementObserver, toolOrder - 2));
             }
             advisors.add(new PrivacyToolContextAdvisor(privacyService, expectedToolCallbackFactory, toolOrder - 1));
-            advisors.add(new PrivacyToolCallValidationAdvisor(privacyService, responseLimits, toolOrder + 1));
+            advisors.add(new PrivacyToolCallValidationAdvisor(privacyService, responseInspectionLimits, toolOrder + 1));
             List<Advisor> managedPrivacyAdvisors = List.copyOf(advisors);
             advisors.add(new PrivacyAdvisorChainValidator(managedPrivacyAdvisors, privacyStage, toolOrder));
             chatClientBuilder.defaultAdvisors(advisors);
@@ -155,11 +155,11 @@ public final class PrivacyChatClientConfigurer
     public static final class Builder {
         private final PrivacyService privacyService;
         private PrivacyToolCallbackFactory expectedToolCallbackFactory;
-        private boolean automaticallyWrapTools;
+        private boolean autoWrapToolCallbacksEnabled;
         // Remains null unless outputProtection(...) is called.
         private PrivacyOutputAction outputAction;
         private String outputBlockMessage = "Response blocked by privacy guardrail.";
-        private PrivacyResponseInspectionLimits responseLimits = PrivacyResponseInspectionLimits.defaults();
+        private PrivacyResponseInspectionLimits responseInspectionLimits = PrivacyResponseInspectionLimits.defaults();
         private PrivacyEnforcementObserver enforcementObserver = PrivacyEnforcementObserver.noop();
 
         private Builder(PrivacyService privacyService) {
@@ -180,16 +180,23 @@ public final class PrivacyChatClientConfigurer
          */
         public Builder toolCallbackFactory(PrivacyToolCallbackFactory privacyToolCallbackFactory) {
             Objects.requireNonNull(privacyToolCallbackFactory, "privacyToolCallbackFactory");
-            if (!privacyToolCallbackFactory.usesPrivacyService(privacyService)) {
-                throw new IllegalArgumentException("expectedToolCallbackFactory must use the same PrivacyService");
+            if (!privacyToolCallbackFactory.usesSamePrivacyService(privacyService)) {
+                throw new IllegalArgumentException("privacyToolCallbackFactory must use the same PrivacyService");
             }
             this.expectedToolCallbackFactory = privacyToolCallbackFactory;
             return this;
         }
 
-        /** Protects each request's resolved tools using the selected tool callback factory. */
-        public Builder automaticallyWrapTools(boolean enabled) {
-            this.automaticallyWrapTools = enabled;
+        /**
+         * Sets whether each request's resolved tool callbacks are wrapped automatically.
+         * Disabled by default. Enabling requires a factory selected through
+         * {@link #toolCallbackFactory(PrivacyToolCallbackFactory)}.
+         *
+         * @param autoWrapToolCallbacksEnabled whether to wrap tool callbacks automatically
+         * @return this builder
+         */
+        public Builder autoWrapToolCallbacks(boolean autoWrapToolCallbacksEnabled) {
+            this.autoWrapToolCallbacksEnabled = autoWrapToolCallbacksEnabled;
             return this;
         }
 
@@ -202,7 +209,7 @@ public final class PrivacyChatClientConfigurer
 
         /** Limits model responses before tool execution and when applying output protection. */
         public Builder responseInspectionLimits(PrivacyResponseInspectionLimits responseInspectionLimits) {
-            this.responseLimits = Objects.requireNonNull(responseInspectionLimits, "responseInspectionLimits");
+            this.responseInspectionLimits = Objects.requireNonNull(responseInspectionLimits, "responseInspectionLimits");
             return this;
         }
 
@@ -213,7 +220,7 @@ public final class PrivacyChatClientConfigurer
         }
 
         public PrivacyChatClientConfigurer build() {
-            if (automaticallyWrapTools && expectedToolCallbackFactory == null) {
+            if (autoWrapToolCallbacksEnabled && expectedToolCallbackFactory == null) {
                 throw new IllegalStateException("Automatic tool protection requires a tool callback factory");
             }
             return new PrivacyChatClientConfigurer(this);

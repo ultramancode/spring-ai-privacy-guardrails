@@ -1,11 +1,11 @@
 package io.github.ultramancode.springai.privacy.security;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClient;
@@ -45,77 +45,76 @@ import java.util.stream.Collectors;
 
 final class SecurityToolBoundaryTestFixtures {
 
-    private static final Pattern PERSON_TOKEN =
-            OpaquePiiTokenFormat.patternForEntityType("PERSON");
+    private static final Pattern PERSON_TOKEN_PATTERN =
+        OpaquePiiTokenFormat.patternForEntityType("PERSON");
 
     private SecurityToolBoundaryTestFixtures() {
     }
 
     static ChatClient securedClient(
-            PrivacyService service,
-            PrivacyToolCallbackFactory factory,
-            SpringSecurityToolBoundary boundary,
-            ChatModel model,
-            ToolCallback... callbacks
+        PrivacyService privacyService,
+        PrivacyToolCallbackFactory toolCallbackFactory,
+        SpringSecurityToolBoundary toolAuthorizationBoundary,
+        ChatModel chatModel,
+        ToolCallback... toolCallbacks
     ) {
-        PrivacyChatClientConfigurer privacy = new PrivacyChatClientConfigurer(service, factory);
-        ToolAuthorizationChatClientFactory security = ToolAuthorizationChatClientFactory.builder()
-            .toolAuthorizationBoundary(boundary)
+        PrivacyChatClientConfigurer privacyConfigurer =
+            new PrivacyChatClientConfigurer(privacyService, toolCallbackFactory);
+        ToolAuthorizationChatClientFactory toolAuthorizationFactory = ToolAuthorizationChatClientFactory.builder()
+            .toolAuthorizationBoundary(toolAuthorizationBoundary)
             .build();
-        return new PrivacySecurityChatClientFactory(privacy, security).builder(model)
-                .defaultTools((Object[]) callbacks)
-                .build();
+        return new PrivacySecurityChatClientFactory(privacyConfigurer, toolAuthorizationFactory)
+            .builder(chatModel)
+            .defaultTools((Object[]) toolCallbacks)
+            .build();
     }
 
     static SpringSecurityToolBoundary boundary(
-            AuthorizationManager<ToolAuthorizationContext> policy
+        AuthorizationManager<ToolAuthorizationContext> authorizationManager
     ) {
         return SpringSecurityToolBoundary.builder(
-                ToolCallingManager.builder().build(),
-                policy
+            ToolCallingManager.builder().build(),
+            authorizationManager
         ).build();
     }
 
     static PrivacyToolCallbackFactory privacyFactory(
-            PrivacyService service,
-            Set<String> disclosedTools
+        PrivacyService privacyService,
+        Set<String> disclosedToolNames
     ) {
-        Map<String, Set<String>> disclosures = disclosedTools.stream()
-                .collect(Collectors.toMap(
-                        name -> name,
-                        ignored -> Set.of("PERSON")
-                ));
+        Map<String, Set<String>> entityTypesByToolName = disclosedToolNames.stream()
+            .collect(Collectors.toMap(
+                toolName -> toolName,
+                ignored -> Set.of("PERSON")
+            ));
         return new PrivacyToolCallbackFactory(
-                service,
-                ToolDisclosurePolicy.allowEntityTypesByToolName(disclosures)
+            privacyService,
+            ToolDisclosurePolicy.allowEntityTypesByToolName(entityTypesByToolName)
         );
     }
 
     static PrivacyService privacyService() {
-        PiiAnalyzer analyzer = (text, options, processingLimits) -> spans(text, "Alice").stream()
-                .map(span -> new PiiSpan("PERSON", span.start(), span.end(), 0.99))
-                .toList();
+        PiiAnalyzer analyzer = (text, options, processingLimits) -> personSpans(text);
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
-    private static List<Span> spans(String text, String value) {
-        List<Span> spans = new ArrayList<>();
-        int fromIndex = 0;
-        while (true) {
-            int start = text.indexOf(value, fromIndex);
-            if (start < 0) {
-                return spans;
-            }
-            spans.add(new Span(start, start + value.length()));
-            fromIndex = start + value.length();
+    private static List<PiiSpan> personSpans(String text) {
+        List<PiiSpan> personSpans = new ArrayList<>();
+        String personName = "Alice";
+        int start = text.indexOf(personName);
+        while (start >= 0) {
+            int end = start + personName.length();
+            personSpans.add(new PiiSpan("PERSON", start, end, 0.99));
+            start = text.indexOf(personName, end);
         }
+        return personSpans;
     }
 
-    static ToolCallback tool(String name, Consumer<String> invocation) {
+    static ToolCallback tool(String toolName, Consumer<String> invocation) {
         return new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {
-                return toolDefinition(name);
+                return toolDefinition(toolName);
             }
 
             @Override
@@ -127,13 +126,13 @@ final class SecurityToolBoundaryTestFixtures {
     }
 
     static ToolCallback contextAwareTool(
-            String name,
-            BiConsumer<String, ToolContext> invocation
+        String toolName,
+        BiConsumer<String, ToolContext> invocation
     ) {
         return new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {
-                return toolDefinition(name);
+                return toolDefinition(toolName);
             }
 
             @Override
@@ -142,47 +141,47 @@ final class SecurityToolBoundaryTestFixtures {
             }
 
             @Override
-            public String call(String input, ToolContext context) {
-                invocation.accept(input, context);
+            public String call(String input, ToolContext toolContext) {
+                invocation.accept(input, toolContext);
                 return "ok";
             }
         };
     }
 
-    private static ToolDefinition toolDefinition(String name) {
+    private static ToolDefinition toolDefinition(String toolName) {
         return ToolDefinition.builder()
-                .name(name)
-                .description("Synthetic authorization test tool")
-                .inputSchema("{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}")
-                .build();
+            .name(toolName)
+            .description("Synthetic authorization test tool")
+            .inputSchema("{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}")
+            .build();
     }
 
-    static Authentication authentication(String name) {
-        return new TestingAuthenticationToken(name, "credentials", "ROLE_USER");
+    static Authentication authentication(String username) {
+        return new TestingAuthenticationToken(username, "credentials", "ROLE_USER");
     }
 
     static void useAuthentication(Authentication authentication) {
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
+        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+        securityContext.setAuthentication(authentication);
+        SecurityContextHolder.setContext(securityContext);
     }
 
-    static CallAdvisor lateToolInjectionAdvisor(ToolCallback callback) {
+    static CallAdvisor lateToolInjectionAdvisor(ToolCallback toolCallback) {
         return new CallAdvisor() {
             @Override
             public ChatClientResponse adviseCall(
-                    ChatClientRequest request,
-                    CallAdvisorChain chain
+                ChatClientRequest request,
+                CallAdvisorChain chain
             ) {
-                ToolCallingChatOptions options =
-                        (ToolCallingChatOptions) request.prompt().getOptions();
-                List<ToolCallback> callbacks = new ArrayList<>(options.getToolCallbacks());
-                callbacks.add(callback);
-                ToolCallingChatOptions mutated = options.mutate()
-                        .toolCallbacks(List.copyOf(callbacks))
-                        .build();
-                Prompt prompt = new Prompt(request.prompt().getInstructions(), mutated);
-                return chain.nextCall(request.mutate().prompt(prompt).build());
+                ToolCallingChatOptions toolCallingOptions =
+                    (ToolCallingChatOptions) request.prompt().getOptions();
+                List<ToolCallback> updatedToolCallbacks = new ArrayList<>(toolCallingOptions.getToolCallbacks());
+                updatedToolCallbacks.add(toolCallback);
+                ToolCallingChatOptions updatedToolCallingOptions = toolCallingOptions.mutate()
+                    .toolCallbacks(List.copyOf(updatedToolCallbacks))
+                    .build();
+                Prompt updatedPrompt = new Prompt(request.prompt().getInstructions(), updatedToolCallingOptions);
+                return chain.nextCall(request.mutate().prompt(updatedPrompt).build());
             }
 
             @Override
@@ -197,25 +196,22 @@ final class SecurityToolBoundaryTestFixtures {
         };
     }
 
-    private record Span(int start, int end) {
-    }
-
     // Resolves and records the definitions exposed for one model call.
     static final class DefinitionResolvingModel implements ChatModel {
 
-        private final ToolCallingManager manager;
+        private final ToolCallingManager toolCallingManager;
         private List<String> exposedToolNames = List.of();
 
-        DefinitionResolvingModel(ToolCallingManager manager) {
-            this.manager = manager;
+        DefinitionResolvingModel(ToolCallingManager toolCallingManager) {
+            this.toolCallingManager = toolCallingManager;
         }
 
         @Override
         public ChatResponse call(Prompt prompt) {
-            ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
-            this.exposedToolNames = this.manager.resolveToolDefinitions(options).stream()
-                    .map(ToolDefinition::name)
-                    .toList();
+            ToolCallingChatOptions toolCallingOptions = (ToolCallingChatOptions) prompt.getOptions();
+            this.exposedToolNames = this.toolCallingManager.resolveToolDefinitions(toolCallingOptions).stream()
+                .map(ToolDefinition::name)
+                .toList();
             return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
         }
 
@@ -238,50 +234,52 @@ final class SecurityToolBoundaryTestFixtures {
     // then returns a final response.
     static final class ResolvingToolLoopModel implements ChatModel {
 
-        private final ToolCallingManager manager;
+        private final ToolCallingManager toolCallingManager;
         private final List<String> requestedToolNames;
-        private final List<String> exposedToolNames = new ArrayList<>();
+        private List<String> exposedToolNames = List.of();
 
         ResolvingToolLoopModel(
-                ToolCallingManager manager,
-                List<String> requestedToolNames
+            ToolCallingManager toolCallingManager,
+            List<String> requestedToolNames
         ) {
-            this.manager = manager;
+            this.toolCallingManager = toolCallingManager;
             this.requestedToolNames = List.copyOf(requestedToolNames);
         }
 
         @Override
         public ChatResponse call(Prompt prompt) {
-            ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
-            this.exposedToolNames.clear();
-            this.exposedToolNames.addAll(this.manager.resolveToolDefinitions(options).stream()
-                    .map(ToolDefinition::name)
-                    .toList());
+            ToolCallingChatOptions toolCallingOptions = (ToolCallingChatOptions) prompt.getOptions();
+            this.exposedToolNames = this.toolCallingManager.resolveToolDefinitions(toolCallingOptions).stream()
+                .map(ToolDefinition::name)
+                .toList();
             boolean hasToolResponse = prompt.getInstructions().stream()
-                    .anyMatch(ToolResponseMessage.class::isInstance);
+                .anyMatch(ToolResponseMessage.class::isInstance);
             if (hasToolResponse) {
                 return new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
             }
-            String token = prompt.getInstructions().stream()
-                    .map(Message::getText)
-                    .map(PERSON_TOKEN::matcher)
-                    .filter(Matcher::find)
-                    .map(Matcher::group)
-                    .findFirst()
-                    .orElse("Alice");
-            List<AssistantMessage.ToolCall> calls = this.requestedToolNames.stream()
-                    .map(name -> new AssistantMessage.ToolCall(
-                            "call-" + name,
-                            "function",
-                            name,
-                            "{\"name\":\"" + token + "\"}"
-                    ))
-                    .toList();
-            AssistantMessage response = AssistantMessage.builder()
-                    .content("")
-                    .toolCalls(calls)
-                    .build();
-            return new ChatResponse(List.of(new Generation(response)));
+            // Use the raw test name when privacy tokenization is not configured.
+            String toolArgumentName = "Alice";
+            for (Message message : prompt.getInstructions()) {
+                Matcher personTokenMatcher = PERSON_TOKEN_PATTERN.matcher(message.getText());
+                if (personTokenMatcher.find()) {
+                    toolArgumentName = personTokenMatcher.group();
+                    break;
+                }
+            }
+            List<AssistantMessage.ToolCall> toolCalls = new ArrayList<>();
+            for (String toolName : this.requestedToolNames) {
+                toolCalls.add(new AssistantMessage.ToolCall(
+                    "call-" + toolName,
+                    "function",
+                    toolName,
+                    "{\"name\":\"" + toolArgumentName + "\"}"
+                ));
+            }
+            AssistantMessage assistantMessage = AssistantMessage.builder()
+                .content("")
+                .toolCalls(toolCalls)
+                .build();
+            return new ChatResponse(List.of(new Generation(assistantMessage)));
         }
 
         @Override
@@ -295,7 +293,7 @@ final class SecurityToolBoundaryTestFixtures {
         }
 
         List<String> exposedToolNames() {
-            return List.copyOf(this.exposedToolNames);
+            return this.exposedToolNames;
         }
     }
 }

@@ -100,17 +100,14 @@ class PrivacyModelRequestStageTest {
     @Test
     void stageRejectsToolCallbackFromAnotherFactory() {
         PrivacyService service = TestPrivacyServices.privacyService();
-        PrivacyToolCallbackFactory expectedFactory = new PrivacyToolCallbackFactory(
-                service,
-                ToolDisclosurePolicy.denyAll()
-        );
-        PrivacyToolCallbackFactory otherFactory = new PrivacyToolCallbackFactory(
-                service,
-                ToolDisclosurePolicy.denyAll()
-        );
-        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(service, expectedFactory, PrivacyEnforcementObserver.noop());
+        PrivacyToolCallbackFactory expectedToolCallbackFactory =
+            new PrivacyToolCallbackFactory(service, ToolDisclosurePolicy.denyAll());
+        PrivacyToolCallbackFactory otherToolCallbackFactory =
+            new PrivacyToolCallbackFactory(service, ToolDisclosurePolicy.denyAll());
+        PrivacyModelRequestStage stage = new PrivacyModelRequestStage(
+            service, expectedToolCallbackFactory, PrivacyEnforcementObserver.noop());
         ToolCallingChatOptions options = ToolCallingChatOptions.builder()
-                .toolCallbacks(List.of(otherFactory.wrap(tool("customerLookup"))))
+                .toolCallbacks(List.of(otherToolCallbackFactory.wrap(tool("customerLookup"))))
                 .build();
 
         try (PrivacySession session = service.openSession()) {

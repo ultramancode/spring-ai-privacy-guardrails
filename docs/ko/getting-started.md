@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 408367a4f7a2815645084dbd78c1108f8eca0c5a6387dd97e103ac512fd17180 -->
+<!-- i18n-source-sha256: 6f30eca27f62b46c9ec85742ca73c551cd57218be0552a2e4be07de295a9a23b -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을

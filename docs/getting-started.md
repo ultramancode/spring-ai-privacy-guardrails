@@ -92,7 +92,7 @@ spring:
 ```
 
 These rules detect only the configured formats. Regex rules are useful for
-structured application identifiers; they are not intended to provide complete
+structured application identifiers. They are not intended to provide complete
 general-purpose PII detection.
 
 Once a `PiiAnalyzer` bean is available, the starter provides `PrivacyService`

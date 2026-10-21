@@ -53,56 +53,56 @@ public class PrivacyGuardrailsProperties {
             return this.maxTextCharacters;
         }
 
-        public void setMaxTextCharacters(int value) {
-            this.maxTextCharacters = requirePositive(value, "processing.max-text-characters");
+        public void setMaxTextCharacters(int maxTextCharacters) {
+            this.maxTextCharacters = requirePositive(maxTextCharacters, "processing.max-text-characters");
         }
 
         public int getMaxOutputCharacters() {
             return this.maxOutputCharacters;
         }
 
-        public void setMaxOutputCharacters(int value) {
-            this.maxOutputCharacters = requirePositive(value, "processing.max-output-characters");
+        public void setMaxOutputCharacters(int maxOutputCharacters) {
+            this.maxOutputCharacters = requirePositive(maxOutputCharacters, "processing.max-output-characters");
         }
 
         public int getMaxValueTreeCharacters() {
             return this.maxValueTreeCharacters;
         }
 
-        public void setMaxValueTreeCharacters(int value) {
-            this.maxValueTreeCharacters = requirePositive(value, "processing.max-value-tree-characters");
+        public void setMaxValueTreeCharacters(int maxValueTreeCharacters) {
+            this.maxValueTreeCharacters = requirePositive(maxValueTreeCharacters, "processing.max-value-tree-characters");
         }
 
         public int getMaxValueTreeNodes() {
             return this.maxValueTreeNodes;
         }
 
-        public void setMaxValueTreeNodes(int value) {
-            this.maxValueTreeNodes = requirePositive(value, "processing.max-value-tree-nodes");
+        public void setMaxValueTreeNodes(int maxValueTreeNodes) {
+            this.maxValueTreeNodes = requirePositive(maxValueTreeNodes, "processing.max-value-tree-nodes");
         }
 
         public int getMaxDepth() {
             return this.maxDepth;
         }
 
-        public void setMaxDepth(int value) {
-            this.maxDepth = requirePositive(value, "processing.max-depth");
+        public void setMaxDepth(int maxDepth) {
+            this.maxDepth = requirePositive(maxDepth, "processing.max-depth");
         }
 
         public int getMaxAnalysisSegments() {
             return this.maxAnalysisSegments;
         }
 
-        public void setMaxAnalysisSegments(int value) {
-            this.maxAnalysisSegments = requirePositive(value, "processing.max-analysis-segments");
+        public void setMaxAnalysisSegments(int maxAnalysisSegments) {
+            this.maxAnalysisSegments = requirePositive(maxAnalysisSegments, "processing.max-analysis-segments");
         }
 
         public int getMaxResultSpans() {
             return this.maxResultSpans;
         }
 
-        public void setMaxResultSpans(int value) {
-            this.maxResultSpans = requirePositive(value, "processing.max-result-spans");
+        public void setMaxResultSpans(int maxResultSpans) {
+            this.maxResultSpans = requirePositive(maxResultSpans, "processing.max-result-spans");
         }
 
         PrivacyProcessingLimits limits() {

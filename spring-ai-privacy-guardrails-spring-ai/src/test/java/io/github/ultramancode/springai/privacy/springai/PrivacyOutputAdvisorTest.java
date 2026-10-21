@@ -43,7 +43,7 @@ class PrivacyOutputAdvisorTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
-    void defaultOrderIsFixedBeforeTheFinalModelBoundary() {
+    void usesDefaultOrderBeforeToolCallingOrCustomOrder() {
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(privacyService());
 
         assertThat(advisor.getOrder()).isEqualTo(PrivacyOutputAdvisor.DEFAULT_ORDER)
@@ -91,7 +91,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     @Test
-    void adviseCallTokenizesDetectedOutput() {
+    void applicationBoundaryTokenizesDetectedOutput() {
         AtomicInteger analysisCalls = new AtomicInteger();
         PrivacyService service = privacyService(analysisCalls);
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
@@ -102,7 +102,7 @@ class PrivacyOutputAdvisorTest {
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
         when(chain.nextCall(any())).thenReturn(response("Alice is available"));
 
-        ChatClientResponse result = adviseCallInSession(service, advisor, chain);
+        ChatClientResponse result = protectCallAtApplicationBoundary(service, advisor, chain);
 
         assertThat(result.chatResponse().getResult().getOutput().getText())
                 .matches(OpaquePiiTokenFormat.patternForEntityType("PERSON").pattern() + " is available");
@@ -287,7 +287,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     @Test
-    void adviseCallBlocksDetectedOutputWhenConfigured() {
+    void applicationBoundaryBlocksDetectedOutputWhenConfigured() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
                 service,
@@ -313,7 +313,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     @Test
-    void adviseCallRedactsDetectedOutputWhenConfigured() {
+    void applicationBoundaryRedactsDetectedOutputWhenConfigured() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
                 service,
@@ -323,7 +323,7 @@ class PrivacyOutputAdvisorTest {
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
         when(chain.nextCall(any())).thenReturn(response("Alice is available"));
 
-        ChatClientResponse result = adviseCallInSession(service, advisor, chain);
+        ChatClientResponse result = protectCallAtApplicationBoundary(service, advisor, chain);
 
         assertThat(result.chatResponse().getResult().getOutput().getText())
                 .isEqualTo("[REDACTED_PERSON] is available");
@@ -352,7 +352,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     @Test
-    void adviseCallPreservesAdditionalGenerations() {
+    void applicationBoundaryPreservesAdditionalGenerations() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
                 service,
@@ -365,7 +365,7 @@ class PrivacyOutputAdvisorTest {
                 new Generation(new AssistantMessage("Alice is also listed"))
         )));
 
-        ChatClientResponse result = adviseCallInSession(service, advisor, chain);
+        ChatClientResponse result = protectCallAtApplicationBoundary(service, advisor, chain);
 
         assertThat(result.chatResponse().getResults()).hasSize(2);
         String first = result.chatResponse().getResults().get(0).getOutput().getText();
@@ -375,7 +375,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     @Test
-    void adviseCallTokenizesRawPiiInReturnedToolCallArguments() {
+    void applicationBoundaryTokenizesRawPiiInReturnedToolCallArguments() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
@@ -390,7 +390,7 @@ class PrivacyOutputAdvisorTest {
                 .build();
         when(chain.nextCall(any())).thenReturn(response(List.of(new Generation(toolCallMessage))));
 
-        ChatClientResponse result = adviseCallInSession(service, advisor, chain);
+        ChatClientResponse result = protectCallAtApplicationBoundary(service, advisor, chain);
 
         String arguments = result.chatResponse().getResult().getOutput().getToolCalls().get(0).arguments();
         assertThat(arguments)
@@ -399,7 +399,7 @@ class PrivacyOutputAdvisorTest {
     }
 
     @Test
-    void adviseCallPreservesProviderOwnedToolCallId() {
+    void applicationBoundaryPreservesProviderOwnedToolCallId() {
         PrivacyService service = privacyService();
         PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(service);
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
@@ -470,7 +470,7 @@ class PrivacyOutputAdvisorTest {
         );
     }
 
-    private ChatClientResponse adviseCallInSession(
+    private ChatClientResponse protectCallAtApplicationBoundary(
             PrivacyService service,
             PrivacyOutputAdvisor advisor,
             CallAdvisorChain chain

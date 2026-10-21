@@ -193,7 +193,7 @@ public final class PrivacyToolCallbackFactory {
         );
     }
 
-    boolean usesPrivacyService(PrivacyService expectedPrivacyService) {
+    boolean usesSamePrivacyService(PrivacyService expectedPrivacyService) {
         return this.privacyService == expectedPrivacyService;
     }
 

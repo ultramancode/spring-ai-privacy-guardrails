@@ -9,7 +9,7 @@ description: >-
 [English](../threat-model.md) | **한국어**
 
 <!-- i18n-source: docs/threat-model.md -->
-<!-- i18n-source-sha256: a0a80c72891427341716b2921fc0f133af5be0b2ec4159096cf4e33ed51de2bd -->
+<!-- i18n-source-sha256: 238066d16e9d1c8f003bd9aba0c55b085aef814223c2972d10001c4af99a957c -->
 
 ## 보호 대상
 

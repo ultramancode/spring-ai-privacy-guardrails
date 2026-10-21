@@ -26,23 +26,23 @@ public class InspectionProperties {
         return piiTokenSimplificationInspectors;
     }
 
-    public void setPiiTokenSimplificationInspectors(Set<String> value) {
-        piiTokenSimplificationInspectors = value;
+    public void setPiiTokenSimplificationInspectors(Set<String> piiTokenSimplificationInspectors) {
+        this.piiTokenSimplificationInspectors = piiTokenSimplificationInspectors;
     }
 
     public InspectionFailurePolicy getFailurePolicy() {
         return failurePolicy;
     }
 
-    public void setFailurePolicy(InspectionFailurePolicy value) {
-        failurePolicy = value;
+    public void setFailurePolicy(InspectionFailurePolicy failurePolicy) {
+        this.failurePolicy = failurePolicy;
     }
 
     public Map<String, InspectionFailurePolicy> getFailurePolicyOverrides() {
         return failurePolicyOverrides;
     }
 
-    public void setFailurePolicyOverrides(Map<String, InspectionFailurePolicy> value) {
-        failurePolicyOverrides = value;
+    public void setFailurePolicyOverrides(Map<String, InspectionFailurePolicy> failurePolicyOverrides) {
+        this.failurePolicyOverrides = failurePolicyOverrides;
     }
 }

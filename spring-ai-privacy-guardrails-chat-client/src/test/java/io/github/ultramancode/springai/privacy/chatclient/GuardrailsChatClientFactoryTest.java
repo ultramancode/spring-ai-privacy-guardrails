@@ -32,6 +32,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.AdvisorParams;
@@ -70,6 +71,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -102,13 +104,16 @@ class GuardrailsChatClientFactoryTest {
         boolean privacyEnabled, boolean inspectionEnabled, boolean authorizationEnabled, boolean streaming) {
         PrivacyService privacyService = privacyService();
         List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
+        InspectionService inspectionService = inspectionService(inspections);
         List<InspectionExecution> executions = new CopyOnWriteArrayList<>();
         AtomicInteger authorizations = new AtomicInteger();
         AtomicReference<String> toolInput = new AtomicReference<>();
         LoopModel chatModel = new LoopModel();
         ToolCallback callback = tool("lookup", false, toolInput);
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
-            .privacyService(privacyService).inspectionService(inspectionService(inspections))
+            .privacyService(privacyService)
+            .inputInspectionService(inspectionService)
+            .outputInspectionService(inspectionService)
             .inspectionObserver((report, execution) -> executions.add(execution))
             .toolAuthorization(toolAuthorizationFactory(authorizations)::prepareToolAuthorization).build();
         GuardrailsPolicy.Builder guardrailsPolicyBuilder = GuardrailsPolicy.builder().toolAuthorization(authorizationEnabled);
@@ -380,7 +385,7 @@ class GuardrailsChatClientFactoryTest {
             .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PERSON")))))
             .inspection().toolAuthorization(true).build();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder().privacyService(privacyService)
-            .inspectionService(inspectionService(new CopyOnWriteArrayList<>()))
+            .inputInspectionService(inspectionService(new CopyOnWriteArrayList<>()))
             .toolAuthorization(toolAuthorizationFactory(new AtomicInteger())::prepareToolAuthorization).build();
         ChatModel chatModel = new ChatModel() {
             public ToolCallingChatOptions getOptions() {
@@ -458,12 +463,15 @@ class GuardrailsChatClientFactoryTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void connectsPrivacyTokenSimplificationToInputAndOutputInspection(boolean streaming) {
+    void simplifiesInputAndOutputWithTheSameService(boolean streaming) {
         PrivacyService privacyService = privacyService();
         List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
         InspectionService inspectionService = inspectionService(inspections).withPiiTokenSimplification(Set.of("guard"));
-        GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder().privacyService(privacyService)
-            .inspectionService(inspectionService).build();
+        GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
+            .privacyService(privacyService)
+            .inputInspectionService(inspectionService)
+            .outputInspectionService(inspectionService)
+            .build();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
             .privacy(GuardrailsPolicy.Privacy.builder().outputProtection().tokenize().build())
             .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build()).build();
@@ -479,12 +487,6 @@ class GuardrailsChatClientFactoryTest {
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
         });
         assertThat(privacyService.activeSessionCount()).isZero();
-        assertThatThrownBy(() -> guardrailsChatClientFactory.builder(new LoopModel(), GuardrailsPolicy.builder().inspection().build()))
-            .hasMessageContaining("requires privacy");
-        GuardrailsPolicy outputProtectionDisabled = guardrailsPolicy.mutate()
-            .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.outputProtection().disable()).build();
-        assertThatThrownBy(() -> guardrailsChatClientFactory.builder(new LoopModel(), outputProtectionDisabled))
-            .hasMessageContaining("requires privacy output protection");
     }
 
     @ParameterizedTest
@@ -494,7 +496,7 @@ class GuardrailsChatClientFactoryTest {
         InspectionService inspectionService = new InspectionService(List.of(new RuleBasedContentInspector("rules", List.of(rule))));
         List<InspectionExecution> executions = new CopyOnWriteArrayList<>();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
-            .inspectionService(inspectionService)
+            .outputInspectionService(inspectionService)
             .inspectionObserver((report, execution) -> executions.add(execution)).build();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().inspection(inspectionPolicyBuilder -> inspectionPolicyBuilder
             .modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true)).build();
@@ -517,7 +519,7 @@ class GuardrailsChatClientFactoryTest {
         PrivacyService privacyService = privacyService();
         AtomicReference<InspectionExecution> failureContext = new AtomicReference<>();
         GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder().privacyService(privacyService)
-            .inspectionService(inspectionService(new CopyOnWriteArrayList<>()))
+            .outputInspectionService(inspectionService(new CopyOnWriteArrayList<>()))
             .inspectionObserver(new InspectionObserver() {
                 public void onInspection(InspectionReport report, InspectionExecution execution) {}
                 public void onFailure(InspectionException failure, InspectionExecution execution) {
@@ -563,6 +565,136 @@ class GuardrailsChatClientFactoryTest {
             })
             .thenCancel().verify(Duration.ofSeconds(5));
         assertThat(privacyService.activeSessionCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void routesDirectionalInspectionThroughToolCalls(boolean streaming, boolean returnDirect) {
+        List<InspectionRequest> inputInspectionRequests = new CopyOnWriteArrayList<>();
+        List<InspectionRequest> outputInspectionRequests = new CopyOnWriteArrayList<>();
+        List<InspectionExecution> inspectionExecutions = new CopyOnWriteArrayList<>();
+        LoopModel chatModel = new LoopModel();
+        GuardrailsChatClientFactory guardrailsFactory = GuardrailsChatClientFactory.builder()
+            .inputInspectionService(inspectionService(inputInspectionRequests))
+            .outputInspectionService(inspectionService(outputInspectionRequests))
+            .inspectionObserver((report, execution) -> inspectionExecutions.add(execution))
+            .build();
+        GuardrailsPolicy inputAndOutputInspectionPolicy = GuardrailsPolicy.builder()
+            .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build()).build();
+        ChatClient chatClient = guardrailsFactory.builder(chatModel, inputAndOutputInspectionPolicy)
+            .defaultTools(tool("lookup", returnDirect, new AtomicReference<>())).build();
+
+        assertThat(invoke(chatClient.prompt().user("request"), streaming)).isEqualTo("Alice");
+
+        int expectedModelCalls = returnDirect ? 1 : 2;
+        assertThat(chatModel.requests).hasSize(expectedModelCalls);
+        assertThat(inputInspectionRequests).hasSize(expectedModelCalls);
+        assertThat(inputInspectionRequests.get(0).segments()).extracting(ContentSegment::text).contains("request");
+        assertThat(outputInspectionRequests).hasSize(1);
+        assertThat(outputInspectionRequests.get(0).segments()).extracting(ContentSegment::text).containsExactly("Alice");
+
+        InspectionExecution inputExecution = new InspectionExecution(InspectionExecution.Phase.MODEL_REQUEST, streaming);
+        InspectionExecution outputExecution = new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, streaming);
+        assertThat(inspectionExecutions).containsExactlyElementsOf(returnDirect
+            ? List.of(inputExecution, outputExecution)
+            : List.of(inputExecution, inputExecution, outputExecution));
+    }
+
+    @ParameterizedTest
+    @EnumSource(InspectionDirection.class)
+    void requiresServicesOnlyForEnabledDirections(InspectionDirection inspectionDirection) {
+        InspectionService selectedInspectionService = inspectionService(new CopyOnWriteArrayList<>());
+        GuardrailsChatClientFactory.Builder guardrailsFactoryBuilder = GuardrailsChatClientFactory.builder();
+        if (inspectionDirection == InspectionDirection.INPUT) {
+            guardrailsFactoryBuilder.inputInspectionService(selectedInspectionService);
+        } else {
+            guardrailsFactoryBuilder.outputInspectionService(selectedInspectionService);
+        }
+        GuardrailsChatClientFactory guardrailsFactory = guardrailsFactoryBuilder.build();
+        GuardrailsPolicy singleDirectionPolicy = GuardrailsPolicy.builder()
+            .inspection(GuardrailsPolicy.Inspection.builder()
+                .modelRequestInspectionEnabled(inspectionDirection == InspectionDirection.INPUT)
+                .finalOutputInspectionEnabled(inspectionDirection == InspectionDirection.OUTPUT)
+                .build())
+            .build();
+        ChatModel chatModel = mock(ChatModel.class);
+
+        assertThatNoException().isThrownBy(() -> guardrailsFactory.builder(chatModel, singleDirectionPolicy));
+
+        GuardrailsPolicy bothDirectionsPolicy = singleDirectionPolicy.mutate()
+            .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build()).build();
+        assertThatThrownBy(() -> guardrailsFactory.builder(chatModel, bothDirectionsPolicy))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining(inspectionDirection == InspectionDirection.INPUT
+                ? "no output InspectionService" : "no input InspectionService");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"INPUT, false", "INPUT, true", "OUTPUT, false", "OUTPUT, true"})
+    void ignoresInspectionServiceForDisabledDirection(InspectionDirection inspectionDirection, boolean streaming) {
+        List<InspectionRequest> activeInspectionRequests = new CopyOnWriteArrayList<>();
+        List<InspectionRequest> inactiveInspectionRequests = new CopyOnWriteArrayList<>();
+        InspectionService activeInspectionService = inspectionService(activeInspectionRequests);
+        InspectionService inactiveInspectionService = inspectionService(inactiveInspectionRequests)
+            .withPiiTokenSimplification(Set.of("guard"));
+        GuardrailsChatClientFactory guardrailsFactory = GuardrailsChatClientFactory.builder()
+            .inputInspectionService(inspectionDirection == InspectionDirection.INPUT
+                ? activeInspectionService : inactiveInspectionService)
+            .outputInspectionService(inspectionDirection == InspectionDirection.OUTPUT
+                ? activeInspectionService : inactiveInspectionService)
+            .build();
+        GuardrailsPolicy singleDirectionPolicy = GuardrailsPolicy.builder()
+            .inspection(GuardrailsPolicy.Inspection.builder()
+                .modelRequestInspectionEnabled(inspectionDirection == InspectionDirection.INPUT)
+                .finalOutputInspectionEnabled(inspectionDirection == InspectionDirection.OUTPUT)
+                .build())
+            .build();
+        ChatModel chatModel = responseModel(Flux.just(response("attack")));
+        ChatClient chatClient = guardrailsFactory.builder(chatModel, singleDirectionPolicy).build();
+
+        assertThat(invoke(chatClient.prompt().user("request"), streaming)).isEqualTo("attack");
+        assertThat(activeInspectionRequests).hasSize(1);
+        assertThat(inactiveInspectionRequests).isEmpty();
+    }
+
+    @ParameterizedTest
+    @EnumSource(InspectionDirection.class)
+    void validatesSimplificationRequirementsPerDirection(InspectionDirection simplificationDirection) {
+        InspectionService inspectionService = inspectionService(new CopyOnWriteArrayList<>());
+        InspectionService tokenSimplifyingInspectionService = inspectionService.withPiiTokenSimplification(Set.of("guard"));
+        GuardrailsChatClientFactory guardrailsFactory = GuardrailsChatClientFactory.builder()
+            .privacyService(privacyService())
+            .inputInspectionService(simplificationDirection == InspectionDirection.INPUT
+                ? tokenSimplifyingInspectionService : inspectionService)
+            .outputInspectionService(simplificationDirection == InspectionDirection.OUTPUT
+                ? tokenSimplifyingInspectionService : inspectionService)
+            .build();
+        GuardrailsPolicy inspectionOnlyPolicy = GuardrailsPolicy.builder()
+            .inspection(GuardrailsPolicy.Inspection.builder()
+                .finalOutputInspectionEnabled(true)
+                .build())
+            .build();
+        ChatModel chatModel = mock(ChatModel.class);
+        assertThatThrownBy(() -> guardrailsFactory.builder(chatModel, inspectionOnlyPolicy))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("requires privacy");
+
+        GuardrailsPolicy privacyEnabledPolicy = inspectionOnlyPolicy.mutate().privacy().build();
+        if (simplificationDirection == InspectionDirection.OUTPUT) {
+            assertThatThrownBy(() -> guardrailsFactory.builder(chatModel, privacyEnabledPolicy))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("requires privacy output protection");
+        }
+        GuardrailsPolicy policyWithRequiredProtection = switch (simplificationDirection) {
+            case INPUT -> privacyEnabledPolicy;
+            case OUTPUT -> privacyEnabledPolicy.mutate()
+                .privacy(GuardrailsPolicy.Privacy.builder().outputProtection().tokenize().build())
+                .build();
+        };
+        assertThatNoException().isThrownBy(() -> guardrailsFactory.builder(chatModel, policyWithRequiredProtection));
+    }
+
+    private enum InspectionDirection {
+        INPUT,
+        OUTPUT
     }
 
     private static ChatResponse response(String text) {

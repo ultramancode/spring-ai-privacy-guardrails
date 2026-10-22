@@ -47,6 +47,8 @@ The example blocks input containing `ignore previous instructions` by throwing
 are inspected. The starter creates a default service when at least one
 `ContentInspector` bean is available.
 You can instead provide an `InspectionService` bean with your own inspectors and policies.
+The client starter uses a single service bean, or the `@Primary` service, for both input
+and output. The client policy selects which inspections run.
 Without inspectors or a custom service, there is no inspection service to select in a client policy.
 
 Literal rules are case-sensitive. Use `InspectionRule.regex(...)` for RE2/J patterns.
@@ -59,6 +61,36 @@ Prepare the required components and add `privacy()` or `toolAuthorization(true)`
 to the same `GuardrailsPolicy`.
 Privacy processing runs first, followed by tool-definition authorization and content
 inspection. See [Configuration](configuration.md) for per-client Java policies.
+
+### Choose separate input and output services
+
+Use separate services when model requests and final responses need different inspectors,
+inspection policies or failure policies:
+
+```java
+GuardrailsChatClientFactory factory = GuardrailsChatClientFactory.builder()
+    .inputInspectionService(inputService)
+    .outputInspectionService(outputService)
+    .build();
+
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+    .inspection(GuardrailsPolicy.Inspection.builder()
+        .finalOutputInspectionEnabled(true)
+        .build())
+    .build();
+
+ChatClient client = factory.builder(chatModel, policy).build();
+```
+
+To run inspection, set the services on the factory and select inspection in the client policy.
+By default, `inspection()` checks requests sent to the model.
+The example above also checks the final response with `finalOutputInspectionEnabled(true)`.
+To inspect only the final response, disable request inspection with `modelRequestInspectionEnabled(false)`.
+
+Each enabled direction needs its corresponding service. To use the same service for both,
+pass the same instance to `inputInspectionService(...)` and `outputInspectionService(...)`.
+
+See [Spring Boot configuration](configuration.md#default-policy-in-spring-boot) to reuse the starter's settings.
 
 ### Simplify PII tokens for selected inspectors
 
@@ -74,10 +106,10 @@ markers such as `[PII_EMAIL_ADDRESS_1]`, retaining the entity type and index.
 Only the copies sent to selected inspectors are simplified. Other text, including tokens
 not issued by the current session, is preserved.
 
-The selection is empty by default and applies to input and enabled output inspection.
-Output simplification requires privacy output protection on the same client.
+The selection is empty by default. For a service you construct yourself, select inspector IDs
+with `withPiiTokenSimplification(...)`. Input simplification requires privacy in the client policy.
+Output simplification also requires privacy output protection.
 Unknown inspector IDs are rejected during configuration.
-Inspection fails with `CONFIGURATION` if the required privacy integration is missing.
 
 When calling `InspectionService` directly, select the inspectors and pass a function
 that simplifies tokens using the active session:
@@ -134,18 +166,8 @@ Failed or cancelled stream assembly releases no
 buffered content, even with `FAIL_OPEN`. Assembly limits are listed
 [below](#scope-and-limits).
 
-The Spring Boot starter uses the same inspectors and policy for input and output.
-To apply different rules to output, supply an advisor with a separate `InspectionService`:
-
-```java
-GuardrailsPolicy inputPolicy = GuardrailsPolicy.builder().inspection().build();
-ChatClient chatClient = guardrails.builder(chatModel, inputPolicy)
-    .defaultAdvisors(new InspectionOutputAdvisor(outputService))
-    .build();
-```
-
-The policy leaves output inspection disabled so the separate advisor owns it.
-For output-only inspection with the same service, use a [client policy](configuration.md#policy-per-client).
+To apply different rules to output, [configure separate services](#choose-separate-input-and-output-services).
+For output-only inspection, use a [client policy](configuration.md#policy-per-client).
 
 ## HTTP guard models and privacy
 
@@ -381,10 +403,11 @@ retaining completed segment IDs and partial findings.
 
 ## Results, policies and failures
 
-With the Spring Boot starter, inspectors run in Spring bean order (`@Order`).
+The starter's default service runs inspectors in Spring bean order (`@Order`).
 When you construct `InspectionService` directly, they run in the order of the supplied
 list. The default policy blocks a request as soon as an inspector reports a finding.
-Later inspectors do not run. Provide an `InspectionPolicy` bean to change this decision.
+Later inspectors do not run. To change this decision, provide an `InspectionPolicy` bean
+for the starter's default service or pass the policy to your service's constructor.
 Configure detection thresholds in each inspector, as scores from different models
 are not directly comparable.
 
@@ -520,7 +543,8 @@ Tool definitions, MCP schemas, structured-output configuration and other metadat
 outside inspection scope. Input inspection does not check newly generated tool arguments
 before execution. Use [tool authorization](security.md) for execution permissions.
 
-The following properties use the `spring.ai.inspection` prefix:
+The following properties configure the starter's default `InspectionService`
+and use the `spring.ai.inspection` prefix:
 
 | Setting | Default | Scope |
 | --- | --- | --- |

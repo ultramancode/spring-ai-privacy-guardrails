@@ -123,6 +123,36 @@ class InspectionAutoConfigurationTest {
         });
     }
 
+    @Test
+    void doesNotChooseBetweenMultipleServicesWithoutAPrimary() {
+        runner.withBean("inputService", InspectionService.class,
+                () -> new InspectionService(List.of(ruleBasedInspector())))
+            .withBean("outputService", InspectionService.class,
+                () -> new InspectionService(List.of(ruleBasedInspector())))
+            .withBean(ContentInspector.class, this::ruleBasedInspector)
+            .run(context -> {
+                assertThat(context).hasNotFailed().doesNotHaveBean(InspectionChatClientConfigurer.class);
+                assertThat(context.getBeansOfType(InspectionService.class)).containsOnlyKeys("inputService", "outputService");
+            });
+    }
+
+    @Test
+    void usesPrimaryServiceWhenMultipleServicesAreAvailable() {
+        InspectionService primaryInspectionService = new InspectionService(List.of(ruleBasedInspector()),
+            (inspectorId, findings) -> InspectionDecision.ALLOW, InspectionFailurePolicy.FAIL_CLOSED);
+        runner.withBean("primaryService", InspectionService.class, () -> primaryInspectionService,
+                beanDefinition -> beanDefinition.setPrimary(true))
+            .withBean("otherService", InspectionService.class,
+                () -> new InspectionService(List.of(ruleBasedInspector())))
+            .run(context -> {
+                assertThat(context).hasNotFailed().hasSingleBean(InspectionChatClientConfigurer.class);
+                ChatModel chatModel = prompt -> new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
+                ChatClient chatClient = context.getBean(InspectionChatClientConfigurer.class)
+                    .configure(ChatClient.builder(chatModel)).build();
+                assertThat(chatClient.prompt().user("attack").call().content()).isEqualTo("done");
+            });
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void usesCustomServiceWithOrWithoutInspectorBeans(boolean registerInspectorBean) {

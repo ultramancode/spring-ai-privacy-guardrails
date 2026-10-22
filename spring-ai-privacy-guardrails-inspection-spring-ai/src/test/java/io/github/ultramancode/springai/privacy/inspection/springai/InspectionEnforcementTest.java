@@ -78,7 +78,7 @@ class InspectionEnforcementTest {
             assertThatThrownBy(() -> enforcement.inspectAndEnforce(() -> List.of(segment), null,
                 new InspectionExecution(InspectionExecution.Phase.MODEL_REQUEST, false)))
                 .isInstanceOfSatisfying(InspectionException.class, failure -> {
-                    assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+                    assertThat(failure.code()).isEqualTo(InspectionFailureCode.CANCELLED);
                     assertThat(failure).hasNoCause();
                     assertThat(failure.report()).contains(
                         new InspectionReport(InspectionDecision.BLOCK, expectedOutcomes));

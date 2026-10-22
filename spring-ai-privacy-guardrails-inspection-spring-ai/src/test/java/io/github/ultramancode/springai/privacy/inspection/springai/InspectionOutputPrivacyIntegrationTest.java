@@ -397,7 +397,7 @@ class InspectionOutputPrivacyIntegrationTest {
 
     private void assertPrivacyProcessingRequired(ChatClient client, boolean streaming) {
         assertThatThrownBy(() -> invoke(client, streaming)).isInstanceOf(InspectionException.class)
-                .satisfies(error -> assertThat(((InspectionException) error).failureCode())
+                .satisfies(error -> assertThat(((InspectionException) error).code())
                         .isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED));
         // The shared prerequisite fails before both the HTTP inspector and the recording inspector run.
         assertThat(httpInspectionTexts).isEmpty();

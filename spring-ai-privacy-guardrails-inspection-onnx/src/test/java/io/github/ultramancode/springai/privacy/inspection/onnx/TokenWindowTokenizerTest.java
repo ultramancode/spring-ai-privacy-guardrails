@@ -149,7 +149,7 @@ class TokenWindowTokenizerTest {
         Files.writeString(tokenizerConfigPath, configuration);
         assertThatThrownBy(() -> new TokenWindowTokenizer(classification()))
                 .isInstanceOfSatisfying(InspectionException.class,
-                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION))
+                        failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.CONFIGURATION))
                 .hasNoCause().hasMessageNotContaining(tempPath.toString());
     }
 
@@ -180,7 +180,7 @@ class TokenWindowTokenizerTest {
                 .windowSize(specialTokens + 2).overlapSize(2).build();
         assertThatThrownBy(() -> new TokenWindowTokenizer(invalid)).as(name)
                 .isInstanceOfSatisfying(InspectionException.class,
-                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION));
+                        failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.CONFIGURATION));
         OnnxClassificationConfig valid = OnnxTestModel.classificationBuilder(tokenizerPath, tokenizerConfigPath)
                 .windowSize(specialTokens + 2).overlapSize(1).build();
         try (TokenWindowTokenizer windowTokenizer = new TokenWindowTokenizer(valid)) {

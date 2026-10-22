@@ -420,7 +420,7 @@ class InspectionAutoConfigurationTest {
                     Runnable invoke = () -> client.prompt().user("synthetic").call().content();
                     if (code == InspectionFailureCode.LIMIT_EXCEEDED) {
                         assertThatThrownBy(invoke::run).isInstanceOf(InspectionException.class);
-                        assertThat(observedFailure.get().failureCode()).isEqualTo(code);
+                        assertThat(observedFailure.get().code()).isEqualTo(code);
                         assertThat(observedFailure.get().report().orElseThrow().outcomes().get(0).result().findings())
                                 .isEmpty();
                         assertThat(observedReport.get()).isNull();

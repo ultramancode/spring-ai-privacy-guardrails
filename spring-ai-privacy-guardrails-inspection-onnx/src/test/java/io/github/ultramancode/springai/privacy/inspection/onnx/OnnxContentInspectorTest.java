@@ -160,7 +160,7 @@ class OnnxContentInspectorTest {
         assertThatThrownBy(() -> new OnnxContentInspector("local",
                 OnnxInspectionConfig.defaults(OnnxTestModel.model()), config))
                 .isInstanceOfSatisfying(InspectionException.class,
-                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION))
+                        failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.CONFIGURATION))
                 .hasNoCause();
     }
 
@@ -182,7 +182,7 @@ class OnnxContentInspectorTest {
         assertThat(classification().toString()).doesNotContain(OnnxTestModel.directory().toString());
         assertThatThrownBy(() -> new OnnxContentInspector("local", OnnxInspectionConfig.defaults(model), classification()))
                 .isInstanceOfSatisfying(InspectionException.class,
-                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION))
+                        failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.CONFIGURATION))
                 .hasMessageNotContaining("private-model").hasMessageNotContaining(tempPath.toString()).hasNoCause();
     }
 

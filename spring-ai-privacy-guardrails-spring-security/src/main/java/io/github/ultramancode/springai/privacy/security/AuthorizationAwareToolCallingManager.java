@@ -11,7 +11,6 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationResult;
 
@@ -55,12 +54,13 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
             return List.of();
         }
         ToolAuthorizationSessionRegistry.SessionState sessionState =
-                requireActiveSessionState(chatOptions);
+                requireActiveSessionState(chatOptions, ToolAuthorizationPhase.DEFINITION);
         List<ToolDefinition> authorizedDefinitions = new ArrayList<>();
         for (ToolCallback callback : toolCallbacks) {
             ToolCallback stableCallback = sessionState.requireStableCallback(
                     callback,
-                    chatOptions
+                    chatOptions,
+                    ToolAuthorizationPhase.DEFINITION
             );
             ToolDefinition definition = stableCallback.getToolDefinition();
             if (sessionState.isToolSearchToolCallback(stableCallback)) {
@@ -81,12 +81,14 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
         Objects.requireNonNull(prompt, "prompt must not be null");
         Objects.requireNonNull(chatResponse, "chatResponse must not be null");
         if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) {
-            throw ToolAuthorizationSessionRegistry.denied(
+            throw new ToolAuthorizationDeniedException(
+                    ToolAuthorizationDenialCode.INVALID_TOOL_CALL_OPTIONS,
+                    ToolAuthorizationPhase.EXECUTION,
                     "Tool execution requires ToolCallingChatOptions"
             );
         }
         ToolAuthorizationSessionRegistry.SessionState sessionState =
-                requireActiveSessionState(options);
+                requireActiveSessionState(options, ToolAuthorizationPhase.EXECUTION);
         Map<String, ToolCallback> stableCallbacksByName = buildStableCallbacksByName(
                 sessionState,
                 options,
@@ -100,7 +102,9 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
             String toolName = toolCall.name();
             ToolCallback callback = stableCallbacksByName.get(toolName);
             if (callback == null || !sessionState.wasDefinitionExposed(toolName)) {
-                throw ToolAuthorizationSessionRegistry.denied(
+                throw new ToolAuthorizationDeniedException(
+                        ToolAuthorizationDenialCode.TOOL_NOT_EXPOSED,
+                        ToolAuthorizationPhase.EXECUTION,
                         "A model-requested tool was not exposed by the authorization boundary"
                 );
             }
@@ -144,7 +148,8 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
     }
 
     private ToolAuthorizationSessionRegistry.SessionState requireActiveSessionState(
-            ToolCallingChatOptions options
+            ToolCallingChatOptions options,
+            ToolAuthorizationPhase phase
     ) {
         Map<String, Object> toolContext = options.getToolContext();
         Object sessionHandleValue = toolContext == null
@@ -153,11 +158,13 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
                         ToolAuthorizationSessionRegistry.TOOL_AUTHORIZATION_SESSION_HANDLE_KEY
                 );
         if (!(sessionHandleValue instanceof ToolAuthorizationSessionHandle handle)) {
-            throw ToolAuthorizationSessionRegistry.denied(
+            throw new ToolAuthorizationDeniedException(
+                    ToolAuthorizationDenialCode.INVALID_AUTHORIZATION_SESSION,
+                    phase,
                     "Tool authorization session handle is missing or invalid"
             );
         }
-        return this.sessionRegistry.requireActiveSessionState(handle);
+        return this.sessionRegistry.requireActiveSessionState(handle, phase);
     }
 
     private Map<String, ToolCallback> buildStableCallbacksByName(
@@ -167,7 +174,8 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
     ) {
         Map<String, ToolCallback> callbacksByName = new LinkedHashMap<>();
         for (ToolCallback callback : toolCallbacks) {
-            ToolCallback stableCallback = sessionState.requireStableCallback(callback, options);
+            ToolCallback stableCallback = sessionState.requireStableCallback(
+                    callback, options, ToolAuthorizationPhase.EXECUTION);
             String name = stableCallback.getToolDefinition().name();
             if (callbacksByName.putIfAbsent(name, stableCallback) != null) {
                 throw new IllegalArgumentException("tool callback names must be unique");
@@ -197,15 +205,21 @@ final class AuthorizationAwareToolCallingManager implements ToolCallingManager {
                 sessionState::authentication,
                 new ToolAuthorizationContext(definition, ToolAuthorizationPhase.EXECUTION)
         );
-        if (result == null || !result.isGranted()) {
-            throw denied(result);
+        if (result == null) {
+            throw new ToolAuthorizationDeniedException(
+                    ToolAuthorizationDenialCode.NO_AUTHORIZATION_DECISION,
+                    ToolAuthorizationPhase.EXECUTION,
+                    "Tool execution was not authorized"
+            );
         }
-    }
-
-    private static AuthorizationDeniedException denied(AuthorizationResult result) {
-        return result == null
-                ? new AuthorizationDeniedException("Tool execution was not authorized")
-                : new AuthorizationDeniedException("Tool execution was not authorized", result);
+        if (!result.isGranted()) {
+            throw new ToolAuthorizationDeniedException(
+                    ToolAuthorizationDenialCode.POLICY_DENIED,
+                    ToolAuthorizationPhase.EXECUTION,
+                    "Tool execution was not authorized",
+                    result
+            );
+        }
     }
 
     private static List<ToolCallback> toolCallbacks(ToolCallingChatOptions options) {

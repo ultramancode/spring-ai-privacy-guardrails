@@ -11,33 +11,34 @@ import java.util.Optional;
  */
 public final class InspectionException extends RuntimeException {
 
-    private final InspectionFailureCode failureCode;
+    private final InspectionFailureCode code;
     private final InspectionReport report;
 
-    public InspectionException(InspectionFailureCode failureCode) {
-        this(failureCode, null);
+    public InspectionException(InspectionFailureCode code) {
+        this(code, null);
     }
 
     /**
      * Creates a failure with the results collected before inspection stopped.
      * The report may be {@code null}. A supplied report must have a BLOCK decision.
      */
-    public InspectionException(InspectionFailureCode failureCode, InspectionReport report) {
-        super("Content inspection failed: " + Objects.requireNonNull(failureCode, "failureCode").name());
-        this.failureCode = failureCode;
+    public InspectionException(InspectionFailureCode code, InspectionReport report) {
+        super("Content inspection failed: " + Objects.requireNonNull(code, "code").name());
+        this.code = code;
         if (report != null && report.decision() != InspectionDecision.BLOCK) {
             throw new IllegalArgumentException("A failed inspection report must block");
         }
         this.report = report;
     }
 
-    public InspectionFailureCode failureCode() {
-        return failureCode;
+    /** Returns the inspection failure code. */
+    public InspectionFailureCode code() {
+        return code;
     }
 
     /**
      * Returns the inspection report, if available.
-     * For exceptions thrown by {@link InspectionService}, {@link #failureCode()} describes
+     * For exceptions thrown by {@link InspectionService}, {@link #code()} describes
      * why the overall inspection stopped. The report preserves individual inspector results,
      * whose failure codes may differ from this exception's code.
      */

@@ -227,13 +227,13 @@ class InspectionChatClientIntegrationTest {
                 StepVerifierOptions verifierOptions = StepVerifierOptions.create().scenarioName(description);
                 StepVerifier.create(request.stream().content(), verifierOptions)
                         .expectErrorMatches(error -> error instanceof InspectionException failure
-                                && failure.failureCode() == InspectionFailureCode.UNSUPPORTED_CONTENT)
+                                && failure.code() == InspectionFailureCode.UNSUPPORTED_CONTENT)
                         .verify(TEST_TIMEOUT);
             } else {
                 assertThatThrownBy(() -> request.call().content())
                         .as(description)
                         .isInstanceOfSatisfying(InspectionException.class, failure ->
-                                assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.UNSUPPORTED_CONTENT));
+                                assertThat(failure.code()).isEqualTo(InspectionFailureCode.UNSUPPORTED_CONTENT));
             }
             assertThat(model.modelCallCount).as(description).hasValue(0);
         }
@@ -377,7 +377,7 @@ class InspectionChatClientIntegrationTest {
             streamSubscription.dispose();
             assertThat(inspectionInterrupted.await(5, TimeUnit.SECONDS)).isTrue();
             InspectionException cancellationException = inspectionFailure.get(5, TimeUnit.SECONDS);
-            assertThat(cancellationException.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+            assertThat(cancellationException.code()).isEqualTo(InspectionFailureCode.CANCELLED);
             assertThat(model.modelCallCount).hasValue(0);
         } finally {
             streamSubscription.dispose();

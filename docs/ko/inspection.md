@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: a30314e6accf19fa4358ddd57d6eff58ad8384ad9dc5289583581af2676e31b8 -->
+<!-- i18n-source-sha256: 6b8758dd53e47eb93a1b2d160744203c75a04f1a2d2c98bfbfa9136ddba96b33 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -499,7 +499,7 @@ InspectionObserver inspectionObserver() {
 
         @Override
         public void onFailure(InspectionException failure, InspectionExecution execution) {
-            auditFailure(failure.failureCode(), failure.report(), execution);
+            auditFailure(failure.code(), failure.report(), execution);
         }
     };
 }

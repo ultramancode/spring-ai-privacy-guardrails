@@ -460,6 +460,44 @@ external state rather than relying only on authorities captured in the object.
 The library cleans up request authorization state when a blocking call completes
 or fails, or when a stream completes, fails, or is cancelled.
 
+## Handling Denials
+
+The tool authorization boundary throws `ToolAuthorizationDeniedException` when
+it rejects a request. Its `code()` returns a `ToolAuthorizationDenialCode`
+identifying the cause:
+
+```java
+try {
+    chatClient.prompt().user(userMessage).call().content();
+} catch (ToolAuthorizationDeniedException ex) {
+    logger.warn("Tool authorization denied: {}", ex.code());
+    throw ex;
+}
+```
+
+| Code | Meaning |
+| --- | --- |
+| `AUTHENTICATION_REQUIRED` | A request with registered tools has no `Authentication`. |
+| `POLICY_DENIED` | The authorization policy denied tool execution. |
+| `NO_AUTHORIZATION_DECISION` | The authorization policy returned `null` for tool execution. |
+| `TOOL_NOT_EXPOSED` | The model requested a tool that was not exposed for the request. |
+| `CALLBACK_CHANGED` | A tool callback was added or replaced in an unsupported way during the request. |
+| `INVALID_AUTHORIZATION_SESSION` | The authorization session is missing, invalid, or closed. |
+| `UNMANAGED_TOOL_ADVISOR` | The request is missing this client's managed tool advisor or uses a separate one. |
+| `INVALID_TOOL_CALL_OPTIONS` | Tool execution was requested without `ToolCallingChatOptions`. |
+
+`phase()` returns an `Optional<ToolAuthorizationPhase>` containing `DEFINITION`
+for denials during tool-list construction or `EXECUTION` for denials during
+execution checks. It is empty for denials before either phase, such as missing
+authentication or an unmanaged tool advisor.
+
+The exception extends Spring Security's `AuthorizationDeniedException`. When
+the policy returns a denied result, `getAuthorizationResult()` preserves that result.
+
+Denied or undecided tools are omitted from the model's tool list during the
+definition phase. This filtering does not throw a denial exception. Exceptions
+thrown directly by the application's `AuthorizationManager` propagate unchanged.
+
 ## Compatibility
 
 | Component | Supported versions |

@@ -60,7 +60,7 @@ class InspectionServiceTest {
             try {
                 LockSupport.parkNanos(request.remaining().toNanos());
             } catch (InspectionException expired) {
-                assertThat(expired.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT);
+                assertThat(expired.code()).isEqualTo(InspectionFailureCode.TIMEOUT);
                 return;
             }
         }
@@ -152,7 +152,7 @@ class InspectionServiceTest {
         // It must expire at the original deadline. Restarting its timeout would leave it active here.
         assertThatThrownBy(simplifiedInspectionRequest::checkActive)
                 .isInstanceOfSatisfying(InspectionException.class,
-                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT));
+                        failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.TIMEOUT));
     }
 
     @Test
@@ -175,7 +175,7 @@ class InspectionServiceTest {
         InspectionException inspectionException = assertThrows(InspectionException.class,
                 () -> inspectionService.inspect(originalInspectionRequest, failingPiiTokenSimplifier));
 
-        assertThat(inspectionException.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION);
+        assertThat(inspectionException.code()).isEqualTo(InspectionFailureCode.CONFIGURATION);
         assertThat(inspectionException).hasNoCause().hasMessageNotContaining("private text");
 
         InspectionReport inspectionReport = inspectionException.report().orElseThrow();
@@ -237,7 +237,7 @@ class InspectionServiceTest {
                 List.of(failingInspector), allowingPolicy, InspectionFailurePolicy.FAIL_OPEN);
 
         assertThatThrownBy(() -> service.inspect(request()))
-                .isInstanceOfSatisfying(InspectionException.class, ex -> assertThat(ex.failureCode()).isEqualTo(failureCode));
+                .isInstanceOfSatisfying(InspectionException.class, ex -> assertThat(ex.code()).isEqualTo(failureCode));
         assertThat(policyCalls).hasValue(0);
     }
 
@@ -455,7 +455,7 @@ class InspectionServiceTest {
 
         assertThatThrownBy(() -> service.inspect(mixedRequest))
                 .isInstanceOfSatisfying(InspectionException.class, ex -> {
-                    assertThat(ex.failureCode()).isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED);
+                    assertThat(ex.code()).isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED);
                     InspectionReport report = ex.report().orElseThrow();
                     assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
                     assertThat(report.outcomes()).containsExactly(new InspectionReport.Outcome(
@@ -491,7 +491,7 @@ class InspectionServiceTest {
 
         assertThatThrownBy(() -> service.inspect(request()))
                 .isInstanceOfSatisfying(InspectionException.class, failure -> {
-                    assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
+                    assertThat(failure.code()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
                     assertThat(failure.getCause()).isNull();
                     InspectionReport report = failure.report().orElseThrow();
                     assertThat(report.outcomes().get(0).inspectorInvoked()).isTrue();
@@ -537,7 +537,7 @@ class InspectionServiceTest {
 
             assertThatThrownBy(() -> service.inspect(request()))
                     .isInstanceOfSatisfying(InspectionException.class, ex -> {
-                        assertThat(ex.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
+                        assertThat(ex.code()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
                         InspectionResult normalized = ex.report().orElseThrow().outcomes().get(0).result();
                         assertThat(normalized.status()).isEqualTo(InspectionResult.Status.FAILED);
                         assertThat(normalized.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
@@ -562,7 +562,7 @@ class InspectionServiceTest {
                     InspectionPolicy.blockFindings(), InspectionFailurePolicy.FAIL_OPEN);
             assertThatThrownBy(() -> service.inspect(request()))
                     .isInstanceOfSatisfying(InspectionException.class, ex -> {
-                        assertThat(ex.failureCode()).isEqualTo(failureCode);
+                        assertThat(ex.code()).isEqualTo(failureCode);
                         InspectionReport report = ex.report().orElseThrow();
                         assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
                         assertThat(report.outcomes().get(0).result().failureCode()).isEqualTo(failureCode);
@@ -590,7 +590,7 @@ class InspectionServiceTest {
 
         assertThatThrownBy(() -> service.inspect(request()))
                 .isInstanceOfSatisfying(InspectionException.class, ex -> {
-                    assertThat(ex.failureCode()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED);
+                    assertThat(ex.code()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED);
                     InspectionReport report = ex.report().orElseThrow();
                     assertThat(report.outcomes()).extracting(InspectionReport.Outcome::inspectorId)
                             .containsExactly("first", "second");
@@ -714,7 +714,7 @@ class InspectionServiceTest {
         try {
             assertThatThrownBy(() -> service.inspect(request()))
                     .isInstanceOfSatisfying(InspectionException.class, ex -> {
-                        assertThat(ex.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+                        assertThat(ex.code()).isEqualTo(InspectionFailureCode.CANCELLED);
                         InspectionReport report = ex.report().orElseThrow();
                         assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
                         assertThat(report.outcomes()).hasSize(1);
@@ -824,7 +824,7 @@ class InspectionServiceTest {
         try {
             assertThatThrownBy(() -> service.inspect(request()))
                     .isInstanceOfSatisfying(InspectionException.class, ex -> {
-                        assertThat(ex.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+                        assertThat(ex.code()).isEqualTo(InspectionFailureCode.CANCELLED);
                         InspectionReport report = ex.report().orElseThrow();
                         assertThat(report.decision()).isEqualTo(InspectionDecision.BLOCK);
                         assertThat(report.outcomes()).hasSize(1);

@@ -117,6 +117,6 @@ class JsonVerdictProtocolTest {
     void rejectsInvalidVerdicts(String output) {
         assertThatThrownBy(() -> protocol.parse("s1", output))
                 .isInstanceOfSatisfying(InspectionException.class, failure ->
-                        assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESPONSE));
+                        assertThat(failure.code()).isEqualTo(InspectionFailureCode.INVALID_RESPONSE));
     }
 }

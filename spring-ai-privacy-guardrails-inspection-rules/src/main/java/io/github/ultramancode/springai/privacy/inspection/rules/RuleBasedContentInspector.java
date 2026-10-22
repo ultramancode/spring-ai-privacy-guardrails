@@ -61,7 +61,7 @@ public final class RuleBasedContentInspector implements ContentInspector {
             }
             return InspectionResult.completed(completedSegmentIds, findings);
         } catch (InspectionException ex) {
-            return InspectionResult.failed(ex.failureCode(), completedSegmentIds, findings);
+            return InspectionResult.failed(ex.code(), completedSegmentIds, findings);
         }
     }
 }

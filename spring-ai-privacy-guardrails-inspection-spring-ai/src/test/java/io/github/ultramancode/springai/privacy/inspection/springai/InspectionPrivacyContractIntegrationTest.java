@@ -158,7 +158,7 @@ class InspectionPrivacyContractIntegrationTest {
         } else {
             assertThatThrownBy(() -> invoke(client, inputText, streaming))
                     .isInstanceOfSatisfying(InspectionException.class, failure ->
-                            assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED));
+                            assertThat(failure.code()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED));
         }
         assertThat(inspectorInvocationCount).hasValue(0);
         assertThat(model.modelCallCount).hasValue(0);
@@ -197,7 +197,7 @@ class InspectionPrivacyContractIntegrationTest {
 
         assertThatThrownBy(() -> invoke(client, "hello", streaming))
                 .isInstanceOfSatisfying(InspectionException.class, failure ->
-                        assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED));
+                        assertThat(failure.code()).isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED));
         assertThat(inspectorInvocationCount).hasValue(0);
         assertThat(model.modelCallCount).hasValue(0);
         assertThat(privacyService.activeSessionCount()).isZero();

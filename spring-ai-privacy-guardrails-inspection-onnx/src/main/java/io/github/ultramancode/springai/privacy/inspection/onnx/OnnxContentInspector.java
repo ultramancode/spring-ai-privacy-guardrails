@@ -116,7 +116,7 @@ public final class OnnxContentInspector implements ContentInspector, AutoCloseab
             return InspectionResult.failed(
                     InspectionFailureCode.CANCELLED, completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (InspectionException ex) {
-            return InspectionResult.failed(ex.failureCode(), completedSegmentIds, List.copyOf(requestFindings.values()));
+            return InspectionResult.failed(ex.code(), completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (RuntimeException ex) {
             return InspectionResult.failed(
                     InspectionFailureCode.INVALID_RESULT, completedSegmentIds, List.copyOf(requestFindings.values()));

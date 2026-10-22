@@ -148,7 +148,7 @@ class OpenAiCompatibleContentInspectorTest {
             try {
                 LockSupport.parkNanos(request.remaining().toNanos());
             } catch (InspectionException expired) {
-                assertThat(expired.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT);
+                assertThat(expired.code()).isEqualTo(InspectionFailureCode.TIMEOUT);
                 return;
             }
         }
@@ -287,7 +287,7 @@ class OpenAiCompatibleContentInspectorTest {
 
         assertThatThrownBy(() -> inspector.inspect(request))
                 .isInstanceOfSatisfying(InspectionException.class, failure ->
-                        assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED));
+                        assertThat(failure.code()).isEqualTo(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED));
         assertThat(calls).hasValue(0);
     }
 
@@ -366,7 +366,7 @@ class OpenAiCompatibleContentInspectorTest {
 
         assertThatThrownBy(() -> service.inspect(privacyProcessedRequest()))
                 .isInstanceOfSatisfying(InspectionException.class, failure ->
-                        assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT));
+                        assertThat(failure.code()).isEqualTo(InspectionFailureCode.INVALID_RESULT));
         assertThat(calls).hasValue(0);
     }
 
@@ -663,7 +663,7 @@ class OpenAiCompatibleContentInspectorTest {
         try {
             assertThatThrownBy(() -> service.inspect(twoSegments()))
                     .isInstanceOfSatisfying(InspectionException.class, serviceFailure -> {
-                        assertThat(serviceFailure.failureCode()).isEqualTo(InspectionFailureCode.CANCELLED);
+                        assertThat(serviceFailure.code()).isEqualTo(InspectionFailureCode.CANCELLED);
 
                         InspectionReport report = serviceFailure.report().orElseThrow();
                         InspectionResult inspectorResult = report.outcomes().get(0).result();
@@ -893,7 +893,7 @@ class OpenAiCompatibleContentInspectorTest {
 
         assertThatThrownBy(() -> service.inspect(privacyProcessedRequest()))
                 .isInstanceOfSatisfying(InspectionException.class, failure ->
-                        assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT));
+                        assertThat(failure.code()).isEqualTo(InspectionFailureCode.INVALID_RESULT));
         assertThat(calls).hasValue(0);
     }
 
@@ -923,6 +923,6 @@ class OpenAiCompatibleContentInspectorTest {
 
         assertThatThrownBy(() -> service.inspect(privacyProcessedRequest()))
                 .isInstanceOfSatisfying(InspectionException.class,
-                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT));
+                        failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.INVALID_RESULT));
     }
 }

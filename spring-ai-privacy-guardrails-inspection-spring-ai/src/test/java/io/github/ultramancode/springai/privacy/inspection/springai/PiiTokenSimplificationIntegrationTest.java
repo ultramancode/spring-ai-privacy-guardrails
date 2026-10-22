@@ -131,7 +131,7 @@ class PiiTokenSimplificationIntegrationTest {
 
         assertThatThrownBy(() -> chatClient.prompt().user("hello").call().content())
                 .isInstanceOfSatisfying(InspectionException.class,
-                        failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION));
+                        failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.CONFIGURATION));
         assertThat(httpInspectionTexts).isEmpty();
         assertThat(modelInputText.get()).isNull();
     }
@@ -152,7 +152,7 @@ class PiiTokenSimplificationIntegrationTest {
                 chatClient.prompt().user("Hello Alice").call().content();
             }
         }).isInstanceOfSatisfying(InspectionException.class,
-                failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.CONFIGURATION));
+                failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.CONFIGURATION));
         assertThat(httpInspectionTexts).containsExactly("Hello [PII_PERSON_1]");
         assertThat(modelInputText.get()).isNotNull();
         assertThat(privacyService.activeSessionCount()).isZero();

@@ -208,8 +208,12 @@ class SpringSecurityContextPropagationIntegrationTest {
                         Mono.just(emptyReactiveContext)
                 ))
                 .block())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("Tool authorization requires an Authentication");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code())
+                                    .isEqualTo(ToolAuthorizationDenialCode.AUTHENTICATION_REQUIRED);
+                            assertThat(denial.phase()).isEmpty();
+                        });
         assertThat(toolCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
@@ -239,8 +243,12 @@ class SpringSecurityContextPropagationIntegrationTest {
                 .collectList()
                 .contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.empty()))
                 .block())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("Tool authorization requires an Authentication");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code())
+                                    .isEqualTo(ToolAuthorizationDenialCode.AUTHENTICATION_REQUIRED);
+                            assertThat(denial.phase()).isEmpty();
+                        });
         assertThat(toolCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
@@ -292,8 +300,12 @@ class SpringSecurityContextPropagationIntegrationTest {
         SecurityContextHolder.clearContext();
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("Tool authorization requires an Authentication");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code())
+                                    .isEqualTo(ToolAuthorizationDenialCode.AUTHENTICATION_REQUIRED);
+                            assertThat(denial.phase()).isEmpty();
+                        });
         assertThat(toolCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();

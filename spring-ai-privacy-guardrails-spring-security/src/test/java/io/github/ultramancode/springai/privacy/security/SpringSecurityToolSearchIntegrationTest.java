@@ -34,7 +34,6 @@ import org.springframework.ai.tool.toolsearch.ToolReference;
 import org.springframework.ai.tool.toolsearch.ToolSearchRequest;
 import org.springframework.ai.tool.toolsearch.ToolSearchResponse;
 import org.springframework.security.authorization.AuthorizationDecision;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.core.context.SecurityContextHolder;
 import reactor.core.publisher.Flux;
@@ -95,8 +94,11 @@ class SpringSecurityToolSearchIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find customer").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("A tool callback was added after authorization");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.CALLBACK_CHANGED);
+                            assertThat(denial.phase()).contains(ToolAuthorizationPhase.DEFINITION);
+                        });
         assertThat(boundary.activeSessionCount()).isZero();
     }
 
@@ -127,8 +129,11 @@ class SpringSecurityToolSearchIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find customer").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("The Tool Search tool callback changed during the request");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.CALLBACK_CHANGED);
+                            assertThat(denial.phase()).contains(ToolAuthorizationPhase.DEFINITION);
+                        });
         assertThat(boundary.activeSessionCount()).isZero();
     }
 
@@ -353,8 +358,11 @@ class SpringSecurityToolSearchIntegrationTest {
                 .user("Find Alice")
                 .call()
                 .content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("A model-requested tool was not exposed by the authorization boundary");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.TOOL_NOT_EXPOSED);
+                            assertThat(denial.phase()).contains(ToolAuthorizationPhase.EXECUTION);
+                        });
         ArgumentCaptor<List<ToolReference>> indexedToolReferences =
                 ArgumentCaptor.forClass(List.class);
         verify(index).indexTools(eq("alice-session"), indexedToolReferences.capture());

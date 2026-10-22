@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
@@ -16,7 +17,6 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.security.authorization.AuthorizationDecision;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -169,15 +169,23 @@ class SpringSecurityToolBoundaryIntegrationTest {
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 
-    @Test
-    void rejectsWhenCallbackReauthorizationFailsBeforePiiDisclosure() {
+    @ParameterizedTest
+    @EnumSource(value = ToolAuthorizationDenialCode.class,
+        names = {"POLICY_DENIED", "NO_AUTHORIZATION_DECISION"})
+    void rejectsWhenCallbackReauthorizationFailsBeforePiiDisclosure(
+        ToolAuthorizationDenialCode expectedCode
+    ) {
         AtomicInteger executionAuthorizationChecks = new AtomicInteger();
         AuthorizationManager<ToolAuthorizationContext> authorizationManager = (authentication, context) -> {
             if (context.phase() == ToolAuthorizationPhase.DEFINITION) {
                 return new AuthorizationDecision(true);
             }
             // Permit the manager precheck, then deny callback-level reauthorization.
-            return new AuthorizationDecision(executionAuthorizationChecks.incrementAndGet() == 1);
+            if (executionAuthorizationChecks.incrementAndGet() == 1) {
+                return new AuthorizationDecision(true);
+            }
+            return expectedCode == ToolAuthorizationDenialCode.POLICY_DENIED
+                ? new AuthorizationDecision(false) : null;
         };
         SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(authorizationManager);
         PrivacyService privacyService = privacyService();
@@ -194,8 +202,11 @@ class SpringSecurityToolBoundaryIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-            .isInstanceOf(AuthorizationDeniedException.class)
-            .hasMessage("Tool execution was not authorized");
+            .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                denial -> {
+                    assertThat(denial.code()).isEqualTo(expectedCode);
+                    assertThat(denial.phase()).contains(ToolAuthorizationPhase.EXECUTION);
+                });
         assertThat(executionAuthorizationChecks).hasValue(2);
         assertThat(disclosedInput).hasNullValue();
         assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
@@ -239,8 +250,11 @@ class SpringSecurityToolBoundaryIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-            .isInstanceOf(AuthorizationDeniedException.class)
-            .hasMessage("A model-requested tool was not exposed by the authorization boundary");
+            .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                denial -> {
+                    assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.TOOL_NOT_EXPOSED);
+                    assertThat(denial.phase()).contains(ToolAuthorizationPhase.EXECUTION);
+                });
         assertThat(chatModel.exposedToolNames()).containsOnly("customerLookup");
         assertThat(businessToolCalls).hasValue(0);
         assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
@@ -271,21 +285,30 @@ class SpringSecurityToolBoundaryIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-            .isInstanceOf(AuthorizationDeniedException.class)
-            .hasMessage("A model-requested tool was not exposed by the authorization boundary");
+            .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                denial -> {
+                    assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.TOOL_NOT_EXPOSED);
+                    assertThat(denial.phase()).contains(ToolAuthorizationPhase.EXECUTION);
+                });
         assertThat(chatModel.exposedToolNames()).containsOnly("customerLookup");
         verifyNoInteractions(resolverFallbackDelegate);
         assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
     }
 
-    @Test
-    void preauthorizesTheWholeBatchBeforeAnyToolCanExecute() {
+    @ParameterizedTest
+    @EnumSource(value = ToolAuthorizationDenialCode.class,
+        names = {"POLICY_DENIED", "NO_AUTHORIZATION_DECISION"})
+    void preauthorizesTheWholeBatchBeforeAnyToolCanExecute(ToolAuthorizationDenialCode expectedCode) {
         AtomicInteger executedToolCalls = new AtomicInteger();
+        AuthorizationDecision policyDenial = new AuthorizationDecision(false);
         AuthorizationManager<ToolAuthorizationContext> readCustomerExecutionPolicy =
-            (authentication, context) -> new AuthorizationDecision(
-                context.phase() == ToolAuthorizationPhase.DEFINITION
-                    || context.toolDefinition().name().equals("readCustomer")
-            );
+            (authentication, context) -> {
+                if (context.phase() == ToolAuthorizationPhase.DEFINITION
+                    || context.toolDefinition().name().equals("readCustomer")) {
+                    return new AuthorizationDecision(true);
+                }
+                return expectedCode == ToolAuthorizationDenialCode.POLICY_DENIED ? policyDenial : null;
+            };
         SpringSecurityToolBoundary toolAuthorizationBoundary = boundary(readCustomerExecutionPolicy);
         PrivacyService privacyService = privacyService();
         PrivacyToolCallbackFactory toolCallbackFactory = privacyFactory(
@@ -315,8 +338,14 @@ class SpringSecurityToolBoundaryIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-            .isInstanceOf(AuthorizationDeniedException.class)
-            .hasMessage("Tool execution was not authorized");
+            .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class, denial -> {
+                assertThat(denial.code()).isEqualTo(expectedCode);
+                assertThat(denial.phase()).contains(ToolAuthorizationPhase.EXECUTION);
+                assertThat(denial.getAuthorizationResult().isGranted()).isFalse();
+                if (expectedCode == ToolAuthorizationDenialCode.POLICY_DENIED) {
+                    assertThat(denial.getAuthorizationResult()).isSameAs(policyDenial);
+                }
+            });
         assertThat(executedToolCalls).hasValue(0);
         assertThat(toolAuthorizationBoundary.activeSessionCount()).isZero();
         assertThat(privacyService.activeSessionCount()).isZero();

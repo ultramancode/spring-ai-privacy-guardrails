@@ -56,7 +56,8 @@ final class ToolAuthorizationLifecycleAdvisor implements CallAdvisor, StreamAdvi
         }
         Authentication authentication = currentAuthentication();
         if (authentication == null) {
-            throw ToolAuthorizationSessionRegistry.denied(
+            throw new ToolAuthorizationDeniedException(
+                    ToolAuthorizationDenialCode.AUTHENTICATION_REQUIRED,
                     "Tool authorization requires an Authentication"
             );
         }
@@ -121,7 +122,8 @@ final class ToolAuthorizationLifecycleAdvisor implements CallAdvisor, StreamAdvi
     }
 
     private static Mono<Authentication> missingAuthentication() {
-        return Mono.error(ToolAuthorizationSessionRegistry.denied(
+        return Mono.error(new ToolAuthorizationDeniedException(
+                ToolAuthorizationDenialCode.AUTHENTICATION_REQUIRED,
                 "Tool authorization requires an Authentication"
         ));
     }

@@ -55,7 +55,7 @@ final class InspectionEnforcement {
         InspectionFailureCode failureCode = InspectionFailureCode.INVALID_RESULT;
         InspectionReport inspectionReport = null;
         if (ex instanceof InspectionException classified) {
-            failureCode = classified.failureCode();
+            failureCode = classified.code();
             inspectionReport = classified.report().orElse(null);
         }
         if (Thread.currentThread().isInterrupted()) {

@@ -502,7 +502,7 @@ InspectionObserver inspectionObserver() {
 
         @Override
         public void onFailure(InspectionException failure, InspectionExecution execution) {
-            auditFailure(failure.failureCode(), failure.report(), execution);
+            auditFailure(failure.code(), failure.report(), execution);
         }
     };
 }

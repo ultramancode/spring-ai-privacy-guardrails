@@ -3,7 +3,6 @@ package io.github.ultramancode.springai.privacy.security;
 import io.github.ultramancode.springai.privacy.boundary.SpringAiToolSearchSupport;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.Authentication;
 
 import java.util.LinkedHashMap;
@@ -37,12 +36,16 @@ final class ToolAuthorizationSessionRegistry {
         return new ToolAuthorizationSession(this, handle);
     }
 
-    SessionState requireActiveSessionState(ToolAuthorizationSessionHandle handle) {
+    SessionState requireActiveSessionState(ToolAuthorizationSessionHandle handle, ToolAuthorizationPhase phase) {
         SessionState sessionState = this.sessions.get(
                 Objects.requireNonNull(handle, "handle must not be null")
         );
         if (sessionState == null) {
-            throw denied("Tool authorization session is missing or expired");
+            throw new ToolAuthorizationDeniedException(
+                    ToolAuthorizationDenialCode.INVALID_AUTHORIZATION_SESSION,
+                    phase,
+                    "Tool authorization session is missing or expired"
+            );
         }
         return sessionState;
     }
@@ -53,10 +56,6 @@ final class ToolAuthorizationSessionRegistry {
 
     int activeSessionCount() {
         return this.sessions.size();
-    }
-
-    static AuthorizationDeniedException denied(String message) {
-        return new AuthorizationDeniedException(message);
     }
 
     static final class SessionState {
@@ -100,31 +99,44 @@ final class ToolAuthorizationSessionRegistry {
 
         ToolCallback requireStableCallback(
                 ToolCallback callback,
-                ToolCallingChatOptions options
+                ToolCallingChatOptions options,
+                ToolAuthorizationPhase phase
         ) {
             Objects.requireNonNull(callback, "callback must not be null");
             String name = callback.getToolDefinition().name();
             ToolCallback initialCallback = this.initialCallbacksByName.get(name);
             if (initialCallback == null) {
                 if (!SpringAiToolSearchSupport.isToolSearchToolCallback(callback, options)) {
-                    throw denied("A tool callback was added after authorization");
+                    throw new ToolAuthorizationDeniedException(
+                            ToolAuthorizationDenialCode.CALLBACK_CHANGED,
+                            phase,
+                            "A tool callback was added after authorization"
+                    );
                 }
-                return pinToolSearchToolCallback(callback);
+                return pinToolSearchToolCallback(callback, phase);
             }
             if (initialCallback != callback) {
-                throw denied("A tool callback was replaced after authorization");
+                throw new ToolAuthorizationDeniedException(
+                        ToolAuthorizationDenialCode.CALLBACK_CHANGED,
+                        phase,
+                        "A tool callback was replaced after authorization"
+                );
             }
             return initialCallback;
         }
 
         // Spring AI adds its Tool Search tool callback after the initial callback snapshot.
         // Pin the first instance so this control-plane callback cannot be replaced.
-        private synchronized ToolCallback pinToolSearchToolCallback(ToolCallback callback) {
+        private synchronized ToolCallback pinToolSearchToolCallback(ToolCallback callback, ToolAuthorizationPhase phase) {
             ToolCallback pinned = this.toolSearchToolCallback;
             if (pinned == null) {
                 this.toolSearchToolCallback = callback;
             } else if (pinned != callback) {
-                throw denied("The Tool Search tool callback changed during the request");
+                throw new ToolAuthorizationDeniedException(
+                        ToolAuthorizationDenialCode.CALLBACK_CHANGED,
+                        phase,
+                        "The Tool Search tool callback changed during the request"
+                );
             }
             return callback;
         }

@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: 02bd9ea94a491d521f77b8a0bcdc3c47a79fde9889b224fc9bd19d03c786ddd9 -->
+<!-- i18n-source-sha256: 7411485cd1a9f0967fbc5eedea7180681e523877be419ef34ad8412d1ccab105 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -438,6 +438,42 @@ Tool Search를 직접 구성하면서 권한 검사가 없는 `ToolCallingManage
 
 라이브러리는 동기 호출의 정상 완료·실패 또는 스트림의 완료·실패·취소 시 요청의
 권한 상태를 정리합니다.
+
+## 거부 사유 확인
+
+도구 권한 연동이 요청을 거부하면 `ToolAuthorizationDeniedException`이 발생합니다.
+`code()`가 반환하는 `ToolAuthorizationDenialCode`로 거부 사유를 구분할 수 있습니다.
+
+```java
+try {
+    chatClient.prompt().user(userMessage).call().content();
+} catch (ToolAuthorizationDeniedException ex) {
+    logger.warn("Tool authorization denied: {}", ex.code());
+    throw ex;
+}
+```
+
+| 코드 | 의미 |
+| --- | --- |
+| `AUTHENTICATION_REQUIRED` | 도구가 등록된 요청에 `Authentication`이 없음 |
+| `POLICY_DENIED` | 권한 정책이 도구 실행을 거부함 |
+| `NO_AUTHORIZATION_DECISION` | 권한 정책이 도구 실행에 대해 `null`을 반환함 |
+| `TOOL_NOT_EXPOSED` | 모델에 제공한 도구 목록에 없는 도구의 실행을 요청함 |
+| `CALLBACK_CHANGED` | 요청 도중 허용되지 않은 방식으로 도구 콜백이 추가되거나 교체됨 |
+| `INVALID_AUTHORIZATION_SESSION` | 권한 세션이 없거나 유효하지 않거나 이미 종료됨 |
+| `UNMANAGED_TOOL_ADVISOR` | 해당 클라이언트가 구성한 도구 Advisor가 없거나 별도 Advisor를 사용함 |
+| `INVALID_TOOL_CALL_OPTIONS` | `ToolCallingChatOptions` 없이 도구 실행을 요청함 |
+
+`phase()`는 `Optional<ToolAuthorizationPhase>`를 반환합니다. 도구 목록 구성 중
+거부되면 `DEFINITION`, 실행 검사 중 거부되면 `EXECUTION`을 담습니다.
+인증 누락이나 별도 도구 Advisor 사용처럼 두 단계에 들어가기 전에 거부되면 빈 값을 반환합니다.
+
+이 예외는 Spring Security의 `AuthorizationDeniedException`을 상속합니다.
+정책이 거부 결과를 반환했다면 `getAuthorizationResult()`로 해당 결과를 확인할 수 있습니다.
+
+도구 목록 구성 단계에서는 권한이 거부되거나 판단이 없는 도구를 모델에 제공할 목록에서
+제외합니다. 이 필터링은 거부 예외를 발생시키지 않습니다.
+애플리케이션의 `AuthorizationManager`가 직접 던진 예외는 그대로 전달됩니다.
 
 ## 호환성
 

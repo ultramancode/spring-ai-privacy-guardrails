@@ -154,7 +154,7 @@ public final class InspectionService {
                     try {
                         inspectionRequest.requirePrivacyProcessed();
                     } catch (InspectionException ex) {
-                        InspectionResult result = InspectionResult.failed(ex.failureCode());
+                        InspectionResult result = InspectionResult.failed(ex.code());
                         outcomes.add(new InspectionReport.Outcome(registeredInspector.id(), false, result));
                         throw ex;
                     }
@@ -190,7 +190,7 @@ public final class InspectionService {
         } catch (RuntimeException ex) {
             InspectionFailureCode failureCode = InspectionFailureCode.INVALID_RESULT;
             if (ex instanceof InspectionException failure) {
-                failureCode = failure.failureCode();
+                failureCode = failure.code();
             }
             if (Thread.currentThread().isInterrupted()) {
                 failureCode = InspectionFailureCode.CANCELLED;
@@ -214,7 +214,7 @@ public final class InspectionService {
             inspectorInvoked = true;
             result = registeredInspector.inspector().inspect(inspectionRequest);
         } catch (InspectionException ex) {
-            result = InspectionResult.failed(ex.failureCode());
+            result = InspectionResult.failed(ex.code());
         } catch (RuntimeException ex) {
             result = InspectionResult.failed(InspectionFailureCode.INVALID_RESULT);
         }

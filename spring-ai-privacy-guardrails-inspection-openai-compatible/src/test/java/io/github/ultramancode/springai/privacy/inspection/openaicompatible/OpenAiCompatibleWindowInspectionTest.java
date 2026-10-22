@@ -232,7 +232,7 @@ class OpenAiCompatibleWindowInspectionTest {
                     try {
                         LockSupport.parkNanos(activeRequest.get().remaining().toNanos());
                     } catch (InspectionException expired) {
-                        assertThat(expired.failureCode()).isEqualTo(InspectionFailureCode.TIMEOUT);
+                        assertThat(expired.code()).isEqualTo(InspectionFailureCode.TIMEOUT);
                         return delegate.parse(segmentId, output);
                     }
                 }

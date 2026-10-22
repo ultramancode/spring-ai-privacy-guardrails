@@ -12,7 +12,6 @@ import org.springframework.ai.chat.client.advisor.api.ToolAdvisor;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.core.Ordered;
 import org.springframework.core.PriorityOrdered;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import reactor.core.publisher.Flux;
 
 import java.lang.ref.ReferenceQueue;
@@ -73,7 +72,8 @@ final class ToolAuthorizationChainAdvisor implements CallAdvisor, StreamAdvisor,
         // A separately registered ToolAdvisor may bypass the authorization-aware manager,
         // including when tools are added later in the chain.
         if (toolAdvisors.isEmpty() || !isRegistered(toolAdvisors.get(0))) {
-            throw new AuthorizationDeniedException(
+            throw new ToolAuthorizationDeniedException(
+                    ToolAuthorizationDenialCode.UNMANAGED_TOOL_ADVISOR,
                     "Tool authorization requires this client's managed tool advisor; "
                             + "do not disable automatic registration or register a separate ToolAdvisor");
         }

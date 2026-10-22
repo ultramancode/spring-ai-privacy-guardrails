@@ -160,7 +160,7 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
             return InspectionResult.completed(completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (InspectionException ex) {
             return InspectionResult.failed(
-                    ex.failureCode(), completedSegmentIds, List.copyOf(requestFindings.values()));
+                    ex.code(), completedSegmentIds, List.copyOf(requestFindings.values()));
         } catch (RuntimeException ex) {
             return InspectionResult.failed(
                     InspectionFailureCode.INVALID_RESULT, completedSegmentIds, List.copyOf(requestFindings.values()));
@@ -254,7 +254,7 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
         InspectionFailureCode code = InspectionFailureCode.INVALID_RESULT;
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof InspectionException inspectionFailure) {
-                return new InspectionException(inspectionFailure.failureCode());
+                return new InspectionException(inspectionFailure.code());
             }
             if (cause instanceof InterruptedIOException) {
                 return new InspectionException(InspectionFailureCode.TIMEOUT);

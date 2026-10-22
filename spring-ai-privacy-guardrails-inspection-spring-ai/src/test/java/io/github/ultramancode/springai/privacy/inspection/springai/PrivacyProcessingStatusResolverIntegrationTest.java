@@ -140,7 +140,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
         try {
             assertThatThrownBy(() -> invoke(client, streaming))
                     .isInstanceOfSatisfying(InspectionException.class, failure -> {
-                        assertThat(failure.failureCode()).isEqualTo(expectedFailureCode);
+                        assertThat(failure.code()).isEqualTo(expectedFailureCode);
                         assertThat(failure).hasMessage("Content inspection failed: " + expectedFailureCode).hasNoCause();
                         assertThat(failure.getSuppressed())
                                 .noneMatch(ex -> ex.getMessage().contains("synthetic-private-text"));
@@ -180,7 +180,7 @@ class PrivacyProcessingStatusResolverIntegrationTest {
                 PrivacyProcessingStatusResolver.unknown(), observer).configure(ChatClient.builder(model)).build();
         assertThatThrownBy(() -> invoke(client, streaming))
                 .isInstanceOfSatisfying(InspectionException.class, failure -> {
-                    assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
+                    assertThat(failure.code()).isEqualTo(InspectionFailureCode.INVALID_RESULT);
                     assertThat(failure).hasNoCause();
                     assertThat(observedInspectionFailures).containsExactly(failure);
 

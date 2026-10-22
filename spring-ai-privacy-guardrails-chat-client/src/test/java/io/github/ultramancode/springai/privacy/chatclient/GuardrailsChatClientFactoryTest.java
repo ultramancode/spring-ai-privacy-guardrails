@@ -21,6 +21,8 @@ import io.github.ultramancode.springai.privacy.inspection.springai.InspectionExe
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationDenialCode;
+import io.github.ultramancode.springai.privacy.security.ToolAuthorizationDeniedException;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementBoundary;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementEvent;
@@ -264,7 +266,11 @@ class GuardrailsChatClientFactoryTest {
             .defaultTools(tool("lookup", false, secondToolInput)).build();
 
         assertThatThrownBy(() -> invoke(secondChatClient.prompt().user("Alice"), streaming))
-            .isInstanceOf(AuthorizationDeniedException.class).hasMessageContaining("managed tool advisor");
+            .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                denial -> {
+                    assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.UNMANAGED_TOOL_ADVISOR);
+                    assertThat(denial.phase()).isEmpty();
+                });
         assertThat(secondToolInput.get()).isNull();
         assertThat(chatModel.requests).hasSize(2);
     }
@@ -535,7 +541,7 @@ class GuardrailsChatClientFactoryTest {
 
         StepVerifier.create(chatClient.prompt().user("Alice").stream().content())
             .expectErrorSatisfies(error -> assertThat(error).isInstanceOfSatisfying(InspectionException.class,
-                failure -> assertThat(failure.failureCode()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED)))
+                failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED)))
             .verify(Duration.ofSeconds(5));
         assertThat(failureContext.get()).isEqualTo(
             new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, true));

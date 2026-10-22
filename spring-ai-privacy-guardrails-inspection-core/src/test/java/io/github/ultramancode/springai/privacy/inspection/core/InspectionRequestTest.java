@@ -57,7 +57,7 @@ class InspectionRequestTest {
             } else {
                 assertThatThrownBy(request::checkActive)
                         .isInstanceOfSatisfying(InspectionException.class,
-                                ex -> assertThat(ex.failureCode()).isEqualTo(expectedFailureCode));
+                                ex -> assertThat(ex.code()).isEqualTo(expectedFailureCode));
             }
             assertThat(Thread.currentThread().isInterrupted()).isEqualTo(interrupted);
         } finally {

@@ -17,7 +17,6 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.security.authorization.AuthorizationDecision;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
@@ -77,8 +76,11 @@ class SpringSecurityToolMutationIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find Alice").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("A tool callback was added after authorization");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.CALLBACK_CHANGED);
+                            assertThat(denial.phase()).contains(ToolAuthorizationPhase.DEFINITION);
+                        });
         assertThat(businessToolCalls).hasValue(0);
         assertThat(boundary.activeSessionCount()).isZero();
         assertThat(service.activeSessionCount()).isZero();
@@ -172,8 +174,11 @@ class SpringSecurityToolMutationIntegrationTest {
         useAuthentication(authentication("alice"));
 
         assertThatThrownBy(() -> chatClient.prompt().user("Find customer").call().content())
-                .isInstanceOf(AuthorizationDeniedException.class)
-                .hasMessage("A tool callback was replaced after authorization");
+                .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                        denial -> {
+                            assertThat(denial.code()).isEqualTo(ToolAuthorizationDenialCode.CALLBACK_CHANGED);
+                            assertThat(denial.phase()).contains(ToolAuthorizationPhase.DEFINITION);
+                        });
         assertThat(boundary.activeSessionCount()).isZero();
     }
 

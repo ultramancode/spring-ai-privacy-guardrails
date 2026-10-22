@@ -1,7 +1,6 @@
 package io.github.ultramancode.springai.privacy.security;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.Authentication;
 
 import java.util.List;
@@ -20,15 +19,23 @@ class ToolAuthorizationSessionTest {
 
         try (ToolAuthorizationSession aliceSession = registry.openSession(alice, List.of());
                 ToolAuthorizationSession bobSession = registry.openSession(bob, List.of())) {
-            assertThat(registry.requireActiveSessionState(aliceSession.handle()).authentication())
+            assertThat(registry.requireActiveSessionState(
+                    aliceSession.handle(), ToolAuthorizationPhase.EXECUTION).authentication())
                     .isSameAs(alice);
 
             aliceSession.close();
             aliceSession.close();
 
-            assertThatThrownBy(() -> registry.requireActiveSessionState(aliceSession.handle()))
-                    .isInstanceOf(AuthorizationDeniedException.class);
-            assertThat(registry.requireActiveSessionState(bobSession.handle()).authentication())
+            assertThatThrownBy(() -> registry.requireActiveSessionState(
+                    aliceSession.handle(), ToolAuthorizationPhase.EXECUTION))
+                    .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                            denial -> {
+                                assertThat(denial.code())
+                                        .isEqualTo(ToolAuthorizationDenialCode.INVALID_AUTHORIZATION_SESSION);
+                                assertThat(denial.phase()).contains(ToolAuthorizationPhase.EXECUTION);
+                            });
+            assertThat(registry.requireActiveSessionState(
+                    bobSession.handle(), ToolAuthorizationPhase.EXECUTION).authentication())
                     .isSameAs(bob);
         }
 
@@ -43,9 +50,16 @@ class ToolAuthorizationSessionTest {
         try (ToolAuthorizationSession session = registry.openSession(alice, List.of())) {
             ToolAuthorizationSessionHandle unregisteredHandle = new ToolAuthorizationSessionHandle();
 
-            assertThatThrownBy(() -> registry.requireActiveSessionState(unregisteredHandle))
-                    .isInstanceOf(AuthorizationDeniedException.class);
-            assertThat(registry.requireActiveSessionState(session.handle()).authentication())
+            assertThatThrownBy(() -> registry.requireActiveSessionState(
+                    unregisteredHandle, ToolAuthorizationPhase.EXECUTION))
+                    .isInstanceOfSatisfying(ToolAuthorizationDeniedException.class,
+                            denial -> {
+                                assertThat(denial.code())
+                                        .isEqualTo(ToolAuthorizationDenialCode.INVALID_AUTHORIZATION_SESSION);
+                                assertThat(denial.phase()).contains(ToolAuthorizationPhase.EXECUTION);
+                            });
+            assertThat(registry.requireActiveSessionState(
+                    session.handle(), ToolAuthorizationPhase.EXECUTION).authentication())
                     .isSameAs(alice);
         }
     }

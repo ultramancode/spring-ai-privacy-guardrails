@@ -332,7 +332,7 @@ class InspectionOutputAdvisorTest {
 
         StepVerifier.create(outputStream)
                 .expectErrorMatches(error -> error instanceof InspectionException inspectionException
-                        && inspectionException.failureCode() == InspectionFailureCode.UNSUPPORTED_CONTENT)
+                        && inspectionException.code() == InspectionFailureCode.UNSUPPORTED_CONTENT)
                 .verify(TEST_TIMEOUT);
     }
 
@@ -397,7 +397,7 @@ class InspectionOutputAdvisorTest {
                             model(responseExceedingLimits, Flux.just(responseExceedingLimits)), inspectionOutputAdvisor)
                     .prompt().user("hello").stream().content())
                     .expectErrorMatches(error -> error instanceof InspectionException inspectionException
-                        && inspectionException.failureCode() == InspectionFailureCode.LIMIT_EXCEEDED)
+                        && inspectionException.code() == InspectionFailureCode.LIMIT_EXCEEDED)
                     .verify(TEST_TIMEOUT);
             assertThat(failureNotificationCount).hasValue(1);
         }
@@ -408,7 +408,7 @@ class InspectionOutputAdvisorTest {
         StepVerifier.create(createInspectionClient(model(response(""), Flux.just(response(""), response(""), response(""))), inspectionOutputAdvisor)
                         .prompt().user("hello").stream().chatResponse())
                 .expectErrorMatches(error -> error instanceof InspectionException inspectionException
-                        && inspectionException.failureCode() == InspectionFailureCode.LIMIT_EXCEEDED)
+                        && inspectionException.code() == InspectionFailureCode.LIMIT_EXCEEDED)
                 .verify(TEST_TIMEOUT);
     }
 
@@ -428,7 +428,7 @@ class InspectionOutputAdvisorTest {
 
         StepVerifier.create(outputUntilTimeout)
                 .expectErrorMatches(error -> error instanceof InspectionException inspectionException
-                        && inspectionException.failureCode() == InspectionFailureCode.TIMEOUT)
+                        && inspectionException.code() == InspectionFailureCode.TIMEOUT)
                 .verify(TEST_TIMEOUT);
         assertThat(sourceCancellationCount).hasValue(1);
 
@@ -474,7 +474,7 @@ class InspectionOutputAdvisorTest {
                 .build();
         assertThatThrownBy(() -> invoke(multipleBodyClient, streaming))
                 .isInstanceOfSatisfying(InspectionException.class,
-                        inspectionException -> assertThat(inspectionException.failureCode())
+                        inspectionException -> assertThat(inspectionException.code())
                                 .isEqualTo(InspectionFailureCode.LIMIT_EXCEEDED));
     }
 
@@ -744,7 +744,7 @@ class InspectionOutputAdvisorTest {
         if (maxFrames == 3) {
             StepVerifier.create(content)
                     .expectErrorMatches(error -> error instanceof InspectionException failure
-                            && failure.failureCode() == InspectionFailureCode.LIMIT_EXCEEDED)
+                            && failure.code() == InspectionFailureCode.LIMIT_EXCEEDED)
                     .verify(TEST_TIMEOUT);
         } else {
             StepVerifier.create(content)
@@ -767,7 +767,7 @@ class InspectionOutputAdvisorTest {
                 .defaultAdvisors(inspectionOutputAdvisor).defaultTools(privacyProtectedToolCallback).build();
         StepVerifier.create(client.prompt().user("hello").stream().content())
                 .expectErrorMatches(error -> error instanceof InspectionException failure
-                        && failure.failureCode() == InspectionFailureCode.LIMIT_EXCEEDED)
+                        && failure.code() == InspectionFailureCode.LIMIT_EXCEEDED)
                 .verify(TEST_TIMEOUT);
         assertThat(toolCallCount).hasValue(2);
         assertThat(privacyService.activeSessionCount()).isZero();

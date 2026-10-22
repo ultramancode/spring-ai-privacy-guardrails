@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 864e95fa0db11d98beab7b088238914c72491610d9dbbef7fa42032a46937804 -->
+<!-- i18n-source-sha256: a30314e6accf19fa4358ddd57d6eff58ad8384ad9dc5289583581af2676e31b8 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -49,6 +49,8 @@ ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory 
 않고 `InspectionBlockedException`을 던집니다. 검사는 위와 같이 구성한 클라이언트에만
 적용됩니다. 스타터는 `ContentInspector` 빈이 하나 이상 있으면 기본 서비스를 생성합니다.
 직접 구성한 검사기와 정책을 사용하는 `InspectionService` 빈을 제공할 수도 있습니다.
+클라이언트 스타터는 단일 서비스 빈 또는 `@Primary` 서비스를 입력과 출력에 연결합니다.
+실행할 검사는 클라이언트 정책에서 선택합니다.
 검사기나 사용자 정의 서비스가 없으면 클라이언트 정책에서 선택할 검사 서비스가 없습니다.
 
 문자열 규칙은 대소문자를 구분합니다. 정규식이 필요하면 RE2/J 패턴을 사용하는
@@ -61,6 +63,36 @@ ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory 
 `toolAuthorization(true)`를 추가로 선택합니다.
 개인정보 처리, 도구 정의 권한 검사, 콘텐츠 검사 순으로 실행합니다.
 클라이언트별 Java 정책은 [설정](configuration.md)을 참고하세요.
+
+### 입력과 출력에 서로 다른 서비스 지정
+
+모델 요청과 최종 응답에 서로 다른 검사기, 검사 정책 또는 실패 정책이 필요하면
+서비스를 각각 지정합니다.
+
+```java
+GuardrailsChatClientFactory factory = GuardrailsChatClientFactory.builder()
+    .inputInspectionService(inputService)
+    .outputInspectionService(outputService)
+    .build();
+
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+    .inspection(GuardrailsPolicy.Inspection.builder()
+        .finalOutputInspectionEnabled(true)
+        .build())
+    .build();
+
+ChatClient client = factory.builder(chatModel, policy).build();
+```
+
+팩토리에 사용할 서비스를 지정하고, 클라이언트 정책에서 검사를 선택해야 실행됩니다.
+`inspection()`은 기본적으로 모델에 전달할 요청을 검사합니다.
+위 예제는 `finalOutputInspectionEnabled(true)`로 최종 응답도 검사하도록 설정합니다.
+최종 응답만 검사하려면 `modelRequestInspectionEnabled(false)`로 모델 요청 검사를 끄세요.
+
+검사를 켠 방향에는 해당 서비스가 필요합니다. 입력과 출력에 같은 서비스를 사용하려면
+`inputInspectionService(...)`와 `outputInspectionService(...)`에 같은 인스턴스를 전달하세요.
+
+스타터의 설정을 재사용하는 방법은 [Spring Boot 설정](configuration.md#spring-boot-기본-정책)을 참고하세요.
 
 ### 선택한 검사기의 개인정보 토큰 간결화
 
@@ -76,10 +108,10 @@ spring.ai.inspection.pii-token-simplification-inspectors=primary-guard
 선택한 검사기에 전달하는 복사본만 간결화합니다.
 현재 세션에서 발급하지 않은 토큰을 포함한 나머지 텍스트는 유지합니다.
 
-기본값은 빈 집합이며, 입력 검사와 활성화된 출력 검사에 적용됩니다.
-출력 토큰을 간결화하려면 같은 클라이언트에 개인정보 출력 보호도 구성해야 합니다.
+기본값은 빈 집합입니다. 직접 만든 서비스에는 `withPiiTokenSimplification(...)`으로
+검사기를 선택합니다. 입력 간결화에는 클라이언트 정책의 개인정보 보호 설정이 필요하며,
+출력 간결화에는 개인정보 출력 보호도 필요합니다.
 등록되지 않은 검사기 ID를 지정하면 설정이 실패합니다.
-필요한 개인정보 보호 연동 없이 검사하면 `CONFIGURATION`으로 실패합니다.
 
 `InspectionService`를 직접 호출할 때는 검사기를 선택하고,
 활성 세션의 토큰을 간결화하는 함수를 전달합니다.
@@ -133,18 +165,8 @@ ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
 응답을 모으는 도중 실패하거나 취소되면 `FAIL_OPEN`이어도 수집한 내용을 전달하지 않습니다.
 수집 한도는 [아래 설정 표](#검사-범위와-한도)를 참고하세요.
 
-Spring Boot 스타터는 입력과 출력에 같은 검사기와 정책을 적용합니다.
-출력에 다른 규칙을 적용하려면 별도의 `InspectionService`를 사용하는 Advisor를 지정합니다.
-
-```java
-GuardrailsPolicy inputPolicy = GuardrailsPolicy.builder().inspection().build();
-ChatClient chatClient = guardrails.builder(chatModel, inputPolicy)
-    .defaultAdvisors(new InspectionOutputAdvisor(outputService))
-    .build();
-```
-
-정책에서는 출력 검사를 끄고 별도 Advisor에 맡깁니다. 같은 서비스로 출력만 검사하려면
-[클라이언트별 정책](configuration.md#클라이언트별-정책)을 사용하세요.
+출력에 다른 규칙을 적용하려면 [입력과 출력 서비스를 따로 지정](#입력과-출력에-서로-다른-서비스-지정)하세요.
+출력만 검사하려면 [클라이언트별 정책](configuration.md#클라이언트별-정책)을 사용하세요.
 
 ## HTTP guard 모델과 개인정보 처리
 
@@ -377,10 +399,11 @@ Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 
 ## 결과, 정책, 실패
 
-Spring Boot 스타터를 사용하면 Spring 빈 순서(`@Order`)대로 검사기를 실행합니다.
+스타터의 기본 서비스는 Spring 빈 순서(`@Order`)대로 검사기를 실행합니다.
 `InspectionService`를 직접 생성하면 전달한 목록의 순서를 따릅니다.
 기본 정책은 검사기에서 탐지 결과가 하나라도 나오면 요청을 차단하고 이후 검사기를
-실행하지 않습니다. 허용 여부를 판단하는 방식을 바꾸려면 `InspectionPolicy` 빈을 등록합니다.
+실행하지 않습니다. 이 판정을 바꾸려면 스타터의 기본 서비스에는 `InspectionPolicy` 빈을
+등록하고, 직접 만든 서비스에는 생성자로 정책을 전달합니다.
 탐지 임계값은 각 검사기에 설정합니다. 서로 다른 모델의 점수를 직접 비교할 수는 없습니다.
 
 서비스는 검사기를 실행하기 전에 입력이 개인정보 처리 조건을 충족하는지 확인합니다.
@@ -515,7 +538,8 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 입력 검사는 모델이 새로 생성한 도구 호출 인자를 실행 전에 검사하지 않습니다.
 실행 권한은 [도구 권한](security.md)으로 제어하세요.
 
-다음 설정은 `spring.ai.inspection` 접두사를 사용합니다.
+다음 설정은 스타터의 기본 `InspectionService`에 적용되며
+`spring.ai.inspection` 접두사를 사용합니다.
 
 | 설정 | 기본값 | 적용 범위 |
 | --- | --- | --- |

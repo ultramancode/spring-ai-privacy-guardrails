@@ -12,8 +12,11 @@ import io.github.ultramancode.springai.privacy.inspection.core.ContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
+import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
+import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
@@ -36,9 +39,12 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authorization.AuthorizationDecision;
 import reactor.core.publisher.Flux;
 
@@ -245,6 +251,122 @@ class GuardrailsAutoConfigurationTest {
                 // One inspection for the model request and one for the final output.
                 assertThat(inspections).hasValue(2);
             });
+    }
+
+    @Test
+    void preservesStarterDefaultsWhenSelectingDirectionalServices() {
+        List<String> inputInspectionTexts = new ArrayList<>();
+        List<String> outputInspectionTexts = new ArrayList<>();
+        AtomicInteger inspectionEventCount = new AtomicInteger();
+        AtomicInteger privacyEventCount = new AtomicInteger();
+        AtomicInteger completedObservationCount = new AtomicInteger();
+        ObservationRegistry observationRegistry = ObservationRegistry.create();
+        observationRegistry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+            public boolean supportsContext(Observation.Context context) { return true; }
+            public void onStop(Observation.Context context) { completedObservationCount.incrementAndGet(); }
+        });
+        EchoModel chatModel = new EchoModel("Alice");
+        InspectionService inputInspectionService = recordingInspectionService(inputInspectionTexts);
+        InspectionService outputInspectionService = recordingInspectionService(outputInspectionTexts);
+        runner.withBean("inputInspectionService", InspectionService.class, () -> inputInspectionService)
+            .withBean("outputInspectionService", InspectionService.class, () -> outputInspectionService)
+            .withBean(PrivacyService.class, GuardrailsAutoConfigurationTest::privacyService)
+            .withBean(PrivacyEnforcementObserver.class, () -> event -> privacyEventCount.incrementAndGet())
+            .withBean(InspectionObserver.class, () -> (report, execution) -> inspectionEventCount.incrementAndGet())
+            .withBean(ObservationRegistry.class, () -> observationRegistry)
+            .withBean(ChatClientBuilderCustomizer.class, () -> chatClientBuilder -> chatClientBuilder.defaultSystem("Be concise"))
+            .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder()
+                .privacy(GuardrailsPolicy.Privacy.builder().outputProtection().redact().build())
+                .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build()).build())
+            .withUserConfiguration(DirectionalInspectionConfiguration.class)
+            .run(context -> {
+                assertThat(context).hasNotFailed().hasSingleBean(GuardrailsChatClientFactory.class);
+                ChatClient chatClient = context.getBean(GuardrailsChatClientFactory.class)
+                    .builder(chatModel).build();
+
+                assertThat(invoke(chatClient, false)).isEqualTo("[REDACTED_PERSON]");
+                String protectedUserText = chatModel.lastPrompt.getUserMessage().getText();
+                assertThat(protectedUserText).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+                assertThat(inputInspectionTexts).containsExactly("Be concise", protectedUserText);
+                assertThat(outputInspectionTexts).containsExactly("[REDACTED_PERSON]");
+                assertThat(inspectionEventCount).hasValue(2);
+                assertThat(privacyEventCount).hasValueGreaterThan(0);
+                assertThat(completedObservationCount).hasValueGreaterThan(0);
+            });
+    }
+
+    @Test
+    void factoryBuildersDoNotShareInspectionOverrides() {
+        List<String> primaryInspectionTexts = new ArrayList<>();
+        List<String> customInspectionTexts = new ArrayList<>();
+        InspectionService primaryInspectionService = recordingInspectionService(primaryInspectionTexts);
+        InspectionService customInspectionService = recordingInspectionService(customInspectionTexts);
+        runner.withBean("primaryInspectionService", InspectionService.class, () -> primaryInspectionService,
+                definition -> definition.setPrimary(true))
+            .withBean("otherInspectionService", InspectionService.class, () -> customInspectionService)
+            .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder().inspection().build())
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                GuardrailsChatClientFactory.Builder customizedFactoryBuilder =
+                    context.getBean(GuardrailsChatClientFactory.Builder.class);
+                GuardrailsChatClientFactory.Builder defaultFactoryBuilder =
+                    context.getBean(GuardrailsChatClientFactory.Builder.class);
+
+                // Both builders start with primaryInspectionService.
+                // Changing this builder must leave defaultFactoryBuilder unchanged.
+                customizedFactoryBuilder.inputInspectionService(customInspectionService);
+
+                ChatClient customizedChatClient = customizedFactoryBuilder.build()
+                    .builder(new EchoModel()).build();
+                ChatClient defaultChatClient = defaultFactoryBuilder.build()
+                    .builder(new EchoModel()).build();
+                invoke(customizedChatClient, false);
+                invoke(defaultChatClient, false);
+
+                assertThat(customInspectionTexts).containsExactly("Alice");
+                assertThat(primaryInspectionTexts).containsExactly("Alice");
+            });
+    }
+
+    @Test
+    void requiresExplicitSelectionWhenInspectionServicesAreAmbiguous() {
+        runner.withBean("firstInspectionService", InspectionService.class,
+                () -> recordingInspectionService(new ArrayList<>()))
+            .withBean("secondInspectionService", InspectionService.class,
+                () -> recordingInspectionService(new ArrayList<>()))
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                GuardrailsChatClientFactory guardrailsFactory = context.getBean(GuardrailsChatClientFactory.class);
+                GuardrailsPolicy inputInspectionPolicy = GuardrailsPolicy.builder().inspection().build();
+                assertThatThrownBy(() -> guardrailsFactory.builder(new EchoModel(), inputInspectionPolicy))
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("no input InspectionService");
+            });
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class DirectionalInspectionConfiguration {
+        @Bean
+        GuardrailsChatClientFactory guardrailsChatClientFactory(
+            GuardrailsChatClientFactory.Builder guardrailsFactoryBuilder,
+            @Qualifier("inputInspectionService") InspectionService inputInspectionService,
+            @Qualifier("outputInspectionService") InspectionService outputInspectionService) {
+            return guardrailsFactoryBuilder
+                .inputInspectionService(inputInspectionService)
+                .outputInspectionService(outputInspectionService)
+                .build();
+        }
+    }
+
+    private static InspectionService recordingInspectionService(List<String> inspectedTexts) {
+        return new InspectionService(List.of(new ContentInspector() {
+            public String inspectorId() { return "recorder"; }
+            public boolean requiresPrivacyProcessedContent() { return false; }
+            public InspectionResult inspect(InspectionRequest inspectionRequest) {
+                inspectionRequest.segments().stream().map(ContentSegment::text).forEach(inspectedTexts::add);
+                return InspectionResult.completed(inspectionRequest.segments().stream().map(ContentSegment::id)
+                    .collect(Collectors.toSet()), List.of());
+            }
+        }));
     }
 
     @Test

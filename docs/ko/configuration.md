@@ -8,7 +8,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 7f4de0253fc33de2cee65bde4dc5630a088a4b3b1b69d8c19bca86b1b5810f44 -->
+<!-- i18n-source-sha256: 3c65d95f6edc4230f8d200e85fc672cb9fc13b85793e128b00c860f21c429b67 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
@@ -144,6 +144,16 @@ ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrail
 Factory는 `ChatClientCustomizer` 빈을 먼저 적용한 뒤 `ChatClientBuilderCustomizer` 빈을
 적용합니다. 각 타입 안에서는 Spring의 빈 정렬 순서를 따릅니다.
 
+스타터는 기본 `GuardrailsChatClientFactory` 빈을 자동으로 등록합니다.
+보통은 위 예제처럼 이 팩토리를 주입받아 사용하면 됩니다.
+
+직접 팩토리를 만들 때는 `GuardrailsChatClientFactory.builder()`에 필요한 서비스를 지정합니다.
+입력·출력 서비스 지정 방법은 [입력·출력 검사 서비스 설정](inspection.md#입력과-출력에-서로-다른-서비스-지정)을 참고하세요.
+
+스타터의 서비스 연결과 기본 설정을 유지하고 싶다면 `GuardrailsChatClientFactory.Builder`를
+주입받아 사용할 수도 있습니다. 예를 들어 `ChatClient`를 만드는 `@Bean` 메서드에서
+이 빌더를 매개변수로 받아 필요한 설정만 변경할 수 있습니다.
+
 ## Advisor 구성
 
 도구 실행 순서를 바꾸거나 Tool Search를 사용하려면 도구 Advisor 빌더를 전달합니다.
@@ -168,10 +178,14 @@ Factory는 빌더를 복사하면서 Tool Search를 포함한 Advisor 타입을 
 ```java
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .privacyService(privacyService)
-        .inspectionService(inspectionService)
+        .inputInspectionService(inspectionService)
         .defaultPolicy(GuardrailsPolicy.builder().privacy().inspection().build())
         .build();
 ```
+
+최종 출력 검사에는 `outputInspectionService(...)`로 서비스를 지정합니다.
+실행할 검사 방향은 정책에서 선택합니다. 자세한 설정은
+[콘텐츠 검사](inspection.md#입력과-출력에-서로-다른-서비스-지정)를 참고하세요.
 
 권한 검사에는 Security 모듈을 추가하고 `SpringSecurityToolBoundary`와
 `ToolAuthorizationChatClientFactory`를 구성합니다. 통합 Factory 빌더에

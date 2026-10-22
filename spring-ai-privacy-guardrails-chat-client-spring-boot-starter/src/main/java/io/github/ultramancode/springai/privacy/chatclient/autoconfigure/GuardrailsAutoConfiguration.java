@@ -16,15 +16,17 @@ import org.springframework.ai.chat.client.advisor.observation.AdvisorObservation
 import org.springframework.ai.chat.client.observation.ChatClientObservationConvention;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 import org.springframework.core.env.Environment;
 
-/** Creates a client factory from application services and an optional default policy bean. */
+/** Configures factory builders and a default factory from application services and client defaults. */
 @AutoConfiguration(afterName = {
     "io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration",
     "io.github.ultramancode.springai.privacy.inspection.autoconfigure.InspectionAutoConfiguration",
@@ -35,8 +37,15 @@ import org.springframework.core.env.Environment;
 public class GuardrailsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
+    GuardrailsChatClientFactory guardrailsChatClientFactory(GuardrailsChatClientFactory.Builder builder) {
+        return builder.build();
+    }
+
+    @Bean
+    @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+    @ConditionalOnMissingBean
     @SuppressWarnings("removal")
-    GuardrailsChatClientFactory guardrailsChatClientFactory(
+    GuardrailsChatClientFactory.Builder guardrailsChatClientFactoryBuilder(
         ObjectProvider<PrivacyService> privacyServiceProvider,
         ObjectProvider<InspectionService> inspectionServiceProvider,
         ObjectProvider<GuardrailsPolicy> guardrailsPolicyProvider,
@@ -75,7 +84,12 @@ public class GuardrailsAutoConfiguration {
                 return chatClientBuilder;
             });
         privacyServiceProvider.ifAvailable(guardrailsFactoryBuilder::privacyService);
-        inspectionServiceProvider.ifAvailable(guardrailsFactoryBuilder::inspectionService);
+        InspectionService inspectionService = inspectionServiceProvider.getIfUnique();
+        if (inspectionService != null) {
+            guardrailsFactoryBuilder
+                .inputInspectionService(inspectionService)
+                .outputInspectionService(inspectionService);
+        }
         privacyObserverProvider.ifAvailable(guardrailsFactoryBuilder::privacyObserver);
         inspectionObserverProvider.ifAvailable(guardrailsFactoryBuilder::inspectionObserver);
         toolAuthorizationConfigurerProvider.ifAvailable(guardrailsFactoryBuilder::toolAuthorization);
@@ -83,7 +97,7 @@ public class GuardrailsAutoConfiguration {
         if (defaultPolicy != null) {
             guardrailsFactoryBuilder.defaultPolicy(defaultPolicy);
         }
-        return guardrailsFactoryBuilder.build();
+        return guardrailsFactoryBuilder;
     }
 
     @Configuration(proxyBeanMethods = false)

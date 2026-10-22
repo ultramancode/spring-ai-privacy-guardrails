@@ -36,7 +36,8 @@ public final class GuardrailsChatClientFactory {
     private final PrivacyEnforcementObserver privacyObserver;
 
     // Inspection
-    private final InspectionService inspectionService;
+    private final InspectionService inputInspectionService;
+    private final InspectionService outputInspectionService;
     private final InspectionObserver inspectionObserver;
 
     // Tool authorization
@@ -55,7 +56,8 @@ public final class GuardrailsChatClientFactory {
         this.privacyService = factoryBuilder.privacyService;
         this.privacyObserver = factoryBuilder.privacyObserver;
 
-        this.inspectionService = factoryBuilder.inspectionService;
+        this.inputInspectionService = factoryBuilder.inputInspectionService;
+        this.outputInspectionService = factoryBuilder.outputInspectionService;
         this.inspectionObserver = factoryBuilder.inspectionObserver;
 
         this.toolAuthorizationConfigurer = factoryBuilder.toolAuthorizationConfigurer;
@@ -80,7 +82,8 @@ public final class GuardrailsChatClientFactory {
         private PrivacyEnforcementObserver privacyObserver = PrivacyEnforcementObserver.noop();
 
         // Inspection
-        private InspectionService inspectionService;
+        private InspectionService inputInspectionService;
+        private InspectionService outputInspectionService;
         private InspectionObserver inspectionObserver = InspectionObserver.noop();
 
         // Tool authorization
@@ -106,8 +109,21 @@ public final class GuardrailsChatClientFactory {
             return this;
         }
 
-        public Builder inspectionService(InspectionService inspectionService) {
-            this.inspectionService = Objects.requireNonNull(inspectionService, "inspectionService");
+        /**
+         * Sets the service for model requests, including requests after tool execution.
+         * Used when {@link GuardrailsPolicy.Inspection#modelRequestInspectionEnabled()} is true.
+         */
+        public Builder inputInspectionService(InspectionService inputInspectionService) {
+            this.inputInspectionService = Objects.requireNonNull(inputInspectionService, "inputInspectionService");
+            return this;
+        }
+
+        /**
+         * Sets the service for final output returned to the application.
+         * Used when {@link GuardrailsPolicy.Inspection#finalOutputInspectionEnabled()} is true.
+         */
+        public Builder outputInspectionService(InspectionService outputInspectionService) {
+            this.outputInspectionService = Objects.requireNonNull(outputInspectionService, "outputInspectionService");
             return this;
         }
 
@@ -215,10 +231,10 @@ public final class GuardrailsChatClientFactory {
         if (guardrailsPolicy.inspection() != null) {
             GuardrailsPolicy.Inspection inspectionPolicy = guardrailsPolicy.inspection();
             if (inspectionPolicy.modelRequestInspectionEnabled()) {
-                modelRequestBoundaryConfigurers.add(createInspectionConfigurer(inspectionPolicy));
+                modelRequestBoundaryConfigurers.add(createInputInspectionConfigurer(inspectionPolicy));
             }
             if (inspectionPolicy.finalOutputInspectionEnabled()) {
-                inspectionOutputAdvisor = new InspectionOutputAdvisor(inspectionService, inspectionPolicy.limits(),
+                inspectionOutputAdvisor = new InspectionOutputAdvisor(outputInspectionService, inspectionPolicy.limits(),
                     inspectionObserver, inspectionPolicy.maxOutputFrames(), inspectionPolicy.outputStreamTimeout());
             }
         }
@@ -253,14 +269,14 @@ public final class GuardrailsChatClientFactory {
         return privacyConfigurerBuilder.build().forToolAdvisorOrder(toolAdvisorOrder);
     }
 
-    private ModelRequestBoundaryConfigurer createInspectionConfigurer(GuardrailsPolicy.Inspection inspectionPolicy) {
+    private ModelRequestBoundaryConfigurer createInputInspectionConfigurer(GuardrailsPolicy.Inspection inspectionPolicy) {
         PrivacyProcessingStatusResolver privacyProcessingStatusResolver = chatClientRequest -> {
             if (PrivacyChatClientConfigurer.hasPrivacyProcessedMessages(chatClientRequest)) {
                 return ContentSegment.PrivacyProcessingStatus.PROCESSED;
             }
             return ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         };
-        return new InspectionChatClientConfigurer(inspectionService,
+        return new InspectionChatClientConfigurer(inputInspectionService,
             inspectionPolicy.limits(), privacyProcessingStatusResolver, inspectionObserver);
     }
 
@@ -275,8 +291,16 @@ public final class GuardrailsChatClientFactory {
         if (guardrailsPolicy.privacy() != null && privacyService == null) {
             throw new IllegalStateException("Privacy is selected but no PrivacyService is configured");
         }
-        if (guardrailsPolicy.inspection() != null && inspectionService == null) {
-            throw new IllegalStateException("Inspection is selected but no InspectionService is configured");
+        GuardrailsPolicy.Inspection inspectionPolicy = guardrailsPolicy.inspection();
+        if (inspectionPolicy != null) {
+            if (inspectionPolicy.modelRequestInspectionEnabled() && inputInspectionService == null) {
+                throw new IllegalStateException(
+                    "Input inspection is selected but no input InspectionService is configured");
+            }
+            if (inspectionPolicy.finalOutputInspectionEnabled() && outputInspectionService == null) {
+                throw new IllegalStateException(
+                    "Output inspection is selected but no output InspectionService is configured");
+            }
         }
         if (guardrailsPolicy.toolAuthorization() && toolAuthorizationConfigurer == null) {
             throw new IllegalStateException(
@@ -287,14 +311,21 @@ public final class GuardrailsChatClientFactory {
 
     private void validatePiiTokenSimplificationRequirements(GuardrailsPolicy guardrailsPolicy) {
         GuardrailsPolicy.Inspection inspectionPolicy = guardrailsPolicy.inspection();
-        if (inspectionPolicy == null || !inspectionService.requiresPiiTokenSimplifier()) {
+        if (inspectionPolicy == null) {
+            return;
+        }
+        boolean inputRequiresSimplification = inspectionPolicy.modelRequestInspectionEnabled()
+            && inputInspectionService.requiresPiiTokenSimplifier();
+        boolean outputRequiresSimplification = inspectionPolicy.finalOutputInspectionEnabled()
+            && outputInspectionService.requiresPiiTokenSimplifier();
+        if (!inputRequiresSimplification && !outputRequiresSimplification) {
             return;
         }
         GuardrailsPolicy.Privacy privacyPolicy = guardrailsPolicy.privacy();
         if (privacyPolicy == null) {
             throw new IllegalStateException("PII token simplification requires privacy in the client policy");
         }
-        if (inspectionPolicy.finalOutputInspectionEnabled() && privacyPolicy.outputProtection() == null) {
+        if (outputRequiresSimplification && privacyPolicy.outputProtection() == null) {
             throw new IllegalStateException("Output PII token simplification requires privacy output protection");
         }
     }

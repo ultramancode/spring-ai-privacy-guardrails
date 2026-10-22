@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,7 +27,7 @@ import java.util.function.Predicate;
  *
  * <p>Creates a default {@link InspectionService} from {@link ContentInspector} beans
  * unless the application provides a service. The {@link InspectionChatClientConfigurer}
- * bean supports applying inspection to client builders.
+ * bean is created when a single service bean or a {@code @Primary} service is available.
  *
  * <p>The default service runs inspectors in Spring order. The default content policy
  * blocks findings. The default failure policy is
@@ -59,7 +60,7 @@ public class InspectionAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(InspectionService.class)
+    @ConditionalOnSingleCandidate(InspectionService.class)
     @ConditionalOnMissingBean
     InspectionChatClientConfigurer inspectionChatClientConfigurer(
         InspectionService inspectionService,

@@ -145,6 +145,17 @@ Use `ChatClientBuilderCustomizer` beans to set shared client defaults.
 The factory applies `ChatClientCustomizer` beans first, followed by
 `ChatClientBuilderCustomizer` beans. Within each type, Spring bean ordering is respected.
 
+The starter registers a default `GuardrailsChatClientFactory` bean automatically.
+For most applications, inject and use that factory as shown above.
+
+To create a factory yourself, call `GuardrailsChatClientFactory.builder()` and supply the
+services you need. See [separate inspection services](inspection.md#choose-separate-input-and-output-services)
+for input and output service settings.
+
+You can also inject `GuardrailsChatClientFactory.Builder` to keep the starter's service
+connections and defaults. For example, receive it as a parameter of the `@Bean` method
+that creates your `ChatClient`, then change only the settings you need.
+
 ## Advisor configuration
 
 Supply a tool advisor builder to customize its order or use Tool Search:
@@ -170,10 +181,14 @@ Depend on `spring-ai-privacy-guardrails-chat-client` and provide the services:
 ```java
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .privacyService(privacyService)
-        .inspectionService(inspectionService)
+        .inputInspectionService(inspectionService)
         .defaultPolicy(GuardrailsPolicy.builder().privacy().inspection().build())
         .build();
 ```
+
+Use `outputInspectionService(...)` to supply a service for final output inspection.
+Select the inspection directions in the policy. See [content inspection](inspection.md#choose-separate-input-and-output-services)
+for details.
 
 For authorization, add the Security module, construct its
 `SpringSecurityToolBoundary` and `ToolAuthorizationChatClientFactory`, and pass

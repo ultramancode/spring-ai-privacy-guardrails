@@ -11,7 +11,7 @@ hide:
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: a61a4fc2500cb15434f694adddb4324c98c4de28ea9a0d89c5d2257dafaf2179 -->
+<!-- i18n-source-sha256: 551b2de93188748ccf643081fb0de4720244ebc1ec6af84eb53ef90defbdbd5c -->
 
 ![Spring AI Privacy Guardrails 실행 경계](../images/hero.svg)
 
@@ -37,7 +37,7 @@ Privacy Boundary Inspector에서 Local Tool, RAG 및 MCP 시나리오의 모델�
 전달받은 값을 비교할 수 있습니다. Security에서는 사용자 역할에 따른 도구 접근 권한을
 비교합니다.
 
-![Local Tool, RAG, MCP, Security 시나리오를 보여주는 Privacy Boundary Inspector](../images/privacy-boundary-inspector-demo-ko.gif)
+![Local Tool, RAG, MCP, Security와 Inspection 차단 사례를 보여주는 Privacy Boundary Inspector](../images/privacy-boundary-inspector-demo-ko.gif)
 
 전체 Inspector 흐름은 [샘플 / 데모 가이드](sample.md)를 참고하세요.
 

@@ -33,7 +33,7 @@ The Privacy Boundary Inspector lets you compare the values received by the
 model and tools in Local Tool, RAG, and MCP scenarios. Security compares tool
 access for users with different roles.
 
-![Privacy Boundary Inspector comparing model and tool inputs in Local Tool, RAG, MCP, and Security scenarios](images/privacy-boundary-inspector-demo.gif)
+![Privacy Boundary Inspector showing Local Tool, RAG, MCP, Security, and blocked Inspection cases](images/privacy-boundary-inspector-demo.gif)
 
 See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 

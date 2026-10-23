@@ -1,6 +1,6 @@
 ---
 description: >-
-  Privacy Boundary Inspector의 Local Tool, RAG, MCP, Security 시나리오로 개인정보 보호와 역할별 도구 접근 권한을
+  Privacy Boundary Inspector의 Local Tool, RAG, MCP, Security, Inspection 시나리오로 개인정보 보호와 역할별 도구 접근 권한을
   확인하는 방법을 설명합니다.
 ---
 
@@ -9,7 +9,7 @@ description: >-
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: bfca745891ec530683f549b7356e61448e4fdcbc708aad7413ee2cc361bfc20b -->
+<!-- i18n-source-sha256: 9b30a90e1e85481cc35efb24ecd56059e6646417ae57e22b232871b44f726de3 -->
 
 샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
 보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수
@@ -26,7 +26,7 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 ```
 
 브라우저에서 `http://127.0.0.1:8080`을 엽니다. 샘플은 로컬 접속만 허용합니다.
-`Local Tool | RAG | MCP | Security` 선택기로 시나리오를 실행하고, `EN | 한국어`로 언어를 선택해
+`Local Tool | RAG | MCP | Security | Inspection` 선택기로 시나리오를 실행하고, `EN | 한국어`로 언어를 선택해
 시나리오를 다시 실행할 수 있습니다.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
@@ -74,7 +74,7 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 로컬 임베딩 모델로 문서를 검색하며, 외부 벡터 저장소, 임베딩 서비스
 또는 LLM은 사용하지 않습니다.
 
-![검색된 문서와 모델에 노출된 보호 컨텍스트를 비교하는 RAG 개인정보 경계 Inspector](../images/privacy-boundary-inspector-rag-ko.png)
+![검색된 문서와 보호된 모델 입력을 비교하는 RAG 개인정보 경계 Inspector](../images/privacy-boundary-inspector-rag-ko.png)
 
 ### MCP
 
@@ -103,37 +103,49 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 
 ![일반 직원과 고객지원 담당자의 도구 접근 권한을 비교하는 Security Inspector](../images/privacy-boundary-inspector-security-ko.png)
 
+### Inspection
+
+**Inspection**을 선택해 **차단 사례**와 **허용 사례**를 비교하세요. 각 선택은 서로
+독립적인 두 요청을 실행합니다. 차단 사례에서는 입력 검사가 모델 호출 전에 프롬프트
+인젝션을 막고(`0`회 호출), 출력 검사가 모델 호출 후 모욕적인 응답 전달을 막습니다
+(`1`회 호출). 허용 사례는 각각 모델을 한 번 호출하고 응답을 전달합니다.
+사례를 변경하면 자동으로 실행됩니다. 현재 선택을 다시 실행하려면 **실행** 버튼을 누르세요.
+
+각 검사 전에 이메일을 토큰으로 치환합니다. 화면에는 백엔드의 실제 검사 보고서,
+검사 대상 텍스트와 모델 호출 횟수를 표시합니다.
+
+로컬 시연용 `ChatModel`과 리터럴 검사 규칙은 고정된 한국어·영어 예시를 사용합니다.
+외부 모델이나 API 키 없이 차단 동작을 시연하며, 일반적인 프롬프트 공격이나 모욕 표현을
+탐지하는 규칙은 아닙니다.
+
+![입력 검사에서 프롬프트 인젝션을 차단하고 출력 검사에서 모욕적 응답 전달을 막는 사례](../images/privacy-boundary-inspector-inspection-ko.png)
+
 ## API로 결과 확인
 
 Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API를 사용하세요.
 
 | 엔드포인트 | 반환 내용 |
 | --- | --- |
-| `GET /demo/scenario` | 선택한 언어의 예제 입력 |
+| `GET /demo/example-input` | 선택한 언어의 예제 입력 |
 | `GET /demo/protect` | 고정 예제의 개인정보 탐지 위치와 토큰화 결과. 모델을 호출하지 않습니다. |
 | `POST /demo/protect` | JSON 본문의 `text`에 입력한 텍스트의 개인정보 탐지 위치와 토큰화 결과. `text`는 비어 있거나 공백으로만 이루어져서는 안 됩니다. |
 | `GET /demo/tool-loop` | CRM 도구 호출 시 모델 입력, 도구 인자, 보호된 결과와 단계별 검증 결과(`boundaryEvidence`) |
-| `GET /demo/rag` | 검색된 문서 원문(`retrievedDocument`)과 모델에 전달된 전체 보호 프롬프트(`modelVisibleContext`) |
+| `GET /demo/rag` | 검색된 문서 원문(`retrievedDocument`)과 모델에 전달된 전체 보호 프롬프트(`modelInput`) |
 | `GET /demo/mcp-tool-loop` | 로컬 Streamable HTTP MCP 도구 호출 시 모델 입력, 도구 인자와 결과 |
 | `GET /demo/security-tool-boundary` | 두 역할의 도구 목록, 권한 판정, 실행 횟수와 허용된 호출의 개인정보 보호 검증 결과 |
+| `GET /demo/inspection?example=block` | 독립된 입력·출력 차단 사례의 실제 검사 보고서, 모델 호출 횟수와 차단된 응답. `example=allow`로 허용 사례 실행 |
 
 요청·응답 예제, 다른 분석기를 사용하는 설정과 실제 모델을 연결하는 검증 방법은
 [전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md)를
 참고하세요.
 
-## EN/KO 런타임 로케일
+## 언어 선택
 
 Inspector에서 언어를 바꾸면 화면 문구뿐 아니라 예제 입력과 결과도 선택한 언어로
 바뀝니다. API를 직접 호출할 때는 요청에 `Accept-Language: en` 또는
 `Accept-Language: ko` 헤더를 지정하세요.
 
-- Local Tool과 MCP는 언어별 고정 입력과 최종 결과 문구를 사용합니다.
-- RAG는 언어별 질의, 검색 문서 접두어, 프롬프트 템플릿을 사용합니다.
-- Security는 언어별 요청 요약, 예제 입력과 최종 응답을 사용합니다.
-- 엔드포인트 경로, 응답 필드 이름, 코드 식별자, 엔티티 유형은 바뀌지 않습니다.
-
-`POST /demo/protect`는 항상 전달된 `text`를 분석하며 로케일이 사용자 입력을 바꾸지
-않습니다.
+`POST /demo/protect`는 선택한 언어와 관계없이 전달된 `text`를 분석합니다.
 
 ## 해석과 검증
 

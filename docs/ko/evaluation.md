@@ -8,7 +8,7 @@ description: >-
 [English](../evaluation.md) | **한국어**
 
 <!-- i18n-source: docs/evaluation.md -->
-<!-- i18n-source-sha256: 2f262af76f5245ad82d8ecfa105a3d5507ceb801d7d330df3a12e3590e5a5dfe -->
+<!-- i18n-source-sha256: 93827f1578332de3fc7e82e60f859d09ee66eb9eef84650c31b3e1a51ed20d04 -->
 
 이 저장소에는 데모 분석기의 회귀 테스트, 개인정보 보호 경계 테스트와 JMH 벤치마크가
 포함되어 있습니다. 회귀 테스트는 탐지 결과를, 경계 테스트는 정책 적용을, JMH 벤치마크는
@@ -25,7 +25,7 @@ description: >-
 기본 데모 구성에서 회귀 테스트만 실행하려면 다음 명령을 사용합니다.
 
 ```bash
-./gradlew :spring-ai-privacy-guardrails-sample-demo:test --tests io.github.ultramancode.springai.privacy.sample.DemoRegexEvaluationTest
+./gradlew :spring-ai-privacy-guardrails-sample-demo:test --tests io.github.ultramancode.springai.privacy.sample.integration.DemoRegexEvaluationTest
 ```
 
 이 테스트는 데모 규칙의 변경을 확인하기 위한 것입니다. 이 결과는 일반적인 개인정보 탐지
@@ -57,7 +57,7 @@ description: >-
 | 허용된 도구 입력값 공개 | 범위가 지정된 도구는 명시적으로 허용된 엔티티 유형의 원문만 받습니다. | [`PrivacyToolCallbackWrapperTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
 | 거부된 도구 입력값 공개 | 허용되지 않은 입력값의 원문은 보호 상태를 유지합니다. | [`PrivacyToolCallbackWrapperTest`](../../spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
 | 도구 결과 → 모델 | 도구 결과의 탐지된 개인정보는 모델로 돌아가기 전에 불투명 토큰으로 바뀝니다. | [`PrivacySequentialToolIntegrationTest`](../../spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
-| MCP Streamable HTTP 도구 왕복 | 로컬 MCP 왕복에서 허용된 입력값만 복원하고, 거부된 값은 보호하며, 결과는 모델로 돌아가기 전에 다시 보호됩니다. | [`McpToolLoopIntegrationTest`](../../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/scenario/McpToolLoopIntegrationTest.java) |
+| MCP Streamable HTTP 도구 왕복 | 로컬 MCP 왕복에서 허용된 입력값만 복원하고, 거부된 값은 보호하며, 결과는 모델로 돌아가기 전에 다시 보호됩니다. | [`McpToolLoopIntegrationTest`](../../samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/mcp/infrastructure/McpToolLoopIntegrationTest.java) |
 | Spring Security 도구 공개·실행 권한 검사 | 허용된 도구만 모델에 제공하며, 한 응답에서 요청한 도구 전체의 권한을 확인한 뒤 실행을 시작합니다. 각 도구의 실행 직전에 권한을 다시 확인하고, 개인정보 보호도 함께 사용하면 권한 확인 후 원문을 복원합니다. | [`SpringSecurityToolBoundaryIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java), [`ToolAuthorizationStandaloneIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/ToolAuthorizationStandaloneIntegrationTest.java) |
 | Tool Search와 도구 변경 검사 | 허용된 도구만 검색 대상으로 등록하고, 검색으로 선택한 도구가 요청 시작 시 등록된 도구인지 확인합니다. 허용되지 않은 도구를 이름으로 요청하거나, 요청 도중 지원하지 않는 도구 추가·교체가 발생하면 실행을 거부합니다. | [`SpringSecurityToolSearchIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolSearchIntegrationTest.java), [`SpringSecurityToolMutationIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolMutationIntegrationTest.java) |
 | 호출 방식별 도구 권한 검사 | 요청 시작 시 확인한 사용자의 인증 정보로 도구 권한을 검사합니다. 인증 정보가 없으면 도구를 실행하지 않습니다. 세부 검증 항목은 [도구 권한 검사의 인증 정보 처리](#도구-권한-검사의-인증-정보-처리)를 참고하세요. | [`SpringSecurityContextPropagationIntegrationTest`](../../spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityContextPropagationIntegrationTest.java) |

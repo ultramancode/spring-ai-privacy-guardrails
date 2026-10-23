@@ -156,6 +156,7 @@ privacyBuild {
     module('spring-ai-privacy-guardrails-sample-demo') { module ->
         module.dependsOnProject(
                 'spring-ai-privacy-guardrails-chat-client-spring-boot-starter',
+                'spring-ai-privacy-guardrails-inspection-rules',
                 'spring-ai-privacy-guardrails-opennlp-spring-boot-starter',
                 'spring-ai-privacy-guardrails-presidio-spring-boot-starter',
                 'spring-ai-privacy-guardrails-spring-security-spring-boot-starter'

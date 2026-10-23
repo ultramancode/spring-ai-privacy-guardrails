@@ -1,7 +1,7 @@
 ---
 description: >-
   Explore PII protection and role-based tool access with the Privacy Boundary
-  Inspector's Local Tool, RAG, MCP, and Security scenarios.
+  Inspector's Local Tool, RAG, MCP, Security, and Inspection scenarios.
 ---
 
 # Sample / Demo Guide
@@ -24,7 +24,7 @@ From the repository root, with JDK 17 installed:
 ```
 
 Open `http://127.0.0.1:8080` in a browser. The sample accepts only local connections.
-Use the `Local Tool | RAG | MCP | Security` selector to run a scenario, and use
+Use the `Local Tool | RAG | MCP | Security | Inspection` selector to run a scenario, and use
 `EN | 한국어` to rerun it in the selected language.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
@@ -68,7 +68,7 @@ or `FAIL`.
 ### RAG
 
 Select **RAG** and compare the retrieved document with the prompt received by
-the model. The document contains `alice@example.com`; in the model's prompt,
+the model. The document contains `alice@example.com`. In the model's prompt,
 that email is replaced by an `EMAIL_ADDRESS` opaque token.
 
 The screen displays the original retrieved document alongside the complete
@@ -78,7 +78,7 @@ retrieved context. The stored document is left unchanged.
 The scenario retrieves documents using a local embedding model. It uses no
 external vector store, embedding service, or LLM.
 
-![RAG Privacy Boundary Inspector comparing the retrieved document with the model-visible protected context](images/privacy-boundary-inspector-rag.png)
+![RAG Privacy Boundary Inspector comparing the retrieved document with the protected model input](images/privacy-boundary-inspector-rag.png)
 
 ### MCP
 
@@ -106,10 +106,28 @@ Select **Security** to compare the same customer lookup request for two sample u
 
 The local model deliberately requests the lookup even when it is hidden, so the
 scenario checks execution blocking as well as tool-list filtering. The sample
-provides both users and their roles; no login or external authentication service
+provides both users and their roles. No login or external authentication service
 is needed. Tool access and permission to receive original PII are separate policies.
 
 ![Security Inspector comparing tool access for a general employee and customer support](images/privacy-boundary-inspector-security.png)
+
+### Inspection
+
+Select **Inspection** to compare **Blocked cases** and **Allowed cases**. Each
+selection runs two independent requests. In blocked cases, input inspection stops
+a prompt injection before the model is called (`0` calls), and output inspection
+withholds an insulting response after the model is called (`1` call). Allowed
+cases call the model once each and deliver a response. Changing the selected
+case runs it automatically. Use **Run** to repeat the current selection.
+
+Email addresses are tokenized before each inspection. The screen displays
+actual reports, inspected text, and model call counts from the backend.
+
+The local scripted `ChatModel` and literal inspection rules use fixed English
+and Korean examples. They demonstrate enforcement without an external model
+or API key. These rules do not provide general prompt attack or toxicity detection.
+
+![Input inspection blocking a prompt injection and output inspection withholding an insulting response](images/privacy-boundary-inspector-inspection.png)
 
 ## Inspect Results Through the API
 
@@ -117,37 +135,32 @@ Use these APIs to retrieve the results shown in the Inspector as JSON:
 
 | Endpoint | What it returns |
 | --- | --- |
-| `GET /demo/scenario` | Example input in the selected language. |
+| `GET /demo/example-input` | Example input in the selected language. |
 | `GET /demo/protect` | PII detection locations and tokenization results for the fixed example, without calling a model. |
 | `POST /demo/protect` | PII detection locations and tokenization results for the JSON body's `text` field. The text must not be empty or contain only whitespace. |
 | `GET /demo/tool-loop` | Model inputs, tool arguments, protected results, and per-stage checks (`boundaryEvidence`) from a CRM tool call. |
-| `GET /demo/rag` | The original retrieved document (`retrievedDocument`) and the complete protected prompt received by the model (`modelVisibleContext`). |
+| `GET /demo/rag` | The original retrieved document (`retrievedDocument`) and the complete protected prompt received by the model (`modelInput`). |
 | `GET /demo/mcp-tool-loop` | Model inputs, tool arguments, and results from a local Streamable HTTP MCP tool call. |
 | `GET /demo/security-tool-boundary` | Tool visibility, authorization decisions, execution counts for two roles, and privacy checks for the allowed call. |
+| `GET /demo/inspection?example=block` | Independent input/output block cases with actual inspection reports, model call counts, and withheld responses. Use `example=allow` for allowed cases. |
 
 See the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md)
 for request and response examples, configuration for other analyzers, and
 instructions for running optional checks with a live model.
 
-## EN/KO Runtime Locale
+## Language Selection
 
 Changing the Inspector's language changes the example input and results as
 well as the UI labels. For direct API calls, set the `Accept-Language: en` or
 `Accept-Language: ko` request header.
 
-- Local Tool and MCP use localized fixed input and final-result wrappers.
-- RAG uses localized queries, retrieved-document prefixes, and prompt templates.
-- Security uses a localized request summary, example input, and final response.
-- Endpoint paths, response field names, code identifiers, and entity types stay
-  unchanged.
-
-`POST /demo/protect` always analyzes its supplied `text`; the locale does not
-replace custom input.
+`POST /demo/protect` always analyzes the supplied `text`, regardless of the
+selected language.
 
 ## Interpretation and Verification
 
 The active session count is observed across the service after the call. Concurrent
-requests can make it nonzero; this value alone does not prove a session leak.
+requests can make it nonzero. This value alone does not prove a session leak.
 
 The default Regex rules and all example values are sample-oriented. Text not
 matched by an enabled analyzer may remain unchanged, and these fixed scenarios

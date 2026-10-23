@@ -87,15 +87,17 @@ Inspector**. Compare the values the model and tools actually receive:
   Streamable HTTP.
 - **Security** compares tool visibility and execution permissions for a general
   employee and customer support, with PII protection on the allowed call.
+- **Inspection** compares input and output checks that block prompt injections
+  and insulting responses with cases that pass inspection.
 
 <p align="center">
-  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing no fixed-fixture raw PII at the model and one scoped tool disclosure" width="960">
+  <img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Privacy Boundary Inspector showing no raw PII from the demo data at the model and one scoped tool disclosure" width="960">
 </p>
 
 Text not matched by the demo's detection rules may be returned unchanged by the
 local model, and the Inspector does not expose opaque token mappings. The
 [Sample Guide](samples/spring-ai-demo/README.md) covers the Local Tool, RAG, MCP,
-and Security demos plus optional Presidio, OpenNLP, and real-model integration.
+Security, and Inspection demos plus optional Presidio, OpenNLP, and real-model integration.
 
 The default repository checks do not call remote models. See the
 [Privacy Boundary Verification Matrix](docs/evaluation.md#privacy-boundary-verification-matrix)

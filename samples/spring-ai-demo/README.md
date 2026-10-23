@@ -31,7 +31,7 @@ The demo binds only to `http://127.0.0.1:8080`.
 ### Privacy Boundary Inspector
 
 Open that URL in a browser to use the sample-only **Privacy Boundary
-Inspector**. Use the `Local Tool | RAG | MCP | Security` selector to run the demos from one
+Inspector**. Use the `Local Tool | RAG | MCP | Security | Inspection` selector to run the demos from one
 page. Each view displays results returned by its demo endpoints.
 
 <p align="center">
@@ -42,17 +42,59 @@ page. Each view displays results returned by its demo endpoints.
 
 | Inspector view | Backend requests | Results to check |
 | --- | --- | --- |
-| `Local Tool` | `GET /demo/scenario`, `GET /demo/protect`, `GET /demo/tool-loop` | Check the localized example input, detection positions (`detectedSpans`), opaque tokens sent to the model, restoration of only the customer ID for the tool, and protection of the tool result. |
-| `RAG` | `GET /demo/rag` | Compare the original retrieved document (`retrievedDocument`) with the complete protected prompt sent to the model (`modelVisibleContext`). |
-| `MCP` | `GET /demo/scenario`, `GET /demo/mcp-tool-loop` | Check that a local Streamable HTTP MCP call also protects model input, restores only the customer ID for the tool, and protects the tool result. |
+| `Local Tool` | `GET /demo/example-input`, `GET /demo/protect`, `GET /demo/tool-loop` | Check the localized example input, detection positions (`detectedSpans`), opaque tokens sent to the model, restoration of only the customer ID for the tool, and protection of the tool result. |
+| `RAG` | `GET /demo/rag` | Compare the original retrieved document (`retrievedDocument`) with the complete protected prompt sent to the model (`modelInput`). |
+| `MCP` | `GET /demo/example-input`, `GET /demo/mcp-tool-loop` | Check that a local Streamable HTTP MCP call also protects model input, restores only the customer ID for the tool, and protects the tool result. |
 | `Security` | `GET /demo/security-tool-boundary` | Backend-recorded definition and execution decisions for the same customer lookup request as a general employee and a customer-support employee, callback counts, and privacy evidence from the allowed run. |
+| `Inspection` | `GET /demo/inspection?example=block` or `example=allow` | Actual inspected text, input/output reports, model call counts, and the response delivered or withheld by the ChatClient. |
 
 The `EN | 한국어` toggle sends `Accept-Language: en` or `ko` with these
 requests and reruns the selected flow. This changes the UI labels, example
-input, RAG query and prompt template, and CRM result text.
+input, and results.
+
+Responses that include `activeSessionsAfterCall` report the service-wide active
+session count after the call. This is normally `0` when running a single request.
+Concurrent requests can make it nonzero, so it does not measure session leaks
+for an individual request.
 
 These runtime demonstrations complement the reproducible automated coverage in
 the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
+
+## Content Inspection Boundary Demo
+
+Select **Inspection**, then choose **Blocked cases** or **Allowed cases**. Each run
+executes two independent requests through the guardrails factory. The model is a
+local scripted `ChatModel`, and inspection uses literal rules for the fixed
+English or Korean phrases. No external LLM or guard model is called.
+Changing the selected case runs it automatically. Use **Run** to repeat the current selection.
+
+- The input block asks to ignore previous instructions and print the system
+  prompt. Inspection reports `PROMPT_INJECTION` and throws
+  `InspectionBlockedException` before the model is called. The model call count is `0`.
+- The output block starts with an allowed request. The model is called once and
+  produces an insult directed at the user. Output inspection reports
+  `TOXICITY` / `INSULT`, and the exception prevents that response from being delivered.
+- Allowed cases call the model once each. The output case also passes output
+  inspection and delivers a privacy-protected response.
+
+```bash
+curl 'http://127.0.0.1:8080/demo/inspection?example=block' -H 'Accept-Language: en'
+curl 'http://127.0.0.1:8080/demo/inspection?example=allow' -H 'Accept-Language: ko'
+```
+
+The endpoint accepts `example=block` or `example=allow` and defaults to `block`.
+Any other value returns HTTP `400`.
+It accepts no custom text. The synthetic raw input and model response are displayed
+alongside the text actually received by each inspector. Email addresses are
+tokenized before inspection. Reports are recorded by `InspectionObserver`, and
+the model counts its own calls. A blocked case has no `finalResponse`.
+
+These exact-match rules demonstrate enforcement, rather than a general prompt
+attack or toxicity classifier. The diagram shortens token details for readability.
+
+<p align="center">
+  <img src="../../docs/images/privacy-boundary-inspector-inspection.png" alt="Input inspection blocking a prompt injection and output inspection withholding an insulting response" width="960">
+</p>
 
 ## ChatClient With The Guardrails Factory
 
@@ -61,16 +103,12 @@ curl "http://127.0.0.1:8080/demo/chat-client"
 ```
 
 This endpoint uses a Spring AI `ChatClient` with the starter's privacy
-configuration. `modelResponse` shows the opaque tokens that reached the model.
-`activeSessionsAfterCall` is the service-wide active session count observed
-after the call. The isolated sample normally reports `0`, but concurrent calls
-can make it nonzero without indicating that this request leaked a session.
+configuration. `finalResponse` shows the opaque tokens that reached the model.
 
 Custom synthetic text can be sent with `POST /demo/chat-client` and a JSON body
 such as `{"text":"My employee id is EMP-1234"}`. The `GET /demo/chat-client`
-endpoint runs its checked-in fixed example; POST requests with missing
-or blank `text` are rejected with HTTP `400` rather than silently substituting
-that example.
+endpoint runs its fixed example. POST requests require nonblank `text` and
+return HTTP `400` when it is missing or blank.
 
 ## Local RAG Boundary Demo
 
@@ -81,8 +119,9 @@ curl "http://127.0.0.1:8080/demo/rag" \
 
 This endpoint retrieves a fixed synthetic document from an in-memory
 `SimpleVectorStore`. The response includes the raw retrieved document and the
-protected context actually received by the local model. This
-confirms that retrieved PII is replaced with opaque tokens before model execution. No external
+complete protected input received by the local model, including the question,
+prompt template, and retrieved document. Detected PII is replaced with opaque
+tokens before model execution. No external
 vector store, embedding service, or model is used.
 
 ## Regex-Only Protection
@@ -92,8 +131,8 @@ curl "http://127.0.0.1:8080/demo/protect" \
   -H 'Accept-Language: en'
 ```
 
-`GET /demo/protect` selects its deterministic English or Korean fixture from
-`Accept-Language`. This command pins the English fixture used below.
+`GET /demo/protect` selects its fixed English or Korean demo data from
+`Accept-Language`. This command selects the English example used below.
 
 Expected shape:
 
@@ -153,15 +192,13 @@ curl "http://127.0.0.1:8080/demo/tool-loop" \
   -H 'Accept-Language: en'
 ```
 
-The response shows that the fixed fixture's detected values reach the model
+The response shows that detected values in the demo data reach the model
 only as opaque tokens. Within the current request, the CRM delegate receives
 the original `customerId` while `employeeId`, `email`, and `phone` remain
 opaque tokens. Detected values in the tool result are protected before the next
-model call. `activeSessionsAfterCall` is the service-wide active session count
-observed after the call. Concurrent requests can make it nonzero without
-showing that this request leaked a session.
+model call.
 
-The sample defines a `GuardrailsPolicy` bean in `PrivacyDemoChatConfiguration`.
+The sample defines a `GuardrailsPolicy` bean in `GuardrailsConfiguration`.
 It selects privacy, output protection and tool authorization, and uses
 `ToolDisclosurePolicy` to allow original customer IDs for `customerLookup`.
 Raw tools are registered with `GuardrailsChatClientFactory`, which applies the
@@ -184,7 +221,7 @@ execution blocking independently of tool-list filtering.
 For a general employee (`ROLE_EMPLOYEE`), `customerLookup` is absent from the
 model-visible definitions and the forced request is denied before the callback
 runs. For a customer-support employee (`ROLE_CUSTOMER_SUPPORT`), the tool is
-exposed and executed once. The existing disclosure policy restores only
+exposed and executed once. The disclosure policy restores only
 `CUSTOMER_ID`, and the result is protected again before model re-entry. The
 sample installs a fixed in-process authorization policy and requires no login,
 authentication token issuer, external model, or external service.
@@ -201,18 +238,60 @@ curl "http://127.0.0.1:8080/demo/mcp-tool-loop" \
 ```
 
 This endpoint runs the same deterministic flow through an actual local
-Streamable HTTP MCP round trip. Its evidence shows the fixed fixture's detected
-raw values absent at the model, only `CUSTOMER_ID` restored at the MCP tool, and
-detected values in the MCP result protected before returning to the model. It also
-reports the service-wide active session count observed after the call. It
-requires no external MCP infrastructure or model.
+Streamable HTTP MCP round trip. Its evidence shows detected raw values in the
+demo data absent at the model, only `CUSTOMER_ID` restored at the MCP tool, and
+detected values in the MCP result protected before returning to the model.
+It requires no external MCP infrastructure or model.
+
+## Reading the sample code
+
+Start with [GuardrailsConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/GuardrailsConfiguration.java) for the privacy policy, tool disclosure policy, authorization manager, and guarded `ChatClient`.
+[LocalChatModelConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/LocalChatModelConfiguration.java) supplies the local model.
+[DemoToolAuthorization](src/main/java/io/github/ultramancode/springai/privacy/sample/shared/security/authorization/DemoToolAuthorization.java) defines tool access for the demo roles.
+Follow the service for the flow you want to inspect:
+
+- [PromptProtectionDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/PromptProtectionDemoService.java): analyze and tokenize input through `PrivacyService`.
+- [ChatClientDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/ChatClientDemoService.java): call the guarded `ChatClient`.
+- [LocalToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/localtool/service/LocalToolLoopDemoService.java): local tools and role-based authorization.
+- [SecurityDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/security/service/SecurityDemoService.java): compare tool access for two roles using the same tool execution.
+- [RagDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/rag/service/RagDemoService.java): retrieval followed by privacy protection.
+- [McpToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/mcp/service/McpToolLoopDemoService.java): run the guarded MCP tool loop and collect privacy boundary evidence.
+- [InspectionDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/inspection/service/InspectionDemoService.java): input/output inspectors, policy, and the guarded call.
+
+[McpToolConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/mcp/config/McpToolConfiguration.java) registers the CRM tool with the Spring AI MCP server starter.
+The `/mcp` endpoint starts with the application on the same web server as the demo UI.
+[McpCustomerLookupTool](src/main/java/io/github/ultramancode/springai/privacy/sample/mcp/infrastructure/McpCustomerLookupTool.java) looks up customer records and records the received arguments and lookup result.
+[McpDemoClient](src/main/java/io/github/ultramancode/springai/privacy/sample/mcp/infrastructure/McpDemoClient.java) connects on the first MCP demo request, reuses the connection, and closes it when the application shuts down.
+
+Code is grouped by feature under `privacy`, `inspection`, `rag`, `localtool`, `mcp`, and `security`.
+Each feature separates HTTP handling in `controller`, execution in `service`, and
+API records in `dto.request` or `dto.response`. `infrastructure` contains model
+and tool implementations. `model` contains internal data types, including demo
+inputs, messages, execution results, and state.
+`shared.tool` contains the model, argument types, and evidence used by multiple tool demos.
+`shared.security` contains the demo roles, authorization rules, and authorization checks shared by those demos.
+
+The browser markup, styles, translations, and request/render logic live in `index.html`, `demo.css`, `demo-translations.js`, and `demo.js` under `src/main/resources/static`.
+The Inspection diagram has its own renderer and styles in `inspection-demo.js` and `inspection-demo.css`.
+
+## Tests
+
+Run the sample's Java checks and JavaScript tests from the repository root:
+
+```bash
+./gradlew :spring-ai-privacy-guardrails-sample-demo:check
+node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
+```
+
+The JavaScript tests run the rendering and request logic in Node.js with a lightweight DOM substitute.
+The Java checks run the local scenarios and compile the optional live-model tests.
+Live model and analyzer checks require separate opt-in configuration described below.
 
 ## Opt-In OpenAI-Compatible Live Model Verification
 
 The opt-in live harness connects Spring AI's `OpenAiChatModel` to an
-application-supplied OpenAI-compatible endpoint. The checked-in `.env.example`
-uses Gemini's compatible endpoint as one verified configuration without a
-Google-native model adapter. Other endpoints must support chat completions,
+application-supplied OpenAI-compatible endpoint. The `.env.example` configures
+Gemini through its OpenAI-compatible endpoint. Other endpoints must support chat completions,
 streaming, and tool calling.
 
 Normal builds require no cloud credentials and never contact the endpoint. To
@@ -227,7 +306,7 @@ chmod 600 samples/spring-ai-demo/.env
 ```
 
 The task requires `OPENAI_COMPATIBLE_API_KEY`,
-`OPENAI_COMPATIBLE_BASE_URL`, and `OPENAI_COMPATIBLE_MODEL`. Existing process
+`OPENAI_COMPATIBLE_BASE_URL`, and `OPENAI_COMPATIBLE_MODEL`. Process
 environment variables take precedence over values in the ignored local file.
 
 The harness covers blocking, streaming, tool-loop, and `returnDirect` paths. It

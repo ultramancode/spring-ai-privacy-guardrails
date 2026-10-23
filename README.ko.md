@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 2e479ad546f9553d79ac73eacc91e2041a56d81c548db10caa0dd89ec7415c91 -->
+<!-- i18n-source-sha256: b582484d3e51bbcff3a5407aa35ef5441eb8730a12bb8fd756bc340cff7ef237 -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -86,13 +86,15 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행하�
 - **MCP**는 Streamable HTTP를 통한 로컬 MCP 도구 호출에서 같은 보호 과정을 보여줍니다.
 - **Security**는 일반 직원과 고객 지원 담당자의 도구 공개·실행 권한을 비교하고,
   허용된 호출에서 개인정보가 보호되는 모습을 보여줍니다.
+- **Inspection**은 입력·출력 검사에서 프롬프트 인젝션과 모욕적 응답을 차단하는 사례와
+  검사를 통과하는 사례를 비교합니다.
 
 <p align="center">
   <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델에서 관찰된 고정 예제 데이터의 개인정보 원문 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">
 </p>
 
 데모의 탐지 규칙에 해당하지 않는 텍스트는 로컬 모델이 변경하지 않고 반환할 수 있으며,
-Inspector는 불투명 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, MCP, Security 데모와 선택형
+Inspector는 불투명 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, MCP, Security, Inspection 데모와 선택형
 Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
 [샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다.
 

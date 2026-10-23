@@ -6,6 +6,16 @@ spring:
   application:
     name: spring-ai-privacy-guardrails-demo
   ai:
+    mcp:
+      server:
+        protocol: STREAMABLE
+        name: privacy-demo-crm
+        version: 1.0.0
+        tool-callback-converter: false
+        capabilities:
+          resource: false
+          prompt: false
+          completion: false
     privacy:
       analysis:
         language: ko

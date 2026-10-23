@@ -6,7 +6,15 @@ import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAu
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PiiRule;
+import io.github.ultramancode.springai.privacy.core.PiiRuleCatalog;
+import io.github.ultramancode.springai.privacy.core.PiiRulePreset;
+import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
+import java.util.Set;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
@@ -53,6 +61,12 @@ import java.util.regex.Matcher;
 public class PublishedArtifactConsumer {
 
     @Bean
+    PiiRule customerIdRule() {
+        return new PatternPiiRule("customer-id", "CUSTOMER_ID", "CUST-[0-9]{4}", 0.99, 0,
+                candidate -> !candidate.equals("CUST-0000"));
+    }
+
+    @Bean
     GuardrailsPolicy guardrailsPolicy() {
         ToolDisclosurePolicy disclosure = ToolDisclosurePolicy.allowEntityTypesByToolName(
             Map.of("customerLookup", List.of("CUSTOMER_ID")));
@@ -82,6 +96,7 @@ public class PublishedArtifactConsumer {
     }
 
     public static void main(String[] args) {
+        verifyLocalRuleApi();
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
             PublishedArtifactConsumer.class
         )
@@ -89,23 +104,50 @@ public class PublishedArtifactConsumer {
             .properties(
                 "spring.main.banner-mode=off",
                 "logging.level.root=ERROR",
-                "spring.ai.privacy.regex.enabled=true",
-                "spring.ai.privacy.regex.rules[0].entity-type=EMAIL_ADDRESS",
-                "spring.ai.privacy.regex.rules[0].pattern="
-                    + "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
-                "spring.ai.privacy.regex.rules[0].score=0.95",
-                "spring.ai.privacy.regex.rules[1].entity-type=CUSTOMER_ID",
-                "spring.ai.privacy.regex.rules[1].pattern=\\bCUST-\\d{4}\\b",
-                "spring.ai.privacy.regex.rules[1].score=0.99"
+                "spring.ai.privacy.rules.enabled=true",
+                "spring.ai.privacy.rules.presets=COMMON",
+                "spring.ai.privacy.rules.include=customer-id"
             )
             .run(args)) {
             verifyRuntime(context);
         }
     }
 
+    private static void verifyLocalRuleApi() {
+        PiiRule direct = new PiiRule() {
+            public String id() { return "account-code"; }
+            public Set<String> entityTypes() { return Set.of("ACCOUNT_CODE"); }
+            public List<PiiSpan> analyze(String text, PiiAnalysisOptions options, PrivacyProcessingLimits limits) {
+                int prefix = text.indexOf("ACME:");
+                if (prefix < 0 || prefix + 9 > text.length()) {
+                    return List.of();
+                }
+                for (int i = prefix + 5; i < prefix + 9; i++) {
+                    if (text.charAt(i) < '0' || text.charAt(i) > '9') {
+                        return List.of();
+                    }
+                }
+                return List.of(new PiiSpan("ACCOUNT_CODE", prefix + 5, prefix + 9, 0.9));
+            }
+        };
+        PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns().rule(direct)
+                .rule(new PatternPiiRule("employee-id", "EMPLOYEE_ID", "EMP-[0-9]{4}", 0.9, 0,
+                        value -> !value.endsWith("0000")))
+                .preset(new PiiRulePreset("COMPANY", List.of("employee-id", "account-code", "email")))
+                .build();
+        RuleBasedPiiAnalyzer analyzer = catalog.select(List.of("COMPANY"), List.of(), List.of("email"));
+        String text = "EMP-1234 EMP-0000 ACME:0077";
+        List<PiiSpan> spans = analyzer.analyze(text, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults());
+        List<String> values = spans.stream().map(span -> text.substring(span.start(), span.end())).toList();
+        if (!values.equals(List.of("EMP-1234", "0077"))
+                || !analyzer.ruleIds().equals(List.of("employee-id", "account-code"))) {
+            throw new IllegalStateException("Published Java rule API did not honor selection or validation");
+        }
+    }
+
     private static void verifyRuntime(ConfigurableApplicationContext context) {
         context.getBean(PrivacyGuardrailsAutoConfiguration.class);
-        context.getBean(RegexPiiAnalyzer.class);
+        context.getBean(RuleBasedPiiAnalyzer.class);
         context.getBean(PrivacyChatClientConfigurer.class);
         context.getBean(GuardrailsChatClientFactory.class);
         PrivacyService privacyService = context.getBean(PrivacyService.class);

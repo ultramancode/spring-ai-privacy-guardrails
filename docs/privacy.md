@@ -12,7 +12,7 @@ Privacy protection replaces detected PII with request-scoped opaque tokens befor
 sending it to a model. Tools receive only the original values allowed by policy,
 and their results are protected before reaching the model or application.
 
-Configure [Regex](#regex-analyzer), [Presidio](#presidio-analyzer),
+Configure [Local rules](#regex-analyzer), [Presidio](#presidio-analyzer),
 [OpenNLP](#opennlp-analyzer-jvm-only-optional), or a [custom analyzer](#custom-analyzers),
 then select `privacy()` in the client policy.
 See [Configuration](configuration.md) for dependencies, client creation and feature selection.
@@ -38,6 +38,10 @@ configured under `spring.ai.privacy`.
 | `analysis.provider-minimum-scores` | empty | Confidence floor by provider ID. The effective floor is the greater of the global and provider-specific values. |
 | `analysis.entity-aliases` | empty | Explicit mappings from analyzer entity labels to canonical types. |
 | `analysis.type-conflict-fallback` | `PII` | Type used when an overlap type conflict cannot be resolved. |
+| `rules.enabled` | `false` | Enables the local rule group. |
+| `rules.presets` | `[]` | Selected preset names. COMMON is not implicit. |
+| `rules.include` | `[]` | Additional registered rule IDs to execute. |
+| `rules.exclude` | `[]` | Registered rule IDs to exclude. |
 | `processing.max-text-characters` | `1000000` | Maximum length of one text or JSON document. Batch analysis uses the combined length of all texts. |
 | `processing.max-output-characters` | `8000000` | Maximum output length per transformation, including unchanged text. |
 | `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. Direct value-tree tokenization also bounds combined `BigDecimal` analysis text by this value. |
@@ -45,12 +49,6 @@ configured under `spring.ai.privacy`.
 | `processing.max-depth` | `128` | Maximum nesting depth in a value tree or JSON document. |
 | `processing.max-analysis-segments` | `100000` | Maximum number of texts in one batch analysis. |
 | `processing.max-result-spans` | `100000` | Maximum raw spans accepted from analyzers or callers in one analysis. Newly produced analyzer spans are summed across session batches. Reused results are not counted again. |
-| `regex.enabled` | `false` | Enables application-supplied Regex rules. |
-| `regex.rules[].entity-type` | required per rule | Canonical entity type assigned to each rule match. |
-| `regex.rules[].pattern` | required per rule | Java regular expression evaluated against source text. |
-| `regex.rules[].score` | `0.85` | Confidence assigned to each match. |
-| `regex.rules[].capture-group` | `0` | Capturing-group number whose range becomes the detected span. `0` means the complete match. |
-| `regex.rules[].validator-id` | unset | Stable ID of an optional `RegexPiiMatchValidator`. This is not a Spring bean name. |
 | `presidio.enabled` | `false` | Enables the Presidio analyzer. |
 | `presidio.analyzer-url` | `http://localhost:5002` | Base analyzer URI. |
 | `presidio.timeout` | `5s` | Timeout for each HTTP attempt, including response-body completion, and for each health check. |
@@ -81,13 +79,13 @@ The base Spring Boot starter warns when it encounters an unknown property name
 inside the fixed `spring.ai.privacy` configuration defined by this library.
 Warnings do not prevent application startup.
 
-For example, the following misspelling records a warning suggesting `regex.enabled`:
+For example, the following misspelling records a warning suggesting `rules.enabled`:
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabledd: true
 ```
 
@@ -120,7 +118,7 @@ tolerates other analyzer failures. `ALLOW_PARTIAL` uses results from the
 analyzers that succeeded, which may reduce protection coverage. The request
 still fails when every analyzer fails.
 
-The following configuration runs Presidio and an application-specific Regex
+The following configuration runs Presidio and an application-specific local rule
 analyzer together and merges their results in the default `UNION` mode.
 
 ```yaml
@@ -132,12 +130,9 @@ spring:
           US_SSN: NATIONAL_ID
       presidio:
         enabled: true
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
+        presets: [COMMON, KR]
 ```
 
 `PRIMARY` mode runs only the primary analyzer and supplemental analyzers and
@@ -150,10 +145,10 @@ after the primary analyzer fails.
 Adding a provider ID to `analysis.provider-minimum-scores` does not register or
 enable an analyzer. It only sets the confidence floor applied to detection
 results from an analyzer that is already registered. To use an analyzer,
-configure `presidio.enabled` or `regex.enabled` as shown above, or register an
+configure `presidio.enabled` or `rules.enabled` as shown above, or register an
 analyzer bean yourself.
 
-Provider IDs identify analyzers, for example `REGEX`, `PRESIDIO`, and `OPENNLP`.
+Provider IDs identify analyzers, for example `RULES`, `PRESIDIO`, and `OPENNLP`.
 They are 1-to-128-character ASCII identifiers made of alphanumeric
 segments separated by single hyphens (`-`) or underscores (`_`). The `core`
 module treats provider IDs case-insensitively and canonicalizes them to
@@ -227,64 +222,103 @@ relative to each text.
 Respect the supplied `limits` when collecting results. For batch analysis, the
 span limit applies to the entire batch.
 
-## Regex Analyzer
+## Local Rules and Presets
 
-The Regex analyzer is intended for application-specific identifiers with
-well-defined formats, such as employee or customer IDs, rather than complete PII
-detection. Treat regular-expression patterns as trusted application-managed
-configuration and avoid unnecessarily complex patterns.
+Define local detection rules in Java and select them through configuration. The core module
+includes COMMON and KR presets. Rules run only when selected by a preset or rule ID.
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: CUSTOMER_ID
-            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
-            score: 0.90
-            capture-group: 0
-            validator-id: customer-id-check
+        presets: [COMMON, KR]
+        include: [employee-id]
+        exclude: [credit-card]
 ```
 
-Each rule requires `entity-type` and `pattern`. `score` defaults to `0.85` and
-`capture-group` to `0`. `validator-id` is optional and refers to the stable ID
-returned by an application-provided `RegexPiiMatchValidator`, not its Spring
-bean name:
+Register application rules as individual Spring beans:
 
 ```java
 @Bean
-RegexPiiMatchValidator customerIdMatchValidator() {
-    return new RegexPiiMatchValidator() {
-        @Override
-        public String id() {
-            return "customer-id-check";
-        }
-
-        @Override
-        public boolean isValid(String candidate) {
-            return CustomerIds.hasValidChecksum(candidate);
-        }
-    };
+PiiRule employeeIdRule() {
+    return new PatternPiiRule("employee-id", "EMPLOYEE_ID",
+            "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0,
+            candidate -> !candidate.equals("EMP-0000"));
 }
 ```
 
-`CustomerIds.hasValidChecksum(...)` represents application-provided validation
-logic. Supply your own implementation.
+`PatternPiiRule` combines a Java regular expression with a score, capture group, and optional
+`Predicate<String>`. Group 0 selects the entire match. A predicate receives the captured
+candidate and returns `true` to accept it or `false` to discard it. It can parse the candidate
+or apply checksum and business checks. Use `PatternPiiRule.Pattern` for multiple patterns.
 
-Validator IDs use lowercase ASCII letters and digits separated by single
-hyphens. They are resolved at startup. Blank, malformed, or unknown IDs, and
-duplicate IDs exposed by two or more validator beans, fail startup. Multiple
-rules may reference the same validator ID. `isValid()` receives exactly the
-candidate selected by `capture-group`. Returning `true` keeps the existing span and score,
-and `false` excludes the candidate. Exceptions follow the configured analyzer
-failure policy.
+For direct detection, implement `PiiRule.id()`, `entityTypes()`, and
+`analyze(text, options, limits)`. Return `PiiSpan` values with positions in the original text:
+UTF-16 offsets, inclusive start, and exclusive end. Return an empty list for no matches.
+`countries()` supplies optional metadata. Preset selection is independent of analysis language.
+Use `PiiAnalyzer` for independent remote services or model providers.
 
-`RegexPiiMatchValidator` implementations are shared across requests and must be
-thread-safe. Validation candidates may contain PII, so do not log them, include
-them in exception messages, or retain them long term. Without `validator-id`, a
-rule uses regex-matched candidates without additional validation.
+### Preset Selection
+
+The catalog expands presets in order, appends `include`, keeps the first occurrence of each
+rule ID, then applies `exclude`. COMMON must be selected explicitly. Rule IDs use 1–64 lowercase
+ASCII letters or digits separated by single hyphens. Preset names start with an ASCII letter
+and contain up to 64 ASCII letters, digits, hyphens, or underscores. Both are case-sensitive.
+
+Duplicate definitions, unknown references, and an empty active selection are configuration
+errors. The Boot provider defaults to disabled. Selection is resolved when `rules.enabled=true`.
+To register a `RuleBasedPiiAnalyzer` bean directly, leave automatic rule selection disabled.
+
+Create a custom preset by registering a `PiiRulePreset` bean:
+
+```java
+@Bean
+PiiRulePreset companyPreset() {
+    return new PiiRulePreset("COMPANY", List.of("employee-id", "email"));
+}
+```
+
+Select it with `presets: [COMPANY]`. In pure Java, register and select definitions through
+`PiiRuleCatalog`:
+
+```java
+PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
+        .rule(new PatternPiiRule("employee-id", "EMPLOYEE_ID",
+                "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0))
+        .preset(new PiiRulePreset("COMPANY", List.of("employee-id", "email")))
+        .build();
+RuleBasedPiiAnalyzer analyzer = catalog.select(
+        List.of("COMPANY", "KR"), List.of(), List.of("kr-rrn"));
+List<String> activeIds = analyzer.ruleIds();
+List<String> selectedPresets = analyzer.presetNames();
+```
+
+### Execution and Limits
+
+Selected rules execute as one `RULES` provider and can run alongside Presidio and OpenNLP.
+Excluding a local rule affects only that rule. A rule exception or invalid result fails the
+entire RULES call and follows the configured provider failure policy. Accepted results must
+use declared entity types and valid, nonempty ranges within the source text.
+
+Result limits apply across rules and providers. Rules and predicates must be thread-safe,
+respect interruption, and remain stable for the analyzer's lifetime. Choose Java regular
+expressions carefully: a single match can backtrack for a long time before interruption is checked.
+
+### Built-in Rules
+
+| Preset | Rule ID | Supported scope |
+| --- | --- | --- |
+| COMMON | email | ASCII addresses with dotted DNS domains. Local parts use letters, digits, dots, underscores, percent signs, plus signs, and hyphens. Quoted local parts, internationalized addresses, and domain literals are unsupported. |
+| COMMON | credit-card | 13–19 digits with optional spaces or hyphens. Checks Luhn and rejects repeated identical digits. Does not verify an issuer or account. |
+| KR | kr-mobile-phone | Domestic 010 plus eight digits, compact or consistently space/hyphen separated. Supports +82 10 forms. Other 01X prefixes, landlines, and extensions are unsupported. |
+| KR | kr-rrn | YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
+
+Built-in matches have a fixed score of 0.85. Evaluate detection quality on data representative
+of your application. The RRN rule validates the birth date without a checksum requirement,
+because the revised issuance scheme uses randomized trailing digits
+([Ministry of the Interior and Safety](https://mois.go.kr/plan2020/download/2020plan.pdf)).
 
 ## Presidio Analyzer
 

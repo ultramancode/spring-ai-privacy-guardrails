@@ -48,7 +48,7 @@ class PrivacyServiceResolutionTest {
         };
         List<PiiAnalyzerFailure> observed = new ArrayList<>();
         PrivacyService service = new PrivacyService(
-                List.of(timedOut, namedAnalyzer("REGEX", List.of())),
+                List.of(timedOut, namedAnalyzer("RULES", List.of())),
                 PiiAnalysisOptions.defaults(),
                 EntityTypeRegistry.defaults(),
                 PiiResolutionPolicy.builder()
@@ -141,13 +141,13 @@ class PrivacyServiceResolutionTest {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
                 .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
                 .build();
-        PrivacyService service = service(policy, namedAnalyzer("REGEX", List.of(
+        PrivacyService service = service(policy, namedAnalyzer("RULES", List.of(
                 new PiiSpan("EMAIL_ADDRESS", 0, 17, 0.95)
         )), failingAnalyzer("PRESIDIO"));
 
         PiiAnalysisResult result = service.analyzeDetailed("alice@example.com");
 
-        assertThat(result.successfulProviders()).containsExactly("REGEX");
+        assertThat(result.successfulProviders()).containsExactly("RULES");
         assertThat(result.failures()).singleElement().satisfies(failure -> {
             assertThat(failure.provider()).isEqualTo("PRESIDIO");
             assertThat(failure.code()).isEqualTo(PrivacyFailureCode.ANALYZER_EXECUTION_FAILED);
@@ -159,7 +159,7 @@ class PrivacyServiceResolutionTest {
             assertThat(span.entityType()).isEqualTo("EMAIL_ADDRESS");
             assertThat(span.evidence()).singleElement()
                     .extracting(PiiEvidence::provider)
-                    .isEqualTo("REGEX");
+                    .isEqualTo("RULES");
         });
     }
 
@@ -170,7 +170,7 @@ class PrivacyServiceResolutionTest {
                 .failurePolicy(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY)
                 .build();
         PrivacyService service = service(policy,
-                namedAnalyzer("REGEX", List.of()),
+                namedAnalyzer("RULES", List.of()),
                 failingAnalyzer("PRESIDIO"));
 
         assertThatThrownBy(() -> service.analyzeDetailed("Alice"))
@@ -195,14 +195,14 @@ class PrivacyServiceResolutionTest {
         PrivacyService service = service(
                 policy,
                 failingAnalyzer("PRESIDIO"),
-                namedAnalyzer("REGEX", List.of(
+                namedAnalyzer("RULES", List.of(
                         new PiiSpan("PERSON", 0, 5, 0.95)
                 ))
         );
 
         PiiAnalysisResult result = service.analyzeDetailed("Alice");
 
-        assertThat(result.successfulProviders()).containsExactly("REGEX");
+        assertThat(result.successfulProviders()).containsExactly("RULES");
         assertThat(result.failures()).singleElement()
                 .extracting(PiiAnalyzerFailure::provider)
                 .isEqualTo("PRESIDIO");
@@ -225,7 +225,7 @@ class PrivacyServiceResolutionTest {
             primaryBatchCalls.incrementAndGet();
             throw new IllegalStateException("unavailable segmented provider");
         });
-        PiiAnalyzer fallback = segmentedAnalyzer("REGEX", (texts, options) -> {
+        PiiAnalyzer fallback = segmentedAnalyzer("RULES", (texts, options) -> {
             fallbackBatchCalls.incrementAndGet();
             return List.of(
                     List.of(),
@@ -321,7 +321,7 @@ class PrivacyServiceResolutionTest {
 
             @Override
             public String providerId() {
-                return "REGEX";
+                return "RULES";
             }
         };
         PrivacyService service = service(policy, interruptedPrimary, fallback);
@@ -366,14 +366,14 @@ class PrivacyServiceResolutionTest {
         PrivacyService service = service(
                 policy,
                 namedAnalyzer("BROKEN", null),
-                namedAnalyzer("REGEX", List.of(
+                namedAnalyzer("RULES", List.of(
                         new PiiSpan("PERSON", 0, 5, 0.95)
                 ))
         );
 
         PiiAnalysisResult result = service.analyzeDetailed("Alice");
 
-        assertThat(result.successfulProviders()).containsExactly("REGEX");
+        assertThat(result.successfulProviders()).containsExactly("RULES");
         assertThat(result.failures()).containsExactly(new PiiAnalyzerFailure(
                 "BROKEN",
                 PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
@@ -421,7 +421,7 @@ class PrivacyServiceResolutionTest {
                 .primaryProvider("PRESIDIO")
                 .build();
 
-        assertThatThrownBy(() -> service(policy, namedAnalyzer("REGEX", List.of())))
+        assertThatThrownBy(() -> service(policy, namedAnalyzer("RULES", List.of())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("PRESIDIO")
                 .hasMessageContaining("not configured");
@@ -431,17 +431,17 @@ class PrivacyServiceResolutionTest {
     void constructorFailsFastForUnknownSupplementalAndThresholdProviders() {
         PiiResolutionPolicy supplementalPolicy = PiiResolutionPolicy.builder()
                 .mode(PiiResolutionMode.PRIMARY)
-                .primaryProvider("REGEX")
+                .primaryProvider("RULES")
                 .supplementalProviders(Set.of("PRESIDIO"))
                 .build();
         PiiResolutionPolicy thresholdPolicy = PiiResolutionPolicy.builder()
                 .providerMinimumScores(Map.of("PRESIDIO", 0.8))
                 .build();
 
-        assertThatThrownBy(() -> service(supplementalPolicy, namedAnalyzer("REGEX", List.of())))
+        assertThatThrownBy(() -> service(supplementalPolicy, namedAnalyzer("RULES", List.of())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Supplemental", "PRESIDIO", "not configured");
-        assertThatThrownBy(() -> service(thresholdPolicy, namedAnalyzer("REGEX", List.of())))
+        assertThatThrownBy(() -> service(thresholdPolicy, namedAnalyzer("RULES", List.of())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("threshold", "PRESIDIO", "no configured analyzer");
     }
@@ -450,24 +450,24 @@ class PrivacyServiceResolutionTest {
     void constructorRejectsProvidersThatTheSelectedModeCanNeverUse() {
         PiiResolutionPolicy primaryPolicy = PiiResolutionPolicy.builder()
                 .mode(PiiResolutionMode.PRIMARY)
-                .primaryProvider("REGEX")
+                .primaryProvider("RULES")
                 .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
                 .build();
         PiiResolutionPolicy fallbackWithoutCandidate = PiiResolutionPolicy.builder()
                 .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
-                .primaryProvider("REGEX")
+                .primaryProvider("RULES")
                 .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
                 .build();
 
         assertThatThrownBy(() -> service(
                 primaryPolicy,
-                namedAnalyzer("REGEX", List.of()),
+                namedAnalyzer("RULES", List.of()),
                 namedAnalyzer("PRESIDIO", List.of())
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not select", "PRESIDIO");
         assertThatThrownBy(() -> service(
                 fallbackWithoutCandidate,
-                namedAnalyzer("REGEX", List.of())
+                namedAnalyzer("RULES", List.of())
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("requires at least one configured non-primary provider");
     }
@@ -475,7 +475,7 @@ class PrivacyServiceResolutionTest {
     @Test
     void tokenizeCanonicalizesAliasesForCallerProvidedSpans() {
         PrivacyService service = new PrivacyService(
-                List.of(namedAnalyzer("REGEX", List.of())),
+                List.of(namedAnalyzer("RULES", List.of())),
                 PiiAnalysisOptions.defaults(),
                 new EntityTypeRegistry(Map.of("PER", "PERSON")),
                 PiiResolutionPolicy.defaults()

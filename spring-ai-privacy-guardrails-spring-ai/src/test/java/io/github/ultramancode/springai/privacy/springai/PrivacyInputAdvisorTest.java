@@ -6,8 +6,8 @@ import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -103,8 +103,8 @@ class PrivacyInputAdvisorTest {
     @Test
     void adviseCallPreservesJsonScalarIsolationBeforeModelInvocation() {
         PrivacyService service = new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
+                List.of(new RuleBasedPiiAnalyzer(List.of(
+                        new PatternPiiRule("employee-id-1", "EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
                 ))),
                 PiiAnalysisOptions.defaults()
         );

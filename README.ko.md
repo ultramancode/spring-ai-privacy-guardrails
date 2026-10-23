@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: b582484d3e51bbcff3a5407aa35ef5441eb8730a12bb8fd756bc340cff7ef237 -->
+<!-- i18n-source-sha256: dd1a5fa36b25d2451c8fa2da2945312bdab1367fd4ec1573b72b1124623007da -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -118,7 +118,7 @@ PII 분석기는 **무엇이 민감한 정보인지** 판별합니다. Privacy G
 | 분석기 | 적합한 경우 |
 | --- | --- |
 | Presidio | 자연어에 포함된 다양한 PII 유형을 탐지할 때 |
-| 내장 Regex 또는 사용자 정의 `PiiAnalyzer` | 형식이 일정한 애플리케이션 고유 식별자를 탐지할 때 |
+| 로컬 규칙 (`PiiRule`) | 내장 식별자와 애플리케이션 전용 규칙으로 탐지할 때 |
 | Apache OpenNLP | 애플리케이션이 보유한 호환 NER 모델을 JVM 안에서 실행할 때 |
 
 다양한 PII 유형을 탐지하려면 Presidio를 기본 선택지로 권장합니다.
@@ -153,7 +153,7 @@ Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니�
 
 아래 예제는 버전 `0.4.0-SNAPSHOT`을 사용합니다.
 
-외부 분석 서비스 없이 시작하려면 클라이언트 스타터와 애플리케이션 전용 정규식 규칙을
+외부 분석 서비스 없이 시작하려면 클라이언트 스타터와 Java로 정의한 애플리케이션 규칙을
 사용할 수 있습니다.
 
 ```gradle
@@ -166,12 +166,18 @@ dependencies {
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
+        presets: [COMMON, KR]
+        include: [employee-id]
+```
+
+```java
+@Bean
+PiiRule employeeIdRule() {
+    return new PatternPiiRule("employee-id", "EMPLOYEE_ID",
+            "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0);
+}
 ```
 
 이 규칙은 `EMP-1234` 형식만 탐지하는 애플리케이션 전용 예제입니다. 일반적인 개인정보
@@ -290,7 +296,7 @@ dependencies {
 
 | 모듈 | 목적 |
 | --- | --- |
-| `spring-ai-privacy-guardrails-core` | 개인정보 탐지·토큰화, 내장 Regex 분석과 요청별 세션 관리 |
+| `spring-ai-privacy-guardrails-core` | 개인정보 탐지·토큰화, 내장 로컬 규칙 분석과 요청별 세션 관리 |
 | `spring-ai-privacy-guardrails-spring-ai-boundary` | 모델 호출 전 개인정보 보호·도구 권한·콘텐츠 검사 조합 |
 | `spring-ai-privacy-guardrails-spring-ai` | Spring AI 모델 호출·도구 실행·응답의 개인정보 보호 |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP 어댑터 |

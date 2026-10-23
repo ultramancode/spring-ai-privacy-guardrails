@@ -5,8 +5,8 @@ import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -116,8 +116,8 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
 
     private PrivacyService privacyService() {
         return new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{6}\\b", 0.99, 0)
+                List.of(new RuleBasedPiiAnalyzer(List.of(
+                        new PatternPiiRule("customer-id-1", "CUSTOMER_ID", "\\bCUST-\\d{6}\\b", 0.99, 0)
                 ))),
                 PiiAnalysisOptions.defaults()
         );

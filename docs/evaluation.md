@@ -18,7 +18,7 @@ not guarantee accuracy or latency in a production environment.
 
 ## Demo Analyzer Regression Test
 
-The demo's Regex analyzer uses the same configuration as the runnable sample and
+The demo's local rule analyzer uses the same configuration as the runnable sample and
 is tested against a synthetic dataset. The test checks that the expected entity
 types and raw values are detected, those raw values are absent from the
 protected output, and request sessions are cleaned up. Detected PII is replaced
@@ -28,7 +28,7 @@ original values.
 To run only the regression test with the default demo configuration:
 
 ```bash
-./gradlew :spring-ai-privacy-guardrails-sample-demo:test --tests io.github.ultramancode.springai.privacy.sample.integration.DemoRegexEvaluationTest
+./gradlew :spring-ai-privacy-guardrails-sample-demo:test --tests io.github.ultramancode.springai.privacy.sample.integration.DemoRulesEvaluationTest
 ```
 
 This test is intended to detect changes in the demo rules. These results do not

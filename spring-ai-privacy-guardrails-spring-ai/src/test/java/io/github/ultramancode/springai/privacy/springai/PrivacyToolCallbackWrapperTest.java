@@ -11,8 +11,8 @@ import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
@@ -296,8 +296,8 @@ class PrivacyToolCallbackWrapperTest {
     @Test
     void toolInputProtectsExactScalarRegexMatches() {
         PrivacyService service = new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
+                List.of(new RuleBasedPiiAnalyzer(List.of(
+                        new PatternPiiRule("employee-id-1", "EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
                 ))),
                 PiiAnalysisOptions.defaults()
         );

@@ -13,8 +13,8 @@ import io.github.ultramancode.springai.privacy.core.PrivacyPhase;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -178,8 +178,8 @@ class PrivacyJsonPayloadPolicyTest {
     @ParameterizedTest
     @ValueSource(strings = {"ab", "[\"ab\"]"})
     void analysisLimitFailuresUseTheCallingBoundaryPhase(String payload) {
-        RegexPiiAnalyzer analyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("PERSON", ".", 1.0, 0)));
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+                new PatternPiiRule("person-1", "PERSON", ".", 1.0, 0)));
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
@@ -532,9 +532,9 @@ class PrivacyJsonPayloadPolicyTest {
     @Test
     void batchingPreservesScalarIsolationForBoundarySensitiveRegexRules() {
         PrivacyService service = new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0),
-                        new RegexPiiRule("API_KEY", "\\AKEY-[0-9]{4}\\z", 1.0, 0)
+                List.of(new RuleBasedPiiAnalyzer(List.of(
+                        new PatternPiiRule("employee-id-2", "EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0),
+                        new PatternPiiRule("api-key-3", "API_KEY", "\\AKEY-[0-9]{4}\\z", 1.0, 0)
                 ))),
                 PiiAnalysisOptions.defaults()
         );

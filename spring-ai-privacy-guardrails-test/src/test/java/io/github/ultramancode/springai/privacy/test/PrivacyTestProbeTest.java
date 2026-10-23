@@ -6,8 +6,8 @@ import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextTestAccess;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
@@ -304,8 +304,8 @@ class PrivacyTestProbeTest {
 
     private PrivacyService privacyService() {
         return new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("PERSON", "\\b(?:Alice|Bob)\\b", 0.99, 0)
+                List.of(new RuleBasedPiiAnalyzer(List.of(
+                        new PatternPiiRule("person-1", "PERSON", "\\b(?:Alice|Bob)\\b", 0.99, 0)
                 ))),
                 PiiAnalysisOptions.defaults()
         );

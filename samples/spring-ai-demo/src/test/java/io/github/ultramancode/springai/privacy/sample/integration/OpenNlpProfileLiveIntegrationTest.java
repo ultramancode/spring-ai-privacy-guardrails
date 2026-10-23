@@ -47,7 +47,7 @@ class OpenNlpProfileLiveIntegrationTest {
                 )))
                 .andExpect(jsonPath("$.successfulProviders").value(Matchers.contains(
                         "OPENNLP",
-                        "REGEX"
+                        "RULES"
                 )));
 
         assertThat(this.privacyService.activeSessionCount()).isZero();

@@ -404,8 +404,8 @@ class PrivacyProcessingLimitsTest {
 
     @Test
     void configuredSpanLimitAppliesToRegexResultsAndSuppliedSpans() {
-        RegexPiiAnalyzer analyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("CHARACTER", ".", 1.0, 0)
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+                new PatternPiiRule("character-1", "CHARACTER", ".", 1.0, 0)
         ));
         PrivacyProcessingLimits acceptingLimits = PrivacyProcessingLimits.builder().maxResultSpans(2).build();
         PrivacyProcessingLimits rejectingLimits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
@@ -426,8 +426,8 @@ class PrivacyProcessingLimitsTest {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
                 .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
                 .build();
-        PiiAnalyzer collectingAnalyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("CHARACTER", ".", 1.0, 0)));
+        PiiAnalyzer collectingAnalyzer = new RuleBasedPiiAnalyzer(List.of(
+                new PatternPiiRule("character-2", "CHARACTER", ".", 1.0, 0)));
         PiiAnalyzer returningAnalyzer = (text, options, processingLimits) -> List.of(
                 new PiiSpan("PII", 0, 1, 1.0), new PiiSpan("PII", 1, 2, 1.0));
         PiiAnalyzer successfulAnalyzer = namedAnalyzer("EMPTY", (text, options, processingLimits) -> List.of());

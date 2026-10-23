@@ -85,14 +85,14 @@ class DemoEndpointsTest {
         assertThat(body).doesNotContain(originalValues.toArray(String[]::new));
 
         ProtectedPromptResponse response = this.objectMapper.readValue(body, ProtectedPromptResponse.class);
-        assertThat(response.successfulProviders()).containsExactly("REGEX");
+        assertThat(response.successfulProviders()).containsExactly("RULES");
         assertThat(response.detectedSpans()).extracting(DetectedSpan::type)
                 .containsExactly("EMPLOYEE_ID", "EMAIL_ADDRESS", "PHONE_NUMBER", "CUSTOMER_ID");
         for (int index = 0; index < response.detectedSpans().size(); index++) {
             DetectedSpan span = response.detectedSpans().get(index);
             assertThat(demoData.input().substring(span.start(), span.end()))
                     .isEqualTo(originalValues.get(index));
-            assertThat(span.providers()).containsExactly("REGEX");
+            assertThat(span.providers()).containsExactly("RULES");
             assertThat(OpaquePiiTokenFormat.patternForEntityType(span.type())
                     .matcher(response.protectedPrompt()).find()).isTrue();
         }
@@ -196,7 +196,7 @@ class DemoEndpointsTest {
                 .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
                         Matchers.containsString("alice@example.com")
                 )))
-                .andExpect(jsonPath("$.successfulProviders[0]").value("REGEX"));
+                .andExpect(jsonPath("$.successfulProviders[0]").value("RULES"));
 
         assertThat(this.privacyService.activeSessionCount()).isZero();
     }

@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.PiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
@@ -82,10 +84,10 @@ abstract class ToolAuthorizationIntegrationTestSupport {
             .withBean(PrivacyClientSettings.class, () -> new PrivacyClientSettings(outputEnabled, limits))
             .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
                 Map.of("customerLookup", List.of("EMPLOYEE_ID"))))
-            .withPropertyValues("spring.ai.privacy.regex.enabled=true",
-                "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
-                "spring.ai.privacy.regex.rules[0].score=0.9");
+            .withBean(PiiRule.class, () -> new PatternPiiRule(
+                    "employee-id", "EMPLOYEE_ID", "EMP-[0-9]{4}", 0.9, 0))
+            .withPropertyValues("spring.ai.privacy.rules.enabled=true",
+                    "spring.ai.privacy.rules.include=employee-id");
     }
 
     protected void startModelServer(String... responses) throws IOException {

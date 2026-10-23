@@ -4,6 +4,9 @@ import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFa
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.PiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import org.springframework.context.annotation.Bean;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -23,14 +26,17 @@ import java.util.List;
 @SpringBootConfiguration
 @EnableAutoConfiguration
 public class ChatClientStarterConsumer {
+    @Bean
+    PiiRule employeeIdRule() {
+        return new PatternPiiRule("employee-id", "EMPLOYEE_ID", "EMP-[0-9]{4}", 1.0, 0);
+    }
+
     public static void main(String[] args) {
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(ChatClientStarterConsumer.class)
             .web(WebApplicationType.NONE)
             .properties("spring.main.banner-mode=off", "logging.level.root=ERROR",
-                "spring.ai.privacy.regex.enabled=true",
-                "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
-                "spring.ai.privacy.regex.rules[0].score=1.0")
+                "spring.ai.privacy.rules.enabled=true",
+                "spring.ai.privacy.rules.include=employee-id")
             .run(args)) {
             GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
             ChatClient chatClient = context.getBean(GuardrailsChatClientFactory.class)

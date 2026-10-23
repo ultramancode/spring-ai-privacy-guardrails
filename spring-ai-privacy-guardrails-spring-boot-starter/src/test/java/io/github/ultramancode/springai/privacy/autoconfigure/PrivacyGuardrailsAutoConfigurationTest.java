@@ -16,9 +16,8 @@ import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementBoundary;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementEvent;
@@ -63,7 +62,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
-import java.util.regex.PatternSyntaxException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -83,18 +81,11 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void configurationMetadataPublishesTheCanonicalPropertySurface() throws Exception {
-        try (InputStream input = PrivacyGuardrailsAutoConfigurationTest.class
-                .getResourceAsStream("/META-INF/spring-configuration-metadata.json")) {
+        try (InputStream input = getClass().getResourceAsStream("/META-INF/spring-configuration-metadata.json")) {
             assertThat(input).isNotNull();
-            String metadata = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-            assertThat(metadata)
-                    .contains("spring.ai.privacy.analysis.included-entity-types")
-                    .contains("\"name\": \"spring.ai.privacy.regex.rules\"")
-                    .contains("\"type\": \"java.util.List<io.github.ultramancode.springai.privacy.autoconfigure."
-                            + "PrivacyGuardrailsProperties$Regex$Rule>\"")
-                    .contains("Ordered rules requiring entity type and pattern, with optional score, "
-                            + "capture group, and validator ID.")
-                    .doesNotContain("spring.ai.privacy.regex.rules[].validator-id");
+            assertThat(new String(input.readAllBytes(), StandardCharsets.UTF_8))
+                    .contains("spring.ai.privacy.rules.enabled", "spring.ai.privacy.rules.presets",
+                            "spring.ai.privacy.rules.include", "spring.ai.privacy.rules.exclude");
         }
     }
 
@@ -114,7 +105,7 @@ class PrivacyGuardrailsAutoConfigurationTest {
                         .doesNotHaveBean(PrivacyToolCallValidationAdvisor.class)
                         .doesNotHaveBean(EntityTypeRegistry.class)
                         .doesNotHaveBean(PrivacyOutputAdvisor.class)
-                        .doesNotHaveBean(RegexPiiAnalyzer.class));
+                        .doesNotHaveBean(RuleBasedPiiAnalyzer.class));
     }
 
     @Test
@@ -204,40 +195,15 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationFailsFastWhenRegexIsEnabledWithoutRules() {
-        this.contextRunner
-                .withPropertyValues("spring.ai.privacy.regex.enabled=true")
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure())
-                            .hasRootCauseMessage(
-                                    "spring.ai.privacy.regex.rules must contain at least one rule when regex is enabled"
-                            );
-                });
-    }
-
-    @Test
-    void regexAnalyzerRejectsNullRulesAtItsOnlyConfigurationBoundary() {
-        PrivacyGuardrailsProperties properties = new PrivacyGuardrailsProperties();
-        properties.getRegex().setEnabled(true);
-        properties.getRegex().getRules().add(null);
-        PrivacyGuardrailsAutoConfiguration autoConfiguration = new PrivacyGuardrailsAutoConfiguration();
-
-        assertThatThrownBy(() -> autoConfiguration.regexPiiAnalyzer(properties, List.of()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("spring.ai.privacy.regex.rules[0] must not be null");
-    }
-
-    @Test
     void configurationCollectionsRejectNullInsteadOfDeferringAmbiguousFailures() {
         PrivacyGuardrailsProperties properties = new PrivacyGuardrailsProperties();
 
         assertThatThrownBy(() -> properties.getAnalysis().setIncludedEntityTypes(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("analysis.included-entity-types must not be null");
-        assertThatThrownBy(() -> properties.getRegex().setRules(null))
+        assertThatThrownBy(() -> properties.getRules().setInclude(null))
                 .isInstanceOf(NullPointerException.class)
-                .hasMessage("regex.rules must not be null");
+                .hasMessage("rules.include must not be null");
     }
 
     @Test
@@ -332,25 +298,11 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void invalidRegexPreservesApplicationOwnedCompilationFailure() {
-        PrivacyGuardrailsProperties properties = new PrivacyGuardrailsProperties();
-        PrivacyGuardrailsProperties.Regex.Rule rule = new PrivacyGuardrailsProperties.Regex.Rule();
-        rule.setEntityType("CUSTOMER_ID");
-        rule.setPattern("(?<secret>CUST-[");
-        properties.getRegex().setRules(List.of(rule));
-
-        assertThatThrownBy(() -> new PrivacyGuardrailsAutoConfiguration()
-                .regexPiiAnalyzer(properties, List.of()))
-                .isInstanceOf(PatternSyntaxException.class)
-                .hasMessageContaining("CUST");
-    }
-
-    @Test
-    void disablingRegexSkipsItsCreationWithoutAMissingAnalyzerFailure() {
-        this.contextRunner.withPropertyValues("spring.ai.privacy.regex.enabled=false")
+    void disablingRulesSkipsTheirCreationWithoutAMissingAnalyzerFailure() {
+        this.contextRunner.withPropertyValues("spring.ai.privacy.rules.enabled=false")
                 .run(context -> assertThat(context)
                         .hasNotFailed()
-                        .doesNotHaveBean(RegexPiiAnalyzer.class)
+                        .doesNotHaveBean(RuleBasedPiiAnalyzer.class)
                         .doesNotHaveBean(PrivacyService.class)
                         .doesNotHaveBean(PrivacyToolCallbackFactory.class)
                         .doesNotHaveBean(PrivacyChatClientConfigurer.class));
@@ -482,10 +434,9 @@ class PrivacyGuardrailsAutoConfigurationTest {
         AtomicReference<String> delegateToolInput = new AtomicReference<>();
         List<PrivacyEnforcementEvent> enforcementEvents = new CopyOnWriteArrayList<>();
         this.contextRunner
-            .withBean(RegexPiiAnalyzer.class, () -> new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.99, 0),
-                new RegexPiiRule(
-                    "EMAIL_ADDRESS",
+            .withBean(RuleBasedPiiAnalyzer.class, () -> new RuleBasedPiiAnalyzer(List.of(
+                new PatternPiiRule("customer-id-1", "CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.99, 0),
+                new PatternPiiRule("email-address-2", "EMAIL_ADDRESS",
                     "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
                     0.95,
                     0
@@ -578,128 +529,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationCreatesRegexAnalyzerWhenRulesAreEnabled() {
-        this.contextRunner
-                .withPropertyValues(
-                        "spring.ai.privacy.regex.enabled=true",
-                        "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                        "spring.ai.privacy.regex.rules[0].pattern=\\bEMP-\\d{4}\\b",
-                        "spring.ai.privacy.regex.rules[0].score=0.91"
-                )
-                .run(context -> {
-                    assertThat(context).hasSingleBean(RegexPiiAnalyzer.class);
-
-                    PrivacyService privacyService = context.getBean(PrivacyService.class);
-                    try (PrivacySession session = privacyService.openSession()) {
-                        assertThat(privacyService.tokenize(session.handle(), "Owner EMP-1234"))
-                                .matches("Owner "
-                                        + OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID").pattern());
-                    }
-                });
-    }
-
-    @Test
-    void autoConfigurationResolvesValidatorIdOnceAndBindsItToTheRuntimeRule() {
-        AtomicInteger idCalls = new AtomicInteger();
-        AtomicReference<String> receivedCandidate = new AtomicReference<>();
-        RegexPiiMatchValidator validator = new RegexPiiMatchValidator() {
-            @Override
-            public String id() {
-                idCalls.incrementAndGet();
-                return "employee-id-check";
-            }
-
-            @Override
-            public boolean isValid(String candidate) {
-                receivedCandidate.set(candidate);
-                return candidate.endsWith("0");
-            }
-        };
-
-        this.contextRunner
-                .withBean("unrelatedSpringBeanName", RegexPiiMatchValidator.class, () -> validator)
-                .withPropertyValues(
-                        "spring.ai.privacy.regex.enabled=true",
-                        "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                        "spring.ai.privacy.regex.rules[0].pattern=\\bEMP-\\d{4}\\b",
-                        "spring.ai.privacy.regex.rules[0].score=0.91",
-                        "spring.ai.privacy.regex.rules[0].validator-id=employee-id-check"
-                )
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    RegexPiiAnalyzer analyzer = context.getBean(RegexPiiAnalyzer.class);
-                    assertThat(idCalls).hasValue(1);
-
-                    assertThat(analyzer.analyze(
-                            "EMP-1234 and EMP-5670",
-                            context.getBean(PiiAnalysisOptions.class),
-                            PrivacyProcessingLimits.defaults()
-                    )).containsExactly(new PiiSpan("EMPLOYEE_ID", 13, 21, 0.91));
-                    assertThat(receivedCandidate).hasValue("EMP-5670");
-                    assertThat(idCalls).hasValue(1);
-                });
-    }
-
-    @Test
-    void autoConfigurationRejectsUnknownValidatorIdAtStartup() {
-        regexContext("missing-check").run(context -> {
-            assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure()).hasRootCauseMessage(
-                    "spring.ai.privacy.regex.rules[0].validator-id references unknown validator ID "
-                            + "'missing-check'"
-            );
-        });
-    }
-
-    @Test
-    void autoConfigurationRejectsBlankValidatorIdAtStartup() {
-        regexContext("").run(context -> {
-            assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure()).hasRootCauseMessage(
-                    "spring.ai.privacy.regex.rules[0].validator-id must not be blank"
-            );
-        });
-    }
-
-    @Test
-    void autoConfigurationRejectsMalformedValidatorIdAtStartup() {
-        regexContext("Employee ID").run(context -> {
-            assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure()).hasRootCauseMessage(
-                    "spring.ai.privacy.regex.rules[0].validator-id must use lowercase ASCII letters "
-                            + "and digits separated by single hyphens"
-            );
-        });
-    }
-
-    @Test
-    void autoConfigurationRejectsDuplicateValidatorIdsAtStartup() {
-        this.contextRunner
-                .withBean(
-                        "firstValidatorBean",
-                        RegexPiiMatchValidator.class,
-                        () -> matchValidator("employee-id-check", candidate -> true)
-                )
-                .withBean(
-                        "secondValidatorBean",
-                        RegexPiiMatchValidator.class,
-                        () -> matchValidator("employee-id-check", candidate -> false)
-                )
-                .withPropertyValues(
-                        "spring.ai.privacy.regex.enabled=true",
-                        "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                        "spring.ai.privacy.regex.rules[0].pattern=\\bEMP-\\d{4}\\b"
-                )
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure()).hasRootCauseMessage(
-                            "Multiple RegexPiiMatchValidator beans use validator ID "
-                                    + "'employee-id-check'"
-                    );
-                });
-    }
-
-    @Test
     void autoConfigurationWiresSanitizedPartialFailureObserverIntoRuntimeAnalysis() {
         AtomicReference<PiiAnalyzerFailure> observed = new AtomicReference<>();
         this.contextRunner
@@ -723,14 +552,14 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void customRegexAnalyzerIsTheSingleSourceForItsTrustedEntityTypes() {
+    void customRulesAnalyzerIsTheSingleSourceForItsTrustedEntityTypes() {
         this.contextRunner
-                .withBean(RegexPiiAnalyzer.class, () -> new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.95, 0)
+                .withBean(RuleBasedPiiAnalyzer.class, () -> new RuleBasedPiiAnalyzer(List.of(
+                        new PatternPiiRule("customer-id-3", "CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.95, 0)
                 )))
-                .withPropertyValues("spring.ai.privacy.regex.enabled=true")
+                .withPropertyValues("spring.ai.privacy.rules.enabled=false")
                 .run(context -> {
-                    assertThat(context).hasSingleBean(RegexPiiAnalyzer.class);
+                    assertThat(context).hasSingleBean(RuleBasedPiiAnalyzer.class);
                     assertThat(context).doesNotHaveBean(EntityTypeRegistry.class);
 
                     PrivacyService privacyService = context.getBean(PrivacyService.class);
@@ -786,35 +615,8 @@ class PrivacyGuardrailsAutoConfigurationTest {
         return ToolDefinition.builder().name(name).description(name).inputSchema("{}").build();
     }
 
-    private ApplicationContextRunner regexContext(String validatorId) {
-        return this.contextRunner.withPropertyValues(
-                "spring.ai.privacy.regex.enabled=true",
-                "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                "spring.ai.privacy.regex.rules[0].pattern=\\bEMP-\\d{4}\\b",
-                "spring.ai.privacy.regex.rules[0].validator-id=" + validatorId
-        );
-    }
-
-    private static RegexPiiMatchValidator matchValidator(
-            String id,
-            Predicate<String> validation
-    ) {
-        return new RegexPiiMatchValidator() {
-            @Override
-            public String id() {
-                return id;
-            }
-
-            @Override
-            public boolean isValid(String candidate) {
-                return validation.test(candidate);
-            }
-        };
-    }
-
     private static PiiAnalyzer emailAnalyzer() {
-        return new RegexPiiAnalyzer(List.of(new RegexPiiRule(
-                "EMAIL_ADDRESS",
+        return new RuleBasedPiiAnalyzer(List.of(new PatternPiiRule("email-address-4", "EMAIL_ADDRESS",
                 "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
                 0.95,
                 0

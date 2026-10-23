@@ -104,9 +104,9 @@ class PrivacyServicePropertyTest {
     }
 
     private static PrivacyService recursivePrivacyService() {
-        RegexPiiAnalyzer analyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("SYNTHETIC_ID", "\\bSYN-\\d{4}\\b", 1.0, 0),
-                new RegexPiiRule("PHONE_NUMBER", "\\b821\\d{9}\\b", 1.0, 0)
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+                new PatternPiiRule("synthetic-id-1", "SYNTHETIC_ID", "\\bSYN-\\d{4}\\b", 1.0, 0),
+                new PatternPiiRule("phone-number-2", "PHONE_NUMBER", "\\b821\\d{9}\\b", 1.0, 0)
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }

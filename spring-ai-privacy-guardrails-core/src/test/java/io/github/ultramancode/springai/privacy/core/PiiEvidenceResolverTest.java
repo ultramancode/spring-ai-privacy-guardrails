@@ -21,7 +21,7 @@ class PiiEvidenceResolverTest {
         List<ResolvedPiiSpan> result = resolver.resolve(
                 List.of(
                         evidence("PER", 0, 5, "OPENNLP", 0.90),
-                        evidence("EMAIL", 6, 23, "REGEX", 0.90)
+                        evidence("EMAIL", 6, 23, "RULES", 0.90)
                 ),
                 canonicalOptions
         );
@@ -78,7 +78,7 @@ class PiiEvidenceResolverTest {
         List<ResolvedPiiSpan> result = resolver.resolve(
                 List.of(
                         evidence("PERSON", 0, 4, "OPENNLP", 0.99),
-                        evidence("EMAIL_ADDRESS", 0, 16, "REGEX", 0.90)
+                        evidence("EMAIL_ADDRESS", 0, 16, "RULES", 0.90)
                 ),
                 PiiAnalysisOptions.defaults()
         );
@@ -172,7 +172,7 @@ class PiiEvidenceResolverTest {
                 Map.of(
                         "OPENNLP", registry,
                         "PRESIDIO", registry,
-                        "REGEX", registry
+                        "RULES", registry
                 ),
                 registry,
                 policy

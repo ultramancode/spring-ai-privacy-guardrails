@@ -2,19 +2,21 @@ package io.github.ultramancode.springai.privacy.autoconfigure;
 
 import io.github.ultramancode.springai.privacy.core.EntityTypeRegistry;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
-import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureObserver;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureObserver;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
+import io.github.ultramancode.springai.privacy.core.PiiRule;
+import io.github.ultramancode.springai.privacy.core.PiiRuleCatalog;
+import io.github.ultramancode.springai.privacy.core.PiiRulePreset;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiMatchValidator;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
-import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -22,22 +24,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 
 /** Auto-configures core privacy services and the starter-managed Spring AI privacy boundary. */
 @AutoConfiguration
 @EnableConfigurationProperties(PrivacyGuardrailsProperties.class)
 public class PrivacyGuardrailsAutoConfiguration {
-
-    private static final Pattern REGEX_MATCH_VALIDATOR_ID_SYNTAX = Pattern.compile(
-            "[a-z0-9]+(?:-[a-z0-9]+)*"
-    );
 
     /** Optional integrations consume a JDK contract without depending on this starter. */
     @Bean
@@ -72,100 +65,33 @@ public class PrivacyGuardrailsAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "spring.ai.privacy.regex", name = "enabled", havingValue = "true")
-    @ConditionalOnMissingBean(RegexPiiAnalyzer.class)
-    RegexPiiAnalyzer regexPiiAnalyzer(
+    @ConditionalOnProperty(prefix = "spring.ai.privacy.rules", name = "enabled", havingValue = "true")
+    RuleBasedPiiAnalyzer ruleBasedPiiAnalyzer(
             PrivacyGuardrailsProperties properties,
-            List<RegexPiiMatchValidator> matchValidators
+            ObjectProvider<PiiRule> rules,
+            ObjectProvider<PiiRulePreset> presets
     ) {
-        List<PrivacyGuardrailsProperties.Regex.Rule> configuredRules = requireConfiguredRegexRules(properties);
-        Map<String, RegexPiiMatchValidator> matchValidatorsById = indexMatchValidators(matchValidators);
-        List<RegexPiiRule> rules = new ArrayList<>(configuredRules.size());
-        for (int index = 0; index < configuredRules.size(); index++) {
-            PrivacyGuardrailsProperties.Regex.Rule rule = configuredRules.get(index);
-            rules.add(new RegexPiiRule(
-                    rule.getEntityType(),
-                    rule.getPattern(),
-                    rule.getScore(),
-                    rule.getCaptureGroup(),
-                    resolveMatchValidator(rule.getValidatorId(), index, matchValidatorsById)
-            ));
-        }
-        return new RegexPiiAnalyzer(rules);
+        PiiRuleCatalog.Builder catalog = PiiRuleCatalog.builder().builtIns();
+        rules.orderedStream().forEach(catalog::rule);
+        presets.orderedStream().forEach(catalog::preset);
+        PrivacyGuardrailsProperties.Rules selection = properties.getRules();
+        return catalog.build().select(selection.getPresets(), selection.getInclude(), selection.getExclude());
     }
 
-    private Map<String, RegexPiiMatchValidator> indexMatchValidators(
-            List<RegexPiiMatchValidator> matchValidators
-    ) {
-        Map<String, RegexPiiMatchValidator> validatorsById = new LinkedHashMap<>();
-        for (RegexPiiMatchValidator matchValidator : matchValidators) {
-            RegexPiiMatchValidator validator = Objects.requireNonNull(
-                    matchValidator,
-                    "RegexPiiMatchValidator beans must not be null"
-            );
-            String validatorId = requireValidValidatorId(
-                    validator.id(),
-                    "RegexPiiMatchValidator.id"
-            );
-            if (validatorsById.putIfAbsent(validatorId, validator) != null) {
-                throw new IllegalStateException(
-                        "Multiple RegexPiiMatchValidator beans use validator ID '"
-                                + validatorId + "'"
-                );
-            }
-        }
-        return validatorsById;
+    @Bean
+    @ConditionalOnProperty(prefix = "spring.ai.privacy.rules", name = "enabled", havingValue = "true")
+    SmartInitializingSingleton ruleProviderConflictCheck(ObjectProvider<PiiAnalyzer> analyzers) {
+        return () -> requireSingleRulesProvider(analyzers.orderedStream().toList());
     }
 
-    private RegexPiiMatchValidator resolveMatchValidator(
-            String configuredValidatorId,
-            int ruleIndex,
-            Map<String, RegexPiiMatchValidator> matchValidatorsById
-    ) {
-        if (configuredValidatorId == null) {
-            return null;
+    private static void requireSingleRulesProvider(List<PiiAnalyzer> analyzers) {
+        long rulesProviders = analyzers.stream()
+                .filter(analyzer -> RuleBasedPiiAnalyzer.PROVIDER_ID.equalsIgnoreCase(analyzer.providerId()))
+                .count();
+        if (rulesProviders > 1) {
+            throw new IllegalStateException("Multiple RULES providers. Set spring.ai.privacy.rules.enabled=false "
+                    + "when registering your own RULES analyzer");
         }
-        String property = "spring.ai.privacy.regex.rules[" + ruleIndex + "].validator-id";
-        String validatorId = requireValidValidatorId(configuredValidatorId, property);
-        RegexPiiMatchValidator matchValidator = matchValidatorsById.get(validatorId);
-        if (matchValidator == null) {
-            throw new IllegalStateException(
-                    property + " references unknown validator ID '" + validatorId + "'"
-            );
-        }
-        return matchValidator;
-    }
-
-    private String requireValidValidatorId(String validatorId, String description) {
-        if (validatorId == null || validatorId.isBlank()) {
-            throw new IllegalStateException(description + " must not be blank");
-        }
-        if (!REGEX_MATCH_VALIDATOR_ID_SYNTAX.matcher(validatorId).matches()) {
-            throw new IllegalStateException(
-                    description + " must use lowercase ASCII letters and digits "
-                            + "separated by single hyphens"
-            );
-        }
-        return validatorId;
-    }
-
-    private List<PrivacyGuardrailsProperties.Regex.Rule> requireConfiguredRegexRules(
-            PrivacyGuardrailsProperties properties
-    ) {
-        List<PrivacyGuardrailsProperties.Regex.Rule> rules = properties.getRegex().getRules();
-        if (rules.isEmpty()) {
-            throw new IllegalStateException(
-                    "spring.ai.privacy.regex.rules must contain at least one rule when regex is enabled"
-            );
-        }
-        for (int index = 0; index < rules.size(); index++) {
-            if (rules.get(index) == null) {
-                throw new IllegalStateException(
-                        "spring.ai.privacy.regex.rules[" + index + "] must not be null"
-                );
-            }
-        }
-        return rules;
     }
 
     @Bean
@@ -180,9 +106,10 @@ public class PrivacyGuardrailsAutoConfiguration {
             ObjectProvider<PiiAnalyzerFailureObserver> failureObserver
     ) {
         List<PiiAnalyzer> configuredAnalyzers = analyzers.orderedStream().toList();
+        requireSingleRulesProvider(configuredAnalyzers);
         if (configuredAnalyzers.isEmpty()) {
             throw new IllegalStateException(
-                    "No PiiAnalyzer is configured. Enable regex, OpenNLP, Presidio, or provide a custom analyzer"
+                    "No PiiAnalyzer is configured. Enable rules, OpenNLP, Presidio, or provide a custom analyzer"
             );
         }
         return new PrivacyService(

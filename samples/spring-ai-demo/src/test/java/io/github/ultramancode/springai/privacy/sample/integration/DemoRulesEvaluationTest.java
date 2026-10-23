@@ -18,13 +18,13 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-class DemoRegexEvaluationTest {
+class DemoRulesEvaluationTest {
 
     @Autowired
     private PrivacyService privacyService;
 
     @Test
-    void demoRegexRulesMatchTheVersionedSyntheticCorpus() throws IOException {
+    void demoRulesMatchTheVersionedSyntheticCorpus() throws IOException {
         List<EvaluationCase> cases = loadEvaluationCases();
         assertThat(cases).isNotEmpty();
 

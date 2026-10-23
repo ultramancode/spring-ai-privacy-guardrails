@@ -12,7 +12,7 @@ This guide shows the basic path for adding Spring AI Privacy Guardrails to an
 existing Spring AI application and applying privacy protection across model,
 tool, MCP, and output boundaries.
 
-Start with the built-in Regex analyzer for a setup that requires no external
+Start with the local rule analyzer for a setup that requires no external
 analyzer service. For PII detection beyond application-specific patterns, you
 can integrate Presidio, an open-source framework for PII detection and
 de-identification, as an external analyzer service.
@@ -38,7 +38,7 @@ its Gradle and Maven dependencies.
 
 | Analyzer | Use |
 | --- | --- |
-| [Regex](#2-quick-start-with-regex) | Application-defined patterns. Included in the client starter. |
+| [Local rules](#2-quick-start-with-local-rules) | Built-in presets and Java-defined rules. Included in the client starter. |
 | [Presidio](#5-use-presidio-for-pii-detection) | Detect various types of PII through an external Presidio service. |
 | [OpenNLP](#6-use-opennlp-for-jvm-local-detection) | Detect PII inside the application using OpenNLP models you provide. No external analysis service is needed. |
 
@@ -49,9 +49,9 @@ Tool authorization uses a separate Spring Security starter. It can be used on
 its own or together with a privacy starter. See
 [Spring Security Tool Authorization](security.md) for its dependency and setup.
 
-## 2. Quick Start with Regex
+## 2. Quick Start with Local Rules
 
-The built-in Regex analyzer is the easiest way to verify the privacy boundary
+The local rule analyzer is the easiest way to verify the privacy boundary
 without an external analyzer service.
 
 Add the client starter. Analyzer-specific starters can be added as needed.
@@ -74,21 +74,30 @@ dependencies {
 </dependency>
 ```
 
-Enable Regex and define application-specific identifiers:
+Select built-in presets and register application-specific rules in Java:
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
-          - entity-type: CUSTOMER_ID
-            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
-            score: 0.90
+        presets: [COMMON, KR]
+        include: [employee-id, customer-id]
+```
+
+```java
+@Bean
+PiiRule employeeIdRule() {
+    return new PatternPiiRule("employee-id", "EMPLOYEE_ID",
+            "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0);
+}
+
+@Bean
+PiiRule customerIdRule() {
+    return new PatternPiiRule("customer-id", "CUSTOMER_ID",
+            "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])", 0.90, 0);
+}
 ```
 
 These rules detect only the configured formats. Regex rules are useful for
@@ -99,7 +108,7 @@ Once a `PiiAnalyzer` bean is available, the starter provides `PrivacyService`
 and the components used by `GuardrailsChatClientFactory`.
 
 If a format match also needs a checksum or business-rule check, add a
-[custom Regex validator](privacy.md#regex-analyzer).
+[Java rule with a validation function](privacy.md#local-rules-and-presets).
 
 ## 3. Protect a ChatClient
 
@@ -225,7 +234,7 @@ Presidio is an open-source framework for PII detection and de-identification.
 Use the Presidio starter when you want to detect PII beyond
 application-specific patterns through an external Presidio Analyzer service.
 
-Add the Presidio starter alongside the [client starter](#2-quick-start-with-regex):
+Add the Presidio starter alongside the [client starter](#2-quick-start-with-local-rules):
 
 ### Gradle
 
@@ -266,7 +275,7 @@ docker compose -f samples/presidio/docker-compose.yml up -d --wait
 
 Create the client as shown in [Protect a ChatClient](#3-protect-a-chatclient).
 
-Regex and Presidio may also be enabled together. In the default `UNION` mode,
+Local rules and Presidio may also be enabled together. In the default `UNION` mode,
 all configured analyzers run and their detection findings are merged. The
 default `REQUIRE_ALL` failure policy fails the request if any configured
 analyzer fails. Review
@@ -277,7 +286,7 @@ analyzers in production.
 
 Use the OpenNLP starter when detection should run inside the application JVM
 with application-supplied compatible OpenNLP models. Add it alongside the
-[client starter](#2-quick-start-with-regex).
+[client starter](#2-quick-start-with-local-rules).
 
 ### Gradle
 
@@ -358,7 +367,7 @@ details.
 
 ## 8. Custom Analyzers
 
-Applications can provide custom `PiiAnalyzer` Spring beans when Regex, Presidio,
+Applications can provide custom `PiiAnalyzer` Spring beans when local rules, Presidio,
 or OpenNLP is not the right detector.
 
 Custom analyzers participate in the same detection and resolution flow as the

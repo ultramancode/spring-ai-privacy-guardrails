@@ -118,7 +118,7 @@ MCP, and output boundaries.
 | Analyzer | Best fit |
 | --- | --- |
 | Presidio | Broader PII detection and NLP-backed recognition |
-| Built-in Regex or custom `PiiAnalyzer` | Application-specific identifiers with predictable formats |
+| Local rules (`PiiRule`) | Built-in identifiers and application-defined detection rules |
 | Apache OpenNLP | JVM-local NER with application-supplied compatible models |
 
 For broader PII detection, Presidio is the recommended default.
@@ -153,8 +153,8 @@ example below and the relevant guide to complete the setup.
 
 The examples below use version `0.4.0-SNAPSHOT`.
 
-To start without an external analyzer service, use the client starter with an
-application-specific regex rule.
+To start without an external analyzer service, use the client starter with a
+Java-defined application rule.
 
 ```gradle
 dependencies {
@@ -166,12 +166,18 @@ dependencies {
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
+        presets: [COMMON, KR]
+        include: [employee-id]
+```
+
+```java
+@Bean
+PiiRule employeeIdRule() {
+    return new PatternPiiRule("employee-id", "EMPLOYEE_ID",
+            "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0);
+}
 ```
 
 This example rule is application-specific and detects only values in the
@@ -299,7 +305,7 @@ dependencies. Add test support separately in the application's test scope.
 
 | Module | Purpose |
 | --- | --- |
-| `spring-ai-privacy-guardrails-core` | PII detection and tokenization, built-in Regex analysis, and request-scoped sessions |
+| `spring-ai-privacy-guardrails-core` | PII detection and tokenization, built-in local rule analysis, and request-scoped sessions |
 | `spring-ai-privacy-guardrails-spring-ai-boundary` | Combines privacy protection, tool authorization, and content inspection before model calls |
 | `spring-ai-privacy-guardrails-spring-ai` | Privacy protection for Spring AI model calls, tool execution, and responses |
 | `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP adapter |

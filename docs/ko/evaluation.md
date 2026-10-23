@@ -8,7 +8,7 @@ description: >-
 [English](../evaluation.md) | **한국어**
 
 <!-- i18n-source: docs/evaluation.md -->
-<!-- i18n-source-sha256: 93827f1578332de3fc7e82e60f859d09ee66eb9eef84650c31b3e1a51ed20d04 -->
+<!-- i18n-source-sha256: 0927676482260f64b6ff2b793440af77c6ee596d7a917dbf4ee12ffd79f3fbcd -->
 
 이 저장소에는 데모 분석기의 회귀 테스트, 개인정보 보호 경계 테스트와 JMH 벤치마크가
 포함되어 있습니다. 회귀 테스트는 탐지 결과를, 경계 테스트는 정책 적용을, JMH 벤치마크는
@@ -17,7 +17,7 @@ description: >-
 
 ## 데모 분석기 회귀 테스트
 
-데모의 정규식(Regex) 분석기는 실행 가능한 샘플과 같은 설정을 사용해 검증용 데이터셋을
+데모의 로컬 규칙 분석기는 실행 가능한 샘플과 같은 설정을 사용해 검증용 데이터셋을
 대상으로 테스트합니다. 테스트는 기대한 엔티티 유형과 원문 값을 탐지하는지, 보호 처리
 결과에서 해당 원문이 제거되는지, 요청 세션이 정리되는지 확인합니다. 탐지된 개인정보는
 원문 값을 직접 드러내지 않는 대체 문자열인 **불투명 토큰(opaque token)**으로 바뀝니다.
@@ -25,7 +25,7 @@ description: >-
 기본 데모 구성에서 회귀 테스트만 실행하려면 다음 명령을 사용합니다.
 
 ```bash
-./gradlew :spring-ai-privacy-guardrails-sample-demo:test --tests io.github.ultramancode.springai.privacy.sample.integration.DemoRegexEvaluationTest
+./gradlew :spring-ai-privacy-guardrails-sample-demo:test --tests io.github.ultramancode.springai.privacy.sample.integration.DemoRulesEvaluationTest
 ```
 
 이 테스트는 데모 규칙의 변경을 확인하기 위한 것입니다. 이 결과는 일반적인 개인정보 탐지

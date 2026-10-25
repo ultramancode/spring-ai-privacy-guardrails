@@ -1,9 +1,12 @@
 package io.github.ultramancode.springai.privacy.springai;
 
 import io.github.ultramancode.springai.privacy.core.EntityTypeRegistry;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureObserver;
+import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
@@ -14,12 +17,11 @@ import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -178,8 +180,16 @@ class PrivacyJsonPayloadPolicyTest {
     @ParameterizedTest
     @ValueSource(strings = {"ab", "[\"ab\"]"})
     void analysisLimitFailuresUseTheCallingBoundaryPhase(String payload) {
+        PatternDefinition personPattern = PatternDefinition.builder()
+                .expression(".")
+                .score(1.0)
+                .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                new PatternPiiRule("person-1", "PERSON", ".", 1.0, 0)));
+                PatternPiiRule.builder()
+                        .id("person")
+                        .entityType(PiiEntityTypes.PERSON)
+                        .addPattern(personPattern)
+                        .build()));
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
@@ -531,13 +541,27 @@ class PrivacyJsonPayloadPolicyTest {
 
     @Test
     void batchingPreservesScalarIsolationForBoundarySensitiveRegexRules() {
-        PrivacyService service = new PrivacyService(
-                List.of(new RuleBasedPiiAnalyzer(List.of(
-                        new PatternPiiRule("employee-id-2", "EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0),
-                        new PatternPiiRule("api-key-3", "API_KEY", "\\AKEY-[0-9]{4}\\z", 1.0, 0)
-                ))),
-                PiiAnalysisOptions.defaults()
-        );
+        PatternDefinition employeeIdPattern = PatternDefinition.builder()
+                .expression("^EMP-[0-9]{4}$")
+                .score(1.0)
+                .build();
+        PatternDefinition apiKeyPattern = PatternDefinition.builder()
+                .expression("\\AKEY-[0-9]{4}\\z")
+                .score(1.0)
+                .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+                PatternPiiRule.builder()
+                        .id("employee-id")
+                        .entityType("EMPLOYEE_ID")
+                        .addPattern(employeeIdPattern)
+                        .build(),
+                PatternPiiRule.builder()
+                        .id("api-key")
+                        .entityType("API_KEY")
+                        .addPattern(apiKeyPattern)
+                        .build()
+        ));
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         List<String> inputs = List.of(
                 "[\"EMP-1234\",\"safe\"]",
                 "[\"safe\",\"EMP-1234\",\"other\"]",

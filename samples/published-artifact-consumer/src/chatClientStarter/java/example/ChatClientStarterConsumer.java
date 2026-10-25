@@ -6,6 +6,7 @@ import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PiiRule;
 import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -28,7 +29,15 @@ import java.util.List;
 public class ChatClientStarterConsumer {
     @Bean
     PiiRule employeeIdRule() {
-        return new PatternPiiRule("employee-id", "EMPLOYEE_ID", "EMP-[0-9]{4}", 1.0, 0);
+        PatternDefinition employeeIdPattern = PatternDefinition.builder()
+                .expression("EMP-[0-9]{4}")
+                .score(1.0)
+                .build();
+        return PatternPiiRule.builder()
+                .id("employee-id")
+                .entityType("EMPLOYEE_ID")
+                .addPattern(employeeIdPattern)
+                .build();
     }
 
     public static void main(String[] args) {

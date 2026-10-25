@@ -3,6 +3,8 @@ unstructured-person-name	-	-	제 이름은 홍길동입니다.
 customer-name-sentence	-	-	고객명은 이순신이며 담당자는 별도입니다.
 email-basic	EMAIL_ADDRESS	test@example.com	연락 이메일은 test@example.com입니다.
 email-tagged	EMAIL_ADDRESS	privacy+demo@example.co.kr	답장은 privacy+demo@example.co.kr로 보내주세요.
+email-apostrophe	EMAIL_ADDRESS	o'connor@example.com	연락처는 o'connor@example.com입니다.
+email-exclamation	EMAIL_ADDRESS	a!b@example.com	다른 주소는 a!b@example.com입니다.
 phone-mobile	PHONE_NUMBER	010-1234-5678	휴대폰은 010-1234-5678입니다.
 phone-older-mobile-prefix	-	-	이전 연락처는 011-123-4567입니다.
 korean-rrn	KOREAN_RRN	900101-1234567	합성 주민번호는 900101-1234567입니다.
@@ -68,6 +70,9 @@ json-ordinary	-	-	{"status":"public","count":1234}
 token-shaped-text	-	-	문서에는 [PII_PERSON_1:not-a-token] 예시만 있습니다.
 ordinary-network-and-date	-	-	공개 주소 192.0.2.1과 날짜 2026-07-12를 기록합니다.
 credit-card-valid	CREDIT_CARD	4111 1111 1111 1111	Test card 4111 1111 1111 1111.
+credit-card-with-expiry	CREDIT_CARD	4111 1111 1111 1111	Test card 4111 1111 1111 1111 12/26.
+credit-card-next-to-year	CREDIT_CARD	4111111111111111	2026 4111111111111111
+credit-card-multiple	CREDIT_CARD,CREDIT_CARD,CREDIT_CARD	4012888888881881,4012-8888-8888-1881,4012 8888 8888 1881	4012888888881881 4012-8888-8888-1881 4012 8888 8888 1881
 credit-card-invalid	-	-	Test card 4111 1111 1111 1112.
 international-mobile	PHONE_NUMBER	+82 10-1234-5678	Contact +82 10-1234-5678.
 rrn-invalid-date	-	-	Synthetic ID 000230-3123456.

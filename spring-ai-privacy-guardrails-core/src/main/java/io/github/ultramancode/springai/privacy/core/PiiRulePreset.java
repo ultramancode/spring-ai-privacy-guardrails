@@ -7,8 +7,8 @@ import java.util.Objects;
 public record PiiRulePreset(String name, List<String> ruleIds) {
     /** Validates the name and copies the member list. References are checked by the catalog. */
     public PiiRulePreset {
-        name = PiiRuleSupport.requirePresetName(name);
+        name = PiiRuleSupport.requireValidPresetName(name);
         ruleIds = List.copyOf(Objects.requireNonNull(ruleIds, "ruleIds must not be null"));
-        ruleIds.forEach(PiiRuleSupport::requireRuleId);
+        ruleIds.forEach(PiiRuleSupport::requireValidRuleId);
     }
 }

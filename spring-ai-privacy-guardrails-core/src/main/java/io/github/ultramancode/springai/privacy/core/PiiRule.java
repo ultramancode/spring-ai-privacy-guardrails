@@ -15,15 +15,17 @@ public interface PiiRule {
     /** Nonempty set of canonical entity types this rule can emit. */
     Set<String> entityTypes();
 
-    /** Country metadata, such as {@code KR}. Selection uses rule IDs and preset names. */
-    default Set<String> countries() {
-        return Set.of();
-    }
-
     /**
      * Finds spans in the original text using UTF-16 offsets, inclusive start and exclusive end.
-     * Return an empty list for no matches. Do not retain the text. Respect the
-     * supplied result budget and interruption. Exceptions fail the local group.
+     * Return an empty list for no matches. Do not retain the text. Cooperate with
+     * thread interruption. A rule failure fails the entire {@code RULES} analysis call.
+     *
+     * <p>If another span would exceed {@link PrivacyProcessingLimits#maxResultSpans()},
+     * implementations must throw {@link PrivacyGuardrailException} with code
+     * {@link PrivacyFailureCode#PAYLOAD_LIMIT_EXCEEDED} and phase {@link PrivacyPhase#ANALYSIS}.
+     * Processing limit failures abort the operation regardless of provider failure policy.</p>
+     *
+     * @return a non-null list of non-null spans with types declared by {@link #entityTypes()}
      */
     List<PiiSpan> analyze(String text, PiiAnalysisOptions options, PrivacyProcessingLimits limits);
 }

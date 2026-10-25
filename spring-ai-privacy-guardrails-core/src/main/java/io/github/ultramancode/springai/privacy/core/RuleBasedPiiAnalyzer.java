@@ -8,8 +8,10 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Executes a fixed selection of local rules as the {@code RULES} provider.
- * A rule failure fails the entire analysis call. Result limits apply across all rules.
+ * Executes the configured PII rules in order and collects their results.
+ * Returns an empty list when no rules detect PII.
+ * Exceptions or invalid rule results abort the analysis call without returning partial results.
+ * The result count limit applies to the total across all rules.
  */
 public final class RuleBasedPiiAnalyzer implements PiiAnalyzer {
     /** Provider ID for resolution and failure policies. */
@@ -31,34 +33,37 @@ public final class RuleBasedPiiAnalyzer implements PiiAnalyzer {
         if (rules.isEmpty()) {
             throw new IllegalArgumentException("at least one PII rule must be selected");
         }
-        Set<String> ids = new HashSet<>();
-        Set<String> types = new LinkedHashSet<>();
-        List<RegisteredRule> registered = new ArrayList<>();
+        Set<String> ruleIds = new HashSet<>();
+        Set<String> entityTypes = new LinkedHashSet<>();
+        List<RegisteredRule> registeredRules = new ArrayList<>();
         for (PiiRule rule : rules) {
             Objects.requireNonNull(rule, "rule must not be null");
-            String id = PiiRuleSupport.requireRuleId(rule.id());
-            if (!ids.add(id)) {
-                throw new IllegalArgumentException("Duplicate rule ID '" + id + "'");
+            String ruleId = PiiRuleSupport.requireValidRuleId(rule.id());
+            if (!ruleIds.add(ruleId)) {
+                throw new IllegalArgumentException("Duplicate rule ID '" + ruleId + "'");
             }
-            Set<String> supported = Set.copyOf(rule.entityTypes());
-            if (supported.isEmpty()) {
-                throw new IllegalArgumentException("Rule '" + id + "' must declare entity types");
+            Set<String> ruleEntityTypes = Set.copyOf(rule.entityTypes());
+            if (ruleEntityTypes.isEmpty()) {
+                throw new IllegalArgumentException("Rule '" + ruleId + "' must declare entity types");
             }
-            supported.forEach(EntityTypeRegistry::requireValidEntityType);
-            registered.add(new RegisteredRule(id, supported, rule));
-            types.addAll(supported);
+            ruleEntityTypes.forEach(EntityTypeRegistry::requireValidEntityType);
+            registeredRules.add(new RegisteredRule(ruleId, ruleEntityTypes, rule));
+            entityTypes.addAll(ruleEntityTypes);
         }
-        this.rules = List.copyOf(registered);
+        this.rules = List.copyOf(registeredRules);
         this.presetNames = List.copyOf(presetNames);
-        this.entityTypes = Set.copyOf(types);
+        this.entityTypes = Set.copyOf(entityTypes);
     }
 
     /** Active rule IDs in execution order. */
     public List<String> ruleIds() {
-        return this.rules.stream().map(RegisteredRule::id).toList();
+        return this.rules.stream().map(RegisteredRule::ruleId).toList();
     }
 
-    /** Explicitly selected preset names. Exclusions may remove some preset members. */
+    /**
+     * Preset names specified when building this analyzer.
+     * Rules from these presets may be excluded.
+     */
     public List<String> presetNames() {
         return this.presetNames;
     }
@@ -68,6 +73,7 @@ public final class RuleBasedPiiAnalyzer implements PiiAnalyzer {
         return PROVIDER_ID;
     }
 
+    /** Declares the configured rules' entity types as trusted for this analyzer. */
     @Override
     public Set<String> trustedEntityTypes() {
         return this.entityTypes;
@@ -88,36 +94,63 @@ public final class RuleBasedPiiAnalyzer implements PiiAnalyzer {
         List<PiiSpan> result = new ArrayList<>();
         for (RegisteredRule rule : this.rules) {
             PiiRuleSupport.checkInterrupted();
-            int remaining = limits.maxResultSpans() - result.size();
-            // A zero remaining budget still permits a later rule to return no matches.
-            PrivacyProcessingLimits ruleLimits = new PrivacyProcessingLimits(
-                    limits.maxTextCharacters(), limits.maxOutputCharacters(), limits.maxValueTreeCharacters(),
-                    limits.maxValueTreeNodes(), limits.maxDepth(), limits.maxAnalysisSegments(),
-                    Math.max(1, remaining));
-            try {
-                List<PiiSpan> spans = Objects.requireNonNull(rule.delegate().analyze(text, options, ruleLimits));
-                PiiRuleSupport.checkInterrupted();
-                if (spans.size() > remaining) {
-                    throw PiiRuleSupport.limitExceeded();
-                }
-                for (PiiSpan span : spans) {
-                    if (span == null || span.end() > text.length()
-                            || !rule.entityTypes().contains(span.entityType())) {
-                        throw new IllegalStateException("Invalid rule result");
-                    }
-                    result.add(span);
-                }
-            } catch (PrivacyGuardrailException failure) {
-                // Do not expose application exception messages or causes containing source text.
-                throw new PrivacyGuardrailException(failure.code(), failure.phase(),
-                        "PII rule '" + rule.id() + "' failed");
-            } catch (RuntimeException failure) {
-                throw new IllegalStateException("PII rule '" + rule.id() + "' failed");
-            }
+            int remainingSpanCount = limits.maxResultSpans() - result.size();
+            List<PiiSpan> spans = analyzeWithRule(rule, text, options, limits, remainingSpanCount);
+            result.addAll(spans);
         }
         return List.copyOf(result);
     }
 
-    private record RegisteredRule(String id, Set<String> entityTypes, PiiRule delegate) {
+    private static List<PiiSpan> analyzeWithRule(
+            RegisteredRule rule,
+            String text,
+            PiiAnalysisOptions options,
+            PrivacyProcessingLimits limits,
+            int remainingSpanCount
+    ) {
+        // A zero remaining budget still permits a later rule to return no matches.
+        PrivacyProcessingLimits ruleLimits = PrivacyProcessingLimits.builder()
+                .maxTextCharacters(limits.maxTextCharacters())
+                .maxOutputCharacters(limits.maxOutputCharacters())
+                .maxValueTreeCharacters(limits.maxValueTreeCharacters())
+                .maxValueTreeNodes(limits.maxValueTreeNodes())
+                .maxDepth(limits.maxDepth())
+                .maxAnalysisSegments(limits.maxAnalysisSegments())
+                .maxResultSpans(Math.max(1, remainingSpanCount))
+                .build();
+        try {
+            // Delegate PII detection to the configured rule.
+            List<PiiSpan> spans = rule.delegate().analyze(text, options, ruleLimits);
+            Objects.requireNonNull(spans);
+            PiiRuleSupport.checkInterrupted();
+            validateRuleResults(rule, spans, text.length(), remainingSpanCount);
+            return List.copyOf(spans);
+        } catch (PrivacyGuardrailException failure) {
+            // Do not expose application exception messages or causes containing source text.
+            throw new PrivacyGuardrailException(failure.code(), failure.phase(),
+                    "PII rule '" + rule.ruleId() + "' failed");
+        } catch (RuntimeException failure) {
+            throw new IllegalStateException("PII rule '" + rule.ruleId() + "' failed");
+        }
+    }
+
+    private static void validateRuleResults(
+            RegisteredRule rule,
+            List<PiiSpan> spans,
+            int textLength,
+            int remainingSpanCount
+    ) {
+        if (spans.size() > remainingSpanCount) {
+            throw PiiRuleSupport.limitExceeded();
+        }
+        for (PiiSpan span : spans) {
+            if (span == null || span.end() > textLength
+                    || !rule.entityTypes().contains(span.entityType())) {
+                throw new IllegalStateException("Invalid rule result");
+            }
+        }
+    }
+
+    private record RegisteredRule(String ruleId, Set<String> entityTypes, PiiRule delegate) {
     }
 }

@@ -9,7 +9,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 82e206b20b97e7e1b069789ea4360327b25877e2d8a17f31cd21431076f76d5b -->
+<!-- i18n-source-sha256: 7b5bc4cba807983653153b9b499e3257ac293d7bb424d203e3b96f72ac5cc699 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
@@ -91,16 +91,32 @@ spring:
 ```
 
 ```java
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+
 @Bean
 PiiRule employeeIdRule() {
-    return new PatternPiiRule("employee-id", "EMPLOYEE_ID",
-            "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0);
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .build();
+    return PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(pattern)
+            .build();
 }
 
 @Bean
 PiiRule customerIdRule() {
-    return new PatternPiiRule("customer-id", "CUSTOMER_ID",
-            "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])", 0.90, 0);
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .build();
+    return PatternPiiRule.builder()
+            .id("customer-id")
+            .entityType("CUSTOMER_ID")
+            .addPattern(pattern)
+            .build();
 }
 ```
 
@@ -111,7 +127,7 @@ PiiRule customerIdRule() {
 Factory가 사용할 개인정보 보호 구성 요소를 제공합니다.
 
 형식이 일치한 뒤 체크섬이나 업무 규칙을 추가로 확인해야 한다면
-[검증 함수를 붙인 Java 규칙](privacy.md#로컬-규칙과-프리셋)를 연결할 수 있습니다.
+[검증 함수를 붙인 Java 규칙](privacy.md#로컬-규칙과-프리셋)을 연결할 수 있습니다.
 
 ## 3. ChatClient 보호
 

@@ -85,7 +85,7 @@
   <g transform="translate(476 294)">
     <rect width="372" height="206" rx="26" fill="#10243a" stroke="#af8cff" stroke-width="2"/>
     <text x="26" y="42" class="sans node-title">PII detection</text>
-    <text x="26" y="76" class="sans node-body">Built-in Regex · Presidio · OpenNLP · Custom</text>
+    <text x="26" y="76" class="sans node-body">Local rules · Presidio · OpenNLP · Custom</text>
     <rect x="24" y="106" width="324" height="40" rx="12" fill="#211d3c"/>
     <text x="186" y="132" text-anchor="middle" class="mono" font-size="15" fill="#c9b6ff">PHONE · CUSTOMER_ID</text>
     <text x="26" y="181" class="sans tiny" font-weight="700">DETECTORS ANSWER “WHAT”</text>

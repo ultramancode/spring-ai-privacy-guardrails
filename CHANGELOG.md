@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] (Unreleased)
+
+### Added
+
+- Added Java-defined local PII rules and selectable COMMON, KR, and application-defined presets.
+- Added `PiiEntityTypes` constants for library-defined entity labels, `BuiltInPiiRuleIds` for built-in rule IDs, and `BuiltInPiiPresetNames` for built-in preset names.
+- Added per-rule built-in score configuration through the Java API. A `RuleBasedPiiAnalyzer` bean replaces automatic rule selection.
+
+### Compatibility
+
+- Replaced `RegexPiiAnalyzer` and `RegexPiiRule` with `RuleBasedPiiAnalyzer` and `PiiRule` implementations such as `PatternPiiRule`. Replace `RegexPiiMatchValidator` with a candidate `Predicate<String>` on `PatternPiiRule`.
+- Replaced `spring.ai.privacy.regex.*` with `spring.ai.privacy.rules.*`. Define application rules as Java beans and select them through `presets`, `include`, and `exclude`. Automatic rule selection remains disabled by default.
+- Changed the local analyzer provider ID from `REGEX` to `RULES`. Update references in `analysis.primary-provider`, `analysis.supplemental-providers`, and `analysis.provider-minimum-scores`.
+
 ## [0.3.0]
 
 This release adds optional Spring Security-based tool authorization and improves PII analysis for structured inputs.

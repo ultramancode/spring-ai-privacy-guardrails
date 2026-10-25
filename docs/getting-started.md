@@ -87,16 +87,32 @@ spring:
 ```
 
 ```java
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+
 @Bean
 PiiRule employeeIdRule() {
-    return new PatternPiiRule("employee-id", "EMPLOYEE_ID",
-            "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0);
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .build();
+    return PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(pattern)
+            .build();
 }
 
 @Bean
 PiiRule customerIdRule() {
-    return new PatternPiiRule("customer-id", "CUSTOMER_ID",
-            "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])", 0.90, 0);
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .build();
+    return PatternPiiRule.builder()
+            .id("customer-id")
+            .entityType("CUSTOMER_ID")
+            .addPattern(pattern)
+            .build();
 }
 ```
 

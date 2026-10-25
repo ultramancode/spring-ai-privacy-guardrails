@@ -103,7 +103,7 @@ For authentication propagation setup and applicable conditions, see
 ## JMH Benchmarks
 
 The repository's JMH benchmarks measure execution time for key local processing
-paths, including Regex analysis, request-scoped PII tokenization, tool-boundary
+paths, including local rule analysis, request-scoped PII tokenization, tool-boundary
 processing, and detokenization. In the same environment, the results can be
 used to compare scaling behavior and version-to-version performance changes.
 

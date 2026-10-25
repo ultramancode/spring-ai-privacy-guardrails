@@ -247,7 +247,6 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 assertThat(output)
                     .contains("below fixed prefix 'spring.ai.privacy.analysis'")
                     .contains("'spring.ai.privacy.rules.include'")
-                    .contains("'spring.ai.privacy.rules.include'")
                     .doesNotContain("synthetic-sensitive-value")
                     .doesNotContain("CUSTOMER_ID");
             });

@@ -16,7 +16,6 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFacto
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -65,6 +64,7 @@ public class PrivacyGuardrailsAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(RuleBasedPiiAnalyzer.class)
     @ConditionalOnProperty(prefix = "spring.ai.privacy.rules", name = "enabled", havingValue = "true")
     RuleBasedPiiAnalyzer ruleBasedPiiAnalyzer(
             PrivacyGuardrailsProperties properties,
@@ -75,23 +75,11 @@ public class PrivacyGuardrailsAutoConfiguration {
         rules.orderedStream().forEach(catalog::rule);
         presets.orderedStream().forEach(catalog::preset);
         PrivacyGuardrailsProperties.Rules selection = properties.getRules();
-        return catalog.build().select(selection.getPresets(), selection.getInclude(), selection.getExclude());
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "spring.ai.privacy.rules", name = "enabled", havingValue = "true")
-    SmartInitializingSingleton ruleProviderConflictCheck(ObjectProvider<PiiAnalyzer> analyzers) {
-        return () -> requireSingleRulesProvider(analyzers.orderedStream().toList());
-    }
-
-    private static void requireSingleRulesProvider(List<PiiAnalyzer> analyzers) {
-        long rulesProviders = analyzers.stream()
-                .filter(analyzer -> RuleBasedPiiAnalyzer.PROVIDER_ID.equalsIgnoreCase(analyzer.providerId()))
-                .count();
-        if (rulesProviders > 1) {
-            throw new IllegalStateException("Multiple RULES providers. Set spring.ai.privacy.rules.enabled=false "
-                    + "when registering your own RULES analyzer");
-        }
+        return catalog.build().analyzerBuilder()
+                .presets(selection.getPresets())
+                .include(selection.getInclude())
+                .exclude(selection.getExclude())
+                .build();
     }
 
     @Bean
@@ -106,7 +94,6 @@ public class PrivacyGuardrailsAutoConfiguration {
             ObjectProvider<PiiAnalyzerFailureObserver> failureObserver
     ) {
         List<PiiAnalyzer> configuredAnalyzers = analyzers.orderedStream().toList();
-        requireSingleRulesProvider(configuredAnalyzers);
         if (configuredAnalyzers.isEmpty()) {
             throw new IllegalStateException(
                     "No PiiAnalyzer is configured. Enable rules, OpenNLP, Presidio, or provide a custom analyzer"

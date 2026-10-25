@@ -1,25 +1,27 @@
 package example;
 
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
-import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAutoConfiguration;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
+import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.core.PrivacySession;
-import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PiiRule;
 import io.github.ultramancode.springai.privacy.core.PiiRuleCatalog;
 import io.github.ultramancode.springai.privacy.core.PiiRulePreset;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
-import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
-import java.util.Set;
+import io.github.ultramancode.springai.privacy.core.PrivacyService;
+import io.github.ultramancode.springai.privacy.core.PrivacySession;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationPhase;
-import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
-import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
+import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import io.github.ultramancode.springai.privacy.test.PrivacyTestProbe;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -29,8 +31,8 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -52,6 +54,7 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -62,8 +65,16 @@ public class PublishedArtifactConsumer {
 
     @Bean
     PiiRule customerIdRule() {
-        return new PatternPiiRule("customer-id", "CUSTOMER_ID", "CUST-[0-9]{4}", 0.99, 0,
-                candidate -> !candidate.equals("CUST-0000"));
+        PatternDefinition customerIdPattern = PatternDefinition.builder()
+                .expression("CUST-[0-9]{4}")
+                .score(0.99)
+                .validator(candidate -> !candidate.equals("CUST-0000"))
+                .build();
+        return PatternPiiRule.builder()
+                .id("customer-id")
+                .entityType("CUSTOMER_ID")
+                .addPattern(customerIdPattern)
+                .build();
     }
 
     @Bean
@@ -130,12 +141,24 @@ public class PublishedArtifactConsumer {
                 return List.of(new PiiSpan("ACCOUNT_CODE", prefix + 5, prefix + 9, 0.9));
             }
         };
-        PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns().rule(direct)
-                .rule(new PatternPiiRule("employee-id", "EMPLOYEE_ID", "EMP-[0-9]{4}", 0.9, 0,
-                        value -> !value.endsWith("0000")))
-                .preset(new PiiRulePreset("COMPANY", List.of("employee-id", "account-code", "email")))
+        PatternDefinition employeeIdPattern = PatternDefinition.builder()
+                .expression("EMP-[0-9]{4}")
+                .score(0.9)
+                .validator(value -> !value.endsWith("0000"))
                 .build();
-        RuleBasedPiiAnalyzer analyzer = catalog.select(List.of("COMPANY"), List.of(), List.of("email"));
+        PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns().rule(direct)
+                .rule(PatternPiiRule.builder()
+                        .id("employee-id")
+                        .entityType("EMPLOYEE_ID")
+                        .addPattern(employeeIdPattern)
+                        .build())
+                .preset(new PiiRulePreset("COMPANY",
+                        List.of("employee-id", "account-code", BuiltInPiiRuleIds.EMAIL)))
+                .build();
+        RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()
+                .presets("COMPANY")
+                .exclude(BuiltInPiiRuleIds.EMAIL)
+                .build();
         String text = "EMP-1234 EMP-0000 ACME:0077";
         List<PiiSpan> spans = analyzer.analyze(text, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults());
         List<String> values = spans.stream().map(span -> text.substring(span.start(), span.end())).toList();
@@ -155,7 +178,7 @@ public class PublishedArtifactConsumer {
         String tokenized;
         try (PrivacySession session = privacyService.openSession()) {
             tokenized = privacyService.tokenize(session.handle(), "alice@example.com");
-            if (!OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS").matcher(tokenized).find()) {
+            if (!OpaquePiiTokenFormat.patternForEntityType(PiiEntityTypes.EMAIL_ADDRESS).matcher(tokenized).find()) {
                 throw new IllegalStateException("Published starter did not tokenize the synthetic email");
             }
         }
@@ -227,7 +250,7 @@ public class PublishedArtifactConsumer {
                 throw new IllegalStateException("Published client exposed raw PII to the model");
             }
             if (finalResponse.contains("final@example.com")
-                    || !OpaquePiiTokenFormat.patternForEntityType("EMAIL_ADDRESS").matcher(finalResponse).find()) {
+                    || !OpaquePiiTokenFormat.patternForEntityType(PiiEntityTypes.EMAIL_ADDRESS).matcher(finalResponse).find()) {
                 throw new IllegalStateException("Published output policy did not protect the final response");
             }
             authorizationChecks.verify();
@@ -330,7 +353,7 @@ public class PublishedArtifactConsumer {
                         .reduce((left, right) -> left + "\n" + right)
                         .orElse("");
                 String customerToken = token(modelInput, "CUSTOMER_ID");
-                String emailToken = token(modelInput, "EMAIL_ADDRESS");
+                String emailToken = token(modelInput, PiiEntityTypes.EMAIL_ADDRESS);
                 AssistantMessage toolCall = AssistantMessage.builder()
                         .content("")
                         .toolCalls(List.of(new AssistantMessage.ToolCall(

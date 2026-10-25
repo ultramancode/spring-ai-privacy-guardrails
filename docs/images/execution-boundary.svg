@@ -41,7 +41,7 @@
 
   <g transform="translate(100 246)">
     <rect width="250" height="78" rx="18" fill="#1e1a38"/>
-    <text x="125" y="34" text-anchor="middle" class="sans card-title">Regex</text>
+    <text x="125" y="34" text-anchor="middle" class="sans card-title">Local rules</text>
     <text x="125" y="59" text-anchor="middle" class="sans small">local identifiers</text>
 
     <rect x="276" width="250" height="78" rx="18" fill="#1e1a38"/>

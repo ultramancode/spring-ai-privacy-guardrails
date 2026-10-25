@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: dd1a5fa36b25d2451c8fa2da2945312bdab1367fd4ec1573b72b1124623007da -->
+<!-- i18n-source-sha256: 057b466170a502eb5e06c8e2d830edbb56be4db022700e6148f503871cb709ee -->
 
 <p align="center">
   <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
@@ -173,10 +173,19 @@ spring:
 ```
 
 ```java
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+
 @Bean
 PiiRule employeeIdRule() {
-    return new PatternPiiRule("employee-id", "EMPLOYEE_ID",
-            "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])", 0.90, 0);
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .build();
+    return PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(pattern)
+            .build();
 }
 ```
 

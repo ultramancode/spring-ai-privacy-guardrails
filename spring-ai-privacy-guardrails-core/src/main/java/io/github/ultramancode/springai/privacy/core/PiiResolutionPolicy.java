@@ -20,7 +20,7 @@ public final class PiiResolutionPolicy {
     public static final PiiAnalyzerFailurePolicy DEFAULT_FAILURE_POLICY = PiiAnalyzerFailurePolicy.REQUIRE_ALL;
 
     /** Default generic entity type used when evidence types conflict. */
-    public static final String DEFAULT_TYPE_CONFLICT_FALLBACK = EntityTypeRegistry.GENERIC_PII_TYPE;
+    public static final String DEFAULT_TYPE_CONFLICT_FALLBACK = PiiEntityTypes.PII;
 
     private final PiiResolutionMode mode;
     private final String primaryProvider;

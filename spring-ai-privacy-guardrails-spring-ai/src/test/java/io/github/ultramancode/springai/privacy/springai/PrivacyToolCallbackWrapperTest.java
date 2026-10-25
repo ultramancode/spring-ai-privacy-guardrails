@@ -13,6 +13,7 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
 import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
@@ -295,12 +296,18 @@ class PrivacyToolCallbackWrapperTest {
 
     @Test
     void toolInputProtectsExactScalarRegexMatches() {
-        PrivacyService service = new PrivacyService(
-                List.of(new RuleBasedPiiAnalyzer(List.of(
-                        new PatternPiiRule("employee-id-1", "EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
-                ))),
-                PiiAnalysisOptions.defaults()
-        );
+        PatternDefinition employeeIdPattern = PatternDefinition.builder()
+                .expression("^EMP-[0-9]{4}$")
+                .score(1.0)
+                .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+                PatternPiiRule.builder()
+                        .id("employee-id")
+                        .entityType("EMPLOYEE_ID")
+                        .addPattern(employeeIdPattern)
+                        .build()
+        ));
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         AtomicReference<String> received = new AtomicReference<>();
         PrivacyToolCallbackWrapper wrapper = wrap(
                 delegate(input -> {

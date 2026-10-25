@@ -6,6 +6,7 @@ import io.github.ultramancode.springai.privacy.security.ToolAuthorizationContext
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PiiRule;
 import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
@@ -78,14 +79,21 @@ abstract class ToolAuthorizationIntegrationTestSupport {
 
     protected ApplicationContextRunner privacyContextRunner(
         boolean outputEnabled, PrivacyResponseInspectionLimits limits) {
+        PatternDefinition employeeIdPattern = PatternDefinition.builder()
+                .expression("EMP-[0-9]{4}")
+                .score(0.9)
+                .build();
         return contextRunner().withConfiguration(AutoConfigurations.of(
             PrivacyGuardrailsAutoConfiguration.class, PrivacySecurityAutoConfiguration.class))
             .withUserConfiguration(PrivacyClientConfiguration.class)
             .withBean(PrivacyClientSettings.class, () -> new PrivacyClientSettings(outputEnabled, limits))
             .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
                 Map.of("customerLookup", List.of("EMPLOYEE_ID"))))
-            .withBean(PiiRule.class, () -> new PatternPiiRule(
-                    "employee-id", "EMPLOYEE_ID", "EMP-[0-9]{4}", 0.9, 0))
+            .withBean(PiiRule.class, () -> PatternPiiRule.builder()
+                    .id("employee-id")
+                    .entityType("EMPLOYEE_ID")
+                    .addPattern(employeeIdPattern)
+                    .build())
             .withPropertyValues("spring.ai.privacy.rules.enabled=true",
                     "spring.ai.privacy.rules.include=employee-id");
     }

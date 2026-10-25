@@ -3,10 +3,12 @@ package io.github.ultramancode.springai.privacy.test;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -91,17 +93,27 @@ class PrivacySequentialToolIntegrationTest {
     }
 
     private PrivacyService privacyService() {
-        return new PrivacyService(
-                List.of(new RuleBasedPiiAnalyzer(List.of(
-                        new PatternPiiRule("customer-id-1", "CUSTOMER_ID", "\\bCUST-\\d{6}\\b", 0.99, 0),
-                        new PatternPiiRule("email-address-2", "EMAIL_ADDRESS",
-                                "\\bwinner@example\\.test\\b",
-                                0.99,
-                                0
-                        )
-                ))),
-                PiiAnalysisOptions.defaults()
-        );
+        PatternDefinition customerIdPattern = PatternDefinition.builder()
+                .expression("\\bCUST-\\d{6}\\b")
+                .score(0.99)
+                .build();
+        PatternDefinition emailAddressPattern = PatternDefinition.builder()
+                .expression("\\bwinner@example\\.test\\b")
+                .score(0.99)
+                .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+                PatternPiiRule.builder()
+                        .id("customer-id")
+                        .entityType("CUSTOMER_ID")
+                        .addPattern(customerIdPattern)
+                        .build(),
+                PatternPiiRule.builder()
+                        .id("email-address")
+                        .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+                        .addPattern(emailAddressPattern)
+                        .build()
+        ));
+        return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
     private ToolCallback crmLookup() {

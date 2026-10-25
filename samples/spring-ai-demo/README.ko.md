@@ -323,12 +323,12 @@ docker compose -f samples/presidio/docker-compose.yml up -d --wait
 ```
 
 이 선택적 프로필을 활성화하면 기본 `REQUIRE_ALL` 정책에 따라 모든 분석 요청에서
-Presidio를 반드시 사용할 수 있어야 합니다. 정규식 분석이 성공해도 Presidio에 장애가
+Presidio를 반드시 사용할 수 있어야 합니다. RULES 분석이 성공해도 Presidio에 장애가
 발생하면 요청이 실패합니다. 이 프로필은 언어 `en`, spaCy `en_core_web_lg`, 분석기별
 최소 점수 `0.8`을 사용합니다. 운영 배포 전에는 운영 환경을 대표하는 검증 데이터로
 임계값을 조정해야 합니다.
 
-한국어 정규식 규칙은 계속 활성화되지만 이 샘플은 한국어 Presidio NER를 제공하지
+한국어 로컬 규칙은 계속 활성화되지만 이 샘플은 한국어 Presidio NER를 제공하지
 않습니다. 운영 한국어 배포에는 호환되는 한국어 NLP 및 인식기 파이프라인을 설치하고
 구성해야 합니다.
 

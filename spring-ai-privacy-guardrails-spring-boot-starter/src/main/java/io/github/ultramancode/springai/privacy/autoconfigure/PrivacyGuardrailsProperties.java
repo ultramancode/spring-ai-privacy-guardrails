@@ -133,7 +133,6 @@ public class PrivacyGuardrailsProperties {
          * Entity types to include in detection. An empty list includes every supported type.
          * Listing a type does not register it as trusted.
          */
-        /** Additional registered rule IDs to activate. */
         private List<String> includedEntityTypes = new ArrayList<>();
         /** Global minimum analyzer confidence score. */
         private double minimumScore = PiiAnalysisOptions.DEFAULT_MINIMUM_SCORE;
@@ -251,9 +250,9 @@ public class PrivacyGuardrailsProperties {
         }
     }
 
-    /** Selection of Java-defined rules. No rule logic is defined in configuration. */
+    /** Automatic configuration and selection of Java-defined rules. */
     public static class Rules {
-        /** Whether the local RULES provider is enabled. Defaults to false. */
+        /** Whether to auto-configure a local RULES analyzer. Defaults to false. */
         private boolean enabled;
         /** Ordered preset names. COMMON is not implicitly included. */
         private List<String> presets = new ArrayList<>();

@@ -3,11 +3,13 @@ package io.github.ultramancode.springai.privacy.test;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
 import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextTestAccess;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
@@ -303,12 +305,18 @@ class PrivacyTestProbeTest {
     }
 
     private PrivacyService privacyService() {
-        return new PrivacyService(
-                List.of(new RuleBasedPiiAnalyzer(List.of(
-                        new PatternPiiRule("person-1", "PERSON", "\\b(?:Alice|Bob)\\b", 0.99, 0)
-                ))),
-                PiiAnalysisOptions.defaults()
-        );
+        PatternDefinition personPattern = PatternDefinition.builder()
+                .expression("\\b(?:Alice|Bob)\\b")
+                .score(0.99)
+                .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+                PatternPiiRule.builder()
+                        .id("person")
+                        .entityType(PiiEntityTypes.PERSON)
+                        .addPattern(personPattern)
+                        .build()
+        ));
+        return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
     private static String readOnce(AtomicInteger reads, String value) {

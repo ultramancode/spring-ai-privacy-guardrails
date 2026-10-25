@@ -1,24 +1,26 @@
 package io.github.ultramancode.springai.privacy.autoconfigure;
 
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
-import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.core.EntityTypeRegistry;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
-import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureObserver;
+import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailure;
+import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailureObserver;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailurePolicy;
+import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionMode;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
+import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
-import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
-import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.ResolvedPiiSpan;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementBoundary;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementEvent;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
@@ -26,9 +28,9 @@ import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementOutcom
 import io.github.ultramancode.springai.privacy.springai.PrivacyInputAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyLifecycleAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAdvisor;
+import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolContextAdvisor;
-import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -433,14 +435,26 @@ class PrivacyGuardrailsAutoConfigurationTest {
     void autoConfiguredBeansProtectTheToolLoopAndNotifyObservers() {
         AtomicReference<String> delegateToolInput = new AtomicReference<>();
         List<PrivacyEnforcementEvent> enforcementEvents = new CopyOnWriteArrayList<>();
+        PatternDefinition customerIdPattern = PatternDefinition.builder()
+                .expression("\\bCUST-\\d{4}\\b")
+                .score(0.99)
+                .build();
+        PatternDefinition emailAddressPattern = PatternDefinition.builder()
+                .expression("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b")
+                .score(0.95)
+                .build();
         this.contextRunner
             .withBean(RuleBasedPiiAnalyzer.class, () -> new RuleBasedPiiAnalyzer(List.of(
-                new PatternPiiRule("customer-id-1", "CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.99, 0),
-                new PatternPiiRule("email-address-2", "EMAIL_ADDRESS",
-                    "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
-                    0.95,
-                    0
-                )
+                PatternPiiRule.builder()
+                        .id("customer-id")
+                        .entityType("CUSTOMER_ID")
+                        .addPattern(customerIdPattern)
+                        .build(),
+                PatternPiiRule.builder()
+                        .id("email-address")
+                        .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+                        .addPattern(emailAddressPattern)
+                        .build()
             )))
             .withBean(PrivacyEnforcementObserver.class, () -> enforcementEvents::add)
             .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
@@ -553,9 +567,17 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     @Test
     void customRulesAnalyzerIsTheSingleSourceForItsTrustedEntityTypes() {
+        PatternDefinition customerIdPattern = PatternDefinition.builder()
+                .expression("\\bCUST-\\d{4}\\b")
+                .score(0.95)
+                .build();
         this.contextRunner
                 .withBean(RuleBasedPiiAnalyzer.class, () -> new RuleBasedPiiAnalyzer(List.of(
-                        new PatternPiiRule("customer-id-3", "CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.95, 0)
+                        PatternPiiRule.builder()
+                                .id("customer-id")
+                                .entityType("CUSTOMER_ID")
+                                .addPattern(customerIdPattern)
+                                .build()
                 )))
                 .withPropertyValues("spring.ai.privacy.rules.enabled=false")
                 .run(context -> {
@@ -616,11 +638,15 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     private static PiiAnalyzer emailAnalyzer() {
-        return new RuleBasedPiiAnalyzer(List.of(new PatternPiiRule("email-address-4", "EMAIL_ADDRESS",
-                "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
-                0.95,
-                0
-        )));
+        PatternDefinition emailAddressPattern = PatternDefinition.builder()
+                .expression("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b")
+                .score(0.95)
+                .build();
+        return new RuleBasedPiiAnalyzer(List.of(PatternPiiRule.builder()
+                .id("email-address")
+                .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+                .addPattern(emailAddressPattern)
+                .build()));
     }
 
     private ToolCallback customerLookup(AtomicReference<String> delegateToolInput) {

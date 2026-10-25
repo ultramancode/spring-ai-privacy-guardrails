@@ -40,24 +40,6 @@ For a local snapshot consumed by another build, run
 `./gradlew publishToMavenLocal` and add `mavenLocal()` only in that local
 consumer.
 
-## Built-in PII Rules
-
-Built-in PII rules live in
-`spring-ai-privacy-guardrails-core/src/main/java/io/github/ultramancode/springai/privacy/core/rules`.
-Keep each rule's detection logic, validation, and metadata in its own package-private
-class implementing `PiiRule`. Reuse `PatternPiiRule` for regular-expression matching.
-Declare its ID in `BuiltInPiiRuleIds` and add an instance to `BuiltInPiiRules.rules()`.
-To include the rule in a built-in preset, add its ID constant to the corresponding
-definition in `BuiltInPiiRules.presets()`. A rule does not need to belong to a preset.
-Declare built-in preset names in `BuiltInPiiPresetNames`.
-
-Place rule-specific tests in the matching test package. Keep catalog registration
-and preset checks separate from individual detection cases. To run these rule tests:
-
-```bash
-./gradlew :spring-ai-privacy-guardrails-core:test --tests 'io.github.ultramancode.springai.privacy.core.rules.*Test'
-```
-
 ## Developer Certificate of Origin
 
 All commits must include a `Signed-off-by` trailer at the end of the commit

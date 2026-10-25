@@ -21,12 +21,12 @@ final class PiiRuleSupport {
     static void checkInterrupted() {
         if (Thread.currentThread().isInterrupted()) {
             throw new PrivacyGuardrailException(PrivacyFailureCode.ANALYSIS_INTERRUPTED,
-                    PrivacyPhase.ANALYSIS, "Local rule analysis interrupted");
+                PrivacyPhase.ANALYSIS, "Local rule analysis interrupted");
         }
     }
 
     static PrivacyGuardrailException limitExceeded() {
         return new PrivacyGuardrailException(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED,
-                PrivacyPhase.ANALYSIS, "Local rule analysis exceeded a configured processing limit");
+            PrivacyPhase.ANALYSIS, "Local rule analysis exceeded a configured processing limit");
     }
 }

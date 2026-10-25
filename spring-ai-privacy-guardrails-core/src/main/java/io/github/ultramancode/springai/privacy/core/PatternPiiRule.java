@@ -62,7 +62,7 @@ public final class PatternPiiRule implements PiiRule {
                     throw new IllegalStateException("Rule '" + this.id + "' produced an empty capture group");
                 }
                 if (definition.validator() != null
-                        && !definition.validator().test(matcher.group(captureGroup))) {
+                    && !definition.validator().test(matcher.group(captureGroup))) {
                     continue;
                 }
                 if (spans.size() >= limits.maxResultSpans()) {
@@ -190,7 +190,7 @@ public final class PatternPiiRule implements PiiRule {
     private record CompiledPattern(PatternDefinition definition, Pattern expression) {
         private CompiledPattern(PatternDefinition definition) {
             this(Objects.requireNonNull(definition, "pattern must not be null"),
-                    Pattern.compile(definition.expression()));
+                Pattern.compile(definition.expression()));
         }
 
         private CompiledPattern {

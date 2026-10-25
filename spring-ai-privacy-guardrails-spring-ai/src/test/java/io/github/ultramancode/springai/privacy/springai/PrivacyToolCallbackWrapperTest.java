@@ -297,24 +297,24 @@ class PrivacyToolCallbackWrapperTest {
     @Test
     void toolInputProtectsExactScalarRegexMatches() {
         PatternDefinition employeeIdPattern = PatternDefinition.builder()
-                .expression("^EMP-[0-9]{4}$")
-                .score(1.0)
-                .build();
+            .expression("^EMP-[0-9]{4}$")
+            .score(1.0)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("employee-id")
-                        .entityType("EMPLOYEE_ID")
-                        .addPattern(employeeIdPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("employee-id")
+                .entityType("EMPLOYEE_ID")
+                .addPattern(employeeIdPattern)
+                .build()
         ));
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         AtomicReference<String> received = new AtomicReference<>();
         PrivacyToolCallbackWrapper wrapper = wrap(
-                delegate(input -> {
-                    received.set(input);
-                    return " ";
-                }),
-                service
+            delegate(input -> {
+                received.set(input);
+                return " ";
+            }),
+            service
         );
         String input = "[\"safe\",\"EMP-1234\"]";
 

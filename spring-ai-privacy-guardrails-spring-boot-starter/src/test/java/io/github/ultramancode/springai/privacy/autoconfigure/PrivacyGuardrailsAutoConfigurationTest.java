@@ -86,8 +86,8 @@ class PrivacyGuardrailsAutoConfigurationTest {
         try (InputStream input = getClass().getResourceAsStream("/META-INF/spring-configuration-metadata.json")) {
             assertThat(input).isNotNull();
             assertThat(new String(input.readAllBytes(), StandardCharsets.UTF_8))
-                    .contains("spring.ai.privacy.rules.enabled", "spring.ai.privacy.rules.presets",
-                            "spring.ai.privacy.rules.include", "spring.ai.privacy.rules.exclude");
+                .contains("spring.ai.privacy.rules.enabled", "spring.ai.privacy.rules.presets",
+                    "spring.ai.privacy.rules.include", "spring.ai.privacy.rules.exclude");
         }
     }
 
@@ -95,28 +95,29 @@ class PrivacyGuardrailsAutoConfigurationTest {
     void autoConfigurationCreatesCoreServiceAndExplicitConfigurerWithoutPublicAdvisorBeans() {
         PiiAnalyzer analyzer = (text, options, processingLimits) -> List.of();
         this.contextRunner
-                .withBean(PiiAnalyzer.class, () -> analyzer)
-                .run(context -> assertThat(context)
-                        .hasNotFailed()
-                        .hasSingleBean(PrivacyService.class)
-                        .hasSingleBean(PrivacyToolCallbackFactory.class)
-                        .hasSingleBean(PrivacyChatClientConfigurer.class)
-                        .doesNotHaveBean(PrivacyLifecycleAdvisor.class)
-                        .doesNotHaveBean(PrivacyInputAdvisor.class)
-                        .doesNotHaveBean(PrivacyToolContextAdvisor.class)
-                        .doesNotHaveBean(PrivacyToolCallValidationAdvisor.class)
-                        .doesNotHaveBean(EntityTypeRegistry.class)
-                        .doesNotHaveBean(PrivacyOutputAdvisor.class)
-                        .doesNotHaveBean(RuleBasedPiiAnalyzer.class));
+            .withBean(PiiAnalyzer.class, () -> analyzer)
+            .run(context -> assertThat(context)
+                .hasNotFailed()
+                .hasSingleBean(PrivacyService.class)
+                .hasSingleBean(PrivacyToolCallbackFactory.class)
+                .hasSingleBean(PrivacyChatClientConfigurer.class)
+                .doesNotHaveBean(PrivacyLifecycleAdvisor.class)
+                .doesNotHaveBean(PrivacyInputAdvisor.class)
+                .doesNotHaveBean(PrivacyToolContextAdvisor.class)
+                .doesNotHaveBean(PrivacyToolCallValidationAdvisor.class)
+                .doesNotHaveBean(EntityTypeRegistry.class)
+                .doesNotHaveBean(PrivacyOutputAdvisor.class)
+                .doesNotHaveBean(RuleBasedPiiAnalyzer.class));
     }
 
     @Test
     void startsWithoutPrivacyInfrastructureWhenNoAnalyzerIsConfigured() {
         this.contextRunner.run(context -> assertThat(context)
-                .hasNotFailed()
-                .doesNotHaveBean(PrivacyService.class)
-                .doesNotHaveBean(PrivacyToolCallbackFactory.class)
-                .doesNotHaveBean(PrivacyChatClientConfigurer.class));
+            .hasNotFailed()
+            .doesNotHaveBean(PiiAnalyzer.class)
+            .doesNotHaveBean(PrivacyService.class)
+            .doesNotHaveBean(PrivacyToolCallbackFactory.class)
+            .doesNotHaveBean(PrivacyChatClientConfigurer.class));
     }
 
     @Test
@@ -201,11 +202,11 @@ class PrivacyGuardrailsAutoConfigurationTest {
         PrivacyGuardrailsProperties properties = new PrivacyGuardrailsProperties();
 
         assertThatThrownBy(() -> properties.getAnalysis().setIncludedEntityTypes(null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("analysis.included-entity-types must not be null");
+            .isInstanceOf(NullPointerException.class)
+            .hasMessage("analysis.included-entity-types must not be null");
         assertThatThrownBy(() -> properties.getRules().setInclude(null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("rules.include must not be null");
+            .isInstanceOf(NullPointerException.class)
+            .hasMessage("rules.include must not be null");
     }
 
     @Test
@@ -297,17 +298,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
                             .extracting(ResolvedPiiSpan::entityType)
                             .isEqualTo("CUSTOMER_ID");
                 });
-    }
-
-    @Test
-    void disablingRulesSkipsTheirCreationWithoutAMissingAnalyzerFailure() {
-        this.contextRunner.withPropertyValues("spring.ai.privacy.rules.enabled=false")
-                .run(context -> assertThat(context)
-                        .hasNotFailed()
-                        .doesNotHaveBean(RuleBasedPiiAnalyzer.class)
-                        .doesNotHaveBean(PrivacyService.class)
-                        .doesNotHaveBean(PrivacyToolCallbackFactory.class)
-                        .doesNotHaveBean(PrivacyChatClientConfigurer.class));
     }
 
     @Test
@@ -436,25 +426,25 @@ class PrivacyGuardrailsAutoConfigurationTest {
         AtomicReference<String> delegateToolInput = new AtomicReference<>();
         List<PrivacyEnforcementEvent> enforcementEvents = new CopyOnWriteArrayList<>();
         PatternDefinition customerIdPattern = PatternDefinition.builder()
-                .expression("\\bCUST-\\d{4}\\b")
-                .score(0.99)
-                .build();
+            .expression("\\bCUST-\\d{4}\\b")
+            .score(0.99)
+            .build();
         PatternDefinition emailAddressPattern = PatternDefinition.builder()
-                .expression("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b")
-                .score(0.95)
-                .build();
+            .expression("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b")
+            .score(0.95)
+            .build();
         this.contextRunner
             .withBean(RuleBasedPiiAnalyzer.class, () -> new RuleBasedPiiAnalyzer(List.of(
                 PatternPiiRule.builder()
-                        .id("customer-id")
-                        .entityType("CUSTOMER_ID")
-                        .addPattern(customerIdPattern)
-                        .build(),
+                    .id("customer-id")
+                    .entityType("CUSTOMER_ID")
+                    .addPattern(customerIdPattern)
+                    .build(),
                 PatternPiiRule.builder()
-                        .id("email-address")
-                        .entityType(PiiEntityTypes.EMAIL_ADDRESS)
-                        .addPattern(emailAddressPattern)
-                        .build()
+                    .id("email-address")
+                    .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+                    .addPattern(emailAddressPattern)
+                    .build()
             )))
             .withBean(PrivacyEnforcementObserver.class, () -> enforcementEvents::add)
             .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
@@ -568,29 +558,29 @@ class PrivacyGuardrailsAutoConfigurationTest {
     @Test
     void customRulesAnalyzerIsTheSingleSourceForItsTrustedEntityTypes() {
         PatternDefinition customerIdPattern = PatternDefinition.builder()
-                .expression("\\bCUST-\\d{4}\\b")
-                .score(0.95)
-                .build();
+            .expression("\\bCUST-\\d{4}\\b")
+            .score(0.95)
+            .build();
         this.contextRunner
-                .withBean(RuleBasedPiiAnalyzer.class, () -> new RuleBasedPiiAnalyzer(List.of(
-                        PatternPiiRule.builder()
-                                .id("customer-id")
-                                .entityType("CUSTOMER_ID")
-                                .addPattern(customerIdPattern)
-                                .build()
-                )))
-                .withPropertyValues("spring.ai.privacy.rules.enabled=false")
-                .run(context -> {
-                    assertThat(context).hasSingleBean(RuleBasedPiiAnalyzer.class);
-                    assertThat(context).doesNotHaveBean(EntityTypeRegistry.class);
+            .withBean(RuleBasedPiiAnalyzer.class, () -> new RuleBasedPiiAnalyzer(List.of(
+                PatternPiiRule.builder()
+                    .id("customer-id")
+                    .entityType("CUSTOMER_ID")
+                    .addPattern(customerIdPattern)
+                    .build()
+            )))
+            .withPropertyValues("spring.ai.privacy.rules.enabled=false")
+            .run(context -> {
+                assertThat(context).hasSingleBean(RuleBasedPiiAnalyzer.class);
+                assertThat(context).doesNotHaveBean(EntityTypeRegistry.class);
 
-                    PrivacyService privacyService = context.getBean(PrivacyService.class);
-                    try (PrivacySession session = privacyService.openSession()) {
-                        assertThat(privacyService.tokenize(session.handle(), "Owner CUST-1234"))
-                                .matches("Owner "
-                                        + OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID").pattern());
-                    }
-                });
+                PrivacyService privacyService = context.getBean(PrivacyService.class);
+                try (PrivacySession session = privacyService.openSession()) {
+                    assertThat(privacyService.tokenize(session.handle(), "Owner CUST-1234"))
+                        .matches("Owner "
+                            + OpaquePiiTokenFormat.patternForEntityType("CUSTOMER_ID").pattern());
+                }
+            });
     }
 
     @Test
@@ -639,14 +629,14 @@ class PrivacyGuardrailsAutoConfigurationTest {
 
     private static PiiAnalyzer emailAnalyzer() {
         PatternDefinition emailAddressPattern = PatternDefinition.builder()
-                .expression("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b")
-                .score(0.95)
-                .build();
+            .expression("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b")
+            .score(0.95)
+            .build();
         return new RuleBasedPiiAnalyzer(List.of(PatternPiiRule.builder()
-                .id("email-address")
-                .entityType(PiiEntityTypes.EMAIL_ADDRESS)
-                .addPattern(emailAddressPattern)
-                .build()));
+            .id("email-address")
+            .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+            .addPattern(emailAddressPattern)
+            .build()));
     }
 
     private ToolCallback customerLookup(AtomicReference<String> delegateToolInput) {

@@ -18,16 +18,16 @@ final class KoreanRrnPiiRule implements PiiRule {
     private static final String RRN_EXPRESSION =
             "(?<![A-Za-z0-9])[0-9]{6}-?[1-4][0-9]{6}(?![A-Za-z0-9])";
     private static final PatternDefinition RRN_PATTERN = PatternDefinition.builder()
-            .expression(RRN_EXPRESSION)
-            .score(0.85)
-            .validator(KoreanRrnPiiRule::isValidCandidate)
-            .build();
+        .expression(RRN_EXPRESSION)
+        .score(0.85)
+        .validator(KoreanRrnPiiRule::isValidCandidate)
+        .build();
 
     private final PatternPiiRule patternRule = PatternPiiRule.builder()
-            .id(BuiltInPiiRuleIds.KR_RRN)
-            .entityType(PiiEntityTypes.KOREAN_RRN)
-            .addPattern(RRN_PATTERN)
-            .build();
+        .id(BuiltInPiiRuleIds.KR_RRN)
+        .entityType(PiiEntityTypes.KOREAN_RRN)
+        .addPattern(RRN_PATTERN)
+        .build();
 
     @Override
     public String id() {
@@ -53,7 +53,7 @@ final class KoreanRrnPiiRule implements PiiRule {
         int century = digits.charAt(6) == '1' || digits.charAt(6) == '2' ? 1900 : 2000;
         try {
             LocalDate.of(century + Integer.parseInt(digits.substring(0, 2)),
-                    Integer.parseInt(digits.substring(2, 4)), Integer.parseInt(digits.substring(4, 6)));
+                Integer.parseInt(digits.substring(2, 4)), Integer.parseInt(digits.substring(4, 6)));
             return true;
         } catch (DateTimeException invalidDate) {
             return false;

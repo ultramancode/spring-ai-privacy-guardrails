@@ -102,22 +102,22 @@ public final class RuleBasedPiiAnalyzer implements PiiAnalyzer {
     }
 
     private static List<PiiSpan> analyzeWithRule(
-            RegisteredRule rule,
-            String text,
-            PiiAnalysisOptions options,
-            PrivacyProcessingLimits limits,
-            int remainingSpanCount
+        RegisteredRule rule,
+        String text,
+        PiiAnalysisOptions options,
+        PrivacyProcessingLimits limits,
+        int remainingSpanCount
     ) {
         // A zero remaining budget still permits a later rule to return no matches.
         PrivacyProcessingLimits ruleLimits = PrivacyProcessingLimits.builder()
-                .maxTextCharacters(limits.maxTextCharacters())
-                .maxOutputCharacters(limits.maxOutputCharacters())
-                .maxValueTreeCharacters(limits.maxValueTreeCharacters())
-                .maxValueTreeNodes(limits.maxValueTreeNodes())
-                .maxDepth(limits.maxDepth())
-                .maxAnalysisSegments(limits.maxAnalysisSegments())
-                .maxResultSpans(Math.max(1, remainingSpanCount))
-                .build();
+            .maxTextCharacters(limits.maxTextCharacters())
+            .maxOutputCharacters(limits.maxOutputCharacters())
+            .maxValueTreeCharacters(limits.maxValueTreeCharacters())
+            .maxValueTreeNodes(limits.maxValueTreeNodes())
+            .maxDepth(limits.maxDepth())
+            .maxAnalysisSegments(limits.maxAnalysisSegments())
+            .maxResultSpans(Math.max(1, remainingSpanCount))
+            .build();
         try {
             // Delegate PII detection to the configured rule.
             List<PiiSpan> spans = rule.delegate().analyze(text, options, ruleLimits);
@@ -128,24 +128,24 @@ public final class RuleBasedPiiAnalyzer implements PiiAnalyzer {
         } catch (PrivacyGuardrailException failure) {
             // Do not expose application exception messages or causes containing source text.
             throw new PrivacyGuardrailException(failure.code(), failure.phase(),
-                    "PII rule '" + rule.ruleId() + "' failed");
+                "PII rule '" + rule.ruleId() + "' failed");
         } catch (RuntimeException failure) {
             throw new IllegalStateException("PII rule '" + rule.ruleId() + "' failed");
         }
     }
 
     private static void validateRuleResults(
-            RegisteredRule rule,
-            List<PiiSpan> spans,
-            int textLength,
-            int remainingSpanCount
+        RegisteredRule rule,
+        List<PiiSpan> spans,
+        int textLength,
+        int remainingSpanCount
     ) {
         if (spans.size() > remainingSpanCount) {
             throw PiiRuleSupport.limitExceeded();
         }
         for (PiiSpan span : spans) {
             if (span == null || span.end() > textLength
-                    || !rule.entityTypes().contains(span.entityType())) {
+                || !rule.entityTypes().contains(span.entityType())) {
                 throw new IllegalStateException("Invalid rule result");
             }
         }

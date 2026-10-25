@@ -43,10 +43,10 @@ public class PrivacyGuardrailsAutoConfiguration {
     PiiAnalysisOptions piiAnalysisOptions(PrivacyGuardrailsProperties properties) {
         PrivacyGuardrailsProperties.Analysis analysis = properties.getAnalysis();
         return PiiAnalysisOptions.builder()
-                .language(analysis.getLanguage())
-                .includedEntityTypes(analysis.getIncludedEntityTypes())
-                .minimumScore(analysis.getMinimumScore())
-                .build();
+            .language(analysis.getLanguage())
+            .includedEntityTypes(analysis.getIncludedEntityTypes())
+            .minimumScore(analysis.getMinimumScore())
+            .build();
     }
 
     @Bean
@@ -54,60 +54,60 @@ public class PrivacyGuardrailsAutoConfiguration {
     PiiResolutionPolicy piiResolutionPolicy(PrivacyGuardrailsProperties properties) {
         PrivacyGuardrailsProperties.Analysis analysis = properties.getAnalysis();
         return PiiResolutionPolicy.builder()
-                .mode(analysis.getMode())
-                .primaryProvider(analysis.getPrimaryProvider())
-                .supplementalProviders(analysis.getSupplementalProviders())
-                .failurePolicy(analysis.getFailurePolicy())
-                .providerMinimumScores(analysis.getProviderMinimumScores())
-                .typeConflictFallback(analysis.getTypeConflictFallback())
-                .build();
+            .mode(analysis.getMode())
+            .primaryProvider(analysis.getPrimaryProvider())
+            .supplementalProviders(analysis.getSupplementalProviders())
+            .failurePolicy(analysis.getFailurePolicy())
+            .providerMinimumScores(analysis.getProviderMinimumScores())
+            .typeConflictFallback(analysis.getTypeConflictFallback())
+            .build();
     }
 
     @Bean
     @ConditionalOnMissingBean(RuleBasedPiiAnalyzer.class)
     @ConditionalOnProperty(prefix = "spring.ai.privacy.rules", name = "enabled", havingValue = "true")
     RuleBasedPiiAnalyzer ruleBasedPiiAnalyzer(
-            PrivacyGuardrailsProperties properties,
-            ObjectProvider<PiiRule> rules,
-            ObjectProvider<PiiRulePreset> presets
+        PrivacyGuardrailsProperties properties,
+        ObjectProvider<PiiRule> rules,
+        ObjectProvider<PiiRulePreset> presets
     ) {
         PiiRuleCatalog.Builder catalog = PiiRuleCatalog.builder().builtIns();
         catalog.addRules(rules.orderedStream().toList());
         presets.orderedStream().forEach(catalog::addPreset);
-        PrivacyGuardrailsProperties.Rules selection = properties.getRules();
+        PrivacyGuardrailsProperties.Rules ruleProperties = properties.getRules();
         return catalog.build().analyzerBuilder()
-                .presets(selection.getPresets())
-                .include(selection.getInclude())
-                .exclude(selection.getExclude())
-                .build();
+            .presets(ruleProperties.getPresets())
+            .include(ruleProperties.getInclude())
+            .exclude(ruleProperties.getExclude())
+            .build();
     }
 
     @Bean
     @ConditionalOnBean(PiiAnalyzer.class)
     @ConditionalOnMissingBean
     PrivacyService privacyService(
-            ObjectProvider<PiiAnalyzer> analyzers,
-            PiiAnalysisOptions options,
-            ObjectProvider<EntityTypeRegistry> entityTypes,
-            PiiResolutionPolicy resolutionPolicy,
-            PrivacyGuardrailsProperties properties,
-            ObjectProvider<PiiAnalyzerFailureObserver> failureObserver
+        ObjectProvider<PiiAnalyzer> analyzers,
+        PiiAnalysisOptions options,
+        ObjectProvider<EntityTypeRegistry> entityTypes,
+        PiiResolutionPolicy resolutionPolicy,
+        PrivacyGuardrailsProperties properties,
+        ObjectProvider<PiiAnalyzerFailureObserver> failureObserver
     ) {
         List<PiiAnalyzer> configuredAnalyzers = analyzers.orderedStream().toList();
         if (configuredAnalyzers.isEmpty()) {
             throw new IllegalStateException(
-                    "No PiiAnalyzer is configured. Enable rules, OpenNLP, Presidio, or provide a custom analyzer"
+                "No PiiAnalyzer is configured. Enable rules, OpenNLP, Presidio, or provide a custom analyzer"
             );
         }
         return new PrivacyService(
-                configuredAnalyzers,
-                options,
-                entityTypes.getIfAvailable(() -> new EntityTypeRegistry(
-                        properties.getAnalysis().getEntityAliases()
-                )),
-                resolutionPolicy,
-                failureObserver.getIfAvailable(PiiAnalyzerFailureObserver::noop),
-                properties.getProcessing().limits()
+            configuredAnalyzers,
+            options,
+            entityTypes.getIfAvailable(() -> new EntityTypeRegistry(
+                properties.getAnalysis().getEntityAliases()
+            )),
+            resolutionPolicy,
+            failureObserver.getIfAvailable(PiiAnalyzerFailureObserver::noop),
+            properties.getProcessing().limits()
         );
     }
 
@@ -120,7 +120,7 @@ public class PrivacyGuardrailsAutoConfiguration {
         ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
     ) {
         PrivacyEnforcementObserver configuredEnforcementObserver = enforcementObserver
-                .getIfAvailable(PrivacyEnforcementObserver::noop);
+            .getIfAvailable(PrivacyEnforcementObserver::noop);
         return PrivacyChatClientConfigurer.builder(privacyService)
             .toolCallbackFactory(toolCallbackFactory)
             .enforcementObserver(configuredEnforcementObserver)
@@ -137,14 +137,14 @@ public class PrivacyGuardrailsAutoConfiguration {
     @ConditionalOnBean(PrivacyService.class)
     @ConditionalOnMissingBean
     PrivacyToolCallbackFactory privacyToolCallbackFactory(
-            PrivacyService privacyService,
-            ToolDisclosurePolicy toolDisclosurePolicy,
-            ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
+        PrivacyService privacyService,
+        ToolDisclosurePolicy toolDisclosurePolicy,
+        ObjectProvider<PrivacyEnforcementObserver> enforcementObserver
     ) {
         return new PrivacyToolCallbackFactory(
-                privacyService,
-                toolDisclosurePolicy,
-                enforcementObserver.getIfAvailable(PrivacyEnforcementObserver::noop)
+            privacyService,
+            toolDisclosurePolicy,
+            enforcementObserver.getIfAvailable(PrivacyEnforcementObserver::noop)
         );
     }
 

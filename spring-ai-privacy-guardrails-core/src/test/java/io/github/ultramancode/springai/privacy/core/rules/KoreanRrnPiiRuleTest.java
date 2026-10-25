@@ -18,7 +18,7 @@ class KoreanRrnPiiRuleTest {
             String text = "한글😀 " + number + " 연락";
 
             assertThat(analyze(text)).as(number)
-                    .containsExactly(new PiiSpan("KOREAN_RRN", 5, 5 + number.length(), 0.85));
+                .containsExactly(new PiiSpan("KOREAN_RRN", 5, 5 + number.length(), 0.85));
         }
     }
 

@@ -306,15 +306,15 @@ class PrivacyTestProbeTest {
 
     private PrivacyService privacyService() {
         PatternDefinition personPattern = PatternDefinition.builder()
-                .expression("\\b(?:Alice|Bob)\\b")
-                .score(0.99)
-                .build();
+            .expression("\\b(?:Alice|Bob)\\b")
+            .score(0.99)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("person")
-                        .entityType(PiiEntityTypes.PERSON)
-                        .addPattern(personPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("person")
+                .entityType(PiiEntityTypes.PERSON)
+                .addPattern(personPattern)
+                .build()
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }

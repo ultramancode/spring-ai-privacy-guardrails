@@ -15,18 +15,18 @@ import java.util.Set;
 final class KoreanMobilePhonePiiRule implements PiiRule {
     private static final String MOBILE_NUMBER_EXPRESSION =
             "(?<![A-Za-z0-9_])(?:010|\\+82[- ]?10)"
-                    + "(?:[0-9]{8}|-[0-9]{4}-[0-9]{4}| [0-9]{4} [0-9]{4})"
-                    + "(?![A-Za-z0-9_])";
+        + "(?:[0-9]{8}|-[0-9]{4}-[0-9]{4}| [0-9]{4} [0-9]{4})"
+        + "(?![A-Za-z0-9_])";
     private static final PatternDefinition MOBILE_NUMBER_PATTERN = PatternDefinition.builder()
-            .expression(MOBILE_NUMBER_EXPRESSION)
-            .score(0.85)
-            .build();
+        .expression(MOBILE_NUMBER_EXPRESSION)
+        .score(0.85)
+        .build();
 
     private final PatternPiiRule patternRule = PatternPiiRule.builder()
-            .id(BuiltInPiiRuleIds.KR_MOBILE_PHONE)
-            .entityType(PiiEntityTypes.PHONE_NUMBER)
-            .addPattern(MOBILE_NUMBER_PATTERN)
-            .build();
+        .id(BuiltInPiiRuleIds.KR_MOBILE_PHONE)
+        .entityType(PiiEntityTypes.PHONE_NUMBER)
+        .addPattern(MOBILE_NUMBER_PATTERN)
+        .build();
 
     @Override
     public String id() {

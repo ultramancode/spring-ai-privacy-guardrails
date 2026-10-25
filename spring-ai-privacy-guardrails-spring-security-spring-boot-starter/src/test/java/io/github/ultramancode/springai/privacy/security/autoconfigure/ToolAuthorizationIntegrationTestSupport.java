@@ -80,9 +80,9 @@ abstract class ToolAuthorizationIntegrationTestSupport {
     protected ApplicationContextRunner privacyContextRunner(
         boolean outputEnabled, PrivacyResponseInspectionLimits limits) {
         PatternDefinition employeeIdPattern = PatternDefinition.builder()
-                .expression("EMP-[0-9]{4}")
-                .score(0.9)
-                .build();
+            .expression("EMP-[0-9]{4}")
+            .score(0.9)
+            .build();
         return contextRunner().withConfiguration(AutoConfigurations.of(
             PrivacyGuardrailsAutoConfiguration.class, PrivacySecurityAutoConfiguration.class))
             .withUserConfiguration(PrivacyClientConfiguration.class)
@@ -90,12 +90,12 @@ abstract class ToolAuthorizationIntegrationTestSupport {
             .withBean(ToolDisclosurePolicy.class, () -> ToolDisclosurePolicy.allowEntityTypesByToolName(
                 Map.of("customerLookup", List.of("EMPLOYEE_ID"))))
             .withBean(PiiRule.class, () -> PatternPiiRule.builder()
-                    .id("employee-id")
-                    .entityType("EMPLOYEE_ID")
-                    .addPattern(employeeIdPattern)
-                    .build())
+                .id("employee-id")
+                .entityType("EMPLOYEE_ID")
+                .addPattern(employeeIdPattern)
+                .build())
             .withPropertyValues("spring.ai.privacy.rules.enabled=true",
-                    "spring.ai.privacy.rules.include=employee-id");
+                "spring.ai.privacy.rules.include=employee-id");
     }
 
     protected void startModelServer(String... responses) throws IOException {

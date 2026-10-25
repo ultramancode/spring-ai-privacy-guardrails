@@ -65,15 +65,15 @@ class PrivacyTestAssertionsTest {
 
     private PrivacyToolCallbackFactory factory() {
         PatternDefinition personPattern = PatternDefinition.builder()
-                .expression("\\bAlice\\b")
-                .score(0.99)
-                .build();
+            .expression("\\bAlice\\b")
+            .score(0.99)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("person")
-                        .entityType(PiiEntityTypes.PERSON)
-                        .addPattern(personPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("person")
+                .entityType(PiiEntityTypes.PERSON)
+                .addPattern(personPattern)
+                .build()
         ));
         PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         return new PrivacyToolCallbackFactory(privacyService, ToolDisclosurePolicy.denyAll());

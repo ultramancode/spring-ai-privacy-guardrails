@@ -34,29 +34,29 @@ class DemoRulesEvaluationTest {
             String tokenized;
             try (PrivacySession session = this.privacyService.openSession()) {
                 PiiTokenizationResult result = this.privacyService.analyzeAndTokenize(
-                        session.handle(),
-                        evaluationCase.text()
+                    session.handle(),
+                    evaluationCase.text()
                 );
                 actual = result.analysis().spans().stream()
-                        .map(span -> new Detection(
-                                span.entityType(),
-                                evaluationCase.text().substring(span.start(), span.end())
-                        ))
-                        .toList();
+                    .map(span -> new Detection(
+                        span.entityType(),
+                        evaluationCase.text().substring(span.start(), span.end())
+                    ))
+                    .toList();
                 tokenized = result.tokenizedText();
             }
 
             assertThat(actual)
-                    .as("detections for corpus case %s", evaluationCase.id())
-                    .containsExactlyElementsOf(expected);
+                .as("detections for corpus case %s", evaluationCase.id())
+                .containsExactlyElementsOf(expected);
             if (!evaluationCase.rawValues().isEmpty()) {
                 assertThat(tokenized)
-                        .as("tokenized output for corpus case %s", evaluationCase.id())
-                        .doesNotContain(evaluationCase.rawValues().toArray(String[]::new));
+                    .as("tokenized output for corpus case %s", evaluationCase.id())
+                    .doesNotContain(evaluationCase.rawValues().toArray(String[]::new));
             }
             assertThat(this.privacyService.activeSessionCount())
-                    .as("session cleanup for corpus case %s", evaluationCase.id())
-                    .isZero();
+                .as("session cleanup for corpus case %s", evaluationCase.id())
+                .isZero();
         }
     }
 
@@ -66,7 +66,7 @@ class DemoRulesEvaluationTest {
             throw new IllegalStateException("privacy evaluation corpus is missing");
         }
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(resource, StandardCharsets.UTF_8)
+            new InputStreamReader(resource, StandardCharsets.UTF_8)
         )) {
             List<EvaluationCase> cases = new ArrayList<>();
             for (String line; (line = reader.readLine()) != null;) {
@@ -78,10 +78,10 @@ class DemoRulesEvaluationTest {
                     throw new IllegalStateException("invalid privacy evaluation corpus row");
                 }
                 cases.add(new EvaluationCase(
-                        fields[0],
-                        splitList(fields[1]),
-                        splitList(fields[2]),
-                        fields[3]
+                    fields[0],
+                    splitList(fields[1]),
+                    splitList(fields[2]),
+                    fields[3]
                 ));
             }
             return List.copyOf(cases);

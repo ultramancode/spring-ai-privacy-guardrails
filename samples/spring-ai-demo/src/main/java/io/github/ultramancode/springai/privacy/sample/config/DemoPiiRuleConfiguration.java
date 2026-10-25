@@ -12,26 +12,26 @@ public class DemoPiiRuleConfiguration {
     @Bean
     PiiRule employeeIdRule() {
         PatternDefinition employeeIdPattern = PatternDefinition.builder()
-                .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
-                .score(0.9)
-                .build();
+            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
+            .score(0.9)
+            .build();
         return PatternPiiRule.builder()
-                .id("employee-id")
-                .entityType("EMPLOYEE_ID")
-                .addPattern(employeeIdPattern)
-                .build();
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(employeeIdPattern)
+            .build();
     }
 
     @Bean
     PiiRule customerIdRule() {
         PatternDefinition customerIdPattern = PatternDefinition.builder()
-                .expression("(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])")
-                .score(0.9)
-                .build();
+            .expression("(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])")
+            .score(0.9)
+            .build();
         return PatternPiiRule.builder()
-                .id("customer-id")
-                .entityType("CUSTOMER_ID")
-                .addPattern(customerIdPattern)
-                .build();
+            .id("customer-id")
+            .entityType("CUSTOMER_ID")
+            .addPattern(customerIdPattern)
+            .build();
     }
 }

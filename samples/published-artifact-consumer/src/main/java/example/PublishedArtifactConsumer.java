@@ -4,8 +4,8 @@ import io.github.ultramancode.springai.privacy.autoconfigure.PrivacyGuardrailsAu
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PiiRule;
@@ -66,15 +66,14 @@ public class PublishedArtifactConsumer {
     @Bean
     PiiRule customerIdRule() {
         PatternDefinition customerIdPattern = PatternDefinition.builder()
-                .expression("CUST-[0-9]{4}")
-                .score(0.99)
-                .validator(candidate -> !candidate.equals("CUST-0000"))
-                .build();
+            .expression("CUST-[0-9]{4}")
+            .score(0.99)
+            .build();
         return PatternPiiRule.builder()
-                .id("customer-id")
-                .entityType("CUSTOMER_ID")
-                .addPattern(customerIdPattern)
-                .build();
+            .id("customer-id")
+            .entityType("CUSTOMER_ID")
+            .addPattern(customerIdPattern)
+            .build();
     }
 
     @Bean
@@ -125,46 +124,49 @@ public class PublishedArtifactConsumer {
     }
 
     private static void verifyLocalRuleApi() {
-        PiiRule direct = new PiiRule() {
+        PiiRule accountCodeRule = new PiiRule() {
             public String id() { return "account-code"; }
             public Set<String> entityTypes() { return Set.of("ACCOUNT_CODE"); }
             public List<PiiSpan> analyze(String text, PiiAnalysisOptions options, PrivacyProcessingLimits limits) {
-                int prefix = text.indexOf("ACME:");
-                if (prefix < 0 || prefix + 9 > text.length()) {
+                String accountPrefix = "ACME:";
+                int prefixStart = text.indexOf(accountPrefix);
+                int accountCodeStart = prefixStart + accountPrefix.length();
+                int accountCodeEnd = accountCodeStart + 4;
+                if (prefixStart < 0 || accountCodeEnd > text.length()) {
                     return List.of();
                 }
-                for (int i = prefix + 5; i < prefix + 9; i++) {
-                    if (text.charAt(i) < '0' || text.charAt(i) > '9') {
+                for (int index = accountCodeStart; index < accountCodeEnd; index++) {
+                    if (text.charAt(index) < '0' || text.charAt(index) > '9') {
                         return List.of();
                     }
                 }
-                return List.of(new PiiSpan("ACCOUNT_CODE", prefix + 5, prefix + 9, 0.9));
+                return List.of(new PiiSpan("ACCOUNT_CODE", accountCodeStart, accountCodeEnd, 0.9));
             }
         };
         PatternDefinition employeeIdPattern = PatternDefinition.builder()
-                .expression("EMP-[0-9]{4}")
-                .score(0.9)
-                .validator(value -> !value.endsWith("0000"))
-                .build();
-        PatternPiiRule employeeRule = PatternPiiRule.builder()
-                .id("employee-id")
-                .entityType("EMPLOYEE_ID")
-                .addPattern(employeeIdPattern)
-                .build();
+            .expression("EMP-[0-9]{4}")
+            .score(0.9)
+            .validator(value -> !value.endsWith("0000"))
+            .build();
+        PatternPiiRule employeeIdRule = PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(employeeIdPattern)
+            .build();
         PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
-                .addRules(List.of(direct, employeeRule))
-                .addPreset(new PiiRulePreset("COMPANY",
-                        List.of("employee-id", "account-code", BuiltInPiiRuleIds.EMAIL)))
-                .build();
+            .addRules(List.of(accountCodeRule, employeeIdRule))
+            .addPreset(new PiiRulePreset("COMPANY",
+                List.of("employee-id", "account-code", BuiltInPiiRuleIds.EMAIL)))
+            .build();
         RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()
-                .presets("COMPANY")
-                .exclude(BuiltInPiiRuleIds.EMAIL)
-                .build();
+            .presets("COMPANY")
+            .exclude(BuiltInPiiRuleIds.EMAIL)
+            .build();
         String text = "EMP-1234 EMP-0000 ACME:0077";
         List<PiiSpan> spans = analyzer.analyze(text, PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults());
-        List<String> values = spans.stream().map(span -> text.substring(span.start(), span.end())).toList();
-        if (!values.equals(List.of("EMP-1234", "0077"))
-                || !analyzer.ruleIds().equals(List.of("employee-id", "account-code"))) {
+        List<String> matchedValues = spans.stream().map(span -> text.substring(span.start(), span.end())).toList();
+        if (!matchedValues.equals(List.of("EMP-1234", "0077"))
+            || !analyzer.ruleIds().equals(List.of("employee-id", "account-code"))) {
             throw new IllegalStateException("Published Java rule API did not honor selection or validation");
         }
     }
@@ -191,20 +193,20 @@ public class PublishedArtifactConsumer {
     }
 
     private static void verifyToolBoundary(
-            ConfigurableApplicationContext context,
-            PrivacyService privacyService
+        ConfigurableApplicationContext context,
+        PrivacyService privacyService
     ) {
         SpringSecurityToolBoundary toolBoundary = context.getBean(
-                SpringSecurityToolBoundary.class
+            SpringSecurityToolBoundary.class
         );
         ToolCallingManager upstreamManager = context.getBean(ToolCallingManager.class);
         if (upstreamManager == toolBoundary.toolCallingManager()) {
             throw new IllegalStateException(
-                    "Published Security starter replaced the shared application ToolCallingManager"
+                "Published Security starter replaced the shared application ToolCallingManager"
             );
         }
         PublishedAuthorizationChecks authorizationChecks = context.getBean(
-                PublishedAuthorizationChecks.class
+            PublishedAuthorizationChecks.class
         );
         AtomicInteger deniedToolCalls = new AtomicInteger();
         try (PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService)) {
@@ -218,9 +220,9 @@ public class PublishedArtifactConsumer {
                 .builder(chatModel).defaultTools(customerTool, deniedTool);
             SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
             securityContext.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                    "published-consumer",
-                    "not-used",
-                    List.of()
+                "published-consumer",
+                "not-used",
+                List.of()
             ));
             SecurityContextHolder.setContext(securityContext);
             String finalResponse;
@@ -251,7 +253,7 @@ public class PublishedArtifactConsumer {
                 throw new IllegalStateException("Published client exposed raw PII to the model");
             }
             if (finalResponse.contains("final@example.com")
-                    || !OpaquePiiTokenFormat.patternForEntityType(PiiEntityTypes.EMAIL_ADDRESS).matcher(finalResponse).find()) {
+                || !OpaquePiiTokenFormat.patternForEntityType(PiiEntityTypes.EMAIL_ADDRESS).matcher(finalResponse).find()) {
                 throw new IllegalStateException("Published output policy did not protect the final response");
             }
             authorizationChecks.verify();
@@ -349,26 +351,26 @@ public class PublishedArtifactConsumer {
             verifyExposedDefinitions(prompt);
             if (this.calls.incrementAndGet() == 1) {
                 String modelInput = prompt.getInstructions().stream()
-                        .map(Message::getText)
-                        .filter(Objects::nonNull)
-                        .reduce((left, right) -> left + "\n" + right)
-                        .orElse("");
+                    .map(Message::getText)
+                    .filter(Objects::nonNull)
+                    .reduce((left, right) -> left + "\n" + right)
+                    .orElse("");
                 String customerToken = token(modelInput, "CUSTOMER_ID");
                 String emailToken = token(modelInput, PiiEntityTypes.EMAIL_ADDRESS);
                 AssistantMessage toolCall = AssistantMessage.builder()
-                        .content("")
-                        .toolCalls(List.of(new AssistantMessage.ToolCall(
-                                "call-1",
-                                "function",
-                                "customerLookup",
-                                "{\"customerId\":\"" + customerToken
-                                        + "\",\"email\":\"" + emailToken + "\"}"
-                        )))
-                        .build();
+                    .content("")
+                    .toolCalls(List.of(new AssistantMessage.ToolCall(
+                        "call-1",
+                        "function",
+                        "customerLookup",
+                        "{\"customerId\":\"" + customerToken
+                            + "\",\"email\":\"" + emailToken + "\"}"
+                    )))
+                    .build();
                 return new ChatResponse(List.of(new Generation(toolCall)));
             }
             return new ChatResponse(List.of(new Generation(
-                    new AssistantMessage("Contact final@example.com")
+                new AssistantMessage("Contact final@example.com")
             )));
         }
 

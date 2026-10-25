@@ -20,24 +20,24 @@ public final class BuiltInPiiRules {
     /** Creates the built-in rules. */
     public static List<PiiRule> rules() {
         return List.of(
-                new CreditCardPiiRule(),
-                new EmailPiiRule(),
-                new KoreanMobilePhonePiiRule(),
-                new KoreanRrnPiiRule()
+            new CreditCardPiiRule(),
+            new EmailPiiRule(),
+            new KoreanMobilePhonePiiRule(),
+            new KoreanRrnPiiRule()
         );
     }
 
     /** Creates the built-in presets with rule IDs in evaluation order. */
     public static List<PiiRulePreset> presets() {
         return List.of(
-                new PiiRulePreset(BuiltInPiiPresetNames.COMMON, List.of(
-                        BuiltInPiiRuleIds.CREDIT_CARD,
-                        BuiltInPiiRuleIds.EMAIL
-                )),
-                new PiiRulePreset(BuiltInPiiPresetNames.KR, List.of(
-                        BuiltInPiiRuleIds.KR_MOBILE_PHONE,
-                        BuiltInPiiRuleIds.KR_RRN
-                ))
+            new PiiRulePreset(BuiltInPiiPresetNames.COMMON, List.of(
+                BuiltInPiiRuleIds.CREDIT_CARD,
+                BuiltInPiiRuleIds.EMAIL
+            )),
+            new PiiRulePreset(BuiltInPiiPresetNames.KR, List.of(
+                BuiltInPiiRuleIds.KR_MOBILE_PHONE,
+                BuiltInPiiRuleIds.KR_RRN
+            ))
         );
     }
 
@@ -65,7 +65,7 @@ public final class BuiltInPiiRules {
             Double score = entry.getValue();
             if (score == null || !Double.isFinite(score) || score < 0.0 || score > 1.0) {
                 throw new IllegalArgumentException("Score for built-in rule '" + ruleId
-                        + "' must be finite and between 0.0 and 1.0");
+                    + "' must be finite and between 0.0 and 1.0");
             }
             rulesById.put(ruleId, new ScoreOverridePiiRule(rule, score));
         }
@@ -86,8 +86,8 @@ public final class BuiltInPiiRules {
         @Override
         public List<PiiSpan> analyze(String text, PiiAnalysisOptions options, PrivacyProcessingLimits limits) {
             return this.delegate.analyze(text, options, limits).stream()
-                    .map(span -> new PiiSpan(span.entityType(), span.start(), span.end(), this.score))
-                    .toList();
+                .map(span -> new PiiSpan(span.entityType(), span.start(), span.end(), this.score))
+                .toList();
         }
     }
 }

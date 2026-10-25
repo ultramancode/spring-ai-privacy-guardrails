@@ -61,8 +61,8 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
         PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
         AtomicInteger activeSessionsAtToolBarrier = new AtomicInteger();
         CyclicBarrier toolBarrier = new CyclicBarrier(
-                2,
-                () -> activeSessionsAtToolBarrier.set(privacyService.activeSessionCount())
+            2,
+            () -> activeSessionsAtToolBarrier.set(privacyService.activeSessionCount())
         );
         Map<String, String> rawIdsByLabel = new ConcurrentHashMap<>();
         ConcurrentToolModel chatModel = new ConcurrentToolModel();
@@ -92,8 +92,8 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
 
         assertThat(activeSessionsAtToolBarrier).hasValue(2);
         assertThat(rawIdsByLabel).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "left", LEFT_ID,
-                "right", RIGHT_ID
+            "left", LEFT_ID,
+            "right", RIGHT_ID
         ));
         assertThat(chatModel.tokensByLabel()).containsKeys("left", "right");
         assertThat(chatModel.tokensByLabel().get("left"))
@@ -117,31 +117,31 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
 
     private PrivacyService privacyService() {
         PatternDefinition customerIdPattern = PatternDefinition.builder()
-                .expression("\\bCUST-\\d{6}\\b")
-                .score(0.99)
-                .build();
+            .expression("\\bCUST-\\d{6}\\b")
+            .score(0.99)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("customer-id")
-                        .entityType("CUSTOMER_ID")
-                        .addPattern(customerIdPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("customer-id")
+                .entityType("CUSTOMER_ID")
+                .addPattern(customerIdPattern)
+                .build()
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
     private ToolCallback customerLookup(
-            CyclicBarrier barrier,
-            Map<String, String> rawIdsByLabel
+        CyclicBarrier barrier,
+        Map<String, String> rawIdsByLabel
     ) {
         ObjectMapper objectMapper = new ObjectMapper();
         return new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder()
-                        .name("customerLookup")
-                        .description("Returns the synthetic customer identifier")
-                        .inputSchema("""
+                    .name("customerLookup")
+                    .description("Returns the synthetic customer identifier")
+                    .inputSchema("""
                                 {
                                   "type": "object",
                                   "properties": {
@@ -151,7 +151,7 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
                                   "required": ["request", "customerId"]
                                 }
                                 """)
-                        .build();
+                    .build();
             }
 
             @Override
@@ -162,8 +162,8 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
                 rawIdsByLabel.put(label, customerId);
                 await(barrier);
                 return objectMapper.writeValueAsString(Map.of(
-                        "request", label,
-                        "customerId", customerId
+                    "request", label,
+                    "customerId", customerId
                 ));
             }
         };
@@ -242,11 +242,11 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
             String customerToken = findToken(prompt);
             this.tokensByLabel.put(label, customerToken);
             return toolCall(
-                    "call-" + label,
-                    this.objectMapper.writeValueAsString(Map.of(
-                            "request", label,
-                            "customerId", customerToken
-                    ))
+                "call-" + label,
+                this.objectMapper.writeValueAsString(Map.of(
+                    "request", label,
+                    "customerId", customerToken
+                ))
             );
         }
 

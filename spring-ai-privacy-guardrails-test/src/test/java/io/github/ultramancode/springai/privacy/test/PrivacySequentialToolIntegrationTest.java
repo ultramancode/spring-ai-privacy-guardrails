@@ -94,24 +94,24 @@ class PrivacySequentialToolIntegrationTest {
 
     private PrivacyService privacyService() {
         PatternDefinition customerIdPattern = PatternDefinition.builder()
-                .expression("\\bCUST-\\d{6}\\b")
-                .score(0.99)
-                .build();
+            .expression("\\bCUST-\\d{6}\\b")
+            .score(0.99)
+            .build();
         PatternDefinition emailAddressPattern = PatternDefinition.builder()
-                .expression("\\bwinner@example\\.test\\b")
-                .score(0.99)
-                .build();
+            .expression("\\bwinner@example\\.test\\b")
+            .score(0.99)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("customer-id")
-                        .entityType("CUSTOMER_ID")
-                        .addPattern(customerIdPattern)
-                        .build(),
-                PatternPiiRule.builder()
-                        .id("email-address")
-                        .entityType(PiiEntityTypes.EMAIL_ADDRESS)
-                        .addPattern(emailAddressPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("customer-id")
+                .entityType("CUSTOMER_ID")
+                .addPattern(customerIdPattern)
+                .build(),
+            PatternPiiRule.builder()
+                .id("email-address")
+                .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+                .addPattern(emailAddressPattern)
+                .build()
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }

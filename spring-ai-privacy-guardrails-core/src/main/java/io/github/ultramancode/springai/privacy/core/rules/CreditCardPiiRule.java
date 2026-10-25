@@ -15,19 +15,19 @@ import java.util.Set;
 final class CreditCardPiiRule implements PiiRule {
     private static final String CARD_NUMBER_EXPRESSION =
             "(?U)\\b(?!1[0-9]{12}(?![0-9]))"
-                    + "(?:4[0-9]{3}|5[0-5][0-9]{2}|6[0-9]{3}|1[0-9]{3}|3[0-9]{3})"
-                    + "[- ]?[0-9]{3,4}[- ]?[0-9]{3,4}[- ]?[0-9]{3,5}\\b";
+        + "(?:4[0-9]{3}|5[0-5][0-9]{2}|6[0-9]{3}|1[0-9]{3}|3[0-9]{3})"
+        + "[- ]?[0-9]{3,4}[- ]?[0-9]{3,4}[- ]?[0-9]{3,5}\\b";
     private static final PatternDefinition CARD_NUMBER_PATTERN = PatternDefinition.builder()
-            .expression(CARD_NUMBER_EXPRESSION)
-            .score(0.85)
-            .validator(CreditCardPiiRule::isValidCandidate)
-            .build();
+        .expression(CARD_NUMBER_EXPRESSION)
+        .score(0.85)
+        .validator(CreditCardPiiRule::isValidCandidate)
+        .build();
 
     private final PatternPiiRule patternRule = PatternPiiRule.builder()
-            .id(BuiltInPiiRuleIds.CREDIT_CARD)
-            .entityType(PiiEntityTypes.CREDIT_CARD)
-            .addPattern(CARD_NUMBER_PATTERN)
-            .build();
+        .id(BuiltInPiiRuleIds.CREDIT_CARD)
+        .entityType(PiiEntityTypes.CREDIT_CARD)
+        .addPattern(CARD_NUMBER_PATTERN)
+        .build();
 
     @Override
     public String id() {

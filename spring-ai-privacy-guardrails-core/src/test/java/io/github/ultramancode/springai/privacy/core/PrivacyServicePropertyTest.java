@@ -106,24 +106,24 @@ class PrivacyServicePropertyTest {
 
     private static PrivacyService recursivePrivacyService() {
         PatternDefinition syntheticIdPattern = PatternDefinition.builder()
-                .expression("\\bSYN-\\d{4}\\b")
-                .score(1.0)
-                .build();
+            .expression("\\bSYN-\\d{4}\\b")
+            .score(1.0)
+            .build();
         PatternDefinition phoneNumberPattern = PatternDefinition.builder()
-                .expression("\\b821\\d{9}\\b")
-                .score(1.0)
-                .build();
+            .expression("\\b821\\d{9}\\b")
+            .score(1.0)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("synthetic-id")
-                        .entityType("SYNTHETIC_ID")
-                        .addPattern(syntheticIdPattern)
-                        .build(),
-                PatternPiiRule.builder()
-                        .id("phone-number")
-                        .entityType(PiiEntityTypes.PHONE_NUMBER)
-                        .addPattern(phoneNumberPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("synthetic-id")
+                .entityType("SYNTHETIC_ID")
+                .addPattern(syntheticIdPattern)
+                .build(),
+            PatternPiiRule.builder()
+                .id("phone-number")
+                .entityType(PiiEntityTypes.PHONE_NUMBER)
+                .addPattern(phoneNumberPattern)
+                .build()
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }

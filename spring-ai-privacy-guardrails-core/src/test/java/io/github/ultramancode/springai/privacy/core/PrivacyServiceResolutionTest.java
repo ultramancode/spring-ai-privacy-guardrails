@@ -20,9 +20,9 @@ class PrivacyServiceResolutionTest {
         class RetriedTimeout extends PrivacyGuardrailException implements PiiAnalyzerFailureMetadata {
             RetriedTimeout() {
                 super(
-                        PrivacyFailureCode.ANALYZER_TIMEOUT,
-                        PrivacyPhase.ANALYSIS,
-                        "safe timeout"
+                    PrivacyFailureCode.ANALYZER_TIMEOUT,
+                    PrivacyPhase.ANALYSIS,
+                    "safe timeout"
                 );
             }
 
@@ -34,9 +34,9 @@ class PrivacyServiceResolutionTest {
         PiiAnalyzer timedOut = new PiiAnalyzer() {
             @Override
             public List<PiiSpan> analyze(
-                    String text,
-                    PiiAnalysisOptions options,
-                    PrivacyProcessingLimits limits
+                String text,
+                PiiAnalysisOptions options,
+                PrivacyProcessingLimits limits
             ) {
                 throw new RetriedTimeout();
             }
@@ -48,23 +48,23 @@ class PrivacyServiceResolutionTest {
         };
         List<PiiAnalyzerFailure> observed = new ArrayList<>();
         PrivacyService service = new PrivacyService(
-                List.of(timedOut, namedAnalyzer("RULES", List.of())),
-                PiiAnalysisOptions.defaults(),
-                EntityTypeRegistry.defaults(),
-                PiiResolutionPolicy.builder()
-                        .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                        .build(),
-                observed::add,
-                PrivacyProcessingLimits.defaults()
+            List.of(timedOut, namedAnalyzer("RULES", List.of())),
+            PiiAnalysisOptions.defaults(),
+            EntityTypeRegistry.defaults(),
+            PiiResolutionPolicy.builder()
+                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+                .build(),
+            observed::add,
+            PrivacyProcessingLimits.defaults()
         );
 
         PiiAnalysisResult result = service.analyzeDetailed("Alice");
 
         PiiAnalyzerFailure expected = new PiiAnalyzerFailure(
-                "PRESIDIO",
-                PrivacyFailureCode.ANALYZER_TIMEOUT,
-                PrivacyPhase.ANALYSIS,
-                3
+            "PRESIDIO",
+            PrivacyFailureCode.ANALYZER_TIMEOUT,
+            PrivacyPhase.ANALYSIS,
+            3
         );
         assertThat(result.failures()).containsExactly(expected);
         assertThat(observed).containsExactly(expected);
@@ -139,10 +139,10 @@ class PrivacyServiceResolutionTest {
     @Test
     void analyzeDetailedReportsPartialProviderFailureWithoutLosingEvidence() {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
         PrivacyService service = service(policy, namedAnalyzer("RULES", List.of(
-                new PiiSpan("EMAIL_ADDRESS", 0, 17, 0.95)
+            new PiiSpan("EMAIL_ADDRESS", 0, 17, 0.95)
         )), failingAnalyzer("PRESIDIO"));
 
         PiiAnalysisResult result = service.analyzeDetailed("alice@example.com");
@@ -158,54 +158,54 @@ class PrivacyServiceResolutionTest {
         assertThat(result.spans()).singleElement().satisfies(span -> {
             assertThat(span.entityType()).isEqualTo("EMAIL_ADDRESS");
             assertThat(span.evidence()).singleElement()
-                    .extracting(PiiEvidence::provider)
-                    .isEqualTo("RULES");
+                .extracting(PiiEvidence::provider)
+                .isEqualTo("RULES");
         });
     }
 
     @Test
     void analyzeDetailedFailsWhenRequiredPrimaryProviderFails() {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .primaryProvider("PRESIDIO")
-                .failurePolicy(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY)
-                .build();
+            .primaryProvider("PRESIDIO")
+            .failurePolicy(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY)
+            .build();
         PrivacyService service = service(policy,
-                namedAnalyzer("RULES", List.of()),
-                failingAnalyzer("PRESIDIO"));
+            namedAnalyzer("RULES", List.of()),
+            failingAnalyzer("PRESIDIO"));
 
         assertThatThrownBy(() -> service.analyzeDetailed("Alice"))
-                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
-                    assertThat(failure.getMessage())
-                            .contains("PRESIDIO", "ANALYZER_EXECUTION_FAILED")
-                            .doesNotContain("Alice");
-                    assertThat(failure.getCause()).isNull();
-                    assertThat(failure.getStackTrace())
-                            .anyMatch(element -> element.getClassName()
-                                    .startsWith(PrivacyServiceResolutionTest.class.getName()));
-                });
+            .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                assertThat(failure.getMessage())
+                    .contains("PRESIDIO", "ANALYZER_EXECUTION_FAILED")
+                    .doesNotContain("Alice");
+                assertThat(failure.getCause()).isNull();
+                assertThat(failure.getStackTrace())
+                    .anyMatch(element -> element.getClassName()
+                        .startsWith(PrivacyServiceResolutionTest.class.getName()));
+            });
     }
 
     @Test
     void analyzeDetailedUsesFallbackWhenPrimaryFailureIsAllowed() {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
-                .primaryProvider("PRESIDIO")
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
+            .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
+            .primaryProvider("PRESIDIO")
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
         PrivacyService service = service(
-                policy,
-                failingAnalyzer("PRESIDIO"),
-                namedAnalyzer("RULES", List.of(
-                        new PiiSpan("PERSON", 0, 5, 0.95)
-                ))
+            policy,
+            failingAnalyzer("PRESIDIO"),
+            namedAnalyzer("RULES", List.of(
+                new PiiSpan("PERSON", 0, 5, 0.95)
+            ))
         );
 
         PiiAnalysisResult result = service.analyzeDetailed("Alice");
 
         assertThat(result.successfulProviders()).containsExactly("RULES");
         assertThat(result.failures()).singleElement()
-                .extracting(PiiAnalyzerFailure::provider)
-                .isEqualTo("PRESIDIO");
+            .extracting(PiiAnalyzerFailure::provider)
+            .isEqualTo("PRESIDIO");
         assertThat(result.spans()).singleElement().satisfies(span -> {
             assertThat(span.start()).isZero();
             assertThat(span.end()).isEqualTo(5);
@@ -215,10 +215,10 @@ class PrivacyServiceResolutionTest {
     @Test
     void analyzeSegmentsUsesFallbackWithoutSharingOffsetsBetweenTexts() {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
-                .primaryProvider("PRESIDIO")
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
+            .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
+            .primaryProvider("PRESIDIO")
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
         AtomicInteger primaryBatchCalls = new AtomicInteger();
         AtomicInteger fallbackBatchCalls = new AtomicInteger();
         PiiAnalyzer primary = segmentedAnalyzer("PRESIDIO", (texts, options) -> {
@@ -228,14 +228,14 @@ class PrivacyServiceResolutionTest {
         PiiAnalyzer fallback = segmentedAnalyzer("RULES", (texts, options) -> {
             fallbackBatchCalls.incrementAndGet();
             return List.of(
-                    List.of(),
-                    List.of(new PiiSpan("PERSON", 0, 5, 0.95))
+                List.of(),
+                List.of(new PiiSpan("PERSON", 0, 5, 0.95))
             );
         });
         PrivacyService service = service(policy, primary, fallback);
 
         List<List<ResolvedPiiSpan>> results = service.analyzeSegments(
-                List.of("safe", "Alice")
+            List.of("safe", "Alice")
         );
 
         assertThat(primaryBatchCalls).hasValue(1);
@@ -287,17 +287,17 @@ class PrivacyServiceResolutionTest {
     @Test
     void analyzeDetailedStopsFallbackWhenThePrimaryAnalyzerIsInterrupted() {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
-                .primaryProvider("PRESIDIO")
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
+            .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
+            .primaryProvider("PRESIDIO")
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
         AtomicInteger fallbackCalls = new AtomicInteger();
         PiiAnalyzer interruptedPrimary = new PiiAnalyzer() {
             @Override
             public List<PiiSpan> analyze(
-                    String text,
-                    PiiAnalysisOptions options,
-                    PrivacyProcessingLimits limits
+                String text,
+                PiiAnalysisOptions options,
+                PrivacyProcessingLimits limits
             ) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Alice leaked from an interrupted provider");
@@ -311,9 +311,9 @@ class PrivacyServiceResolutionTest {
         PiiAnalyzer fallback = new PiiAnalyzer() {
             @Override
             public List<PiiSpan> analyze(
-                    String text,
-                    PiiAnalysisOptions options,
-                    PrivacyProcessingLimits limits
+                String text,
+                PiiAnalysisOptions options,
+                PrivacyProcessingLimits limits
             ) {
                 fallbackCalls.incrementAndGet();
                 return List.of();
@@ -328,10 +328,10 @@ class PrivacyServiceResolutionTest {
 
         try {
             assertThatThrownBy(() -> service.analyzeDetailed("Alice"))
-                    .isInstanceOf(PrivacyGuardrailException.class)
-                    .hasMessage("PII analysis interrupted")
-                    .hasMessageNotContaining("Alice")
-                    .hasNoCause();
+                .isInstanceOf(PrivacyGuardrailException.class)
+                .hasMessage("PII analysis interrupted")
+                .hasMessageNotContaining("Alice")
+                .hasNoCause();
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
             assertThat(fallbackCalls).hasValue(0);
         } finally {
@@ -361,24 +361,24 @@ class PrivacyServiceResolutionTest {
     @Test
     void analyzeDetailedTreatsNullAnalyzerResultsAsProviderFailures() {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
         PrivacyService service = service(
-                policy,
-                namedAnalyzer("BROKEN", null),
-                namedAnalyzer("RULES", List.of(
-                        new PiiSpan("PERSON", 0, 5, 0.95)
-                ))
+            policy,
+            namedAnalyzer("BROKEN", null),
+            namedAnalyzer("RULES", List.of(
+                new PiiSpan("PERSON", 0, 5, 0.95)
+            ))
         );
 
         PiiAnalysisResult result = service.analyzeDetailed("Alice");
 
         assertThat(result.successfulProviders()).containsExactly("RULES");
         assertThat(result.failures()).containsExactly(new PiiAnalyzerFailure(
-                "BROKEN",
-                PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
-                PrivacyPhase.ANALYSIS,
-                1
+            "BROKEN",
+            PrivacyFailureCode.ANALYZER_CONTRACT_VIOLATION,
+            PrivacyPhase.ANALYSIS,
+            1
         ));
         assertThat(result.spans()).singleElement().satisfies(span -> {
             assertThat(span.start()).isZero();
@@ -417,73 +417,73 @@ class PrivacyServiceResolutionTest {
     @Test
     void constructorFailsFastWhenPrimaryProviderIsNotConfigured() {
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY)
-                .primaryProvider("PRESIDIO")
-                .build();
+            .mode(PiiResolutionMode.PRIMARY)
+            .primaryProvider("PRESIDIO")
+            .build();
 
         assertThatThrownBy(() -> service(policy, namedAnalyzer("RULES", List.of())))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("PRESIDIO")
-                .hasMessageContaining("not configured");
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("PRESIDIO")
+            .hasMessageContaining("not configured");
     }
 
     @Test
     void constructorFailsFastForUnknownSupplementalAndThresholdProviders() {
         PiiResolutionPolicy supplementalPolicy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY)
-                .primaryProvider("RULES")
-                .supplementalProviders(Set.of("PRESIDIO"))
-                .build();
+            .mode(PiiResolutionMode.PRIMARY)
+            .primaryProvider("RULES")
+            .supplementalProviders(Set.of("PRESIDIO"))
+            .build();
         PiiResolutionPolicy thresholdPolicy = PiiResolutionPolicy.builder()
-                .providerMinimumScores(Map.of("PRESIDIO", 0.8))
-                .build();
+            .providerMinimumScores(Map.of("PRESIDIO", 0.8))
+            .build();
 
         assertThatThrownBy(() -> service(supplementalPolicy, namedAnalyzer("RULES", List.of())))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Supplemental", "PRESIDIO", "not configured");
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Supplemental", "PRESIDIO", "not configured");
         assertThatThrownBy(() -> service(thresholdPolicy, namedAnalyzer("RULES", List.of())))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("threshold", "PRESIDIO", "no configured analyzer");
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("threshold", "PRESIDIO", "no configured analyzer");
     }
 
     @Test
     void constructorRejectsProvidersThatTheSelectedModeCanNeverUse() {
         PiiResolutionPolicy primaryPolicy = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY)
-                .primaryProvider("RULES")
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
+            .mode(PiiResolutionMode.PRIMARY)
+            .primaryProvider("RULES")
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
         PiiResolutionPolicy fallbackWithoutCandidate = PiiResolutionPolicy.builder()
-                .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
-                .primaryProvider("RULES")
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
+            .mode(PiiResolutionMode.PRIMARY_WITH_FALLBACK)
+            .primaryProvider("RULES")
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
 
         assertThatThrownBy(() -> service(
-                primaryPolicy,
-                namedAnalyzer("RULES", List.of()),
-                namedAnalyzer("PRESIDIO", List.of())
+            primaryPolicy,
+            namedAnalyzer("RULES", List.of()),
+            namedAnalyzer("PRESIDIO", List.of())
         )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("does not select", "PRESIDIO");
+            .hasMessageContaining("does not select", "PRESIDIO");
         assertThatThrownBy(() -> service(
-                fallbackWithoutCandidate,
-                namedAnalyzer("RULES", List.of())
+            fallbackWithoutCandidate,
+            namedAnalyzer("RULES", List.of())
         )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("requires at least one configured non-primary provider");
+            .hasMessageContaining("requires at least one configured non-primary provider");
     }
 
     @Test
     void tokenizeCanonicalizesAliasesForCallerProvidedSpans() {
         PrivacyService service = new PrivacyService(
-                List.of(namedAnalyzer("RULES", List.of())),
-                PiiAnalysisOptions.defaults(),
-                new EntityTypeRegistry(Map.of("PER", "PERSON")),
-                PiiResolutionPolicy.defaults()
+            List.of(namedAnalyzer("RULES", List.of())),
+            PiiAnalysisOptions.defaults(),
+            new EntityTypeRegistry(Map.of("PER", "PERSON")),
+            PiiResolutionPolicy.defaults()
         );
 
         try (PrivacySession session = service.openSession()) {
             assertThat(service.tokenize(session.handle(), "Alice", List.of(
-                    new PiiSpan("PER", 0, 5, 0.9)
+                new PiiSpan("PER", 0, 5, 0.9)
             ))).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
         }
     }

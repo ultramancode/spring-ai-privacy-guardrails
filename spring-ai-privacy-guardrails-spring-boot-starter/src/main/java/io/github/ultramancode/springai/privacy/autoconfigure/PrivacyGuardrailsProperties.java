@@ -142,7 +142,7 @@ public class PrivacyGuardrailsProperties {
         private String primaryProvider;
         /** Providers allowed to supplement primary-provider evidence. */
         private List<String> supplementalProviders = new ArrayList<>();
-        /** Sole policy controlling whether analyzer failures stop processing. */
+        /** Policy for handling analyzer failures. */
         private PiiAnalyzerFailurePolicy failurePolicy = PiiResolutionPolicy.DEFAULT_FAILURE_POLICY;
         /**
          * Minimum confidence scores for individual providers.
@@ -258,7 +258,7 @@ public class PrivacyGuardrailsProperties {
         private List<String> presets = new ArrayList<>();
         /** Additional registered rule IDs to activate. */
         private List<String> include = new ArrayList<>();
-        /** Registered rule IDs to remove from the combined selection. */
+        /** Registered rule IDs to exclude from the analyzer. */
         private List<String> exclude = new ArrayList<>();
 
         public boolean isEnabled() {

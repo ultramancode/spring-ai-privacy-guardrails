@@ -62,24 +62,24 @@ public class CorePrivacyBenchmark {
 
     static PrivacyService benchmarkPrivacyService() {
         PatternDefinition customerIdPattern = PatternDefinition.builder()
-                .expression("\\bCUST-\\d{4}\\b")
-                .score(0.99)
-                .build();
+            .expression("\\bCUST-\\d{4}\\b")
+            .score(0.99)
+            .build();
         PatternDefinition emailAddressPattern = PatternDefinition.builder()
-                .expression("\\b[A-Za-z0-9._%+-]+@example\\.test\\b")
-                .score(0.99)
-                .build();
+            .expression("\\b[A-Za-z0-9._%+-]+@example\\.test\\b")
+            .score(0.99)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("customer-id")
-                        .entityType("CUSTOMER_ID")
-                        .addPattern(customerIdPattern)
-                        .build(),
-                PatternPiiRule.builder()
-                        .id("email-address")
-                        .entityType(PiiEntityTypes.EMAIL_ADDRESS)
-                        .addPattern(emailAddressPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("customer-id")
+                .entityType("CUSTOMER_ID")
+                .addPattern(customerIdPattern)
+                .build(),
+            PatternPiiRule.builder()
+                .id("email-address")
+                .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+                .addPattern(emailAddressPattern)
+                .build()
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }

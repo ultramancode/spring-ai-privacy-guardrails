@@ -181,27 +181,27 @@ class PrivacyJsonPayloadPolicyTest {
     @ValueSource(strings = {"ab", "[\"ab\"]"})
     void analysisLimitFailuresUseTheCallingBoundaryPhase(String payload) {
         PatternDefinition personPattern = PatternDefinition.builder()
-                .expression(".")
-                .score(1.0)
-                .build();
+            .expression(".")
+            .score(1.0)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("person")
-                        .entityType(PiiEntityTypes.PERSON)
-                        .addPattern(personPattern)
-                        .build()));
+            PatternPiiRule.builder()
+                .id("person")
+                .entityType(PiiEntityTypes.PERSON)
+                .addPattern(personPattern)
+                .build()));
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults(), limits);
 
         try (PrivacySession session = service.openSession()) {
             assertThatThrownBy(() -> PrivacyJsonPayloadTransformer.tokenize(
-                    service, session.handle(), payload, PrivacyPhase.TOOL_INPUT, false))
-                    .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
-                        assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
-                        assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOOL_INPUT);
-                    });
+                service, session.handle(), payload, PrivacyPhase.TOOL_INPUT, false))
+                .isInstanceOfSatisfying(PrivacyGuardrailException.class, failure -> {
+                    assertThat(failure.code()).isEqualTo(PrivacyFailureCode.PAYLOAD_LIMIT_EXCEEDED);
+                    assertThat(failure.phase()).isEqualTo(PrivacyPhase.TOOL_INPUT);
+                });
             assertPayloadLimit(() -> applyOutputPolicy(
-                    service, session.handle(), payload, PrivacyOutputAction.BLOCK));
+                service, session.handle(), payload, PrivacyOutputAction.BLOCK));
         }
     }
 
@@ -542,41 +542,41 @@ class PrivacyJsonPayloadPolicyTest {
     @Test
     void batchingPreservesScalarIsolationForBoundarySensitiveRegexRules() {
         PatternDefinition employeeIdPattern = PatternDefinition.builder()
-                .expression("^EMP-[0-9]{4}$")
-                .score(1.0)
-                .build();
+            .expression("^EMP-[0-9]{4}$")
+            .score(1.0)
+            .build();
         PatternDefinition apiKeyPattern = PatternDefinition.builder()
-                .expression("\\AKEY-[0-9]{4}\\z")
-                .score(1.0)
-                .build();
+            .expression("\\AKEY-[0-9]{4}\\z")
+            .score(1.0)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("employee-id")
-                        .entityType("EMPLOYEE_ID")
-                        .addPattern(employeeIdPattern)
-                        .build(),
-                PatternPiiRule.builder()
-                        .id("api-key")
-                        .entityType("API_KEY")
-                        .addPattern(apiKeyPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("employee-id")
+                .entityType("EMPLOYEE_ID")
+                .addPattern(employeeIdPattern)
+                .build(),
+            PatternPiiRule.builder()
+                .id("api-key")
+                .entityType("API_KEY")
+                .addPattern(apiKeyPattern)
+                .build()
         ));
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         List<String> inputs = List.of(
-                "[\"EMP-1234\",\"safe\"]",
-                "[\"safe\",\"EMP-1234\",\"other\"]",
-                "[\"safe\",\"EMP-1234\"]",
-                "{\"safe\":\"value\",\"employee\":\"EMP-1234\"}",
-                "[\"safe\",\"KEY-1234\"]"
+            "[\"EMP-1234\",\"safe\"]",
+            "[\"safe\",\"EMP-1234\",\"other\"]",
+            "[\"safe\",\"EMP-1234\"]",
+            "{\"safe\":\"value\",\"employee\":\"EMP-1234\"}",
+            "[\"safe\",\"KEY-1234\"]"
         );
 
         for (String input : inputs) {
             try (PrivacySession session = service.openSession()) {
                 String protectedPayload = applyOutputPolicy(
-                        service,
-                        session.handle(),
-                        input,
-                        PrivacyOutputAction.TOKENIZE
+                    service,
+                    session.handle(),
+                    input,
+                    PrivacyOutputAction.TOKENIZE
                 );
 
                 assertThat(protectedPayload).doesNotContain("EMP-1234", "KEY-1234");

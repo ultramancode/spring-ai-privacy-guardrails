@@ -104,15 +104,15 @@ class PrivacyInputAdvisorTest {
     @Test
     void adviseCallPreservesJsonScalarIsolationBeforeModelInvocation() {
         PatternDefinition employeeIdPattern = PatternDefinition.builder()
-                .expression("^EMP-[0-9]{4}$")
-                .score(1.0)
-                .build();
+            .expression("^EMP-[0-9]{4}$")
+            .score(1.0)
+            .build();
         RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
-                PatternPiiRule.builder()
-                        .id("employee-id")
-                        .entityType("EMPLOYEE_ID")
-                        .addPattern(employeeIdPattern)
-                        .build()
+            PatternPiiRule.builder()
+                .id("employee-id")
+                .entityType("EMPLOYEE_ID")
+                .addPattern(employeeIdPattern)
+                .build()
         ));
         PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         PrivacyInputAdvisor advisor = new PrivacyInputAdvisor(service);
@@ -129,8 +129,8 @@ class PrivacyInputAdvisorTest {
 
         try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = PrivacyRequestContextSupport.attachLifecycle(
-                    new ChatClientRequest(new Prompt(input), Map.of()),
-                    session.handle()
+                new ChatClientRequest(new Prompt(input), Map.of()),
+                session.handle()
             );
 
             assertThat(advisor.adviseCall(request, chain).chatResponse()).isNotNull();

@@ -68,8 +68,8 @@ public final class PiiRuleCatalog {
     }
 
     private static Map<String, PiiRulePreset> registerPresets(
-            List<PiiRulePreset> presets,
-            Map<String, PiiRule> rulesById
+        List<PiiRulePreset> presets,
+        Map<String, PiiRule> rulesById
     ) {
         Map<String, PiiRulePreset> presetsByName = new LinkedHashMap<>();
         for (PiiRulePreset preset : presets) {
@@ -109,8 +109,8 @@ public final class PiiRuleCatalog {
             ruleIds.remove(ruleId);
         }
         List<PiiRule> rules = ruleIds.stream()
-                .map(this.rulesById::get)
-                .toList();
+            .map(this.rulesById::get)
+            .toList();
         return new RuleBasedPiiAnalyzer(rules, List.copyOf(presetNames));
     }
 

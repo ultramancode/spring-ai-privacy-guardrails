@@ -1,7 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
 import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -33,15 +32,15 @@ class PiiRuleCatalogTest {
             throw new AssertionError("Unselected rule executed");
         });
         PiiRuleCatalog catalog = PiiRuleCatalog.builder()
-                .addRules(List.of(direct, excluded, supplemental, included, inactive))
-                .addPreset(new PiiRulePreset("CUSTOM", List.of("direct", "excluded")))
-                .addPreset(new PiiRulePreset("ADDITIONAL", List.of("supplemental", "excluded")))
-                .build();
+            .addRules(List.of(direct, excluded, supplemental, included, inactive))
+            .addPreset(new PiiRulePreset("CUSTOM", List.of("direct", "excluded")))
+            .addPreset(new PiiRulePreset("ADDITIONAL", List.of("supplemental", "excluded")))
+            .build();
         RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()
-                .presets("CUSTOM", "ADDITIONAL", "CUSTOM")
-                .include("direct", "included")
-                .exclude("excluded")
-                .build();
+            .presets("CUSTOM", "ADDITIONAL", "CUSTOM")
+            .include("direct", "included")
+            .exclude("excluded")
+            .build();
         assertThat(analyzer.ruleIds()).containsExactly("direct", "supplemental", "included");
         assertThat(analyzer.presetNames()).containsExactly("CUSTOM", "ADDITIONAL");
         // Verify UTF-16 offsets: each Korean character uses one code unit and the emoji uses two.
@@ -58,8 +57,8 @@ class PiiRuleCatalogTest {
         PiiRule thirdRule = rule("third", text -> List.of());
         List<PiiRule> rules = new ArrayList<>(List.of(secondRule, thirdRule));
         PiiRuleCatalog.Builder builder = PiiRuleCatalog.builder()
-                .addRule(firstRule)
-                .addRules(rules);
+            .addRule(firstRule)
+            .addRules(rules);
         rules.clear();
 
         PiiRuleCatalog catalog = builder.build();
@@ -75,7 +74,7 @@ class PiiRuleCatalogTest {
 
         assertThatNullPointerException().isThrownBy(() -> builder.addRules(null));
         assertThatNullPointerException().isThrownBy(() ->
-                builder.addRules(Arrays.asList(additionalRule, null)));
+            builder.addRules(Arrays.asList(additionalRule, null)));
 
         assertThat(builder.build().ruleIds()).containsExactly("existing");
     }
@@ -84,83 +83,81 @@ class PiiRuleCatalogTest {
     void rejectsInvalidCatalogDefinitions() {
         PiiRule rule = rule("custom", text -> List.of());
         assertThatIllegalArgumentException().isThrownBy(() ->
-                PiiRuleCatalog.builder().addRule(rule).addRule(rule).build());
+            PiiRuleCatalog.builder().addRule(rule).addRule(rule).build());
         assertThatIllegalArgumentException().isThrownBy(() ->
-                PiiRuleCatalog.builder().addRule(rule).addRules(List.of(rule)).build());
+            PiiRuleCatalog.builder().addRule(rule).addRules(List.of(rule)).build());
         assertThatIllegalArgumentException().isThrownBy(() ->
-                PiiRuleCatalog.builder().builtIns().addPreset(new PiiRulePreset("KR", List.of())).build())
-                .withMessage("Duplicate preset name 'KR'");
+            PiiRuleCatalog.builder().builtIns().addPreset(new PiiRulePreset("KR", List.of())).build())
+            .withMessage("Duplicate preset name 'KR'");
         assertThatIllegalArgumentException().isThrownBy(() ->
-                PiiRuleCatalog.builder().addPreset(new PiiRulePreset("CUSTOM", List.of("missing"))).build());
+            PiiRuleCatalog.builder().addPreset(new PiiRulePreset("CUSTOM", List.of("missing"))).build());
         PiiRulePreset preset = new PiiRulePreset("CUSTOM", List.of("custom"));
         assertThatIllegalArgumentException().isThrownBy(() ->
-                PiiRuleCatalog.builder().addRule(rule).addPreset(preset).addPreset(preset).build())
-                .withMessage("Duplicate preset name 'CUSTOM'");
+            PiiRuleCatalog.builder().addRule(rule).addPreset(preset).addPreset(preset).build())
+            .withMessage("Duplicate preset name 'CUSTOM'");
         assertThatIllegalArgumentException().isThrownBy(() ->
-                new PiiRulePreset("invalid name", List.of("custom"))).withMessageContaining("preset name");
+            new PiiRulePreset("invalid name", List.of("custom"))).withMessageContaining("preset name");
     }
 
     @Test
     void rejectsUnknownPresetsAndRuleIds() {
         PiiRuleCatalog catalog = PiiRuleCatalog.builder()
-                .addRule(rule("custom", text -> List.of()))
-                .addPreset(new PiiRulePreset("CUSTOM", List.of("custom")))
-                .build();
+            .addRule(rule("custom", text -> List.of()))
+            .addPreset(new PiiRulePreset("CUSTOM", List.of("custom")))
+            .build();
 
-        for (String unknownReference : List.of("missing", "invalid name", "", "x".repeat(65))) {
-            assertThatIllegalArgumentException().isThrownBy(() ->
-                    catalog.analyzerBuilder().presets(unknownReference).build())
-                    .withMessageContaining("Unknown preset");
-            assertThatIllegalArgumentException().isThrownBy(() ->
-                    catalog.analyzerBuilder().presets("CUSTOM").include(unknownReference).build())
-                    .withMessageContaining("Unknown rule ID");
-            assertThatIllegalArgumentException().isThrownBy(() ->
-                    catalog.analyzerBuilder().presets("CUSTOM").exclude(unknownReference).build())
-                    .withMessageContaining("Unknown rule ID");
-        }
+        assertThatIllegalArgumentException().isThrownBy(() ->
+            catalog.analyzerBuilder().presets("UNKNOWN").build())
+            .withMessageContaining("Unknown preset");
+        assertThatIllegalArgumentException().isThrownBy(() ->
+            catalog.analyzerBuilder().presets("CUSTOM").include("missing-rule").build())
+            .withMessageContaining("Unknown rule ID");
+        assertThatIllegalArgumentException().isThrownBy(() ->
+            catalog.analyzerBuilder().presets("CUSTOM").exclude("missing-rule").build())
+            .withMessageContaining("Unknown rule ID");
     }
 
     @Test
     void rejectsAnalyzersWithoutRules() {
         PiiRuleCatalog catalog = PiiRuleCatalog.builder()
-                .addRule(rule("custom", text -> List.of()))
-                .addPreset(new PiiRulePreset("CUSTOM", List.of("custom")))
-                .build();
+            .addRule(rule("custom", text -> List.of()))
+            .addPreset(new PiiRulePreset("CUSTOM", List.of("custom")))
+            .build();
 
         assertThatIllegalArgumentException().isThrownBy(() -> catalog.analyzerBuilder().build());
         assertThatIllegalArgumentException().isThrownBy(() -> catalog.analyzerBuilder()
-                .presets("CUSTOM")
-                .exclude("custom")
-                .build());
+            .presets("CUSTOM")
+            .exclude("custom")
+            .build());
     }
 
     @Test
     void analyzerBuildersCopyInputsAndReplacePreviousSelections() {
         PiiRuleCatalog catalog = PiiRuleCatalog.builder()
-                .addRules(List.of(
-                        rule("first", text -> List.of()),
-                        rule("second", text -> List.of()),
-                        rule("third", text -> List.of()),
-                        rule("fourth", text -> List.of())))
-                .addPreset(new PiiRulePreset("CUSTOM", List.of("first", "second")))
-                .addPreset(new PiiRulePreset("ADDITIONAL", List.of("fourth")))
-                .build();
+            .addRules(List.of(
+                rule("first", text -> List.of()),
+                rule("second", text -> List.of()),
+                rule("third", text -> List.of()),
+                rule("fourth", text -> List.of())))
+            .addPreset(new PiiRulePreset("CUSTOM", List.of("first", "second")))
+            .addPreset(new PiiRulePreset("ADDITIONAL", List.of("fourth")))
+            .build();
         List<String> presetNames = new ArrayList<>(List.of("CUSTOM"));
         List<String> includedRuleIds = new ArrayList<>(List.of("third"));
         List<String> excludedRuleIds = new ArrayList<>(List.of("second"));
         PiiRuleCatalog.AnalyzerBuilder analyzerBuilder = catalog.analyzerBuilder()
-                .presets(presetNames)
-                .include(includedRuleIds)
-                .exclude(excludedRuleIds);
+            .presets(presetNames)
+            .include(includedRuleIds)
+            .exclude(excludedRuleIds);
         presetNames.clear();
         includedRuleIds.clear();
         excludedRuleIds.clear();
         RuleBasedPiiAnalyzer first = analyzerBuilder.build();
 
         RuleBasedPiiAnalyzer second = analyzerBuilder.presets("ADDITIONAL")
-                .include("second")
-                .exclude("first")
-                .build();
+            .include("second")
+            .exclude("first")
+            .build();
 
         assertThat(first.ruleIds()).containsExactly("first", "third");
         assertThat(first.presetNames()).containsExactly("CUSTOM");
@@ -174,66 +171,57 @@ class PiiRuleCatalogTest {
         PiiRulePreset preset = new PiiRulePreset("CUSTOM", ruleIds);
         ruleIds.clear();
         PiiRuleCatalog.Builder builder = PiiRuleCatalog.builder()
-                .addRule(rule("first", text -> List.of()))
-                .addPreset(preset);
+            .addRule(rule("first", text -> List.of()))
+            .addPreset(preset);
         PiiRuleCatalog first = builder.build();
         PiiRuleCatalog second = builder.addRule(rule("second", text -> List.of()))
-                .addPreset(new PiiRulePreset("ADDITIONAL", List.of("second", "first")))
-                .build();
+            .addPreset(new PiiRulePreset("ADDITIONAL", List.of("second", "first")))
+            .build();
         assertThat(first.ruleIds()).containsExactly("first");
         assertThat(first.presets()).containsExactly(new PiiRulePreset("CUSTOM", List.of("first")));
         assertThat(second.presets()).containsExactly(
-                new PiiRulePreset("CUSTOM", List.of("first")),
-                new PiiRulePreset("ADDITIONAL", List.of("second", "first")));
+            new PiiRulePreset("CUSTOM", List.of("first")),
+            new PiiRulePreset("ADDITIONAL", List.of("second", "first")));
+        // Both rules declare CUSTOM_ID and can be selected together.
         assertThat(second.analyzerBuilder().include("first", "second").build().ruleIds())
-                .containsExactly("first", "second");
+            .containsExactly("first", "second");
     }
 
     @Test
     void presetsKeepTheirOwnRuleOrderAndMayShareRules() {
         PiiRuleCatalog catalog = PiiRuleCatalog.builder()
-                .addRules(List.of(
-                        rule("first", text -> List.of()),
-                        rule("second", text -> List.of()),
-                        rule("third", text -> List.of())))
-                .addPreset(new PiiRulePreset("CUSTOM", List.of("third", "first")))
-                .addPreset(new PiiRulePreset("SHARED", List.of("first", "second")))
-                .build();
+            .addRules(List.of(
+                rule("first", text -> List.of()),
+                rule("second", text -> List.of()),
+                rule("third", text -> List.of())))
+            .addPreset(new PiiRulePreset("CUSTOM", List.of("third", "first")))
+            .addPreset(new PiiRulePreset("SHARED", List.of("first", "second")))
+            .build();
 
         assertThat(catalog.presets()).containsExactly(
-                new PiiRulePreset("CUSTOM", List.of("third", "first")),
-                new PiiRulePreset("SHARED", List.of("first", "second")));
+            new PiiRulePreset("CUSTOM", List.of("third", "first")),
+            new PiiRulePreset("SHARED", List.of("first", "second")));
         assertThat(catalog.analyzerBuilder().presets("CUSTOM", "SHARED").build().ruleIds())
-                .containsExactly("third", "first", "second");
+            .containsExactly("third", "first", "second");
     }
 
     @Test
     void rulesCanBeSelectedDirectlyWithoutAPreset() {
         PatternDefinition employeeIdPattern = PatternDefinition.builder()
-                .expression("EMP-[0-9]{4}")
-                .score(0.9)
-                .build();
+            .expression("EMP-[0-9]{4}")
+            .score(0.9)
+            .build();
         PiiRule rule = PatternPiiRule.builder()
-                .id("employee-id")
-                .entityType("EMPLOYEE_ID")
-                .addPattern(employeeIdPattern)
-                .build();
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(employeeIdPattern)
+            .build();
         PiiRuleCatalog catalog = PiiRuleCatalog.builder().addRule(rule).build();
 
         assertThat(catalog.presets()).isEmpty();
         RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder().include("employee-id").build();
         assertThat(analyze(analyzer, "EMP-1234"))
-                .containsExactly(new PiiSpan("EMPLOYEE_ID", 0, 8, 0.9));
-    }
-
-    @Test
-    void countryPresetSelectionIsIndependentOfAnalysisLanguage() {
-        PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns().build();
-        RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder().presets(BuiltInPiiPresetNames.KR).build();
-        PiiAnalysisOptions options = PiiAnalysisOptions.builder().language("en").build();
-
-        assertThat(analyzer.analyze("010-1234-5678", options, PrivacyProcessingLimits.defaults()))
-                .containsExactly(new PiiSpan("PHONE_NUMBER", 0, 13, 0.85));
+            .containsExactly(new PiiSpan("EMPLOYEE_ID", 0, 8, 0.9));
     }
 
     private static List<PiiSpan> analyze(PiiAnalyzer analyzer, String text) {

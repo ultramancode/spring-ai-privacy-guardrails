@@ -75,17 +75,17 @@ final class PrivacyConfigurationPropertyDiagnostics {
     }
 
     private static Optional<Diagnostic> diagnosePropertyName(
-            ConfigurationPropertyName name,
-            DiagnosticContext context
+        ConfigurationPropertyName name,
+        DiagnosticContext context
     ) {
         if (!ROOT.isAncestorOf(name)) {
             return Optional.empty();
         }
         Optional<SegmentMatch> rootMatchCandidate = closestSegmentMatch(
-                name,
-                ROOT_ELEMENTS,
-                ROOT_PROPERTIES,
-                context.systemEnvironmentMapping()
+            name,
+            ROOT_ELEMENTS,
+            ROOT_PROPERTIES,
+            context.systemEnvironmentMapping()
         );
         if (rootMatchCandidate.isEmpty()) {
             return Optional.empty();
@@ -99,24 +99,29 @@ final class PrivacyConfigurationPropertyDiagnostics {
         String propertyRoot = ROOT + "." + rootMatch.expected();
         return switch (rootMatch.expected()) {
             case "processing" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    PROCESSING_PROPERTIES,
-                    context
+                name,
+                propertyIndex,
+                propertyRoot,
+                PROCESSING_PROPERTIES,
+                context
             );
             case "analysis" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    ANALYSIS_PROPERTIES,
-                    ANALYSIS_MAP_PROPERTIES,
-                    ANALYSIS_INDEXED_SCALAR_PROPERTIES,
-                    context
+                name,
+                propertyIndex,
+                propertyRoot,
+                ANALYSIS_PROPERTIES,
+                ANALYSIS_MAP_PROPERTIES,
+                ANALYSIS_INDEXED_SCALAR_PROPERTIES,
+                context
             );
             case "rules" -> diagnoseFixedPropertyPath(
-                    name, propertyIndex, propertyRoot, RULES_PROPERTIES,
-                    Set.of(), RULES_INDEXED_SCALAR_PROPERTIES, context
+                name,
+                propertyIndex,
+                propertyRoot,
+                RULES_PROPERTIES,
+                Set.of(),
+                RULES_INDEXED_SCALAR_PROPERTIES,
+                context
             );
             default -> Optional.empty();
         };

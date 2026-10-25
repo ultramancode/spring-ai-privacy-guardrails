@@ -141,8 +141,17 @@ public final class PiiRuleCatalog {
         }
 
         /** Registers a rule without activating it. */
-        public Builder rule(PiiRule rule) {
+        public Builder addRule(PiiRule rule) {
             this.rules.add(Objects.requireNonNull(rule, "rule must not be null"));
+            return this;
+        }
+
+        /**
+         * Registers rules in collection iteration order, after any rules already registered.
+         * Copies the collection. Registration does not activate the rules.
+         */
+        public Builder addRules(Collection<? extends PiiRule> rules) {
+            this.rules.addAll(List.copyOf(rules));
             return this;
         }
 
@@ -150,7 +159,7 @@ public final class PiiRuleCatalog {
          * Registers a named list of rule IDs without activating it.
          * Preset names must be unique within the catalog.
          */
-        public Builder preset(PiiRulePreset preset) {
+        public Builder addPreset(PiiRulePreset preset) {
             this.presets.add(Objects.requireNonNull(preset, "preset must not be null"));
             return this;
         }

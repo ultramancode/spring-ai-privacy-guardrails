@@ -87,7 +87,9 @@ class BuiltInPiiRulesTest {
                 .addPattern(PatternDefinition.builder().expression("low").score(0.3).build())
                 .addPattern(PatternDefinition.builder().expression("high").score(0.8).build())
                 .build();
-        PiiRuleCatalog.Builder builder = PiiRuleCatalog.builder().builtInsWithScores(scoreOverrides).rule(applicationRule);
+        PiiRuleCatalog.Builder builder = PiiRuleCatalog.builder()
+                .builtInsWithScores(scoreOverrides)
+                .addRule(applicationRule);
         scoreOverrides.put(BuiltInPiiRuleIds.EMAIL, 0.1);
         RuleBasedPiiAnalyzer analyzer = builder.build()
                 .analyzerBuilder().presets(BuiltInPiiPresetNames.COMMON).include("company-id").build();

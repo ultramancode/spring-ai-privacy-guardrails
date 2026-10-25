@@ -146,13 +146,14 @@ public class PublishedArtifactConsumer {
                 .score(0.9)
                 .validator(value -> !value.endsWith("0000"))
                 .build();
-        PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns().rule(direct)
-                .rule(PatternPiiRule.builder()
-                        .id("employee-id")
-                        .entityType("EMPLOYEE_ID")
-                        .addPattern(employeeIdPattern)
-                        .build())
-                .preset(new PiiRulePreset("COMPANY",
+        PatternPiiRule employeeRule = PatternPiiRule.builder()
+                .id("employee-id")
+                .entityType("EMPLOYEE_ID")
+                .addPattern(employeeIdPattern)
+                .build();
+        PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
+                .addRules(List.of(direct, employeeRule))
+                .addPreset(new PiiRulePreset("COMPANY",
                         List.of("employee-id", "account-code", BuiltInPiiRuleIds.EMAIL)))
                 .build();
         RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()

@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: 4f0504b6e8bc473ee8e2865899b8cdd8ac612547433bd7b5c74f3cce0769937a -->
+<!-- i18n-source-sha256: d6b800d2e9e619cd7e6d8eb6d36aff58e7330e21be6b1efed97cc47f28753c95 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -276,6 +276,9 @@ PiiRule employeeIdRule() {
 `builtIns()`와 `builtInsWithScores(...)`는 내장 규칙과
 `BuiltInPiiRules.presets()`에 정의된 COMMON, KR 프리셋을 등록합니다.
 
+`addRule(...)`로 애플리케이션 규칙 하나를 등록하거나 `addRules(...)`로 컬렉션을 등록합니다.
+두 메소드는 기존에 등록한 규칙을 유지하며, 컬렉션은 순회 순서대로 복사합니다.
+
 카탈로그는 프리셋을 순서대로 펼치고 `include`를 추가한 뒤 중복 ID의 첫 위치를 유지하고
 `exclude`를 적용합니다. COMMON도 명시적으로 선택해야 합니다. 규칙 ID는 1~64자의 ASCII
 소문자·숫자와 그 사이의 단일 하이픈을 사용합니다. 프리셋 이름은 ASCII 문자로 시작하며
@@ -313,8 +316,8 @@ import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
 
 PiiRule employeeRule = employeeIdRule();
 PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
-        .rule(employeeRule)
-        .preset(new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL)))
+        .addRule(employeeRule)
+        .addPreset(new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL)))
         .build();
 RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()
         .presets("COMPANY", BuiltInPiiPresetNames.KR)

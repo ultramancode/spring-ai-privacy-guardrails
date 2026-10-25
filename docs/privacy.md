@@ -287,6 +287,9 @@ or preset does not activate it.
 `builtIns()` and `builtInsWithScores(...)` register the built-in rules and the COMMON
 and KR presets defined in `BuiltInPiiRules.presets()`.
 
+Use `addRule(...)` to register one application rule or `addRules(...)` to register a collection.
+Both methods retain previously registered rules. Collections are copied in iteration order.
+
 The catalog expands presets in order, appends `include`, keeps the first occurrence of each
 rule ID, then applies `exclude`. COMMON must be selected explicitly. Rule IDs use 1–64 lowercase
 ASCII letters or digits separated by single hyphens. Preset names start with an ASCII letter
@@ -324,8 +327,8 @@ import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
 
 PiiRule employeeRule = employeeIdRule();
 PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
-        .rule(employeeRule)
-        .preset(new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL)))
+        .addRule(employeeRule)
+        .addPreset(new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL)))
         .build();
 RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()
         .presets("COMPANY", BuiltInPiiPresetNames.KR)

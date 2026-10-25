@@ -72,8 +72,8 @@ public class PrivacyGuardrailsAutoConfiguration {
             ObjectProvider<PiiRulePreset> presets
     ) {
         PiiRuleCatalog.Builder catalog = PiiRuleCatalog.builder().builtIns();
-        rules.orderedStream().forEach(catalog::rule);
-        presets.orderedStream().forEach(catalog::preset);
+        catalog.addRules(rules.orderedStream().toList());
+        presets.orderedStream().forEach(catalog::addPreset);
         PrivacyGuardrailsProperties.Rules selection = properties.getRules();
         return catalog.build().analyzerBuilder()
                 .presets(selection.getPresets())

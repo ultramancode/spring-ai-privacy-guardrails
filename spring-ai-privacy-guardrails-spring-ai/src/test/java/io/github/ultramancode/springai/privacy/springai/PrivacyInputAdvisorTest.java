@@ -6,8 +6,9 @@ import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -102,12 +103,18 @@ class PrivacyInputAdvisorTest {
 
     @Test
     void adviseCallPreservesJsonScalarIsolationBeforeModelInvocation() {
-        PrivacyService service = new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("EMPLOYEE_ID", "^EMP-[0-9]{4}$", 1.0, 0)
-                ))),
-                PiiAnalysisOptions.defaults()
-        );
+        PatternDefinition employeeIdPattern = PatternDefinition.builder()
+            .expression("^EMP-[0-9]{4}$")
+            .score(1.0)
+            .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+            PatternPiiRule.builder()
+                .id("employee-id")
+                .entityType("EMPLOYEE_ID")
+                .addPattern(employeeIdPattern)
+                .build()
+        ));
+        PrivacyService service = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         PrivacyInputAdvisor advisor = new PrivacyInputAdvisor(service);
         CallAdvisorChain chain = mock(CallAdvisorChain.class);
         String input = "[\"safe\",\"EMP-1234\"]";
@@ -122,8 +129,8 @@ class PrivacyInputAdvisorTest {
 
         try (PrivacySession session = service.openSession()) {
             ChatClientRequest request = PrivacyRequestContextSupport.attachLifecycle(
-                    new ChatClientRequest(new Prompt(input), Map.of()),
-                    session.handle()
+                new ChatClientRequest(new Prompt(input), Map.of()),
+                session.handle()
             );
 
             assertThat(advisor.adviseCall(request, chain).chatResponse()).isNotNull();

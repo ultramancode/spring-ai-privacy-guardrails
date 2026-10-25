@@ -162,7 +162,7 @@ selected language.
 The active session count is observed across the service after the call. Concurrent
 requests can make it nonzero. This value alone does not prove a session leak.
 
-The default Regex rules and all example values are sample-oriented. Text not
+The demo's employee and customer ID rules and all example values are sample-oriented. Text not
 matched by an enabled analyzer may remain unchanged, and these fixed scenarios
 do not establish general detection accuracy or prove protection for unsupported
 execution paths.

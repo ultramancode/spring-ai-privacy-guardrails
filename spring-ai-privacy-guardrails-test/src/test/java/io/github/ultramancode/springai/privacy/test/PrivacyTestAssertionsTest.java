@@ -1,9 +1,11 @@
 package io.github.ultramancode.springai.privacy.test;
 
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
@@ -62,12 +64,18 @@ class PrivacyTestAssertionsTest {
     }
 
     private PrivacyToolCallbackFactory factory() {
-        PrivacyService privacyService = new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("PERSON", "\\bAlice\\b", 0.99, 0)
-                ))),
-                PiiAnalysisOptions.defaults()
-        );
+        PatternDefinition personPattern = PatternDefinition.builder()
+            .expression("\\bAlice\\b")
+            .score(0.99)
+            .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+            PatternPiiRule.builder()
+                .id("person")
+                .entityType(PiiEntityTypes.PERSON)
+                .addPattern(personPattern)
+                .build()
+        ));
+        PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         return new PrivacyToolCallbackFactory(privacyService, ToolDisclosurePolicy.denyAll());
     }
 

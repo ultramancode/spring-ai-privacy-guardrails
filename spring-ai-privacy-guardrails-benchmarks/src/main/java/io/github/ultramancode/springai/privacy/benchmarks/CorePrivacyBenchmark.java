@@ -1,10 +1,12 @@
 package io.github.ultramancode.springai.privacy.benchmarks;
 
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
+import io.github.ultramancode.springai.privacy.core.PiiEntityTypes;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.core.PrivacySession;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
@@ -59,14 +61,25 @@ public class CorePrivacyBenchmark {
     }
 
     static PrivacyService benchmarkPrivacyService() {
-        RegexPiiAnalyzer analyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{4}\\b", 0.99, 0),
-                new RegexPiiRule(
-                        "EMAIL_ADDRESS",
-                        "\\b[A-Za-z0-9._%+-]+@example\\.test\\b",
-                        0.99,
-                        0
-                )
+        PatternDefinition customerIdPattern = PatternDefinition.builder()
+            .expression("\\bCUST-\\d{4}\\b")
+            .score(0.99)
+            .build();
+        PatternDefinition emailAddressPattern = PatternDefinition.builder()
+            .expression("\\b[A-Za-z0-9._%+-]+@example\\.test\\b")
+            .score(0.99)
+            .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+            PatternPiiRule.builder()
+                .id("customer-id")
+                .entityType("CUSTOMER_ID")
+                .addPattern(customerIdPattern)
+                .build(),
+            PatternPiiRule.builder()
+                .id("email-address")
+                .entityType(PiiEntityTypes.EMAIL_ADDRESS)
+                .addPattern(emailAddressPattern)
+                .build()
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }

@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 7a9c40f5e68c2a3122ffcaa875b2eec9e0622e8cef308fb456918c0ff1f7b9a6 -->
+<!-- i18n-source-sha256: b45450e9481e4624d3aa06d38e901f0f9e9508313005a463aeddb8a481e98d86 -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
@@ -121,7 +121,7 @@ curl "http://127.0.0.1:8080/demo/rag" \
 포함됩니다. 모델에 전달되는 입력에서 탐지된 개인정보는 불투명 토큰으로 바뀝니다.
 외부 벡터 저장소, 임베딩 서비스 또는 모델은 사용하지 않습니다.
 
-## 정규식 전용 보호
+## 로컬 규칙 보호
 
 ```bash
 curl "http://127.0.0.1:8080/demo/protect" \
@@ -137,12 +137,12 @@ curl "http://127.0.0.1:8080/demo/protect" \
 {
   "protectedPrompt": "직원번호는 [PII_EMPLOYEE_ID_1:<opaque>]이고, 이메일은 [PII_EMAIL_ADDRESS_1:<opaque>], 전화번호는 [PII_PHONE_NUMBER_1:<opaque>], 고객번호는 [PII_CUSTOMER_ID_1:<opaque>]입니다.",
   "detectedSpans": [
-    {"type":"EMPLOYEE_ID","start":6,"end":14,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"EMAIL_ADDRESS","start":23,"end":39,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"PHONE_NUMBER","start":47,"end":60,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"CUSTOMER_ID","start":68,"end":79,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"}
+    {"type":"EMPLOYEE_ID","start":6,"end":14,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"EMAIL_ADDRESS","start":23,"end":39,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"PHONE_NUMBER","start":47,"end":60,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"CUSTOMER_ID","start":68,"end":79,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"}
   ],
-  "successfulProviders": ["REGEX"]
+  "successfulProviders": ["RULES"]
 }
 ```
 
@@ -153,9 +153,10 @@ curl "http://127.0.0.1:8080/demo/protect" \
 분석기의 ID가 표시됩니다. `successfulProviders`는 분석에 성공한 분석기 목록이며, 개인정보를
 찾지 못한 분석기도 포함됩니다.
 
-기본 설정은 다음 형식에 소규모 형식 기반 정규식 규칙을 사용합니다.
+기본 설정은 COMMON·KR 프리셋과 애플리케이션의 Java 규칙으로 다음 형식을 탐지합니다.
 
 - 이메일 주소
+- Luhn 검증을 통과한 카드번호 후보
 - 한국 휴대전화 번호
 - 예제용 한국 주민등록번호 형식
 - `EMP-1234` 같은 직원 ID
@@ -172,11 +173,12 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
 
 응답에는 `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CUSTOMER_ID`, `EMPLOYEE_ID` 불투명 토큰이
 포함되어야 합니다. 사람 이름은 안정적인 식별자 형식이 아니라 의미 기반 엔티티이므로
-정규식 전용 프로필은 이를 추측하지 않습니다. `PERSON` 탐지가 필요하면 Presidio 또는
+로컬 규칙 프로필은 이를 추측하지 않습니다. `PERSON` 탐지가 필요하면 Presidio 또는
 아래의 선택적 OpenNLP 프로필처럼 구성된 NER 분석기를 사용하세요.
 
-이 규칙은 샘플용입니다. 운영 시스템은 자체 데이터에 맞게 조정하거나 사용자 정의
-`PiiAnalyzer` Spring Bean을 추가해야 합니다. 저장소에 포함된
+직원 ID와 고객 ID 규칙은 샘플에서 정의하고, 나머지 규칙은 내장 카탈로그에서 가져옵니다.
+문서에 명시된 지원 형식을 실제 데이터와 비교하고 필요하면 `PiiRule` Bean이나 독립
+`PiiAnalyzer`를 추가하세요. 저장소에 포함된
 [평가 기준](../../docs/ko/evaluation.md)은 이 설정으로 구성한 양성·음성·적대적 사례를
 다룹니다.
 
@@ -321,12 +323,12 @@ docker compose -f samples/presidio/docker-compose.yml up -d --wait
 ```
 
 이 선택적 프로필을 활성화하면 기본 `REQUIRE_ALL` 정책에 따라 모든 분석 요청에서
-Presidio를 반드시 사용할 수 있어야 합니다. 정규식 분석이 성공해도 Presidio에 장애가
+Presidio를 반드시 사용할 수 있어야 합니다. RULES 분석이 성공해도 Presidio에 장애가
 발생하면 요청이 실패합니다. 이 프로필은 언어 `en`, spaCy `en_core_web_lg`, 분석기별
 최소 점수 `0.8`을 사용합니다. 운영 배포 전에는 운영 환경을 대표하는 검증 데이터로
 임계값을 조정해야 합니다.
 
-한국어 정규식 규칙은 계속 활성화되지만 이 샘플은 한국어 Presidio NER를 제공하지
+한국어 로컬 규칙은 계속 활성화되지만 이 샘플은 한국어 Presidio NER를 제공하지
 않습니다. 운영 한국어 배포에는 호환되는 한국어 NLP 및 인식기 파이프라인을 설치하고
 구성해야 합니다.
 
@@ -372,8 +374,8 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
 
 응답은 `John Smith`를 `PERSON` 불투명 토큰으로 바꿔야 합니다. 탐지 범위는 오프셋 `0..10`을
 포함하고 `providers: ["OPENNLP"]`를 보고해야 합니다. `successfulProviders`에는
-`OPENNLP`와 `REGEX`가 모두 포함됩니다. OpenNLP 모델은 해당 범위를 찾았고 계속
-활성화된 정규식 분석기는 그 범위의 근거를 만들지 않았지만 성공적으로 완료되었기
+`OPENNLP`와 `RULES`가 모두 포함됩니다. OpenNLP 모델은 해당 범위를 찾았고 계속
+활성화된 로컬 규칙 분석기는 그 범위의 근거를 만들지 않았지만 성공적으로 완료되었기
 때문입니다.
 
 이 프로필의 OpenNLP 임계값 `0.8`과 Apache가 호스팅하는 기존 영어 모델은 재현 가능한

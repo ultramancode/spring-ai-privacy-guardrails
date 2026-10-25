@@ -9,13 +9,13 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 6f30eca27f62b46c9ec85742ca73c551cd57218be0552a2e4be07de295a9a23b -->
+<!-- i18n-source-sha256: 7b5bc4cba807983653153b9b499e3257ac293d7bb424d203e3b96f72ac5cc699 -->
 
 이 가이드는 기존 Spring AI 애플리케이션에 Spring AI Privacy Guardrails를
 추가해 모델, 도구, MCP 및 출력 경계에 개인정보 보호를 적용하는 기본 사용 방법을
 설명합니다.
 
-외부 분석기 서비스 없이 시작하려면 내장 Regex 분석기를 사용할 수 있습니다.
+외부 분석기 서비스 없이 시작하려면 내장 로컬 규칙 분석기를 사용할 수 있습니다.
 애플리케이션 고유 형식뿐 아니라 다양한 PII 유형을 탐지하려면, 오픈소스 PII
 탐지·비식별화 프레임워크인 Presidio를 외부 분석 서비스로 연동할 수 있습니다.
 
@@ -41,7 +41,7 @@ Presidio와 OpenNLP는 별도 스타터가 필요합니다. 각 링크에서 Gra
 
 | 분석기 | 용도 |
 | --- | --- |
-| [Regex](#2-regex로-빠르게-시작) | 직접 정의한 패턴으로 탐지합니다. 클라이언트 스타터에 포함되어 있습니다. |
+| [로컬 규칙](#2-로컬-규칙으로-빠르게-시작) | 내장 프리셋과 Java 규칙으로 탐지합니다. 클라이언트 스타터에 포함되어 있습니다. |
 | [Presidio](#5-presidio로-다양한-pii-유형-탐지) | 외부 Presidio 서비스를 연동해 다양한 유형의 개인정보를 탐지합니다. |
 | [OpenNLP](#6-jvm-내부-탐지에-opennlp-사용) | 직접 준비한 OpenNLP 모델로 애플리케이션 내부에서 개인정보를 탐지합니다. 외부 분석 서비스가 필요하지 않습니다. |
 
@@ -53,10 +53,10 @@ Presidio와 OpenNLP는 별도 스타터가 필요합니다. 각 링크에서 Gra
 개인정보 보호 스타터와 함께 사용할 수 있습니다. 의존성과 설정 방법은
 [Spring Security 도구 권한](security.md)을 참고하세요.
 
-## 2. Regex로 빠르게 시작
+## 2. 로컬 규칙으로 빠르게 시작
 
 외부 분석기 서비스 없이 개인정보 보호 경계를 가장 쉽게 확인하려면 내장
-Regex 분석기를 사용할 수 있습니다.
+로컬 규칙 분석기를 사용할 수 있습니다.
 
 클라이언트 스타터를 추가합니다. 필요한 분석기 스타터는 별도로 추가할 수 있습니다.
 
@@ -78,21 +78,46 @@ dependencies {
 </dependency>
 ```
 
-Regex를 활성화하고 애플리케이션 전용 식별자 규칙을 정의합니다.
+내장 프리셋을 선택하고 애플리케이션 전용 식별자 규칙은 Java에 등록합니다.
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
-          - entity-type: CUSTOMER_ID
-            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
-            score: 0.90
+        presets: [COMMON, KR]
+        include: [employee-id, customer-id]
+```
+
+```java
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+
+@Bean
+PiiRule employeeIdRule() {
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .build();
+    return PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(pattern)
+            .build();
+}
+
+@Bean
+PiiRule customerIdRule() {
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .build();
+    return PatternPiiRule.builder()
+            .id("customer-id")
+            .entityType("CUSTOMER_ID")
+            .addPattern(pattern)
+            .build();
+}
 ```
 
 이 규칙은 설정한 형식만 탐지합니다. Regex는 구조화된 애플리케이션 식별자에
@@ -102,7 +127,7 @@ spring:
 Factory가 사용할 개인정보 보호 구성 요소를 제공합니다.
 
 형식이 일치한 뒤 체크섬이나 업무 규칙을 추가로 확인해야 한다면
-[사용자 정의 Regex 검증기](privacy.md#regex-분석기)를 연결할 수 있습니다.
+[검증 함수를 붙인 Java 규칙](privacy.md#로컬-규칙과-프리셋)을 연결할 수 있습니다.
 
 ## 3. ChatClient 보호
 
@@ -223,7 +248,7 @@ Spring Security 스타터를 추가하고, 도구 권한 정책을
 Presidio는 오픈소스 PII 탐지·비식별화 프레임워크입니다. 애플리케이션 고유 형식뿐 아니라 다양한 PII 유형을 탐지하려면 외부 Presidio
 Analyzer 서비스를 연동하는 Presidio 스타터를 사용합니다.
 
-[클라이언트 스타터](#2-regex로-빠르게-시작)와 함께 Presidio 스타터를 추가합니다.
+[클라이언트 스타터](#2-로컬-규칙으로-빠르게-시작)와 함께 Presidio 스타터를 추가합니다.
 
 ### Gradle
 
@@ -265,7 +290,7 @@ docker compose -f samples/presidio/docker-compose.yml up -d --wait
 
 [ChatClient 보호](#3-chatclient-보호)의 예제에 따라 클라이언트를 생성합니다.
 
-Regex와 Presidio를 함께 활성화할 수도 있습니다. 기본 `UNION` 모드에서는 구성한
+로컬 규칙과 Presidio를 함께 활성화할 수도 있습니다. 기본 `UNION` 모드에서는 구성한
 분석기를 모두 실행한 뒤 탐지 결과를 합칩니다. 기본 실패 정책인 `REQUIRE_ALL`에서는
 구성한 분석기 중 하나라도 실패하면 해당 요청도 실패합니다. 여러 분석기를 함께
 사용할 때의 선택 방식과 실패 처리 방법은
@@ -274,7 +299,7 @@ Regex와 Presidio를 함께 활성화할 수도 있습니다. 기본 `UNION` 모
 ## 6. JVM 내부 탐지에 OpenNLP 사용
 
 호환되는 OpenNLP 모델을 애플리케이션 JVM 내부에서 사용해 탐지하려면
-OpenNLP 스타터를 사용합니다. [클라이언트 스타터](#2-regex로-빠르게-시작)와 함께 추가하세요.
+OpenNLP 스타터를 사용합니다. [클라이언트 스타터](#2-로컬-규칙으로-빠르게-시작)와 함께 추가하세요.
 
 ### Gradle
 
@@ -353,10 +378,10 @@ ChatClient outputClient = guardrails.builder(chatModel, outputPolicy).build();
 
 ## 8. 사용자 정의 분석기
 
-Regex, Presidio 또는 OpenNLP가 적합하지 않은 경우 애플리케이션이 사용자
+로컬 규칙, Presidio 또는 OpenNLP가 적합하지 않은 경우 애플리케이션이 사용자
 정의 `PiiAnalyzer` Spring Bean을 제공할 수 있습니다.
 
-사용자 정의 분석기도 Regex, Presidio, OpenNLP와 동일한 탐지·해석 흐름을 거쳐
+사용자 정의 분석기도 로컬 규칙, Presidio, OpenNLP와 동일한 탐지·해석 흐름을 거쳐
 모델, 도구 및 선택적 출력 보호 경계에 적용됩니다.
 
 사용자 정의 `PiiAnalyzer`는 여러 요청에서 동시에 호출될 수 있으므로 동시 호출에

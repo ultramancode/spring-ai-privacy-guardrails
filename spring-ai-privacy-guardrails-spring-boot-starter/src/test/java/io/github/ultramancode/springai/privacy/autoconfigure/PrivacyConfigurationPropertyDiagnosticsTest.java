@@ -57,39 +57,34 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     @Test
     void fixedDiagnosticSchemaStaysInSyncWithConfigurationProperties() {
         assertDiagnosticSchemaMatches(
-                PrivacyGuardrailsProperties.class,
-                PrivacyConfigurationPropertyDiagnostics.ROOT_PROPERTIES
+            PrivacyGuardrailsProperties.class,
+            PrivacyConfigurationPropertyDiagnostics.ROOT_PROPERTIES
         );
         assertDiagnosticSchemaMatches(
-                PrivacyGuardrailsProperties.Processing.class,
-                PrivacyConfigurationPropertyDiagnostics.PROCESSING_PROPERTIES
+            PrivacyGuardrailsProperties.Processing.class,
+            PrivacyConfigurationPropertyDiagnostics.PROCESSING_PROPERTIES
         );
         assertDiagnosticSchemaMatches(
-                PrivacyGuardrailsProperties.Analysis.class,
-                PrivacyConfigurationPropertyDiagnostics.ANALYSIS_PROPERTIES
+            PrivacyGuardrailsProperties.Analysis.class,
+            PrivacyConfigurationPropertyDiagnostics.ANALYSIS_PROPERTIES
         );
         assertDiagnosticSchemaMatches(
-                PrivacyGuardrailsProperties.Regex.class,
-                PrivacyConfigurationPropertyDiagnostics.REGEX_PROPERTIES
-        );
-        assertDiagnosticSchemaMatches(
-                PrivacyGuardrailsProperties.Regex.Rule.class,
-                PrivacyConfigurationPropertyDiagnostics.REGEX_RULE_PROPERTIES
+            PrivacyGuardrailsProperties.Rules.class,
+            PrivacyConfigurationPropertyDiagnostics.RULES_PROPERTIES
         );
         assertNoMapOrCollectionProperties(PrivacyGuardrailsProperties.class);
         assertContainerPropertiesMatch(
-                PrivacyGuardrailsProperties.Analysis.class,
-                PrivacyConfigurationPropertyDiagnostics.ANALYSIS_MAP_PROPERTIES,
-                PrivacyConfigurationPropertyDiagnostics.ANALYSIS_INDEXED_SCALAR_PROPERTIES,
-                Set.of()
+            PrivacyGuardrailsProperties.Analysis.class,
+            PrivacyConfigurationPropertyDiagnostics.ANALYSIS_MAP_PROPERTIES,
+            PrivacyConfigurationPropertyDiagnostics.ANALYSIS_INDEXED_SCALAR_PROPERTIES,
+            Set.of()
         );
         assertContainerPropertiesMatch(
-                PrivacyGuardrailsProperties.Regex.class,
-                Set.of(),
-                Set.of(),
-                PrivacyConfigurationPropertyDiagnostics.REGEX_INDEXED_OBJECT_PROPERTIES
+            PrivacyGuardrailsProperties.Rules.class,
+            Set.of(),
+            PrivacyConfigurationPropertyDiagnostics.RULES_INDEXED_SCALAR_PROPERTIES,
+            Set.of()
         );
-        assertNoMapOrCollectionProperties(PrivacyGuardrailsProperties.Regex.Rule.class);
     }
 
     @Test
@@ -114,21 +109,21 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void warnsWithoutEchoingDissimilarUnknownNamesInFixedConfigurationAreas(
-            CapturedOutput output
+        CapturedOutput output
     ) {
         this.diagnosticsRunner
             .withPropertyValues(
                 "spring.ai.privacy.processing.synthetic-credential-name="
                     + "synthetic-secret-two",
                 "spring.ai.privacy.analysis.synthetic-credential-name=synthetic-secret-three",
-                "spring.ai.privacy.regex.synthetic-credential-name=synthetic-secret-four"
+                "spring.ai.privacy.rules.synthetic-credential-name=synthetic-secret-four"
             )
             .run(context -> {
                 assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
                 assertThat(output)
                     .contains("below fixed prefix 'spring.ai.privacy.processing'")
                     .contains("below fixed prefix 'spring.ai.privacy.analysis'")
-                    .contains("below fixed prefix 'spring.ai.privacy.regex'")
+                    .contains("below fixed prefix 'spring.ai.privacy.rules'")
                     .contains("The unrecognized property name and configuration value were "
                         + "omitted from this diagnostic.")
                     .doesNotContain("synthetic-credential-name")
@@ -140,7 +135,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void warnsWithoutEchoingUnexpectedDescendantsOfFixedLeafProperties(
-            CapturedOutput output
+        CapturedOutput output
     ) {
         this.diagnosticsRunner
             .withPropertyValues(
@@ -148,7 +143,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                     + "synthetic-secret-one",
                 "spring.ai.privacy.analysis.included-entity-types.synthetic-credential-name="
                     + "synthetic-secret-two",
-                "spring.ai.privacy.regex.rules[0].score.synthetic-credential-name="
+                "spring.ai.privacy.rules.include[0].synthetic-credential-name="
                     + "synthetic-secret-three"
             )
             .run(context -> {
@@ -157,7 +152,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                     .contains("below fixed prefix 'spring.ai.privacy.analysis.language'")
                     .contains("below fixed prefix "
                         + "'spring.ai.privacy.analysis.included-entity-types'")
-                    .contains("below fixed prefix 'spring.ai.privacy.regex.rules[0].score'")
+                    .contains("below fixed prefix 'spring.ai.privacy.rules.include'")
                     .doesNotContain("synthetic-credential-name")
                     .doesNotContain("synthetic-secret-one")
                     .doesNotContain("synthetic-secret-two")
@@ -204,10 +199,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
             .withPropertyValues(
                 "spring.ai.privacy.processing.maxTextCharacters=8",
                 "spring.ai.privacy.analysis.minimumScore=0.5",
-                "spring.ai.privacy.analysis.typeConflictFallback=SAFE_MESSAGE",
-                "spring.ai.privacy.regex.rules[0].entityType=CUSTOMER_ID",
-                "spring.ai.privacy.regex.rules[0].pattern=\\bCUST-\\d{6}\\b",
-                "spring.ai.privacy.regex.rules[0].validatorId=customer-id-check"
+                "spring.ai.privacy.analysis.typeConflictFallback=SAFE_MESSAGE"
             )
             .run(context -> {
                 assertThat(context).hasNotFailed().hasSingleBean(PrivacyService.class);
@@ -218,53 +210,12 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 assertThat(properties.getAnalysis().getMinimumScore()).isEqualTo(0.5);
                 assertThat(properties.getAnalysis().getTypeConflictFallback())
                     .isEqualTo("SAFE_MESSAGE");
-                assertThat(properties.getRegex().getRules()).singleElement()
-                    .satisfies(rule -> {
-                        assertThat(rule.getEntityType()).isEqualTo("CUSTOMER_ID");
-                        assertThat(rule.getValidatorId()).isEqualTo("customer-id-check");
-                    });
                 assertThat(output)
                     .doesNotContain(
-                        "Unrecognized Spring AI Privacy Guardrails "
-                            + "configuration property"
-                )
+                        "Unrecognized Spring AI Privacy Guardrails configuration property"
+                    )
                     .doesNotContain("SAFE_MESSAGE");
             });
-    }
-
-    @Test
-    void recognizesCanonicalSystemEnvironmentNames(CapturedOutput output) {
-        withPrivacySystemEnvironment(Map.of(
-            "SPRING_AI_PRIVACY_ANALYSIS_LANGUAGE", "ko",
-            "SPRING_AI_PRIVACY_PROCESSING_MAXTEXTCHARACTERS", "8",
-            "SPRING_AI_PRIVACY_ANALYSIS_MINIMUMSCORE", "0.5",
-            "SPRING_AI_PRIVACY_ANALYSIS_INCLUDEDENTITYTYPES_0", "EMAIL_ADDRESS",
-            "SPRING_AI_PRIVACY_ANALYSIS_TYPECONFLICTFALLBACK", "SAFE_MESSAGE",
-            "SPRING_AI_PRIVACY_REGEX_RULES_0_ENTITYTYPE", "CUSTOMER_ID",
-            "SPRING_AI_PRIVACY_REGEX_RULES_0_PATTERN", "\\bCUST-\\d{6}\\b",
-            "SPRING_AI_PRIVACY_REGEX_RULES_0_VALIDATORID", "customer-id-check"
-        )).run(context -> {
-            assertThat(context).hasNotFailed().hasSingleBean(PrivacyService.class);
-            PrivacyGuardrailsProperties properties = context.getBean(
-                PrivacyGuardrailsProperties.class
-            );
-            assertThat(properties.getProcessing().getMaxTextCharacters()).isEqualTo(8);
-            assertThat(properties.getAnalysis().getMinimumScore()).isEqualTo(0.5);
-            assertThat(properties.getAnalysis().getIncludedEntityTypes())
-                .containsExactly("EMAIL_ADDRESS");
-            assertThat(properties.getAnalysis().getTypeConflictFallback())
-                .isEqualTo("SAFE_MESSAGE");
-            assertThat(properties.getRegex().getRules()).singleElement()
-                .satisfies(rule -> {
-                    assertThat(rule.getEntityType()).isEqualTo("CUSTOMER_ID");
-                    assertThat(rule.getValidatorId()).isEqualTo("customer-id-check");
-                });
-            assertThat(output)
-                .doesNotContain(
-                    "Unrecognized Spring AI Privacy Guardrails configuration property"
-            )
-                .doesNotContain("SAFE_MESSAGE");
-        });
     }
 
     @Test
@@ -272,19 +223,25 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
         withSystemEnvironment(Map.of(
             "SPRING_AI_PRIVACY_PROCESSING_MAXTEXTCHARACTERSS", "8",
             "SPRING_AI_PRIVACY_ANALYSIS_PROVIDERMINIMUMSCOREZ_CUSTOMPROVIDER", "0.75",
-            "SPRING_AI_PRIVACY_REGEX_RULES_0_VALIDATORIDD", "synthetic-sensitive-value"
+            "SPRING_AI_PRIVACY_RULES_PRESETSS", "synthetic-sensitive-value"
         )).run(context -> {
-            assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
-            assertThat(output)
-                .contains("'spring.ai.privacy.processing.maxtextcharacterss'")
-                .contains("'spring.ai.privacy.processing.max-text-characters'")
-                .contains("'spring.ai.privacy.analysis.providerminimumscorez'")
-                .contains("'spring.ai.privacy.analysis.provider-minimum-scores'")
-                .contains("'spring.ai.privacy.regex.rules[0].validatoridd'")
-                .contains("'spring.ai.privacy.regex.rules[0].validator-id'")
-                .doesNotContain("customprovider")
-                .doesNotContain("synthetic-sensitive-value");
-        });
+                assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
+                assertThat(output)
+                    .contains(
+                        "'spring.ai.privacy.processing.maxtextcharacterss'. Did you mean "
+                            + "'spring.ai.privacy.processing.max-text-characters'?"
+                    )
+                    .contains(
+                        "'spring.ai.privacy.analysis.providerminimumscorez'. Did you mean "
+                            + "'spring.ai.privacy.analysis.provider-minimum-scores'?"
+                    )
+                    .contains(
+                        "'spring.ai.privacy.rules.presetss'. Did you mean "
+                            + "'spring.ai.privacy.rules.presets'?"
+                    )
+                    .doesNotContain("customprovider")
+                    .doesNotContain("synthetic-sensitive-value");
+            });
     }
 
     @Test
@@ -312,14 +269,13 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
             .withPropertyValues(
                 "spring.ai.privacy.analysis.minimum.score=0.5",
                 "spring.ai.privacy.analysis.primary.provider=synthetic-sensitive-value",
-                "spring.ai.privacy.regex.rules[0].entity.type=CUSTOMER_ID"
+                "spring.ai.privacy.rules.include.ids=CUSTOMER_ID"
             )
             .run(context -> {
                 assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
                 assertThat(output)
                     .contains("below fixed prefix 'spring.ai.privacy.analysis'")
-                    .contains("'spring.ai.privacy.regex.rules[0].entity'")
-                    .contains("'spring.ai.privacy.regex.rules[0].entity-type'")
+                    .contains("'spring.ai.privacy.rules.include'")
                     .doesNotContain("synthetic-sensitive-value")
                     .doesNotContain("CUSTOMER_ID");
             });
@@ -346,53 +302,30 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
     }
 
     @Test
-    void recognizesUnderscoreSeparatedSystemEnvironmentNames(CapturedOutput output) {
-        withPrivacySystemEnvironment(Map.of(
-            "SPRING_AI_PRIVACY_ANALYSIS_LANGUAGE", "ko",
-            "SPRING_AI_PRIVACY_PROCESSING_MAX_TEXT_CHARACTERS", "8",
-            "SPRING_AI_PRIVACY_ANALYSIS_MINIMUM_SCORE", "0.5",
-            "SPRING_AI_PRIVACY_ANALYSIS_INCLUDED_ENTITY_TYPES_0", "EMAIL_ADDRESS",
-            "SPRING_AI_PRIVACY_ANALYSIS_TYPE_CONFLICT_FALLBACK", "SAFE_MESSAGE",
-            "SPRING_AI_PRIVACY_REGEX_RULES_0_ENTITY_TYPE", "EMAIL_ADDRESS"
-        )).run(context -> {
-            assertThat(context).hasNotFailed().hasSingleBean(PrivacyService.class);
-            PrivacyGuardrailsProperties properties = context.getBean(
-                PrivacyGuardrailsProperties.class
-            );
-            assertThat(properties.getProcessing().getMaxTextCharacters()).isEqualTo(8);
-            assertThat(properties.getAnalysis().getMinimumScore()).isEqualTo(0.5);
-            assertThat(properties.getAnalysis().getIncludedEntityTypes())
-                .containsExactly("EMAIL_ADDRESS");
-            assertThat(properties.getAnalysis().getTypeConflictFallback())
-                .isEqualTo("SAFE_MESSAGE");
-            assertThat(properties.getRegex().getRules()).singleElement()
-                .satisfies(rule ->
-                assertThat(rule.getEntityType()).isEqualTo("EMAIL_ADDRESS"));
-            assertThat(output)
-                .doesNotContain("Unrecognized Spring AI Privacy Guardrails configuration property")
-                .doesNotContain("SAFE_MESSAGE");
-        });
-    }
-
-    @Test
     void recognizesCompactAndUnderscoreSeparatedEnvironmentNamesInTheSameSource(
-            CapturedOutput output
+        CapturedOutput output
     ) {
         withPrivacySystemEnvironment(Map.of(
             "SPRING_AI_PRIVACY_ANALYSIS_LANGUAGE", "ko",
             "SPRING_AI_PRIVACY_PROCESSING_MAXTEXTCHARACTERS", "8",
-            "SPRING_AI_PRIVACY_PROCESSING_MAX_OUTPUT_CHARACTERS", "9"
+            "SPRING_AI_PRIVACY_PROCESSING_MAX_OUTPUT_CHARACTERS", "9",
+            "SPRING_AI_PRIVACY_RULES_PRESETS_0", "COMMON",
+            "SPRING_AI_PRIVACY_RULES_INCLUDE_0", "email",
+            "SPRING_AI_PRIVACY_RULES_EXCLUDE_0", "credit-card"
         )).run(context -> {
-            assertThat(context).hasNotFailed().hasSingleBean(PrivacyService.class);
-            PrivacyGuardrailsProperties properties = context.getBean(
-                PrivacyGuardrailsProperties.class
-            );
-            assertThat(properties.getProcessing().getMaxTextCharacters()).isEqualTo(8);
-            assertThat(properties.getProcessing().getMaxOutputCharacters()).isEqualTo(9);
-            assertThat(output).doesNotContain(
-                "Unrecognized Spring AI Privacy Guardrails configuration property"
-            );
-        });
+                assertThat(context).hasNotFailed().hasSingleBean(PrivacyService.class);
+                PrivacyGuardrailsProperties properties = context.getBean(
+                    PrivacyGuardrailsProperties.class
+                );
+                assertThat(properties.getProcessing().getMaxTextCharacters()).isEqualTo(8);
+                assertThat(properties.getProcessing().getMaxOutputCharacters()).isEqualTo(9);
+                assertThat(properties.getRules().getPresets()).containsExactly("COMMON");
+                assertThat(properties.getRules().getInclude()).containsExactly("email");
+                assertThat(properties.getRules().getExclude()).containsExactly("credit-card");
+                assertThat(output).doesNotContain(
+                    "Unrecognized Spring AI Privacy Guardrails configuration property"
+                );
+            });
     }
 
     @Test
@@ -447,52 +380,54 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
 
     @Test
     void warnsForDashedFixedPropertyTyposFromSystemEnvironmentNames(
-            CapturedOutput output
+        CapturedOutput output
     ) {
         withSystemEnvironment(Map.of(
             "SPRING_AI_PRIVACY_ANALYSIS_LANGUAGEEEE", "true",
             "SPRING_AI_PRIVACY_PROCESSING_MAX_TEXT_CHARACTERSS", "8",
             "SPRING_AI_PRIVACY_ANALYSIS_PRIMARY_PROVIDE", "synthetic-sensitive-value",
-            "SPRING_AI_PRIVACY_REGEX_RULES_0_CAPTURE_GROPU", "0"
+            "SPRING_AI_PRIVACY_RULES_ENABELD", "0"
         )).run(context -> {
-            assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
-            assertThat(output)
-                .contains("'spring.ai.privacy.processing.max-text-characters'")
-                .contains("'spring.ai.privacy.analysis.primary-provider'")
-                .contains("'spring.ai.privacy.regex.rules[0].capture-group'")
-                .contains("'spring.ai.privacy.analysis.languageeee'")
-                .contains("'spring.ai.privacy.analysis.language'")
-                .doesNotContain(
-                    "'spring.ai.privacy.processing.max-text-characterss'"
-            )
-                .doesNotContain(
-                    "'spring.ai.privacy.analysis.primary-provide'"
-            )
-                .doesNotContain("'spring.ai.privacy.regex.rules[0].capture-gropu'")
-                .doesNotContain("synthetic-sensitive-value");
-        });
+                assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
+                assertThat(output)
+                    .contains("'spring.ai.privacy.processing.max-text-characters'")
+                    .contains("'spring.ai.privacy.analysis.primary-provider'")
+                    .contains("'spring.ai.privacy.rules.enabled'")
+                    .contains("'spring.ai.privacy.analysis.languageeee'")
+                    .contains("'spring.ai.privacy.analysis.language'")
+                    .doesNotContain(
+                        "'spring.ai.privacy.processing.max-text-characterss'"
+                    )
+                    .doesNotContain(
+                        "'spring.ai.privacy.analysis.primary-provide'"
+                    )
+                    .doesNotContain("synthetic-sensitive-value");
+            });
     }
 
     @Test
     void ignoresProviderExtensionsAndSupportedDynamicSegments(CapturedOutput output) {
         this.diagnosticsRunner
-                .withPropertyValues(
-                        "spring.ai.privacy.custom-provider.credentials.client-secret=synthetic-secret-one",
-                        "spring.ai.privacy.analysis.provider-minimum-scores.custom-provider=0.75",
-                        "spring.ai.privacy.analysis.entity-aliases.external-label=CUSTOMER_ID",
-                        "spring.ai.privacy.analysis.included-entity-types[0]=CUSTOMER_ID",
-                        "spring.ai.privacy.analysis.supplemental-providers[0]=custom-provider",
-                        "spring.ai.privacy.presidio.headers.Authorization=synthetic-secret-two",
-                        "spring.ai.privacy.opennlp.entity-models.CUSTOMER_RECORD=classpath:synthetic-model",
-                        "spring.ai.privacy.toolz.custom-setting=true"
-                )
-                .run(context -> {
-                    assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
-                    assertThat(output)
-                            .doesNotContain("Unrecognized Spring AI Privacy Guardrails configuration property")
-                            .doesNotContain("synthetic-secret-one")
-                            .doesNotContain("synthetic-secret-two");
-                });
+            .withPropertyValues(
+                "spring.ai.privacy.custom-provider.credentials.client-secret=synthetic-secret-one",
+                "spring.ai.privacy.analysis.provider-minimum-scores.custom-provider=0.75",
+                "spring.ai.privacy.analysis.entity-aliases.external-label=CUSTOMER_ID",
+                "spring.ai.privacy.analysis.included-entity-types[0]=CUSTOMER_ID",
+                "spring.ai.privacy.analysis.supplemental-providers[0]=custom-provider",
+                "spring.ai.privacy.rules.presets[0]=COMMON",
+                "spring.ai.privacy.rules.include[0]=email",
+                "spring.ai.privacy.rules.exclude[0]=credit-card",
+                "spring.ai.privacy.presidio.headers.Authorization=synthetic-secret-two",
+                "spring.ai.privacy.opennlp.entity-models.CUSTOMER_RECORD=classpath:synthetic-model",
+                "spring.ai.privacy.toolz.custom-setting=true"
+            )
+            .run(context -> {
+                assertThat(context).hasNotFailed().doesNotHaveBean(PrivacyService.class);
+                assertThat(output)
+                    .doesNotContain("Unrecognized Spring AI Privacy Guardrails configuration property")
+                    .doesNotContain("synthetic-secret-one")
+                    .doesNotContain("synthetic-secret-two");
+            });
     }
 
     @Test
@@ -577,11 +512,11 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
         };
         this.diagnosticsRunner
             .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(partialSource))
-            .withPropertyValues("spring.ai.privacy.regex.enabledd=true")
+            .withPropertyValues("spring.ai.privacy.rules.enabledd=true")
             .run(context -> {
                 assertThat(context).hasNotFailed();
                 assertThat(output)
-                    .contains("'spring.ai.privacy.regex.enabledd'. Did you mean ")
+                    .contains("'spring.ai.privacy.rules.enabledd'. Did you mean ")
                     .doesNotContain("spring.ai.privacy.analysis.languageeee")
                     .doesNotContain("synthetic-sensitive-value");
             });

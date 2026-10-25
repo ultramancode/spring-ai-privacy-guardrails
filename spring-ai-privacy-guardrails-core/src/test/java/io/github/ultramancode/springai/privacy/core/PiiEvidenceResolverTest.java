@@ -15,15 +15,15 @@ class PiiEvidenceResolverTest {
     void resolveFiltersByCanonicalEntityAllowlist() {
         PiiEvidenceResolver resolver = resolverWithAliases(PiiResolutionPolicy.defaults());
         PiiAnalysisOptions canonicalOptions = PiiAnalysisOptions.builder()
-                .includedEntityTypes(List.of("PERSON"))
-                .build();
+            .includedEntityTypes(List.of("PERSON"))
+            .build();
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                List.of(
-                        evidence("PER", 0, 5, "OPENNLP", 0.90),
-                        evidence("EMAIL", 6, 23, "REGEX", 0.90)
-                ),
-                canonicalOptions
+            List.of(
+                evidence("PER", 0, 5, "OPENNLP", 0.90),
+                evidence("EMAIL", 6, 23, "RULES", 0.90)
+            ),
+            canonicalOptions
         );
 
         assertThat(result).singleElement().satisfies(span -> {
@@ -76,11 +76,11 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
-                List.of(
-                        evidence("PERSON", 0, 4, "OPENNLP", 0.99),
-                        evidence("EMAIL_ADDRESS", 0, 16, "REGEX", 0.90)
-                ),
-                PiiAnalysisOptions.defaults()
+            List.of(
+                evidence("PERSON", 0, 4, "OPENNLP", 0.99),
+                evidence("EMAIL_ADDRESS", 0, 16, "RULES", 0.90)
+            ),
+            PiiAnalysisOptions.defaults()
         );
 
         assertThat(result).singleElement().satisfies(span -> {
@@ -161,21 +161,21 @@ class PiiEvidenceResolverTest {
     }
 
     private PiiEvidenceResolver resolver(
-            EntityTypeRegistry configuredRegistry,
-            PiiResolutionPolicy policy
+        EntityTypeRegistry configuredRegistry,
+        PiiResolutionPolicy policy
     ) {
         EntityTypeRegistry registry = configuredRegistry.withAdditionalTrustedTypes(
-                Set.of(policy.typeConflictFallback())
+            Set.of(policy.typeConflictFallback())
         );
         return new PiiEvidenceResolver(
-                registry,
-                Map.of(
-                        "OPENNLP", registry,
-                        "PRESIDIO", registry,
-                        "REGEX", registry
-                ),
-                registry,
-                policy
+            registry,
+            Map.of(
+                "OPENNLP", registry,
+                "PRESIDIO", registry,
+                "RULES", registry
+            ),
+            registry,
+            policy
         );
     }
 

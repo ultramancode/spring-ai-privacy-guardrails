@@ -30,25 +30,25 @@ class OpenNlpProfileLiveIntegrationTest {
     @Test
     void profileProtectsPersonDetectedByApplicationSuppliedModels() throws Exception {
         this.mockMvc.perform(post("/demo/protect")
-                        .contentType("application/json")
-                        .content("{\"text\":\"John Smith joined the board.\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
-                        Matchers.containsString("John Smith")
-                )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.startsWith(
-                        "[PII_PERSON_"
-                )))
-                .andExpect(jsonPath("$.detectedSpans[0].type").value("PERSON"))
-                .andExpect(jsonPath("$.detectedSpans[0].start").value(0))
-                .andExpect(jsonPath("$.detectedSpans[0].end").value(10))
-                .andExpect(jsonPath("$.detectedSpans[0].providers").value(Matchers.contains(
-                        "OPENNLP"
-                )))
-                .andExpect(jsonPath("$.successfulProviders").value(Matchers.contains(
-                        "OPENNLP",
-                        "REGEX"
-                )));
+            .contentType("application/json")
+            .content("{\"text\":\"John Smith joined the board.\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
+                Matchers.containsString("John Smith")
+            )))
+            .andExpect(jsonPath("$.protectedPrompt").value(Matchers.startsWith(
+                "[PII_PERSON_"
+            )))
+            .andExpect(jsonPath("$.detectedSpans[0].type").value("PERSON"))
+            .andExpect(jsonPath("$.detectedSpans[0].start").value(0))
+            .andExpect(jsonPath("$.detectedSpans[0].end").value(10))
+            .andExpect(jsonPath("$.detectedSpans[0].providers").value(Matchers.contains(
+                "OPENNLP"
+            )))
+            .andExpect(jsonPath("$.successfulProviders").value(Matchers.contains(
+                "OPENNLP",
+                "RULES"
+            )));
 
         assertThat(this.privacyService.activeSessionCount()).isZero();
     }

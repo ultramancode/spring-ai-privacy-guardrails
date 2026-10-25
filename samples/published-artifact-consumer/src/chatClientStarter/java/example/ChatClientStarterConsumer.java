@@ -3,6 +3,9 @@ package example;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsChatClientFactory;
 import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+import io.github.ultramancode.springai.privacy.core.PiiRule;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -15,22 +18,35 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @SpringBootConfiguration
 @EnableAutoConfiguration
 public class ChatClientStarterConsumer {
+    @Bean
+    PiiRule employeeIdRule() {
+        PatternDefinition employeeIdPattern = PatternDefinition.builder()
+            .expression("EMP-[0-9]{4}")
+            .score(1.0)
+            .build();
+        return PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(employeeIdPattern)
+            .build();
+    }
+
     public static void main(String[] args) {
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(ChatClientStarterConsumer.class)
             .web(WebApplicationType.NONE)
             .properties("spring.main.banner-mode=off", "logging.level.root=ERROR",
-                "spring.ai.privacy.regex.enabled=true",
-                "spring.ai.privacy.regex.rules[0].entity-type=EMPLOYEE_ID",
-                "spring.ai.privacy.regex.rules[0].pattern=EMP-[0-9]{4}",
-                "spring.ai.privacy.regex.rules[0].score=1.0")
+                "spring.ai.privacy.rules.enabled=true",
+                "spring.ai.privacy.rules.include=employee-id")
             .run(args)) {
             GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
             ChatClient chatClient = context.getBean(GuardrailsChatClientFactory.class)
@@ -39,8 +55,9 @@ public class ChatClientStarterConsumer {
             String blockingResponse = chatClient.prompt().user(input).call().content();
             String streamingResponse = chatClient.prompt().user(input).stream().content().collectList()
                 .map(parts -> String.join("", parts)).block(Duration.ofSeconds(5));
-            if (!OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID").matcher(blockingResponse).matches()
-                || !OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID").matcher(streamingResponse).matches()
+            Pattern employeeIdTokenPattern = OpaquePiiTokenFormat.patternForEntityType("EMPLOYEE_ID");
+            if (!employeeIdTokenPattern.matcher(blockingResponse).matches()
+                || !employeeIdTokenPattern.matcher(streamingResponse).matches()
                 || context.getBean(PrivacyService.class).activeSessionCount() != 0) {
                 throw new IllegalStateException("ChatClient starter did not protect the quick-start input");
             }

@@ -26,7 +26,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
     static final List<String> ROOT_PROPERTIES = List.of(
         "processing",
         "analysis",
-        "regex"
+        "rules"
     );
     static final List<String> PROCESSING_PROPERTIES = List.of(
             "max-text-characters",
@@ -57,15 +57,9 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "included-entity-types",
             "supplemental-providers"
     );
-    static final List<String> REGEX_PROPERTIES = List.of("enabled", "rules");
-    static final Set<String> REGEX_INDEXED_OBJECT_PROPERTIES = Set.of("rules");
-    static final List<String> REGEX_RULE_PROPERTIES = List.of(
-            "entity-type",
-            "pattern",
-            "score",
-            "capture-group",
-            "validator-id"
-    );
+    static final List<String> RULES_PROPERTIES = List.of("enabled", "presets", "include", "exclude");
+    static final Set<String> RULES_INDEXED_SCALAR_PROPERTIES = Set.of("presets", "include", "exclude");
+
     PrivacyConfigurationPropertyDiagnostics(Environment environment) {
         findDiagnostics(environment).forEach(PrivacyConfigurationPropertyDiagnostics::warn);
     }
@@ -81,17 +75,17 @@ final class PrivacyConfigurationPropertyDiagnostics {
     }
 
     private static Optional<Diagnostic> diagnosePropertyName(
-            ConfigurationPropertyName name,
-            DiagnosticContext context
+        ConfigurationPropertyName name,
+        DiagnosticContext context
     ) {
         if (!ROOT.isAncestorOf(name)) {
             return Optional.empty();
         }
         Optional<SegmentMatch> rootMatchCandidate = closestSegmentMatch(
-                name,
-                ROOT_ELEMENTS,
-                ROOT_PROPERTIES,
-                context.systemEnvironmentMapping()
+            name,
+            ROOT_ELEMENTS,
+            ROOT_PROPERTIES,
+            context.systemEnvironmentMapping()
         );
         if (rootMatchCandidate.isEmpty()) {
             return Optional.empty();
@@ -105,26 +99,29 @@ final class PrivacyConfigurationPropertyDiagnostics {
         String propertyRoot = ROOT + "." + rootMatch.expected();
         return switch (rootMatch.expected()) {
             case "processing" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    PROCESSING_PROPERTIES,
-                    context
+                name,
+                propertyIndex,
+                propertyRoot,
+                PROCESSING_PROPERTIES,
+                context
             );
             case "analysis" -> diagnoseFixedPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    ANALYSIS_PROPERTIES,
-                    ANALYSIS_MAP_PROPERTIES,
-                    ANALYSIS_INDEXED_SCALAR_PROPERTIES,
-                    context
+                name,
+                propertyIndex,
+                propertyRoot,
+                ANALYSIS_PROPERTIES,
+                ANALYSIS_MAP_PROPERTIES,
+                ANALYSIS_INDEXED_SCALAR_PROPERTIES,
+                context
             );
-            case "regex" -> diagnoseRegexPropertyPath(
-                    name,
-                    propertyIndex,
-                    propertyRoot,
-                    context
+            case "rules" -> diagnoseFixedPropertyPath(
+                name,
+                propertyIndex,
+                propertyRoot,
+                RULES_PROPERTIES,
+                Set.of(),
+                RULES_INDEXED_SCALAR_PROPERTIES,
+                context
             );
             default -> Optional.empty();
         };
@@ -204,60 +201,6 @@ final class PrivacyConfigurationPropertyDiagnostics {
         }
         return unrecognizedPropertyBelowPrefixDiagnostic(
                 propertyRoot + "." + match.expected()
-        );
-    }
-
-    /** Diagnoses fixed fields and indexed rule objects below the regex property root. */
-    private static Optional<Diagnostic> diagnoseRegexPropertyPath(
-            ConfigurationPropertyName name,
-            int propertyIndex,
-            String propertyRoot,
-            DiagnosticContext context
-    ) {
-        Optional<SegmentMatch> propertyMatchCandidate = closestSegmentMatch(
-                name,
-                propertyIndex,
-                REGEX_PROPERTIES,
-                context.systemEnvironmentMapping()
-        );
-        if (propertyMatchCandidate.isEmpty()) {
-            return unrecognizedPropertyBelowPrefixDiagnostic(propertyRoot);
-        }
-        SegmentMatch propertyMatch = propertyMatchCandidate.get();
-        if (!propertyMatch.exact()) {
-            return typoSuggestionDiagnostic(propertyRoot, propertyMatch);
-        }
-        int ruleIndex = propertyIndex + propertyMatch.consumedElements();
-        if (!REGEX_INDEXED_OBJECT_PROPERTIES.contains(propertyMatch.expected())) {
-            return name.getNumberOfElements() <= ruleIndex
-                    ? verifyCanonicalProperty(
-                            context,
-                            ConfigurationPropertyName.of(propertyRoot)
-                                    .append(propertyMatch.expected()),
-                            propertyRoot,
-                            propertyMatch
-                    )
-                    : unrecognizedPropertyBelowPrefixDiagnostic(
-                            propertyRoot + "." + propertyMatch.expected()
-                    );
-        }
-        if (name.getNumberOfElements() <= ruleIndex) {
-            return Optional.empty();
-        }
-        if (!name.isNumericIndex(ruleIndex)) {
-            return unrecognizedPropertyBelowPrefixDiagnostic(propertyRoot + ".rules");
-        }
-        int rulePropertyIndex = ruleIndex + 1;
-        if (name.getNumberOfElements() <= rulePropertyIndex) {
-            return Optional.empty();
-        }
-        String rulesRoot = propertyRoot + ".rules[" + dashedElement(name, ruleIndex) + "]";
-        return diagnoseFixedPropertyPath(
-                name,
-                rulePropertyIndex,
-                rulesRoot,
-                REGEX_RULE_PROPERTIES,
-                context
         );
     }
 

@@ -5,7 +5,6 @@ import io.github.ultramancode.springai.privacy.core.PiiAnalyzerFailurePolicy;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionMode;
 import io.github.ultramancode.springai.privacy.core.PiiResolutionPolicy;
 import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
@@ -24,8 +23,8 @@ public class PrivacyGuardrailsProperties {
     /** PII analyzer resolution settings. */
     private final Analysis analysis = new Analysis();
 
-    /** Built-in regular-expression analyzer settings. */
-    private final Regex regex = new Regex();
+    /** Local PII rule selection settings. */
+    private final Rules rules = new Rules();
 
     public Processing getProcessing() {
         return this.processing;
@@ -35,8 +34,8 @@ public class PrivacyGuardrailsProperties {
         return this.analysis;
     }
 
-    public Regex getRegex() {
-        return this.regex;
+    public Rules getRules() {
+        return this.rules;
     }
 
     /** Per-service limits for input, output, value trees, and analysis. */
@@ -143,7 +142,7 @@ public class PrivacyGuardrailsProperties {
         private String primaryProvider;
         /** Providers allowed to supplement primary-provider evidence. */
         private List<String> supplementalProviders = new ArrayList<>();
-        /** Sole policy controlling whether analyzer failures stop processing. */
+        /** Policy for handling analyzer failures. */
         private PiiAnalyzerFailurePolicy failurePolicy = PiiResolutionPolicy.DEFAULT_FAILURE_POLICY;
         /**
          * Minimum confidence scores for individual providers.
@@ -251,13 +250,16 @@ public class PrivacyGuardrailsProperties {
         }
     }
 
-    /** Properties for the optional built-in Java regular-expression analyzer. */
-    public static class Regex {
-
-        /** Whether the built-in regular-expression analyzer is enabled. */
-        private boolean enabled = false;
-        /** Ordered rules requiring entity type and pattern, with optional score, capture group, and validator ID. */
-        private List<Rule> rules = new ArrayList<>();
+    /** Automatic configuration and selection of Java-defined rules. */
+    public static class Rules {
+        /** Whether to auto-configure a local RULES analyzer. Defaults to false. */
+        private boolean enabled;
+        /** Ordered preset names. COMMON is not implicitly included. */
+        private List<String> presets = new ArrayList<>();
+        /** Additional registered rule IDs to activate. */
+        private List<String> include = new ArrayList<>();
+        /** Registered rule IDs to exclude from the analyzer. */
+        private List<String> exclude = new ArrayList<>();
 
         public boolean isEnabled() {
             return this.enabled;
@@ -267,68 +269,28 @@ public class PrivacyGuardrailsProperties {
             this.enabled = enabled;
         }
 
-        public List<Rule> getRules() {
-            return this.rules;
+        public List<String> getPresets() {
+            return this.presets;
         }
 
-        public void setRules(List<Rule> rules) {
-            this.rules = new ArrayList<>(Objects.requireNonNull(rules, "regex.rules must not be null"));
+        public void setPresets(List<String> presets) {
+            this.presets = new ArrayList<>(Objects.requireNonNull(presets, "rules.presets must not be null"));
         }
 
-        /** One configured regular-expression detection rule. */
-        public static class Rule {
+        public List<String> getInclude() {
+            return this.include;
+        }
 
-            /** Entity type emitted by the rule. */
-            private String entityType;
-            /** Java regular expression used to find the entity. */
-            private String pattern;
-            /** Confidence score assigned to matches. */
-            private double score = RegexPiiRule.DEFAULT_SCORE;
-            /** Capturing group that identifies the entity text. */
-            private int captureGroup = 0;
-            /** Optional stable ID of a RegexPiiMatchValidator bean. */
-            private String validatorId;
+        public void setInclude(List<String> include) {
+            this.include = new ArrayList<>(Objects.requireNonNull(include, "rules.include must not be null"));
+        }
 
-            public String getEntityType() {
-                return this.entityType;
-            }
+        public List<String> getExclude() {
+            return this.exclude;
+        }
 
-            public void setEntityType(String entityType) {
-                this.entityType = entityType;
-            }
-
-            public String getPattern() {
-                return this.pattern;
-            }
-
-            public void setPattern(String pattern) {
-                this.pattern = pattern;
-            }
-
-            public double getScore() {
-                return this.score;
-            }
-
-            public void setScore(double score) {
-                this.score = score;
-            }
-
-            public int getCaptureGroup() {
-                return this.captureGroup;
-            }
-
-            public void setCaptureGroup(int captureGroup) {
-                this.captureGroup = captureGroup;
-            }
-
-            public String getValidatorId() {
-                return this.validatorId;
-            }
-
-            public void setValidatorId(String validatorId) {
-                this.validatorId = validatorId;
-            }
+        public void setExclude(List<String> exclude) {
+            this.exclude = new ArrayList<>(Objects.requireNonNull(exclude, "rules.exclude must not be null"));
         }
     }
-
 }

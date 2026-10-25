@@ -12,25 +12,24 @@ public final class EntityTypeRegistry {
 
     static final int MAX_ENTITY_TYPE_LENGTH = 128;
     static final String ENTITY_TYPE_REGEX = "[A-Z0-9]+(?:_[A-Z0-9]+)*";
-    static final String GENERIC_PII_TYPE = "PII";
 
     private static final Pattern ENTITY_TYPE_PATTERN = Pattern.compile(ENTITY_TYPE_REGEX);
     private static final Set<String> DEFAULT_CANONICAL_TYPES = Set.of(
-            GENERIC_PII_TYPE,
-            "PERSON",
-            "ORGANIZATION",
-            "LOCATION",
-            "EMAIL_ADDRESS",
-            "PHONE_NUMBER",
-            "NATIONAL_ID",
-            "CREDIT_CARD",
-            "DATE_TIME",
-            "IP_ADDRESS",
-            "URL",
-            "IBAN_CODE",
-            "CRYPTO",
-            "NRP",
-            "MEDICAL_LICENSE"
+        PiiEntityTypes.PII,
+        PiiEntityTypes.PERSON,
+        PiiEntityTypes.ORGANIZATION,
+        PiiEntityTypes.LOCATION,
+        PiiEntityTypes.EMAIL_ADDRESS,
+        PiiEntityTypes.PHONE_NUMBER,
+        PiiEntityTypes.NATIONAL_ID,
+        PiiEntityTypes.CREDIT_CARD,
+        PiiEntityTypes.DATE_TIME,
+        PiiEntityTypes.IP_ADDRESS,
+        PiiEntityTypes.URL,
+        PiiEntityTypes.IBAN_CODE,
+        PiiEntityTypes.CRYPTO,
+        PiiEntityTypes.NRP,
+        PiiEntityTypes.MEDICAL_LICENSE
     );
 
     private final Map<String, String> aliases;
@@ -138,7 +137,7 @@ public final class EntityTypeRegistry {
         String reportedType = requireValidEntityType(entityType);
         String canonical = this.aliases.getOrDefault(reportedType, reportedType);
         return this.trustedCanonicalTypes.contains(canonical)
-                ? canonical : GENERIC_PII_TYPE;
+            ? canonical : PiiEntityTypes.PII;
     }
 
     String requireTrustedType(String entityType) {

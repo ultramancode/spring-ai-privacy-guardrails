@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 43dbbb7e913e8c33e747015622e3cb0898cf48c099cb759a842a4715adf835be -->
+<!-- i18n-source-sha256: 4a21af75e82f30decb83ec39463b860f463a1553d7650b1ff36e8a44c491ce47 -->
 
 ## 책임 범위
 
@@ -75,7 +75,7 @@ flowchart LR
 ```
 
 `core` 모듈은 Spring에 의존하지 않고 탐지 결과 해석, 개인정보 토큰화, 세션 관리와 내장
-정규식(Regex) 분석기를 제공합니다. Presidio와 OpenNLP 연동 모듈은 이 공통 기능 위에 각
+로컬 규칙 분석기를 제공합니다. Presidio와 OpenNLP 연동 모듈은 이 공통 기능 위에 각
 분석기와의 연동을 추가합니다.
 
 Spring AI 연동 모듈은 `core`를 `ChatClient`, 모델 호출과 도구 실행 경계에 연결합니다.
@@ -107,7 +107,7 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 | --- | --- |
 | 클라이언트 구성 | `GuardrailsChatClientFactory`, `GuardrailsPolicy` |
 | 애플리케이션 API | `PrivacyService`, `PrivacySession` |
-| 분석기 확장 | `PiiAnalyzer`, `RegexPiiMatchValidator` |
+| 분석기 확장 | `PiiAnalyzer`, `PiiRule` |
 | 도구 정책 | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI 연동 | `PrivacyChatClientConfigurer` |
 | 모델 요청 구성 | `ModelRequestBoundaryConfigurer` |
@@ -131,11 +131,11 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 입력 원문의 개인정보를 별도로 복사하기보다 입력 원문에서의 위치와 탐지 출처를
 유지합니다.
 
-기본으로 제공하는 정규식, Presidio와 OpenNLP 분석기는 여러 요청에서 공유해 사용할 수
+기본으로 제공하는 로컬 규칙, Presidio와 OpenNLP 분석기는 여러 요청에서 공유해 사용할 수
 있도록 구현되어 있습니다. Presidio의 외부 서비스 호출 제한 시간과 재시도는 라이브러리
 설정으로 관리합니다.
 
-애플리케이션이 `PiiAnalyzer`나 `RegexPiiMatchValidator`를 직접 구현하는 경우에는 여러
+애플리케이션이 `PiiAnalyzer`나 `PiiRule`을 직접 구현하는 경우에는 여러
 요청에서 동시에 호출될 수 있으므로 동시 호출에 안전해야 합니다. 외부 서비스 호출처럼
 대기 시간이 발생하는 작업을 추가한다면 적절한 제한 시간도 직접 두어야 합니다.
 

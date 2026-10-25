@@ -75,26 +75,26 @@ class DemoEndpointsTest {
     void protectReturnsAccurateSpansWithoutExposingRawValues(String language) throws Exception {
         CustomerDemoData demoData = CustomerDemoData.getByLocale(Locale.forLanguageTag(language));
         String body = this.mockMvc.perform(get("/demo/protect")
-                        .header(HttpHeaders.ACCEPT_LANGUAGE, language))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rawUserInput").doesNotExist())
-                .andExpect(jsonPath("$.tokenMappings").doesNotExist())
-                .andReturn().getResponse().getContentAsString();
+            .header(HttpHeaders.ACCEPT_LANGUAGE, language))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.rawUserInput").doesNotExist())
+            .andExpect(jsonPath("$.tokenMappings").doesNotExist())
+            .andReturn().getResponse().getContentAsString();
 
         List<String> originalValues = demoData.originalValues();
         assertThat(body).doesNotContain(originalValues.toArray(String[]::new));
 
         ProtectedPromptResponse response = this.objectMapper.readValue(body, ProtectedPromptResponse.class);
-        assertThat(response.successfulProviders()).containsExactly("REGEX");
+        assertThat(response.successfulProviders()).containsExactly("RULES");
         assertThat(response.detectedSpans()).extracting(DetectedSpan::type)
-                .containsExactly("EMPLOYEE_ID", "EMAIL_ADDRESS", "PHONE_NUMBER", "CUSTOMER_ID");
+            .containsExactly("EMPLOYEE_ID", "EMAIL_ADDRESS", "PHONE_NUMBER", "CUSTOMER_ID");
         for (int index = 0; index < response.detectedSpans().size(); index++) {
             DetectedSpan span = response.detectedSpans().get(index);
             assertThat(demoData.input().substring(span.start(), span.end()))
-                    .isEqualTo(originalValues.get(index));
-            assertThat(span.providers()).containsExactly("REGEX");
+                .isEqualTo(originalValues.get(index));
+            assertThat(span.providers()).containsExactly("RULES");
             assertThat(OpaquePiiTokenFormat.patternForEntityType(span.type())
-                    .matcher(response.protectedPrompt()).find()).isTrue();
+                .matcher(response.protectedPrompt()).find()).isTrue();
         }
 
         assertThat(this.privacyService.activeSessionCount()).isZero();
@@ -176,27 +176,27 @@ class DemoEndpointsTest {
     @Test
     void protectAcceptsDocumentedEnglishTextWithStructuredIdentifiers() throws Exception {
         this.mockMvc.perform(post("/demo/protect")
-                        .contentType("application/json")
-                        .content("""
+            .contentType("application/json")
+            .content("""
                                 {"text":"Email alice@example.com, phone 010-2345-6789, customer ID CUST-654321, employee ID EMP-1234."}
                                 """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[PII_EMAIL_ADDRESS_"
-                )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[PII_PHONE_NUMBER_"
-                )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[PII_CUSTOMER_ID_"
-                )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
-                        "[PII_EMPLOYEE_ID_"
-                )))
-                .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
-                        Matchers.containsString("alice@example.com")
-                )))
-                .andExpect(jsonPath("$.successfulProviders[0]").value("REGEX"));
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
+                "[PII_EMAIL_ADDRESS_"
+            )))
+            .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
+                "[PII_PHONE_NUMBER_"
+            )))
+            .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
+                "[PII_CUSTOMER_ID_"
+            )))
+            .andExpect(jsonPath("$.protectedPrompt").value(Matchers.containsString(
+                "[PII_EMPLOYEE_ID_"
+            )))
+            .andExpect(jsonPath("$.protectedPrompt").value(Matchers.not(
+                Matchers.containsString("alice@example.com")
+            )))
+            .andExpect(jsonPath("$.successfulProviders[0]").value("RULES"));
 
         assertThat(this.privacyService.activeSessionCount()).isZero();
     }

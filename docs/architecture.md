@@ -76,7 +76,7 @@ flowchart LR
 ```
 
 The `core` module has no Spring dependency and provides detection resolution,
-PII tokenization, session management, and the built-in Regex analyzer. The Presidio
+PII tokenization, session management, and the local rule analyzer. The Presidio
 and OpenNLP integration modules add the corresponding analyzer integrations on
 top of these shared capabilities.
 
@@ -112,7 +112,7 @@ and are not part of the compatibility contract.
 | --- | --- |
 | Client assembly | `GuardrailsChatClientFactory`, `GuardrailsPolicy` |
 | Application API | `PrivacyService`, `PrivacySession` |
-| Analyzer extension | `PiiAnalyzer`, `RegexPiiMatchValidator` |
+| Analyzer extension | `PiiAnalyzer`, `PiiRule` |
 | Tool policy | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI integration | `PrivacyChatClientConfigurer` |
 | Model-request composition | `ModelRequestBoundaryConfigurer` |
@@ -139,11 +139,11 @@ analyzer, the same `core` rules for range validation, entity normalization, and
 overlap resolution still apply. Detection results retain input-text offsets and
 provenance rather than copying PII substrings from the input text.
 
-The provided Regex, Presidio, and OpenNLP analyzers are implemented for safe
+The provided local rule, Presidio, and OpenNLP analyzers are implemented for safe
 reuse across concurrent requests. Presidio request timeouts and retries are
 managed through library configuration.
 
-A custom `PiiAnalyzer` or `RegexPiiMatchValidator` may be invoked concurrently
+A custom `PiiAnalyzer` or `PiiRule` may be invoked concurrently
 by multiple requests and must therefore be thread-safe. If it adds blocking
 work such as an external service call, that work must also use an appropriate
 finite timeout.

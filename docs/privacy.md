@@ -12,7 +12,7 @@ Privacy protection replaces detected PII with request-scoped opaque tokens befor
 sending it to a model. Tools receive only the original values allowed by policy,
 and their results are protected before reaching the model or application.
 
-Configure [Regex](#regex-analyzer), [Presidio](#presidio-analyzer),
+Configure [Local rules](#local-rules-and-presets), [Presidio](#presidio-analyzer),
 [OpenNLP](#opennlp-analyzer-jvm-only-optional), or a [custom analyzer](#custom-analyzers),
 then select `privacy()` in the client policy.
 See [Configuration](configuration.md) for dependencies, client creation and feature selection.
@@ -38,6 +38,10 @@ configured under `spring.ai.privacy`.
 | `analysis.provider-minimum-scores` | empty | Confidence floor by provider ID. The effective floor is the greater of the global and provider-specific values. |
 | `analysis.entity-aliases` | empty | Explicit mappings from analyzer entity labels to canonical types. |
 | `analysis.type-conflict-fallback` | `PII` | Type used when an overlap type conflict cannot be resolved. |
+| `rules.enabled` | `false` | Enables automatic configuration of a local RULES analyzer. |
+| `rules.presets` | `[]` | Selected preset names. COMMON is not implicit. |
+| `rules.include` | `[]` | Additional registered rule IDs to execute. |
+| `rules.exclude` | `[]` | Registered rule IDs to exclude. |
 | `processing.max-text-characters` | `1000000` | Maximum length of one text or JSON document. Batch analysis uses the combined length of all texts. |
 | `processing.max-output-characters` | `8000000` | Maximum output length per transformation, including unchanged text. |
 | `processing.max-value-tree-characters` | `1000000` | Maximum combined length of string values, map keys, and numeric representations in one value tree or JSON document. Direct value-tree tokenization also bounds combined `BigDecimal` analysis text by this value. |
@@ -45,12 +49,6 @@ configured under `spring.ai.privacy`.
 | `processing.max-depth` | `128` | Maximum nesting depth in a value tree or JSON document. |
 | `processing.max-analysis-segments` | `100000` | Maximum number of texts in one batch analysis. |
 | `processing.max-result-spans` | `100000` | Maximum raw spans accepted from analyzers or callers in one analysis. Newly produced analyzer spans are summed across session batches. Reused results are not counted again. |
-| `regex.enabled` | `false` | Enables application-supplied Regex rules. |
-| `regex.rules[].entity-type` | required per rule | Canonical entity type assigned to each rule match. |
-| `regex.rules[].pattern` | required per rule | Java regular expression evaluated against source text. |
-| `regex.rules[].score` | `0.85` | Confidence assigned to each match. |
-| `regex.rules[].capture-group` | `0` | Capturing-group number whose range becomes the detected span. `0` means the complete match. |
-| `regex.rules[].validator-id` | unset | Stable ID of an optional `RegexPiiMatchValidator`. This is not a Spring bean name. |
 | `presidio.enabled` | `false` | Enables the Presidio analyzer. |
 | `presidio.analyzer-url` | `http://localhost:5002` | Base analyzer URI. |
 | `presidio.timeout` | `5s` | Timeout for each HTTP attempt, including response-body completion, and for each health check. |
@@ -63,8 +61,9 @@ configured under `spring.ai.privacy`.
 | `opennlp.tokenizer-model` | unset | Optional tokenizer-model resource. If omitted, `SimpleTokenizer` is used. |
 | `opennlp.entity-models` | empty | Canonical entity types mapped to required name-finder model resources. |
 
-Regex `rules`, Presidio `headers`, and OpenNLP `entity-models` are empty by
-default. Spring Boot configuration metadata provides IDE completion.
+Rule selection lists (`rules.presets`, `rules.include`, and `rules.exclude`), Presidio
+`headers`, and OpenNLP `entity-models` are empty by default. Spring Boot configuration
+metadata provides IDE completion.
 `analysis.language` accepts a 1-to-64-character ASCII identifier made of
 alphanumeric segments separated by single hyphens or underscores. Letter case
 is ignored, and `core` passes the lowercase canonical form to every analyzer.
@@ -81,17 +80,17 @@ The base Spring Boot starter warns when it encounters an unknown property name
 inside the fixed `spring.ai.privacy` configuration defined by this library.
 Warnings do not prevent application startup.
 
-For example, the following misspelling records a warning suggesting `regex.enabled`:
+For example, the following misspelling records a warning suggesting `rules.enabled`:
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabledd: true
 ```
 
-Diagnostics check property names within `processing`, `analysis`, and `regex`.
+Diagnostics check property names within `processing`, `analysis`, and `rules`.
 Unknown top-level sections, analyzer-specific settings, dynamic map keys and list
 values are outside this check.
 
@@ -104,7 +103,7 @@ Analyzers return the positions, types, and confidence scores of detected PII.
 PII categories such as `PERSON` and `EMAIL_ADDRESS` are called entity types in
 configuration and APIs. The library applies entity aliases, detection allowlists,
 confidence floors, analyzer selection, and rules for overlapping ranges to these
-results. Positions always refer to the original source text. Regex,
+results. Positions always refer to the original source text. Local rules,
 Presidio, OpenNLP, and custom `PiiAnalyzer` Spring beans may be combined.
 
 `UNION` mode runs every configured analyzer and merges their detection results.
@@ -120,8 +119,8 @@ tolerates other analyzer failures. `ALLOW_PARTIAL` uses results from the
 analyzers that succeeded, which may reduce protection coverage. The request
 still fails when every analyzer fails.
 
-The following configuration runs Presidio and an application-specific Regex
-analyzer together and merges their results in the default `UNION` mode.
+The following configuration runs Presidio alongside the built-in COMMON and KR rules
+and merges their results in the default `UNION` mode.
 
 ```yaml
 spring:
@@ -132,12 +131,9 @@ spring:
           US_SSN: NATIONAL_ID
       presidio:
         enabled: true
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
+        presets: [COMMON, KR]
 ```
 
 `PRIMARY` mode runs only the primary analyzer and supplemental analyzers and
@@ -150,15 +146,15 @@ after the primary analyzer fails.
 Adding a provider ID to `analysis.provider-minimum-scores` does not register or
 enable an analyzer. It only sets the confidence floor applied to detection
 results from an analyzer that is already registered. To use an analyzer,
-configure `presidio.enabled` or `regex.enabled` as shown above, or register an
+configure `presidio.enabled` or `rules.enabled` as shown above, or register an
 analyzer bean yourself.
 
-Provider IDs identify analyzers, for example `REGEX`, `PRESIDIO`, and `OPENNLP`.
+Provider IDs identify analyzers, for example `RULES`, `PRESIDIO`, and `OPENNLP`.
 They are 1-to-128-character ASCII identifiers made of alphanumeric
 segments separated by single hyphens (`-`) or underscores (`_`). The `core`
 module treats provider IDs case-insensitively and canonicalizes them to
-uppercase. Unsupported punctuation or whitespace, invalid or repeated
-separators, and duplicate provider IDs are rejected.
+uppercase. Unsupported punctuation or whitespace and invalid or repeated
+separators are rejected. Provider IDs must be unique within each `PrivacyService`.
 
 Entity labels are 1-to-128-character ASCII identifiers composed of segments of
 uppercase letters and digits separated by single underscores (`_`). Lowercase,
@@ -227,64 +223,181 @@ relative to each text.
 Respect the supplied `limits` when collecting results. For batch analysis, the
 span limit applies to the entire batch.
 
-## Regex Analyzer
+## Local Rules and Presets
 
-The Regex analyzer is intended for application-specific identifiers with
-well-defined formats, such as employee or customer IDs, rather than complete PII
-detection. Treat regular-expression patterns as trusted application-managed
-configuration and avoid unnecessarily complex patterns.
+Define local detection rules in Java and select them through configuration. The core module
+includes COMMON and KR presets. Rules run only when selected by a preset or rule ID.
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: CUSTOMER_ID
-            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
-            score: 0.90
-            capture-group: 0
-            validator-id: customer-id-check
+        presets: [COMMON, KR]
+        include: [employee-id]
+        exclude: [credit-card]
 ```
 
-Each rule requires `entity-type` and `pattern`. `score` defaults to `0.85` and
-`capture-group` to `0`. `validator-id` is optional and refers to the stable ID
-returned by an application-provided `RegexPiiMatchValidator`, not its Spring
-bean name:
+Register application rules as individual Spring beans:
 
 ```java
-@Bean
-RegexPiiMatchValidator customerIdMatchValidator() {
-    return new RegexPiiMatchValidator() {
-        @Override
-        public String id() {
-            return "customer-id-check";
-        }
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 
-        @Override
-        public boolean isValid(String candidate) {
-            return CustomerIds.hasValidChecksum(candidate);
-        }
-    };
+@Bean
+PiiRule employeeIdRule() {
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .validator(candidate -> !candidate.equals("EMP-0000"))
+            .build();
+    return PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(pattern)
+            .build();
 }
 ```
 
-`CustomerIds.hasValidChecksum(...)` represents application-provided validation
-logic. Supply your own implementation.
+`PatternPiiRule.builder()` requires an `id`, an `entityType`, and at least one `pattern`.
+Use `PiiEntityTypes` constants for library-defined labels, for example
+`.entityType(PiiEntityTypes.CREDIT_CARD)`, or a string such as `"EMPLOYEE_ID"` for an application type.
 
-Validator IDs use lowercase ASCII letters and digits separated by single
-hyphens. They are resolved at startup. Blank, malformed, or unknown IDs, and
-duplicate IDs exposed by two or more validator beans, fail startup. Multiple
-rules may reference the same validator ID. `isValid()` receives exactly the
-candidate selected by `capture-group`. Returning `true` keeps the existing span and score,
-and `false` excludes the candidate. Exceptions follow the configured analyzer
-failure policy.
+`PatternPiiRule.PatternDefinition` combines a Java regular expression with a score, capture
+group, and optional `Predicate<String>`. Its builder requires an expression and a score.
+The capture group defaults to 0, which selects the entire match. A predicate receives the
+captured candidate and returns `true` to accept it or `false` to discard it. It can parse the
+candidate or apply checksum and business checks. Without a predicate, every match is accepted.
+Use `.addPattern(...)` to add one definition or `.addPatterns(...)` to add a collection.
+Both methods retain previously added patterns. Patterns are evaluated in the order they
+are added, each with its own score, capture group, and predicate.
 
-`RegexPiiMatchValidator` implementations are shared across requests and must be
-thread-safe. Validation candidates may contain PII, so do not log them, include
-them in exception messages, or retain them long term. Without `validator-id`, a
-rule uses regex-matched candidates without additional validation.
+For direct detection, implement `PiiRule.id()`, `entityTypes()`, and
+`analyze(text, options, limits)`. Return `PiiSpan` values with positions in the original text:
+UTF-16 offsets, inclusive start, and exclusive end. Return an empty list for no matches.
+Preset selection is independent of analysis language.
+Use `PiiAnalyzer` for independent remote services or model providers.
+
+### Preset Selection
+
+`PiiRulePreset` defines a named, ordered list of registered rule IDs. A rule may belong
+to multiple presets or none. Use `include` to select rules directly. Registering a rule
+or preset does not activate it.
+
+`builtIns()` and `builtInsWithScores(...)` register the built-in rules and the COMMON
+and KR presets defined in `BuiltInPiiRules.presets()`.
+
+Use `addRule(...)` to register one application rule or `addRules(...)` to register a collection.
+Both methods retain previously registered rules. Collections are copied in iteration order.
+
+The catalog expands presets in order, appends `include`, keeps the first occurrence of each
+rule ID, then applies `exclude`. COMMON must be selected explicitly. Rule IDs use 1–64 lowercase
+ASCII letters or digits separated by single hyphens. Preset names start with an ASCII letter
+and contain up to 64 ASCII letters, digits, hyphens, or underscores. Both are case-sensitive.
+Built-in rule IDs are available as `BuiltInPiiRuleIds` constants for Java configuration.
+Use `BuiltInPiiPresetNames` constants for built-in preset names and strings for
+application-defined names, such as `"COMPANY"`.
+
+Duplicate definitions, unknown references, and an empty active selection are configuration
+errors. Automatic rule configuration is disabled by default. When `rules.enabled=true`,
+Boot creates a `RuleBasedPiiAnalyzer` from the configured selection.
+Declaring a `RuleBasedPiiAnalyzer` bean replaces automatic rule selection, even when
+`rules.enabled=true`. Use `RuleBasedPiiAnalyzer` as the bean method's return type so Boot can
+detect it. That bean owns rule registration and selection, including any application rules
+and presets. A manually declared analyzer also works when `rules.enabled=false`.
+Other analyzer providers can still run alongside it.
+
+To define an application preset, register a `PiiRulePreset` bean. Its name must differ
+from built-in presets and other registered presets:
+
+```java
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
+
+@Bean
+PiiRulePreset companyPreset() {
+    return new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL));
+}
+```
+
+Select it with `presets: [COMPANY]`. In pure Java, pass the rule created by
+`employeeIdRule()` above to `PiiRuleCatalog`:
+
+```java
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
+
+PiiRule employeeRule = employeeIdRule();
+PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
+        .addRule(employeeRule)
+        .addPreset(new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL)))
+        .build();
+RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()
+        .presets("COMPANY", BuiltInPiiPresetNames.KR)
+        .exclude(BuiltInPiiRuleIds.KR_RRN)
+        .build();
+List<String> ruleIds = analyzer.ruleIds();
+List<String> presetNames = analyzer.presetNames();
+```
+
+`analyzerBuilder()` starts a builder for a `RuleBasedPiiAnalyzer`. `presets`, `include`,
+and `exclude` accept strings or collections and default to empty. Each call copies its
+values and replaces that part of the selection.
+
+### Execution and Limits
+
+Selected rules execute as one `RULES` provider and can run alongside Presidio and OpenNLP.
+Excluding a local rule affects only that rule. A rule exception or invalid result fails the
+entire RULES call and follows the configured provider failure policy. Accepted results must
+use declared entity types and valid, nonempty ranges within the source text.
+
+Result limits apply across rules and providers. If another span would exceed
+`limits.maxResultSpans()`, a rule must throw `PrivacyGuardrailException` with code
+`PAYLOAD_LIMIT_EXCEEDED` and phase `ANALYSIS`. Processing limit failures abort the operation
+regardless of provider failure policy.
+
+Rules and predicates must be thread-safe, respect interruption, and remain stable for
+the analyzer's lifetime. Choose Java regular
+expressions carefully: a single match can backtrack for a long time before interruption is checked.
+
+### Built-in Rules
+
+| Preset | Rule ID | Supported scope |
+| --- | --- | --- |
+| COMMON | email | ASCII addresses with dotted DNS domains. Unquoted local parts support special characters such as apostrophes and exclamation marks. Double-quoted local parts, internationalized addresses, and domain literals are unsupported. |
+| COMMON | credit-card | 13–17 ASCII digits starting with 1, 3, 4, 50–55, or 6, with optional spaces or hyphens between digit groups. Excludes compact 13-digit numbers starting with 1. Checks Luhn. Does not verify issuance or account status. |
+| KR | kr-mobile-phone | Domestic 010 plus eight digits, compact or consistently space/hyphen separated. Supports +82 10 forms. Other 01X prefixes, landlines, and extensions are unsupported. |
+| KR | kr-rrn | YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
+
+Built-in matches have a default score of 0.85. These are heuristic scores, not measured
+probabilities. Evaluate detection quality on data representative of your application.
+The RRN rule validates the birth date without a checksum requirement,
+because the revised issuance scheme uses randomized trailing digits
+([Ministry of the Interior and Safety](https://mois.go.kr/plan2020/download/2020plan.pdf)).
+
+Pass a map of built-in rule IDs to scores to `PiiRuleCatalog.Builder.builtInsWithScores(...)` to
+set a fixed score for each specified rule. For example, register a Spring bean:
+
+```java
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
+
+@Bean
+RuleBasedPiiAnalyzer localPiiAnalyzer() {
+    PiiRuleCatalog catalog = PiiRuleCatalog.builder()
+            .builtInsWithScores(Map.of(
+                    BuiltInPiiRuleIds.EMAIL, 0.95,
+                    BuiltInPiiRuleIds.KR_RRN, 0.70))
+            .build();
+    return catalog.analyzerBuilder()
+            .presets(BuiltInPiiPresetNames.COMMON, BuiltInPiiPresetNames.KR)
+            .build();
+}
+```
+
+Unspecified built-in rules keep their defaults. Each score must be finite and between 0.0
+and 1.0, inclusive. Unknown built-in IDs and invalid scores are rejected during registration.
+Overrides preserve candidate validation and do not affect application rules or their
+individual pattern scores. `analysis.minimum-score` and `analysis.provider-minimum-scores`
+control which results are accepted after detection.
 
 ## Presidio Analyzer
 

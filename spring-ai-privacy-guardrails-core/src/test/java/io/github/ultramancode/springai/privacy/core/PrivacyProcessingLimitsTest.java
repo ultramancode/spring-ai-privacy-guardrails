@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -404,14 +405,22 @@ class PrivacyProcessingLimitsTest {
 
     @Test
     void configuredSpanLimitAppliesToRegexResultsAndSuppliedSpans() {
-        RegexPiiAnalyzer analyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("CHARACTER", ".", 1.0, 0)
+        PatternDefinition characterPattern = PatternDefinition.builder()
+            .expression(".")
+            .score(1.0)
+            .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+            PatternPiiRule.builder()
+                .id("character")
+                .entityType("CHARACTER")
+                .addPattern(characterPattern)
+                .build()
         ));
         PrivacyProcessingLimits acceptingLimits = PrivacyProcessingLimits.builder().maxResultSpans(2).build();
         PrivacyProcessingLimits rejectingLimits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
         List<PiiSpan> twoSpans = List.of(
-                new PiiSpan("CHARACTER", 0, 1, 1.0),
-                new PiiSpan("CHARACTER", 1, 2, 1.0)
+            new PiiSpan("CHARACTER", 0, 1, 1.0),
+            new PiiSpan("CHARACTER", 1, 2, 1.0)
         );
 
         assertThat(analyzer.analyze("ab", PiiAnalysisOptions.defaults(), acceptingLimits)).hasSize(2);
@@ -424,18 +433,26 @@ class PrivacyProcessingLimitsTest {
     void allowPartialStillRejectsCollectedOrReturnedSpanLimitFailures() {
         PrivacyProcessingLimits limits = PrivacyProcessingLimits.builder().maxResultSpans(1).build();
         PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
-                .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
-                .build();
-        PiiAnalyzer collectingAnalyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("CHARACTER", ".", 1.0, 0)));
+            .failurePolicy(PiiAnalyzerFailurePolicy.ALLOW_PARTIAL)
+            .build();
+        PatternDefinition characterPattern = PatternDefinition.builder()
+            .expression(".")
+            .score(1.0)
+            .build();
+        PiiAnalyzer collectingAnalyzer = new RuleBasedPiiAnalyzer(List.of(
+            PatternPiiRule.builder()
+                .id("character")
+                .entityType("CHARACTER")
+                .addPattern(characterPattern)
+                .build()));
         PiiAnalyzer returningAnalyzer = (text, options, processingLimits) -> List.of(
-                new PiiSpan("PII", 0, 1, 1.0), new PiiSpan("PII", 1, 2, 1.0));
+            new PiiSpan("PII", 0, 1, 1.0), new PiiSpan("PII", 1, 2, 1.0));
         PiiAnalyzer successfulAnalyzer = namedAnalyzer("EMPTY", (text, options, processingLimits) -> List.of());
 
         for (PiiAnalyzer analyzer : List.of(collectingAnalyzer, returningAnalyzer)) {
             PrivacyService service = new PrivacyService(
-                    List.of(successfulAnalyzer, analyzer), PiiAnalysisOptions.defaults(),
-                    EntityTypeRegistry.defaults(), policy, PiiAnalyzerFailureObserver.noop(), limits);
+                List.of(successfulAnalyzer, analyzer), PiiAnalysisOptions.defaults(),
+                EntityTypeRegistry.defaults(), policy, PiiAnalyzerFailureObserver.noop(), limits);
             assertAnalysisPayloadLimitExceeded(() -> service.analyze("ab"));
             assertAnalysisPayloadLimitExceeded(() -> service.analyzeSegments(List.of("ab")));
         }

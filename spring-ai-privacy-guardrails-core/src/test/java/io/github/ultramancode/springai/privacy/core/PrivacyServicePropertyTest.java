@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.core;
 
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -104,9 +105,25 @@ class PrivacyServicePropertyTest {
     }
 
     private static PrivacyService recursivePrivacyService() {
-        RegexPiiAnalyzer analyzer = new RegexPiiAnalyzer(List.of(
-                new RegexPiiRule("SYNTHETIC_ID", "\\bSYN-\\d{4}\\b", 1.0, 0),
-                new RegexPiiRule("PHONE_NUMBER", "\\b821\\d{9}\\b", 1.0, 0)
+        PatternDefinition syntheticIdPattern = PatternDefinition.builder()
+            .expression("\\bSYN-\\d{4}\\b")
+            .score(1.0)
+            .build();
+        PatternDefinition phoneNumberPattern = PatternDefinition.builder()
+            .expression("\\b821\\d{9}\\b")
+            .score(1.0)
+            .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+            PatternPiiRule.builder()
+                .id("synthetic-id")
+                .entityType("SYNTHETIC_ID")
+                .addPattern(syntheticIdPattern)
+                .build(),
+            PatternPiiRule.builder()
+                .id("phone-number")
+                .entityType(PiiEntityTypes.PHONE_NUMBER)
+                .addPattern(phoneNumberPattern)
+                .build()
         ));
         return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }

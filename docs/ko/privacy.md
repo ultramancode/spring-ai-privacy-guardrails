@@ -8,13 +8,13 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: 7415de4ad4ac338adf3eb3323d6c8e2e72eb657f0a5b6dd231ed0622cad68e2c -->
+<!-- i18n-source-sha256: d6b800d2e9e619cd7e6d8eb6d36aff58e7330e21be6b1efed97cc47f28753c95 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
 전달하기 전에 보호합니다.
 
-[Regex](#regex-분석기), [Presidio](#presidio-분석기),
+[로컬 규칙](#로컬-규칙과-프리셋), [Presidio](#presidio-분석기),
 [OpenNLP](#opennlp-분석기-jvm-전용-선택-사항) 또는 [사용자 정의 분석기](#사용자-정의-분석기)를
 구성한 뒤 클라이언트 정책에서 `privacy()`를 선택하세요.
 의존성, 클라이언트 생성과 기능 선택은 [설정](configuration.md)을 참고하세요.
@@ -40,6 +40,10 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 | `analysis.provider-minimum-scores` | 비어 있음 | 분석기 ID별 최소 신뢰도입니다. 전체 최소 신뢰도와 비교해 더 큰 값을 적용합니다. |
 | `analysis.entity-aliases` | 비어 있음 | 분석기 엔티티 레이블을 정규 유형에 연결하는 명시적 매핑입니다. |
 | `analysis.type-conflict-fallback` | `PII` | 해석하지 못한 중첩 유형 충돌에 사용할 유형입니다. |
+| `rules.enabled` | `false` | 로컬 RULES 분석기의 자동 구성을 활성화합니다. |
+| `rules.presets` | `[]` | 선택할 프리셋 이름입니다. COMMON은 자동 포함되지 않습니다. |
+| `rules.include` | `[]` | 추가로 실행할 등록된 규칙 ID입니다. |
+| `rules.exclude` | `[]` | 실행하지 않을 등록된 규칙 ID입니다. |
 | `processing.max-text-characters` | `1000000` | 텍스트나 JSON 문서 하나의 최대 길이입니다. 배치 분석에서는 모든 텍스트의 길이를 합산합니다. |
 | `processing.max-output-characters` | `8000000` | 변환 결과의 최대 길이입니다. 원문을 그대로 반환할 때도 적용합니다. |
 | `processing.max-value-tree-characters` | `1000000` | 값 트리나 JSON 문서 하나에서 문자열 값·맵 키·숫자 표현의 길이를 합산한 상한입니다. 직접 값 트리를 토큰화할 때는 `BigDecimal` 분석 텍스트의 누적 길이에도 적용합니다. |
@@ -47,12 +51,6 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 | `processing.max-depth` | `128` | 값 트리나 JSON 문서 하나의 최대 중첩 깊이입니다. |
 | `processing.max-analysis-segments` | `100000` | 한 번의 배치 분석에 전달하는 텍스트의 최대 개수입니다. |
 | `processing.max-result-spans` | `100000` | 한 번의 분석에서 분석기나 호출자로부터 받는 원시 탐지 범위의 최대 개수입니다. 세션 배치에서 새로 생성된 결과는 합산하고 재사용한 결과는 다시 세지 않습니다. |
-| `regex.enabled` | `false` | 애플리케이션이 제공한 Regex 규칙을 활성화합니다. |
-| `regex.rules[].entity-type` | 규칙마다 필수 | 규칙의 일치 결과에 부여할 정규 엔티티 유형입니다. |
-| `regex.rules[].pattern` | 규칙마다 필수 | 원문 텍스트에 적용할 Java 정규식입니다. |
-| `regex.rules[].score` | `0.85` | 각 일치 결과에 부여할 신뢰도입니다. |
-| `regex.rules[].capture-group` | `0` | 탐지 범위(span)로 사용할 정규식 캡처 그룹 번호입니다. `0`은 전체 일치를 의미합니다. |
-| `regex.rules[].validator-id` | 미설정 | 일치 후보를 추가로 검사할 선택적 `RegexPiiMatchValidator`의 ID입니다. Spring Bean 이름이 아닙니다. |
 | `presidio.enabled` | `false` | Presidio 분석기를 활성화합니다. |
 | `presidio.analyzer-url` | `http://localhost:5002` | 분석기의 기본 URI입니다. |
 | `presidio.timeout` | `5s` | 응답 본문 수신 완료까지 포함해 각 HTTP 요청 시도와 상태 확인에 적용되는 제한 시간입니다. |
@@ -65,7 +63,8 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 | `opennlp.tokenizer-model` | 미설정 | 선택적인 tokenizer 모델 리소스입니다. 설정하지 않으면 `SimpleTokenizer`를 사용합니다. |
 | `opennlp.entity-models` | 비어 있음 | 정규 엔티티 유형을 필수 name-finder 모델 리소스에 연결합니다. |
 
-Regex `rules`, Presidio `headers`, OpenNLP `entity-models`의 기본값은 비어 있습니다.
+규칙 선택 목록(`rules.presets`, `rules.include`, `rules.exclude`), Presidio `headers`,
+OpenNLP `entity-models`의 기본값은 비어 있습니다.
 Spring Boot 설정 메타데이터는 IDE 자동 완성을 제공합니다.
 `analysis.language`는 영숫자 단어를 하나의 하이픈 또는 밑줄로 구분한
 1~64자 ASCII 식별자를 받습니다. 대소문자를 구분하지 않으며 `core`는
@@ -82,17 +81,17 @@ Spring Boot 설정 메타데이터는 IDE 자동 완성을 제공합니다.
 알 수 없는 프로퍼티 이름을 발견하면 경고합니다. 이 경고는 애플리케이션 시작을
 막지 않습니다.
 
-예를 들어 다음 오타는 `regex.enabled`를 제안하는 경고를 기록합니다.
+예를 들어 다음 오타는 `rules.enabled`를 제안하는 경고를 기록합니다.
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabledd: true
 ```
 
-진단 대상은 `processing`, `analysis`, `regex` 안의 프로퍼티 이름입니다.
+진단 대상은 `processing`, `analysis`, `rules` 안의 프로퍼티 이름입니다.
 알 수 없는 최상위 영역, 분석기별 설정, 동적 맵 키와 목록 값은 검사하지 않습니다.
 
 진단 메시지에는 설정값, 자격 증명 또는 동적 맵 키를 포함하지 않습니다.
@@ -103,7 +102,7 @@ spring:
 `PERSON`, `EMAIL_ADDRESS`처럼 구분하며, 설정과 API에서는 이를 엔티티 유형이라고
 부릅니다. 라이브러리는 분석 결과에 엔티티 별칭, 탐지 허용 목록, 신뢰도 하한,
 분석기 선택과 겹치는 범위의 처리 규칙을 적용합니다. 탐지 위치는 항상 원문 텍스트를
-기준으로 합니다. Regex, Presidio, OpenNLP와 Spring Bean으로 등록한 사용자 정의
+기준으로 합니다. 로컬 규칙, Presidio, OpenNLP와 Spring Bean으로 등록한 사용자 정의
 `PiiAnalyzer`를 함께 사용할 수도 있습니다.
 
 `UNION` 모드에서는 설정한 모든 분석기를 실행하고 탐지 결과를 병합합니다. 겹치는
@@ -117,7 +116,7 @@ spring:
 결과만 사용하므로 보호 범위가 줄어들 수 있으며, 모든 분석기가 실패하면 요청도
 실패합니다.
 
-다음 설정은 Presidio와 애플리케이션 전용 Regex 분석기를 함께 실행하고, 기본 `UNION`
+다음 설정은 Presidio와 내장 COMMON·KR 규칙을 함께 실행하고, 기본 `UNION`
 모드로 탐지 결과를 병합합니다.
 
 ```yaml
@@ -129,12 +128,9 @@ spring:
           US_SSN: NATIONAL_ID
       presidio:
         enabled: true
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: EMPLOYEE_ID
-            pattern: "(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])"
-            score: 0.90
+        presets: [COMMON, KR]
 ```
 
 `PRIMARY` 모드에서는 주 분석기와 보조 분석기만 실행하며, 그 외의 분석기가
@@ -147,13 +143,14 @@ spring:
 `analysis.provider-minimum-scores`에 분석기 ID를 추가해도 해당 분석기가 자동으로
 등록되거나 활성화되지는 않습니다. 이 설정은 이미 등록된 분석기의 탐지 결과에
 적용할 신뢰도 하한만 지정합니다. 분석기를 사용하려면 앞의 예시처럼
-`presidio.enabled` 또는 `regex.enabled`를 설정하거나 직접 분석기 Bean을 등록해야 합니다.
+`presidio.enabled` 또는 `rules.enabled`를 설정하거나 직접 분석기 Bean을 등록해야 합니다.
 
-분석기 ID(provider ID)는 `REGEX`, `PRESIDIO`, `OPENNLP`처럼 각 분석기를 구분하는
+분석기 ID(provider ID)는 `RULES`, `PRESIDIO`, `OPENNLP`처럼 각 분석기를 구분하는
 이름입니다. 영문자와 숫자로 이루어진 구간을 단일 하이픈(`-`) 또는 밑줄(`_`)로
 연결한 1~128자의 ASCII 식별자이며, 라이브러리는 분석기 ID의 대소문자를
 구분하지 않고 대문자 형태로 정규화합니다. 허용되지 않은 문장부호나 공백,
-잘못되거나 연속된 구분자, 중복된 분석기 ID는 거부합니다.
+잘못되거나 연속된 구분자는 거부합니다. 각 `PrivacyService`에 전달하는 분석기 ID는
+서로 달라야 합니다.
 
 엔티티 레이블은 대문자 영문자와 숫자로 이루어진 구간을 단일 밑줄(`_`)로 연결한
 1~128자의 ASCII 식별자입니다. 소문자, 공백, 하이픈(`-`), 허용되지 않은 문장부호와
@@ -217,64 +214,178 @@ spring:
 결과를 수집할 때는 전달받은 `limits`를 준수해야 합니다. 배치 분석에서는 결과 수 제한을
 배치 전체에 적용합니다.
 
-## Regex 분석기
+## 로컬 규칙과 프리셋
 
-Regex 분석기는 모든 개인정보를 탐지하기 위한 용도가 아니라, 사번이나 고객번호처럼
-형식이 명확한 애플리케이션 고유 식별자를 탐지하는 데 적합합니다. 정규식 패턴은
-애플리케이션이 관리하는 신뢰된 설정으로 사용하고, 불필요하게 복잡한 패턴은 피하세요.
+로컬 탐지 규칙을 Java에 정의하고 설정에서 선택합니다. core 모듈에는 COMMON·KR 프리셋이
+포함되어 있습니다. 프리셋이나 규칙 ID로 선택한 규칙만 실행됩니다.
 
 ```yaml
 spring:
   ai:
     privacy:
-      regex:
+      rules:
         enabled: true
-        rules:
-          - entity-type: CUSTOMER_ID
-            pattern: "(?<![A-Za-z0-9_])CUST-[0-9]{6}(?![A-Za-z0-9_])"
-            score: 0.90
-            capture-group: 0
-            validator-id: customer-id-check
+        presets: [COMMON, KR]
+        include: [employee-id]
+        exclude: [credit-card]
 ```
 
-각 규칙에는 `entity-type`과 `pattern`이 필요합니다. `score` 기본값은 `0.85`,
-`capture-group` 기본값은 `0`입니다. `validator-id`는 선택 사항이며 Spring Bean 이름이
-아니라 애플리케이션이 제공한 `RegexPiiMatchValidator`의 `id()`가 반환하는 고정 ID를
-참조합니다.
+애플리케이션 규칙은 개별 Spring Bean으로 등록합니다.
 
 ```java
-@Bean
-RegexPiiMatchValidator customerIdMatchValidator() {
-    return new RegexPiiMatchValidator() {
-        @Override
-        public String id() {
-            return "customer-id-check";
-        }
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 
-        @Override
-        public boolean isValid(String candidate) {
-            return CustomerIds.hasValidChecksum(candidate);
-        }
-    };
+@Bean
+PiiRule employeeIdRule() {
+    PatternDefinition pattern = PatternDefinition.builder()
+            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
+            .score(0.90)
+            .validator(candidate -> !candidate.equals("EMP-0000"))
+            .build();
+    return PatternPiiRule.builder()
+            .id("employee-id")
+            .entityType("EMPLOYEE_ID")
+            .addPattern(pattern)
+            .build();
 }
 ```
 
-`CustomerIds.hasValidChecksum(...)`은 애플리케이션의 검증 로직을 나타내는 예시입니다.
-실제 사용할 검증 로직은 애플리케이션에서 구현해야 합니다.
+`PatternPiiRule.builder()`에는 `id`, `entityType`과 하나 이상의 `pattern`이 필요합니다.
+라이브러리에서 제공하는 타입은 `.entityType(PiiEntityTypes.CREDIT_CARD)`처럼
+`PiiEntityTypes` 상수로 지정하고, 애플리케이션 전용 타입은 `"EMPLOYEE_ID"` 같은 문자열로 지정할 수 있습니다.
 
-ID는 소문자 ASCII 영문자와 숫자로 이루어진 구간을 하나의 하이픈으로 연결합니다.
-애플리케이션을 시작할 때 ID를 확인하며, 빈 값이나 잘못된 형식, 알 수 없는 ID가
-있거나 둘 이상의 검증기 Bean이 같은 ID를 사용하면 시작에 실패합니다. 여러 규칙이
-같은 ID를 참조하는 것은 허용됩니다.
+`PatternPiiRule.PatternDefinition`은 Java 정규식, 점수, 캡처 그룹과 선택적인
+`Predicate<String>`을 묶습니다. 빌더에는 정규식과 점수를 반드시 지정해야 합니다.
+캡처 그룹의 기본값은 0이며 전체 매치를 선택합니다. 검증 함수는 캡처된 후보를 받아
+`true`면 채택하고 `false`면 제외합니다. 후보 파싱, 체크섬, 업무 조건을 검사할 수 있습니다.
+검증 함수를 지정하지 않으면 모든 매치를 채택합니다. 규칙 빌더의 `.addPattern(...)`으로
+정의 하나를 추가하거나 `.addPatterns(...)`으로 컬렉션의 정의들을 추가합니다.
+두 메소드 모두 기존 패턴을 유지하며, 추가한 순서대로 각각의 점수, 캡처 그룹과 검증 함수를 적용합니다.
 
-`isValid()`에는 `capture-group`이 선택한 일치 후보만 전달됩니다. `true`를 반환하면
-기존 탐지 범위와 점수를 유지하고, `false`를 반환하면 해당 후보를 제외합니다. 실행 중
-발생한 예외는 설정한 분석기 실패 정책에 따라 처리합니다.
+본문에서 직접 탐지하려면 `PiiRule`의 `id()`, `entityTypes()`, `analyze(text, options, limits)`를
+구현합니다. `PiiSpan`의 위치는 원문의 UTF-16 기준으로 start 포함, end 제외입니다.
+탐지 결과가 없으면 빈 목록을 반환합니다.
+프리셋 선택은 분석 언어와 독립적입니다. 독립적인 원격 서비스나 모델은 `PiiAnalyzer`로 연결합니다.
 
-`RegexPiiMatchValidator` 구현체는 여러 요청에서 공유되므로 스레드 안전하게 작성해야
-합니다. 검증 대상 문자열에는 개인정보 원문이 포함될 수 있으니 로그나 예외 메시지에
-남기거나 장기간 보관하지 마세요. `validator-id`를 설정하지 않으면 정규식에 일치한 후보를
-별도의 검증 없이 사용합니다.
+### 프리셋 선택
+
+`PiiRulePreset`은 등록된 규칙 ID를 순서대로 묶고 이름을 붙인 정의입니다. 한 규칙이
+여러 프리셋에 속하거나 어느 프리셋에도 속하지 않을 수 있습니다. 규칙을 직접 선택하려면
+`include`를 사용합니다. 규칙이나 프리셋을 등록해도 활성화되지는 않습니다.
+
+`builtIns()`와 `builtInsWithScores(...)`는 내장 규칙과
+`BuiltInPiiRules.presets()`에 정의된 COMMON, KR 프리셋을 등록합니다.
+
+`addRule(...)`로 애플리케이션 규칙 하나를 등록하거나 `addRules(...)`로 컬렉션을 등록합니다.
+두 메소드는 기존에 등록한 규칙을 유지하며, 컬렉션은 순회 순서대로 복사합니다.
+
+카탈로그는 프리셋을 순서대로 펼치고 `include`를 추가한 뒤 중복 ID의 첫 위치를 유지하고
+`exclude`를 적용합니다. COMMON도 명시적으로 선택해야 합니다. 규칙 ID는 1~64자의 ASCII
+소문자·숫자와 그 사이의 단일 하이픈을 사용합니다. 프리셋 이름은 ASCII 문자로 시작하며
+최대 64자의 ASCII 문자·숫자·하이픈·밑줄을 사용합니다. 두 이름 모두 대소문자를 구분합니다.
+Java에서는 `BuiltInPiiRuleIds` 상수로 내장 규칙 ID를 참조할 수 있습니다.
+내장 프리셋 이름은 `BuiltInPiiPresetNames` 상수로, 애플리케이션에서 정의한 이름은
+`"COMPANY"` 같은 문자열로 지정할 수 있습니다.
+
+중복 정의, 미등록 참조, 활성 상태의 빈 선택은 구성 오류입니다. 규칙 자동 구성은 기본적으로
+비활성이며, `rules.enabled=true`이면 Boot가 설정된 선택으로 `RuleBasedPiiAnalyzer`를 생성합니다.
+`RuleBasedPiiAnalyzer` Bean을 직접 선언하면 `rules.enabled=true`여도 자동 선택을
+대체합니다. Boot가 해당 Bean을 인식하도록 Bean 메서드의 반환 타입을
+`RuleBasedPiiAnalyzer`로 선언하세요.
+애플리케이션 규칙과 프리셋을 포함한 규칙 등록과 선택은 해당 Bean에서 구성합니다.
+직접 선언한 분석기는 `rules.enabled=false`일 때도 동작합니다.
+다른 분석기 provider와는 계속 병행할 수 있습니다.
+
+애플리케이션 프리셋을 정의하려면 `PiiRulePreset` Bean을 등록합니다. 이름은 내장
+프리셋이나 다른 등록된 프리셋과 달라야 합니다.
+
+```java
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
+
+@Bean
+PiiRulePreset companyPreset() {
+    return new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL));
+}
+```
+
+`presets: [COMPANY]`로 선택할 수 있습니다. 순수 Java에서는 위 `employeeIdRule()`로 만든
+규칙을 `PiiRuleCatalog`에 전달합니다.
+
+```java
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
+
+PiiRule employeeRule = employeeIdRule();
+PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
+        .addRule(employeeRule)
+        .addPreset(new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL)))
+        .build();
+RuleBasedPiiAnalyzer analyzer = catalog.analyzerBuilder()
+        .presets("COMPANY", BuiltInPiiPresetNames.KR)
+        .exclude(BuiltInPiiRuleIds.KR_RRN)
+        .build();
+List<String> ruleIds = analyzer.ruleIds();
+List<String> presetNames = analyzer.presetNames();
+```
+
+`analyzerBuilder()`는 `RuleBasedPiiAnalyzer`를 만드는 빌더를 생성합니다.
+`presets`, `include`, `exclude`는 문자열이나 컬렉션을 받으며 기본값은 빈 목록입니다.
+각 호출은 전달한 값을 복사하고 해당 선택 항목을 대체합니다.
+
+### 실행과 한도
+
+선택된 규칙은 하나의 `RULES` provider로 실행하며 Presidio·OpenNLP와 병행할 수 있습니다.
+로컬 규칙 제외는 해당 규칙에만 적용됩니다. 규칙 예외나 잘못된 결과는 RULES 호출 전체를
+실패시키고 설정한 provider 실패 정책을 따릅니다. 결과는 선언된 엔티티 유형과 원문 안의
+유효한 범위를 사용해야 하며 빈 범위는 허용하지 않습니다.
+
+결과 수 한도는 규칙·provider 전체에 적용됩니다. 결과 하나를 더 추가하면
+`limits.maxResultSpans()`를 초과하는 경우, 규칙은 코드가 `PAYLOAD_LIMIT_EXCEEDED`이고
+단계가 `ANALYSIS`인 `PrivacyGuardrailException`을 던져야 합니다.
+처리 한도 초과는 provider 실패 정책과 관계없이 작업 전체를 중단합니다.
+
+규칙과 검증 함수는 스레드 안전해야 하며 중단을 존중하고 분석기의 수명 동안
+안정적이어야 합니다. Java 정규식은 주의해서 작성해야 합니다.
+한 번의 매칭 안에서 역추적이 길어지면 다음 중단 확인까지 오래 걸릴 수 있습니다.
+
+### 내장 규칙
+
+| 프리셋 | 규칙 ID | 지원 범위 |
+| --- | --- | --- |
+| COMMON | email | 점으로 구분한 DNS 도메인의 ASCII 이메일. local part에는 작은따옴표·느낌표 같은 특수 문자를 사용할 수 있습니다. 큰따옴표로 감싼 local part, 국제화 주소, 도메인 리터럴은 지원하지 않습니다. |
+| COMMON | credit-card | 1·3·4·50~55·6으로 시작하는 13~17자리 ASCII 숫자와 숫자 그룹 사이의 선택적 공백·하이픈. 1로 시작하는 구분자 없는 13자리 숫자는 제외합니다. Luhn 검사를 적용하며 실재 발급·계좌 상태를 확인하지 않습니다. |
+| KR | kr-mobile-phone | 010 뒤 8자리의 연속형 또는 일관된 공백·하이픈 구분형. +82 10 국제형도 지원합니다. 다른 01X·유선전화·내선은 지원하지 않습니다. |
+| KR | kr-rrn | YYMMDD, 1~4 구분 숫자와 6자리, 선택적 하이픈. 1900~2099년 달력 유효성을 검사합니다. 실재 신원·발급 여부를 확인하지 않습니다. |
+
+내장 탐지 결과의 기본 점수는 0.85입니다. 이 점수는 휴리스틱 값이며 측정된 확률이 아닙니다.
+애플리케이션 환경을 대표하는 데이터로 탐지 품질을 평가하세요.
+주민번호 규칙은 생년월일을 검증하며, 뒷자리에 임의번호를 사용하는 발급 체계를
+고려해 체크섬을 요구하지 않습니다([행정안전부](https://mois.go.kr/plan2020/download/2020plan.pdf)).
+
+`PiiRuleCatalog.Builder.builtInsWithScores(...)`에 내장 규칙 ID와 점수의 맵을 전달하면 지정한 규칙의
+고정 점수를 설정할 수 있습니다. 예를 들어 Spring Bean으로 등록할 수 있습니다.
+
+```java
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
+import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
+
+@Bean
+RuleBasedPiiAnalyzer localPiiAnalyzer() {
+    PiiRuleCatalog catalog = PiiRuleCatalog.builder()
+            .builtInsWithScores(Map.of(
+                    BuiltInPiiRuleIds.EMAIL, 0.95,
+                    BuiltInPiiRuleIds.KR_RRN, 0.70))
+            .build();
+    return catalog.analyzerBuilder()
+            .presets(BuiltInPiiPresetNames.COMMON, BuiltInPiiPresetNames.KR)
+            .build();
+}
+```
+
+지정하지 않은 내장 규칙은 기본 점수를 사용합니다. 점수는 0.0 이상 1.0 이하의 유한한
+값이어야 합니다. 미등록 내장 규칙 ID나 잘못된 점수는 등록 단계에서 거부합니다.
+점수를 재정의해도 후보 검증은 유지되며, 애플리케이션 규칙이나 개별 패턴의 점수에는
+영향을 주지 않습니다. `analysis.minimum-score`와 `analysis.provider-minimum-scores`는
+탐지 이후 어떤 결과를 채택할지 결정합니다.
 
 ## Presidio 분석기
 

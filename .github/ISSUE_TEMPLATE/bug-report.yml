@@ -33,7 +33,7 @@ body:
       multiple: true
       options:
         - Not applicable
-        - Regex
+        - Local rules (RULES)
         - Presidio
         - OpenNLP
         - Custom analyzer

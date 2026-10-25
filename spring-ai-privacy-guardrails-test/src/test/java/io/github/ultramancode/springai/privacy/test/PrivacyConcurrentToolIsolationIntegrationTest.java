@@ -5,8 +5,9 @@ import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
-import io.github.ultramancode.springai.privacy.core.RegexPiiAnalyzer;
-import io.github.ultramancode.springai.privacy.core.RegexPiiRule;
+import io.github.ultramancode.springai.privacy.core.RuleBasedPiiAnalyzer;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule;
+import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
 import io.github.ultramancode.springai.privacy.springai.ToolDisclosurePolicy;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -60,10 +61,10 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
         PrivacyTestProbe privacyTestProbe = PrivacyTestProbe.create(privacyService);
         AtomicInteger activeSessionsAtToolBarrier = new AtomicInteger();
         CyclicBarrier toolBarrier = new CyclicBarrier(
-                2,
-                () -> activeSessionsAtToolBarrier.set(privacyService.activeSessionCount())
+            2,
+            () -> activeSessionsAtToolBarrier.set(privacyService.activeSessionCount())
         );
-        Map<String, String> rawIdByLabel = new ConcurrentHashMap<>();
+        Map<String, String> rawIdsByLabel = new ConcurrentHashMap<>();
         ConcurrentToolModel chatModel = new ConcurrentToolModel();
         GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
             .privacy(privacyPolicyBuilder -> privacyPolicyBuilder.toolDisclosurePolicy(
@@ -72,7 +73,7 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
         ChatClient chatClient = GuardrailsChatClientFactory.builder().privacyService(privacyService)
             .build()
             .builder(privacyTestProbe.wrapModel(chatModel), guardrailsPolicy)
-            .defaultTools(privacyTestProbe.wrapTool(customerLookup(toolBarrier, rawIdByLabel)))
+            .defaultTools(privacyTestProbe.wrapTool(customerLookup(toolBarrier, rawIdsByLabel)))
             .build();
 
         CountDownLatch start = new CountDownLatch(1);
@@ -90,15 +91,15 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
         }
 
         assertThat(activeSessionsAtToolBarrier).hasValue(2);
-        assertThat(rawIdByLabel).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "left", LEFT_ID,
-                "right", RIGHT_ID
+        assertThat(rawIdsByLabel).containsExactlyInAnyOrderEntriesOf(Map.of(
+            "left", LEFT_ID,
+            "right", RIGHT_ID
         ));
-        assertThat(chatModel.tokenByLabel()).containsKeys("left", "right");
-        assertThat(chatModel.tokenByLabel().get("left"))
+        assertThat(chatModel.tokensByLabel()).containsKeys("left", "right");
+        assertThat(chatModel.tokensByLabel().get("left"))
             .matches(CUSTOMER_TOKEN)
-            .isNotEqualTo(chatModel.tokenByLabel().get("right"));
-        assertThat(chatModel.tokenByLabel().get("right")).matches(CUSTOMER_TOKEN);
+            .isNotEqualTo(chatModel.tokensByLabel().get("right"));
+        assertThat(chatModel.tokensByLabel().get("right")).matches(CUSTOMER_TOKEN);
         assertThat(privacyTestProbe.toolCalls()).allSatisfy(call -> {
             Map<?, ?> input = new ObjectMapper().readValue(call.input(), Map.class);
             String label = input.get("request").toString();
@@ -115,26 +116,32 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
     }
 
     private PrivacyService privacyService() {
-        return new PrivacyService(
-                List.of(new RegexPiiAnalyzer(List.of(
-                        new RegexPiiRule("CUSTOMER_ID", "\\bCUST-\\d{6}\\b", 0.99, 0)
-                ))),
-                PiiAnalysisOptions.defaults()
-        );
+        PatternDefinition customerIdPattern = PatternDefinition.builder()
+            .expression("\\bCUST-\\d{6}\\b")
+            .score(0.99)
+            .build();
+        RuleBasedPiiAnalyzer analyzer = new RuleBasedPiiAnalyzer(List.of(
+            PatternPiiRule.builder()
+                .id("customer-id")
+                .entityType("CUSTOMER_ID")
+                .addPattern(customerIdPattern)
+                .build()
+        ));
+        return new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
     }
 
     private ToolCallback customerLookup(
-            CyclicBarrier barrier,
-            Map<String, String> rawIdByLabel
+        CyclicBarrier barrier,
+        Map<String, String> rawIdsByLabel
     ) {
         ObjectMapper objectMapper = new ObjectMapper();
         return new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {
                 return ToolDefinition.builder()
-                        .name("customerLookup")
-                        .description("Returns the synthetic customer identifier")
-                        .inputSchema("""
+                    .name("customerLookup")
+                    .description("Returns the synthetic customer identifier")
+                    .inputSchema("""
                                 {
                                   "type": "object",
                                   "properties": {
@@ -144,7 +151,7 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
                                   "required": ["request", "customerId"]
                                 }
                                 """)
-                        .build();
+                    .build();
             }
 
             @Override
@@ -152,11 +159,11 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
                 Map<?, ?> parsed = objectMapper.readValue(input, Map.class);
                 String label = requiredString(parsed.get("request"), "request");
                 String customerId = requiredString(parsed.get("customerId"), "customerId");
-                rawIdByLabel.put(label, customerId);
+                rawIdsByLabel.put(label, customerId);
                 await(barrier);
                 return objectMapper.writeValueAsString(Map.of(
-                        "request", label,
-                        "customerId", customerId
+                    "request", label,
+                    "customerId", customerId
                 ));
             }
         };
@@ -207,7 +214,7 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
     private static final class ConcurrentToolModel implements ChatModel {
 
         private final ObjectMapper objectMapper = new ObjectMapper();
-        private final Map<String, String> tokenByLabel = new ConcurrentHashMap<>();
+        private final Map<String, String> tokensByLabel = new ConcurrentHashMap<>();
 
         @Override
         public ChatResponse call(Prompt prompt) {
@@ -227,24 +234,24 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
             return ToolCallingChatOptions.builder().build();
         }
 
-        Map<String, String> tokenByLabel() {
-            return Map.copyOf(this.tokenByLabel);
+        Map<String, String> tokensByLabel() {
+            return Map.copyOf(this.tokensByLabel);
         }
 
         private ChatResponse requestLookup(Prompt prompt, String label) {
             String customerToken = findToken(prompt);
-            this.tokenByLabel.put(label, customerToken);
+            this.tokensByLabel.put(label, customerToken);
             return toolCall(
-                    "call-" + label,
-                    this.objectMapper.writeValueAsString(Map.of(
-                            "request", label,
-                            "customerId", customerToken
-                    ))
+                "call-" + label,
+                this.objectMapper.writeValueAsString(Map.of(
+                    "request", label,
+                    "customerId", customerToken
+                ))
             );
         }
 
         private ChatResponse complete(Prompt prompt, String label) {
-            String expectedToken = this.tokenByLabel.get(label);
+            String expectedToken = this.tokensByLabel.get(label);
             Map<?, ?> result = this.objectMapper.readValue(toolResponse(prompt), Map.class);
             String responseLabel = requiredString(result.get("request"), "request");
             String resultToken = requiredString(result.get("customerId"), "customerId");
@@ -252,7 +259,7 @@ class PrivacyConcurrentToolIsolationIntegrationTest {
                 throw new IllegalStateException("Concurrent privacy session identity crossed requests");
             }
             String foreignLabel = label.equals("left") ? "right" : "left";
-            String foreignToken = this.tokenByLabel.get(foreignLabel);
+            String foreignToken = this.tokensByLabel.get(foreignLabel);
             if (foreignToken == null || promptContains(prompt, foreignToken)) {
                 throw new IllegalStateException("Concurrent model prompt contained a foreign opaque token");
             }

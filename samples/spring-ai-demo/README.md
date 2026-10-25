@@ -124,7 +124,7 @@ prompt template, and retrieved document. Detected PII is replaced with opaque
 tokens before model execution. No external
 vector store, embedding service, or model is used.
 
-## Regex-Only Protection
+## Local Rule Protection
 
 ```bash
 curl "http://127.0.0.1:8080/demo/protect" \
@@ -140,12 +140,12 @@ Expected shape:
 {
   "protectedPrompt": "Employee ID is [PII_EMPLOYEE_ID_1:<opaque>], email is [PII_EMAIL_ADDRESS_1:<opaque>], phone is [PII_PHONE_NUMBER_1:<opaque>], and customer ID is [PII_CUSTOMER_ID_1:<opaque>].",
   "detectedSpans": [
-    {"type":"EMPLOYEE_ID","start":15,"end":23,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"EMAIL_ADDRESS","start":34,"end":50,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"PHONE_NUMBER","start":61,"end":74,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"},
-    {"type":"CUSTOMER_ID","start":95,"end":106,"providers":["REGEX"],"reason":"SINGLE_EVIDENCE"}
+    {"type":"EMPLOYEE_ID","start":15,"end":23,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"EMAIL_ADDRESS","start":34,"end":50,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"PHONE_NUMBER","start":61,"end":74,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"},
+    {"type":"CUSTOMER_ID","start":95,"end":106,"providers":["RULES"],"reason":"SINGLE_EVIDENCE"}
   ],
-  "successfulProviders": ["REGEX"]
+  "successfulProviders": ["RULES"]
 }
 ```
 
@@ -157,9 +157,10 @@ Each span's `providers` list identifies analyzers whose findings contributed to 
 `successfulProviders` lists analyzers that completed successfully, including
 those that found no PII.
 
-The default configuration uses small, format-based regex rules for:
+The default configuration uses COMMON/KR presets and application-owned Java rules for:
 
 - Email addresses.
+- Card number candidates that pass Luhn validation.
 - Korean mobile phone numbers.
 - Synthetic Korean resident registration number format.
 - Employee IDs such as `EMP-1234`.
@@ -176,12 +177,13 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
 
 The response should contain `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CUSTOMER_ID`,
 and `EMPLOYEE_ID` opaque tokens. Person names are semantic entities rather than stable
-identifier formats, so the regex-only profile does not guess them. Use a
+identifier formats, so the local rule profile does not guess them. Use a
 configured NER provider such as Presidio or the optional OpenNLP profile below
 when `PERSON` detection is required.
 
-These rules are sample-oriented. Production systems should tune them for their
-own data or add custom `PiiAnalyzer` beans. The checked-in
+The employee and customer ID rules belong to this sample. The other rules come
+from the built-in catalog. Check their documented format limits against your own
+data, and add `PiiRule` beans or independent `PiiAnalyzer` providers as needed. The checked-in
 [evaluation baseline](../../docs/evaluation.md) covers positive, negative, and
 adversarial synthetic cases using this configuration.
 
@@ -332,11 +334,11 @@ Then run the demo with the `presidio` profile:
 
 Once this optional profile is enabled, the default `REQUIRE_ALL` policy makes
 Presidio availability mandatory for every analysis request. An outage fails
-closed even if regex succeeds. The profile uses language `en`, spaCy
+closed even if RULES succeeds. The profile uses language `en`, spaCy
 `en_core_web_lg`, and a provider-specific minimum score of `0.8`. Production
 deployments should calibrate that threshold with representative synthetic data.
 
-Korean regex rules remain active, but this sample does not provide Korean
+Korean local rules remain active, but this sample does not provide Korean
 Presidio NER support. A production Korean deployment must install and configure
 a compatible Korean NLP and recognizer pipeline.
 
@@ -383,8 +385,8 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
 
 The response should replace `John Smith` with a `PERSON` opaque token. Its detected
 span should cover offsets `0..10` and report `providers: ["OPENNLP"]`.
-`successfulProviders` contains both `OPENNLP` and `REGEX`: the OpenNLP model
-found the span, while the still-enabled regex analyzer also completed
+`successfulProviders` contains both `OPENNLP` and `RULES`: the OpenNLP model
+found the span, while the still-enabled RULES analyzer also completed
 successfully without contributing evidence to that span.
 
 The profile's `0.8` OpenNLP threshold and these Apache-hosted legacy English

@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: bcf99975074060ca7c49802b402e0f8cb4adb2bf2a96a0dc35cded12a8eabb23 -->
+<!-- i18n-source-sha256: 442d9ec5c8ce546f8d38fb40ececf70ff76764bcf1e058bdb97f343f1a8e6de6 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -536,7 +536,8 @@ GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
                 .outputProtection().tokenize()
                 .build())
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
+        .build();
 ```
 
 차단 메시지를 직접 지정하려면 `block(message)`를 사용합니다.
@@ -686,7 +687,7 @@ try 블록을 벗어나 세션이 닫히면 그 세션의 불투명 토큰을 �
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0-SNAPSHOT"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0"
 }
 ```
 

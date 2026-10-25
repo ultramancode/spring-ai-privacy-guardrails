@@ -33,8 +33,8 @@ Add the client and Presidio starters:
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -55,7 +55,7 @@ spring:
 components. Put credentials in `presidio.headers` rather than in the URL.
 
 Create a client through `GuardrailsChatClientFactory` with a policy that selects
-`privacy()`, as shown in [Getting Started](../../docs/getting-started.md#3-protect-a-chatclient).
+`privacy()`, as shown in [Getting Started](../../docs/getting-started.md#create-a-protected-client).
 
 ## Manual API Check
 

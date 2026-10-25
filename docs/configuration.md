@@ -16,7 +16,7 @@ through Spring AI, including request-specific and MCP tools.
 Add the client starter alongside your Spring AI model integration:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
 ```
 
 Use the same version for all Guardrails modules. This starter includes the privacy
@@ -49,8 +49,11 @@ After preparing [built-in presets](getting-started.md#enable-built-in-presets) a
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy()
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+            .build();
 }
 ```
 
@@ -137,8 +140,10 @@ GuardrailsPolicy privacyOnly = supportPolicy.mutate()
         .toolAuthorization(false)
         .build();
 
-ChatClient inputClient = guardrailsChatClientFactory.builder(chatModel, inputPolicy).build();
-ChatClient privacyClient = guardrailsChatClientFactory.builder(chatModel, privacyOnly).build();
+ChatClient inputClient = guardrailsChatClientFactory.builder(chatModel, inputPolicy)
+        .build();
+ChatClient privacyClient = guardrailsChatClientFactory.builder(chatModel, privacyOnly)
+        .build();
 ```
 
 `privacy(false)` and `inspection(false)` remove the entire feature.
@@ -154,12 +159,15 @@ Register a `GuardrailsPolicy` bean if clients should share a default:
 ```java
 @Bean
 GuardrailsPolicy defaultGuardrailsPolicy() {
-    return GuardrailsPolicy.builder().privacy().build();
+    return GuardrailsPolicy.builder()
+            .privacy()
+            .build();
 }
 
 @Bean
 ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    return guardrailsChatClientFactory.builder(chatModel).build();
+    return guardrailsChatClientFactory.builder(chatModel)
+            .build();
 }
 ```
 
@@ -208,7 +216,10 @@ Depend on `spring-ai-privacy-guardrails-chat-client` and provide the services:
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .privacyService(privacyService)
         .inputInspectionService(inspectionService)
-        .defaultPolicy(GuardrailsPolicy.builder().privacy().inspection().build())
+        .defaultPolicy(GuardrailsPolicy.builder()
+                .privacy()
+                .inspection()
+                .build())
         .build();
 ```
 

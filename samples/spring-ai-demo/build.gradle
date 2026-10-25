@@ -37,8 +37,18 @@ application {
     mainClass = 'io.github.ultramancode.springai.privacy.sample.PrivacyGuardrailsDemoApplication'
 }
 
+tasks.register('liveModelConfigurationTest', Test) {
+    group = 'verification'
+    description = 'Verifies live-model test configuration without calling a model endpoint.'
+    testClassesDirs = sourceSets.openAiCompatibleLiveTest.output.classesDirs
+    classpath = sourceSets.openAiCompatibleLiveTest.runtimeClasspath
+    include '**/LiveModelTestConfigurationTest.class'
+    useJUnitPlatform()
+    shouldRunAfter tasks.named('test')
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('openAiCompatibleLiveTestClasses')
+    dependsOn tasks.named('liveModelConfigurationTest')
 }
 
 tasks.register('openAiCompatibleLiveTest', Test) {
@@ -46,6 +56,7 @@ tasks.register('openAiCompatibleLiveTest', Test) {
     description = 'Runs opt-in privacy boundary tests against an OpenAI-compatible model endpoint.'
     testClassesDirs = sourceSets.openAiCompatibleLiveTest.output.classesDirs
     classpath = sourceSets.openAiCompatibleLiveTest.runtimeClasspath
+    include '**/*LiveIntegrationTest.class'
     useJUnitPlatform()
     maxParallelForks = 1
     shouldRunAfter tasks.named('test')

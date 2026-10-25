@@ -46,13 +46,13 @@ entity type is configured under `ToolDisclosurePolicy`.
 ## Add the Spring Boot Starter
 
 Use an existing Spring AI app with a configured `ChatModel`. These dependency examples use
-`0.4.0-SNAPSHOT`. Complete [local snapshot preparation](getting-started.md#add-the-client-starter) first.
+`0.4.0` from Maven Central. See [repository configuration](getting-started.md#add-the-client-starter).
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -62,7 +62,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-security-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -150,7 +150,9 @@ After preparing dependencies and the authorization policy, create the client thr
 @Bean
 ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .toolAuthorization(true)
+            .build();
     return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
             .defaultTools(customerLookupToolCallback)
             .build();
@@ -232,7 +234,9 @@ ChatClient customToolAdvisorClient(
         GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback
 ) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .toolAuthorization(true)
+            .build();
     ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
     return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)
             .defaultTools(customerLookupToolCallback)
@@ -394,9 +398,13 @@ ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatC
         .build();
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .toolAuthorization(authorizationFactory::prepareToolAuthorization)
-        .defaultPolicy(GuardrailsPolicy.builder().toolAuthorization(true).build())
+        .defaultPolicy(GuardrailsPolicy.builder()
+                .toolAuthorization(true)
+                .build())
         .build();
-ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel).defaultTools(customerLookupToolCallback).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
 
 To add privacy or inspection, supply its service and select the feature in the policy.
@@ -420,7 +428,10 @@ ChatClient toolSearchClient(
         GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolIndex toolIndex
 ) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy()
+            .toolAuthorization(true)
+            .build();
     return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy,
                     ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();

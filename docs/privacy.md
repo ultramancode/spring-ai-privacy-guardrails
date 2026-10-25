@@ -559,7 +559,8 @@ GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
                 .outputProtection().tokenize()
                 .build())
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy)
+        .build();
 ```
 
 To customize the block message, use `block(message)`:
@@ -716,7 +717,7 @@ cleaned up after the request.
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0-SNAPSHOT"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0"
 }
 ```
 

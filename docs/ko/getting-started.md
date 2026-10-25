@@ -8,7 +8,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 6aed6249d103c25821bdc9fe31321d8e57dc3c4aa7b208745a1f25355d19cea1 -->
+<!-- i18n-source-sha256: 6c080ede26d68dce42085f4f7a034a3848876524f0f926dce0a4560857e06c1d -->
 
 기존 Spring AI 앱에 개인정보 보호를 추가하는 경로입니다. **1~4단계로 첫 호출을 완료**한 뒤
 필요한 선택 기능을 추가하세요. 외부 분석 서비스나 사용자 정의 규칙은 첫 호출에 필요하지 않습니다.
@@ -25,26 +25,28 @@ Java 17, Spring AI 2.0.0, Spring Boot 4.0.0 이상을 사용합니다. 애플리
 
 ## 1. 클라이언트 스타터 추가
 
-다음 `0.4.0-SNAPSHOT` 예제는 개발 버전입니다. 저장소에서 먼저 `./gradlew publishToMavenLocal`을
-실행하고, 사용 앱의 개발용 저장소 설정에 Gradle의 `mavenLocal()` 또는 Maven의 기본 로컬 저장소를 사용하세요.
-정식 릴리스를 사용할 때는 모든 Guardrails 모듈을 실제 배포된 같은 버전으로 맞춥니다.
-[로컬 SNAPSHOT 안내](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/CONTRIBUTING.md#development)
+예제는 Maven Central의 `0.4.0`을 사용합니다. 모든 Guardrails 모듈을 같은 버전으로 맞추세요.
+기여자를 위한 로컬 빌드 설정은 [기여 안내](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/CONTRIBUTING.md#development)를 참고하세요.
 
 `build.gradle`에 추가합니다.
 
 ```gradle
+repositories {
+    mavenCentral()
+}
+
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
 }
 ```
 
-Maven 사용자는 `pom.xml`의 `dependencies`에 추가합니다.
+Maven은 기본으로 Central을 사용합니다. `pom.xml`의 `dependencies`에 추가합니다.
 
 ```xml
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-chat-client-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -86,8 +88,11 @@ import org.springframework.context.annotation.Configuration;
 public class PrivacyConfiguration {
     @Bean
     ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
-        return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+                .privacy()
+                .build();
+        return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+                .build();
     }
 }
 ```
@@ -252,7 +257,7 @@ Analyzer 서비스를 연동하는 Presidio 스타터를 사용합니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -262,7 +267,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -305,7 +310,7 @@ OpenNLP 스타터를 사용합니다. [클라이언트 스타터](#add-the-clien
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -315,7 +320,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -357,7 +362,8 @@ GuardrailsPolicy outputPolicy = GuardrailsPolicy.builder()
                 .outputProtection().tokenize()
                 .build())
         .build();
-ChatClient outputClient = guardrailsChatClientFactory.builder(chatModel, outputPolicy).build();
+ChatClient outputClient = guardrailsChatClientFactory.builder(chatModel, outputPolicy)
+        .build();
 ```
 
 개인정보 보호 설정의 `outputProtection()`에서 사용할 출력 처리 방식을 선택합니다.

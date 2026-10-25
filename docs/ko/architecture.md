@@ -8,9 +8,12 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 4a21af75e82f30decb83ec39463b860f463a1553d7650b1ff36e8a44c491ce47 -->
+<!-- i18n-source-sha256: 7fa55081eebfe35b65798aa92d4cbffa7e8696eb8dda76e33a9e61a0a073ed94 -->
 
 ## 책임 범위
+
+라이브러리는 개인정보 보호, 도구 권한 검사와 콘텐츠 검사를 제공합니다.
+다음 흐름은 개인정보 보호 경계를 보여줍니다.
 
 Spring AI Privacy Guardrails는 **개인정보 토큰화**로 분석기가 탐지한 원문을
 요청별 **불투명 토큰(opaque token)**으로 바꿔 모델에 전달합니다. 불투명 토큰은
@@ -24,7 +27,7 @@ flowchart TD
     B --> C["모델"]
     C -. "도구 호출" .-> D["도구<br/>(허용된 유형만 원문으로 전달)"]
     D -. "결과의 개인정보<br/>토큰화" .-> C
-    C --> E["최종 응답 검사<br/>(출력 보호 사용 시)"]
+    C --> E["최종 응답의 개인정보 정책 적용<br/>(출력 보호 사용 시)"]
     E --> F["애플리케이션"]
 ```
 
@@ -36,63 +39,81 @@ flowchart TD
 라이브러리는 지원하는 모델·도구·출력 경계를 통과하는 데이터를 보호합니다.
 필요한 경우 Spring Security를 연동해 모델에 공개할 도구와 실행 가능한 도구도 제한할 수 있습니다.
 
-클라이언트는 `GuardrailsChatClientFactory`와 `GuardrailsPolicy`로 개인정보 보호,
-콘텐츠 검사와 도구 권한 검사를 선택합니다.
-클라이언트 생성과 정책 구성은 [설정](configuration.md)을 참고하세요.
+## 클라이언트 구성
+
+`GuardrailsPolicy`에서 개인정보 보호, 도구 권한 검사와 콘텐츠 검사를 각각 선택합니다.
+`GuardrailsChatClientFactory`는 선택한 기능과 공통 서비스를 조합해 `ChatClient.Builder`를
+반환합니다. 애플리케이션은 이 빌더의 `build()`를 호출해 클라이언트를 생성합니다.
+
+```mermaid
+flowchart LR
+    PRIVACY["Privacy<br/>개인정보 토큰화와 원문 공개"] --> FACTORY["GuardrailsChatClientFactory"]
+    SECURITY["Security<br/>도구 권한 검사"] --> FACTORY
+    INSPECTION["Inspection<br/>입력·출력 콘텐츠 검사"] --> FACTORY
+    FACTORY --> CLIENT["ChatClient"]
+```
+
+화살표는 클라이언트 구성을 나타냅니다. 실제 모델 요청에서는 선택한 단계를
+개인정보 보호 → 도구 인가 → 콘텐츠 검사 순서로 실행합니다. 출력 보호와 출력 검사는
+별도로 설정합니다. 사용 방법은 [설정](configuration.md)을 참고하세요.
 
 ## 모듈 구조
 
-이 프로젝트는 Gradle 멀티 모듈 라이브러리이며, 모듈별로 개인정보 보호 정책,
-Spring AI 연동과 분석기 연동의 역할을 분리합니다.
+모듈은 각 기능의 구현, 클라이언트 조합과 Spring Boot 자동 설정의 역할을 나눕니다.
+그림과 표에서는 공통 접두사 `spring-ai-privacy-guardrails-`를 생략합니다.
+화살표는 해당 모듈에서 직접 의존하는 모듈을 가리킵니다. 요청 실행 순서를 나타내지는 않습니다.
+같은 내부 모듈 의존성을 가진 모듈은 한 상자에 묶었습니다.
 
-이 라이브러리 내부 주요 모듈의 의존 관계입니다. 화살표는 의존 대상 모듈을 가리킵니다.
-개인정보 보호와 도구 권한 검사는 각각 사용하거나 같은 `ChatClient`에 함께 적용할 수
-있습니다.
+그림은 주요 라이브러리 모듈을 보여줍니다. Spring Boot 스타터 구성은 아래에서 설명합니다.
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "linear"}}}%%
 flowchart LR
-    CORE["core"]
-    CLIENT["Client factory"] --> SAI
-    CLIENT --> INSPECT["Inspection integration"]
-    CLIENTBOOT["Client starter"] --> CLIENT
-    CLIENTBOOT --> BASE
-    CLIENTBOOT --> INSPECTBOOT["Inspection starter"]
-    INSPECTBOOT --> INSPECT
+    CLIENT["chat-client"]
 
-    PRES["Presidio 연동"] --> CORE
-    SAI["Spring AI 연동"] --> CORE
-    OPEN["OpenNLP 연동"] --> CORE
-    SEC["Spring Security 연동"]
+    subgraph PRIVACY["개인정보 보호"]
+        SAI["spring-ai"] --> CORE["core"]
+        ANALYZERS["presidio<br/>opennlp"] --> CORE
+    end
 
-    PRESBOOT["Presidio<br/>Spring Boot 스타터"] --> PRES
-    BASE["기본<br/>Spring Boot 스타터"] --> SAI
-    OPENBOOT["OpenNLP<br/>Spring Boot 스타터"] --> OPEN
-    SECBOOT["Spring Security<br/>Spring Boot 스타터"] --> SEC
+    subgraph SECURITY["도구 권한 검사"]
+        SEC["spring-security"]
+    end
 
-    PRESBOOT --> BASE
-    OPENBOOT --> BASE
+    subgraph INSPECTION["콘텐츠 검사"]
+        BACKENDS["inspection-rules<br/>inspection-onnx<br/>inspection-openai-compatible"] --> ICORE["inspection-core"]
+        ISA["inspection-spring-ai"] --> ICORE
+    end
+
+    CLIENT --> ISA
+    CLIENT --> SAI
+    SAI --> BOUNDARY["spring-ai-boundary"]
+    SEC --> BOUNDARY
+    ISA --> BOUNDARY
 ```
 
-`core` 모듈은 Spring에 의존하지 않고 탐지 결과 해석, 개인정보 토큰화, 세션 관리와 내장
-로컬 규칙 분석기를 제공합니다. Presidio와 OpenNLP 연동 모듈은 이 공통 기능 위에 각
-분석기와의 연동을 추가합니다.
+`chat-client`는 `spring-security`에 직접 의존하지 않고 도구 권한 설정기를 받습니다.
+클라이언트 스타터는 선택적 연동을 위해 Security 모듈에 컴파일 시점에만 의존합니다.
+애플리케이션에서 필요할 때 Security 스타터를 추가합니다.
 
-Spring AI 연동 모듈은 `core`를 `ChatClient`, 모델 호출과 도구 실행 경계에 연결합니다.
-기본 Spring Boot 스타터는 `core`와 Spring AI 연동을 조립하고, 분석기별 Spring Boot
-스타터는 여기에 해당 분석기 연동을 추가합니다.
+| 모듈 | 역할과 주요 내부 의존성 |
+| --- | --- |
+| `core` | 탐지 결과 해석, 개인정보 토큰화, 요청별 세션과 로컬 규칙을 제공합니다. Spring에 의존하지 않습니다. |
+| `spring-ai` | 모델·도구·출력 경계에 개인정보 보호를 적용합니다. `core`와 `spring-ai-boundary`를 사용합니다. |
+| `spring-security` | 도구 공개와 실행 권한을 검사합니다. `spring-ai-boundary`와 Spring Security Core를 사용합니다. |
+| `inspection-core` | `InspectionService`, 검사기 인터페이스와 콘텐츠 정책을 제공합니다. Spring에 의존하지 않습니다. |
+| `inspection-spring-ai` | 모델 입력과 최종 출력의 콘텐츠 검사를 적용합니다. `inspection-core`와 `spring-ai-boundary`를 사용합니다. |
+| `spring-ai-boundary` | 개인정보 보호, 도구 권한과 콘텐츠 검사가 공유하는 모델 요청 단계를 조합합니다. |
+| `chat-client` | `GuardrailsChatClientFactory`로 선택한 기능을 조합합니다. `spring-ai`와 `inspection-spring-ai`에 의존하며, 도구 권한 설정기를 받아 선택적으로 Security를 연동합니다. |
+| `presidio`, `opennlp` | `core` 위에 외부 분석기 연동을 추가합니다. |
+| `inspection-rules`, `inspection-onnx`, `inspection-openai-compatible` | `inspection-core` 기반의 콘텐츠 검사 백엔드를 제공합니다. |
 
-Spring Security 연동은 Spring AI의 도구 호출 API와 `spring-security-core`를
-사용합니다. 전용 Spring Boot 스타터는 기본 스타터와 독립적으로 사용할 수 있습니다.
-
-개인정보 보호, 콘텐츠 검사와 권한 검사 연동은
-`spring-ai-privacy-guardrails-spring-ai-boundary`를 공유합니다.
-이 공통 모듈은 매 모델 호출 전에 개인정보 보호 → 도구 인가 → 모델 입력 콘텐츠 검사
-순서로 실행하며, 등록하지 않은 단계는 건너뜁니다.
-
-개인정보 보호와 도구 권한 검사를 함께 사용하려면 클라이언트와 Spring Security
-스타터를 추가하고 [설정](configuration.md)에서 두 기능을 선택하세요.
+클라이언트 Spring Boot 스타터는 개인정보 보호와 콘텐츠 검사 스타터를 포함해
+공통 서비스를 구성합니다. 분석기와 콘텐츠 검사 백엔드 의존성은 별도로 선택합니다.
+Spring Security 스타터는 선택 사항이며 개인정보 보호 스타터 없이도 사용할 수 있습니다.
 코어와 개인정보 보호 모듈은 Spring Security에 의존하지 않습니다.
+
+개인정보 보호, 권한 검사와 콘텐츠 검사 연동은 `spring-ai-boundary`를 공유해
+매 모델 호출 전에 실행할 단계를 조합합니다. 등록하지 않은 단계는 건너뜁니다.
 
 테스트 지원 모듈은 애플리케이션에서 개인정보 보호 동작을 검증하기 위한 테스트 전용
 API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행 가능한 사용 예제를 위한
@@ -106,7 +127,8 @@ API를 제공합니다. 벤치마크와 샘플은 각각 성능 측정과 실행
 | 역할 | 대표 공개 API |
 | --- | --- |
 | 클라이언트 구성 | `GuardrailsChatClientFactory`, `GuardrailsPolicy` |
-| 애플리케이션 API | `PrivacyService`, `PrivacySession` |
+| 개인정보 보호 API | `PrivacyService`, `PrivacySession` |
+| 콘텐츠 검사 | `InspectionService`, `ContentInspector`, `InspectionChatClientConfigurer` |
 | 분석기 확장 | `PiiAnalyzer`, `PiiRule` |
 | 도구 정책 | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI 연동 | `PrivacyChatClientConfigurer` |
@@ -165,9 +187,9 @@ Spring AI 연동에서는 요청이 정상적으로 끝나거나 오류 또는 �
 
 ## Spring AI 실행 흐름
 
-Spring AI 연동은 지원하는 모델과 도구 호출 흐름을 하나의 요청 세션 안에서 보호합니다.
-클라이언트에 이 라이브러리의 Spring Security 연동을 적용하면 모델에 제공할 도구와
-도구 실행 권한도 검사합니다.
+다음 흐름은 개인정보 보호를 사용하는 클라이언트를 보여줍니다. 도구 권한과 콘텐츠
+검사는 선택한 경우 실행합니다. 도구 결과를 받은 뒤의 호출을 포함해 매 모델 호출은
+설정된 요청 단계를 거칩니다.
 
 ```mermaid
 sequenceDiagram
@@ -181,6 +203,8 @@ sequenceDiagram
 
     P->>P: 허용된 도구만 목록에 유지<br/>(도구 권한 검사 적용 시)
 
+    P->>P: 모델 입력 콘텐츠 검사<br/>(콘텐츠 검사 적용 시)
+
     P->>M: 보호된 모델 요청
 
     opt 도구 호출
@@ -192,13 +216,14 @@ sequenceDiagram
         P->>T: 도구 실행
         T-->>P: 도구 결과
         P->>P: 도구 결과의 개인정보 토큰화
+        P->>P: 선택한 모델 요청 단계 다시 적용
         P-->>M: 보호된 도구 결과
     end
 
     M-->>P: 최종 응답
 
-    opt 출력 보호 사용
-        P->>P: 최종 응답 검사
+    opt 최종 응답 정책 사용
+        P->>P: 선택한 개인정보 보호와<br/>콘텐츠 검사 적용
     end
 
     P-->>A: 애플리케이션 출력

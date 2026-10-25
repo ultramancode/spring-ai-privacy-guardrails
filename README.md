@@ -20,12 +20,21 @@ Use these features independently or together. Analyzers identify sensitive value
 This library applies the findings and policies on supported Spring AI execution paths.
 
 <p align="center">
-  <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="PII detection, model input tokenization and per-tool original disclosure" width="100%"></a>
+  <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="PII tokenization and per-tool disclosure, with optional tool authorization and content inspection" width="100%"></a>
 </p>
 
-[View the full diagram](docs/images/hero.svg) · **Watch the demo:** [English](https://youtu.be/IeeA5ogIX_I) · [한국어](https://youtu.be/vir-x78e9j8)
+<p align="center">
+  <strong>Watch the demo:</strong>
+  <a href="https://youtu.be/IeeA5ogIX_I">English</a> ·
+  <a href="https://youtu.be/vir-x78e9j8">한국어</a>
+</p>
 
-**Featured in:** [Spring Blog](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/) · [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
+**Featured In**
+
+- **Spring Blog** — Featured in [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
+- **Spring AI Community** — Listed in [Awesome Spring AI's Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
+
+<br>
 
 ## Run the Sample
 
@@ -49,14 +58,14 @@ to check in RAG, MCP, Security and Inspection.
 ## Add Protection to an Application
 
 Use Java 17, Spring AI 2.0.0 and Spring Boot 4.0.0 or later, with an application-provided
-`ChatModel` whose model connection is already configured. The examples use the development
-version `0.4.0-SNAPSHOT`. See [local snapshot preparation and Maven setup](docs/getting-started.md#add-the-client-starter).
+`ChatModel` whose model connection is already configured. These examples use `0.4.0`.
+See [repository configuration and Maven setup](docs/getting-started.md#add-the-client-starter).
 
 Add the client starter:
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -81,8 +90,11 @@ configuration alone do not protect existing clients:
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy()
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+            .build();
 }
 ```
 
@@ -169,23 +181,10 @@ Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
 
 ## Security Boundary
 
-This library reduces the risk of accidental PII disclosure on supported Spring
-AI execution paths, but it is not a complete DLP system or a guarantee of legal
-compliance.
+This library reduces the risk of PII disclosure, but it does not replace a complete
+data loss prevention (DLP) system or guarantee legal compliance.
 
-Applications remain responsible for:
-
-- authentication, authorization policy design, application-owned execution
-  paths, and logging policies.
-- access control and data-retention policies for stored `ChatMemory`, vector
-  stores, and databases.
-- validating and tuning analyzer quality for the production environment.
-- protecting response metadata and non-text media outside the explicitly
-  supported reasoning text.
-- authentication and transport encryption for remote analyzers.
-
-Before using the library in production, review [Security](SECURITY.md) and the
-[Threat Model](docs/threat-model.md).
+See the [Threat Model](docs/threat-model.md) for protection scope and limitations.
 
 ## Build and Verify
 

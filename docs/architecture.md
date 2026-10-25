@@ -10,6 +10,9 @@ description: >-
 
 ## Responsibility Boundary
 
+The library provides privacy protection, tool authorization and content inspection.
+The following flow shows the privacy protection boundary.
+
 Spring AI Privacy Guardrails tokenizes PII detected by analyzers before sending
 data to a model, replacing it with request-scoped **opaque tokens**. These replacement
 strings do not directly reveal the original values. Immediately before tool
@@ -23,7 +26,7 @@ flowchart TD
     B --> C["Model"]
     C -. "Tool call" .-> D["Tool<br/>(originals only for permitted types)"]
     D -. "Tokenize PII<br/>in the result" .-> C
-    C --> E["Inspect final response<br/>(when output protection is enabled)"]
+    C --> E["Apply final-response PII policy<br/>(when output protection is enabled)"]
     E --> F["Application"]
 ```
 
@@ -37,66 +40,82 @@ The library protects data that crosses supported model, tool, and output
 boundaries. The optional Spring Security integration can also authorize tool
 discovery and execution.
 
-Clients select privacy protection, content inspection and tool authorization through
-`GuardrailsChatClientFactory` and `GuardrailsPolicy`.
-See [Configuration](configuration.md) for setup.
+## Client Composition
+
+`GuardrailsPolicy` selects privacy protection, tool authorization and content inspection
+independently. `GuardrailsChatClientFactory` combines the selected features with shared
+services and returns a `ChatClient.Builder`. The application calls `build()` to create
+its client.
+
+```mermaid
+flowchart LR
+    PRIVACY["Privacy<br/>PII tokenization and disclosure"] --> FACTORY["GuardrailsChatClientFactory"]
+    SECURITY["Security<br/>Tool authorization"] --> FACTORY
+    INSPECTION["Inspection<br/>Input and output content checks"] --> FACTORY
+    FACTORY --> CLIENT["ChatClient"]
+```
+
+The arrows show client composition. At runtime, the selected model-request stages execute
+in privacy, tool authorization, then content inspection order. Output protection and
+output inspection are configured separately. See [Configuration](configuration.md) for setup.
 
 ## Module Structure
 
-This project is a Gradle multi-module library that separates core privacy
-policy, Spring AI integration, and analyzer integrations.
+The modules separate feature implementations from client assembly and Spring Boot
+configuration. The diagram and table omit the common `spring-ai-privacy-guardrails-`
+prefix. Arrows point from a module to its direct dependency, not in request execution
+order. Modules with the same internal dependencies are grouped in one box.
 
-The diagram shows the main dependencies between this library's modules. Arrows
-point to the required module. Privacy protection and tool authorization can be
-used independently or applied together to the same `ChatClient`.
+The diagram shows the main library modules. Spring Boot starters are described below.
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "linear"}}}%%
 flowchart LR
-    CORE["core"]
-    CLIENT["Client factory"] --> SAI
-    CLIENT --> INSPECT["Inspection integration"]
-    CLIENTBOOT["Client starter"] --> CLIENT
-    CLIENTBOOT --> BASE
-    CLIENTBOOT --> INSPECTBOOT["Inspection starter"]
-    INSPECTBOOT --> INSPECT
+    CLIENT["chat-client"]
 
-    PRES["Presidio integration"] --> CORE
-    SAI["Spring AI integration"] --> CORE
-    OPEN["OpenNLP integration"] --> CORE
-    SEC["Spring Security integration"]
+    subgraph PRIVACY["Privacy"]
+        SAI["spring-ai"] --> CORE["core"]
+        ANALYZERS["presidio<br/>opennlp"] --> CORE
+    end
 
-    PRESBOOT["Presidio<br/>Spring Boot Starter"] --> PRES
-    BASE["Base<br/>Spring Boot Starter"] --> SAI
-    OPENBOOT["OpenNLP<br/>Spring Boot Starter"] --> OPEN
-    SECBOOT["Spring Security<br/>Spring Boot Starter"] --> SEC
+    subgraph SECURITY["Tool authorization"]
+        SEC["spring-security"]
+    end
 
-    PRESBOOT --> BASE
-    OPENBOOT --> BASE
+    subgraph INSPECTION["Content inspection"]
+        BACKENDS["inspection-rules<br/>inspection-onnx<br/>inspection-openai-compatible"] --> ICORE["inspection-core"]
+        ISA["inspection-spring-ai"] --> ICORE
+    end
+
+    CLIENT --> ISA
+    CLIENT --> SAI
+    SAI --> BOUNDARY["spring-ai-boundary"]
+    SEC --> BOUNDARY
+    ISA --> BOUNDARY
 ```
 
-The `core` module has no Spring dependency and provides detection resolution,
-PII tokenization, session management, and the local rule analyzer. The Presidio
-and OpenNLP integration modules add the corresponding analyzer integrations on
-top of these shared capabilities.
+`chat-client` accepts a tool-authorization configurer without a direct dependency on
+`spring-security`. The client starter has a compile-only Security dependency for
+optional integration. Applications add the Security starter when they need it.
 
-The Spring AI integration module connects `core` to `ChatClient`, model calls,
-and tool execution boundaries. The base Spring Boot starter assembles `core`
-with the Spring AI integration, while analyzer-specific Spring Boot starters
-add the corresponding analyzer integration.
+| Module | Responsibility and main internal dependencies |
+| --- | --- |
+| `core` | Detection resolution, PII tokenization, request sessions and local rules. No Spring dependency. |
+| `spring-ai` | Applies privacy protection to model, tool and output boundaries. Uses `core` and `spring-ai-boundary`. |
+| `spring-security` | Authorizes tool discovery and execution. Uses `spring-ai-boundary` and Spring Security Core. |
+| `inspection-core` | Provides `InspectionService`, inspector contracts and content policies. No Spring dependency. |
+| `inspection-spring-ai` | Applies model-input and final-output content inspection. Uses `inspection-core` and `spring-ai-boundary`. |
+| `spring-ai-boundary` | Composes the shared model-request stages used by privacy, tool authorization and content inspection. |
+| `chat-client` | Assembles selected features through `GuardrailsChatClientFactory`. Depends on `spring-ai` and `inspection-spring-ai`, and accepts a tool-authorization configurer for optional Security integration. |
+| `presidio`, `opennlp` | Add analyzer integrations on top of `core`. |
+| `inspection-rules`, `inspection-onnx`, `inspection-openai-compatible` | Provide content-inspection backends based on `inspection-core`. |
 
-The optional Spring Security integration uses Spring AI's tool-calling APIs and
-Spring Security Core. Its Spring Boot starter can be used independently of the
-base starter.
-
-The privacy, inspection and security integrations share
-`spring-ai-privacy-guardrails-spring-ai-boundary`.
-Before each model call, this shared module runs privacy protection, tool authorization,
-and content inspection in that order. Unconfigured stages are skipped.
-
-To use privacy protection and tool authorization together, add the client and
-Spring Security starters and select both features in the [client policy](configuration.md).
+The client Spring Boot starter includes the privacy and inspection starters, which configure
+the shared services. Analyzer and inspection backend dependencies are selected separately.
+The Spring Security starter is optional and can also be used without the privacy starter.
 The core and privacy modules do not depend on Spring Security.
+
+The privacy, security and inspection integrations share `spring-ai-boundary` to compose
+the stages that run before each model call. Unconfigured stages are skipped.
 
 The test-support module provides test-only APIs for verifying privacy behavior.
 Benchmarks and samples are repository-internal modules for performance
@@ -111,7 +130,8 @@ and are not part of the compatibility contract.
 | Role | Representative public APIs |
 | --- | --- |
 | Client assembly | `GuardrailsChatClientFactory`, `GuardrailsPolicy` |
-| Application API | `PrivacyService`, `PrivacySession` |
+| Privacy API | `PrivacyService`, `PrivacySession` |
+| Content inspection | `InspectionService`, `ContentInspector`, `InspectionChatClientConfigurer` |
 | Analyzer extension | `PiiAnalyzer`, `PiiRule` |
 | Tool policy | `ToolDisclosurePolicy`, `PrivacyToolCallbackFactory` |
 | Spring AI integration | `PrivacyChatClientConfigurer` |
@@ -178,10 +198,9 @@ the session lifecycle explicitly.
 
 ## Spring AI Execution Flow
 
-The Spring AI integration protects the supported model and tool flow within one
-request session. When this library's Spring Security integration is applied to
-the client, it also checks which tools can be shown to the model and whether
-the requested tools may execute.
+The following sequence shows a privacy-enabled client. Tool authorization and content
+inspection run when selected. Each model call, including one after a tool returns,
+passes through the configured request stages.
 
 ```mermaid
 sequenceDiagram
@@ -195,6 +214,8 @@ sequenceDiagram
 
     P->>P: Keep only authorized tools<br/>(with tool authorization)
 
+    P->>P: Inspect model input<br/>(with content inspection)
+
     P->>M: Protected model request
 
     opt Tool call
@@ -206,13 +227,14 @@ sequenceDiagram
         P->>T: Execute tool
         T-->>P: Tool result
         P->>P: Tokenize PII in the tool result
+        P->>P: Apply selected model-request stages again
         P-->>M: Protected tool result
     end
 
     M-->>P: Final response
 
-    opt Output protection enabled
-        P->>P: Inspect final response
+    opt Final-response policies enabled
+        P->>P: Apply selected PII protection<br/>and content inspection
     end
 
     P-->>A: Application output

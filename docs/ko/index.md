@@ -8,7 +8,7 @@ description: >-
 [English](../index.md) | **한국어**
 
 <!-- i18n-source: docs/index.md -->
-<!-- i18n-source-sha256: e03e1cf53b19bda61bde0df3e817ae9b0f7932c00d02feeeb986d4f6832552a3 -->
+<!-- i18n-source-sha256: 20ce12e06e0bb8c6a7b388f033772afc2a014ba4fda261a474478169d5064a75 -->
 
 **모델에는 탐지된 개인정보를 토큰으로 전달하고, 도구에는 필요한 원문만 공개합니다. 도구 결과는 다시 보호합니다.**
 
@@ -31,7 +31,7 @@ Inspector의 Local Tool에서는 모델에 토큰을 전달하고, 허용된 도
 
 ![개인정보 보호 Inspector의 Local Tool·RAG·MCP·Security·Inspection](../images/privacy-boundary-inspector-demo-ko.gif)
 
-[![모델과 도구 사이의 개인정보 보호 흐름](../images/hero.svg)](../images/hero.svg)
+[![모델·도구 사이의 개인정보 보호 흐름과 선택 가능한 도구 권한·콘텐츠 검사](../images/hero.svg)](../images/hero.svg)
 
 [큰 그림 보기](../images/hero.svg) · [아키텍처](architecture.md) · [문제 해결](troubleshooting.md)
 

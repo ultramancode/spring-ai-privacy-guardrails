@@ -288,7 +288,8 @@ node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
 ```
 
 The JavaScript tests run the rendering and request logic in Node.js with a lightweight DOM substitute.
-The Java checks run the local scenarios and compile the optional live-model tests.
+The Java checks run the local scenarios and verify that the optional live-model
+configuration starts and loads its custom PII rules, without contacting a model.
 Live model and analyzer checks require separate opt-in configuration described below.
 
 ## Opt-In OpenAI-Compatible Live Model Verification

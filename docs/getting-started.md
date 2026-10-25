@@ -22,26 +22,28 @@ The client starter supplies `GuardrailsChatClientFactory`.
 
 ## 1. Add the Client Starter
 
-These examples use the development version `0.4.0-SNAPSHOT`. First run `./gradlew publishToMavenLocal`
-from this repository. In the consuming app, use Gradle's `mavenLocal()` in your development repository
-configuration, or Maven's default local repository. For a released version, use the same actually
-published version for every Guardrails module. See [local snapshot setup](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/CONTRIBUTING.md#development).
+These examples use `0.4.0` from Maven Central. Use the same version for every Guardrails module.
+Local build setup for contributors is described in [Contributing](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/CONTRIBUTING.md#development).
 
 Add to `build.gradle`:
 
 ```gradle
+repositories {
+    mavenCentral()
+}
+
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
 }
 ```
 
-For Maven, add to `dependencies` in `pom.xml`:
+Maven uses Central by default. Add to `dependencies` in `pom.xml`:
 
 ```xml
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-chat-client-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -84,8 +86,11 @@ import org.springframework.context.annotation.Configuration;
 public class PrivacyConfiguration {
     @Bean
     ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
-        return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+        GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+                .privacy()
+                .build();
+        return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+                .build();
     }
 }
 ```
@@ -255,7 +260,7 @@ Add the Presidio starter alongside the [client starter](#add-the-client-starter)
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -265,7 +270,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -309,7 +314,7 @@ with application-supplied compatible OpenNLP models. Add it alongside the
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -319,7 +324,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -361,7 +366,8 @@ GuardrailsPolicy outputPolicy = GuardrailsPolicy.builder()
                 .outputProtection().tokenize()
                 .build())
         .build();
-ChatClient outputClient = guardrailsChatClientFactory.builder(chatModel, outputPolicy).build();
+ChatClient outputClient = guardrailsChatClientFactory.builder(chatModel, outputPolicy)
+        .build();
 ```
 
 Choose the output action through `outputProtection()` in the privacy settings.

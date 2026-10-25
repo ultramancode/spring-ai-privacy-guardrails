@@ -98,13 +98,18 @@ jobs:
       - name: Verify CycloneDX SBOM
         if: matrix.java == 21
         run: |
+          project_version=$(sed -n 's/^version=//p' gradle.properties)
+          if [[ -z "$project_version" ]]; then
+            echo "gradle.properties must declare version for SBOM verification" >&2
+            exit 1
+          fi
           identity_args=()
           if [[ "$GITHUB_REPOSITORY" != \
               "ultramancode/spring-ai-privacy-guardrails" ]]; then
             identity_args+=(--allow-noncanonical-source)
           fi
           ./scripts/verify-release-sbom.sh \
-            0.4.0-SNAPSHOT \
+            "$project_version" \
             build/reports/cyclonedx/bom.json \
             "${identity_args[@]}"
 

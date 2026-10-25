@@ -28,7 +28,7 @@ Follow the [setup and success checks](sample.md#run-the-inspector).
 
 [![Privacy Boundary Inspector with Local Tool, RAG, MCP, Security and Inspection](images/privacy-boundary-inspector-demo.gif)](images/privacy-boundary-inspector-demo.gif)
 
-[![Privacy enforcement between models and tools](images/hero.svg)](images/hero.svg)
+[![Privacy flow with optional tool authorization and content inspection](images/hero.svg)](images/hero.svg)
 
 [View the full diagram](images/hero.svg) · [Architecture](architecture.md) · [Troubleshooting](troubleshooting.md)
 

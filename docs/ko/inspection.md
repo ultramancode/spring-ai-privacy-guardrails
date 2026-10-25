@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 2ea1762d1aee3e62b3f86e54a5fc35286c714865c32caf2a20d7e4d265084259 -->
+<!-- i18n-source-sha256: fa8dfd8fb3cea7d3de447685ee0d8161d0f984da68a36828ed79b5022a8ba386 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -30,12 +30,12 @@ description: >-
 
 클라이언트 스타터에는 검사 백엔드가 포함되어 있지 않습니다.
 
-`build.gradle`의 예시는 다음과 같습니다. [개발 SNAPSHOT 준비](getting-started.md#add-the-client-starter)를 먼저 완료하세요.
+[Maven Central을 설정한](getting-started.md#add-the-client-starter) `build.gradle`에 다음 의존성을 추가합니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0"
 }
 ```
 
@@ -51,8 +51,11 @@ ContentInspector applicationRules() {
 
 @Bean
 ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().inspection().build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .inspection()
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+            .build();
 }
 ```
 
@@ -104,7 +107,8 @@ GuardrailsPolicy policy = GuardrailsPolicy.builder()
         .build())
     .build();
 
-ChatClient client = factory.builder(chatModel, policy).build();
+ChatClient client = factory.builder(chatModel, policy)
+        .build();
 ```
 
 팩토리에 사용할 서비스를 지정하고, 클라이언트 정책에서 검사를 선택해야 실행됩니다.
@@ -169,9 +173,12 @@ InspectionReport report = inspectionService.inspect(request);
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build())
+        .inspection(GuardrailsPolicy.Inspection.builder()
+                .finalOutputInspectionEnabled(true)
+                .build())
         .build();
-ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+        .build();
 ```
 
 출력 검사는 답변을 애플리케이션에 반환하기 전에 실행하며, `returnDirect`로
@@ -379,8 +386,8 @@ Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 프롬프트 인젝션 분류 성능을 이 영어 독성 테스트에서 추론하지 마세요.
 
 성공한 테스트는 토큰 창, 점수·임계값, 부분 결과를 기준 데이터와 비교합니다.
-[파일 준비 안내](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/scripts/inspection/README.md)와
-[실제 분류 설정](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java)을 참고하세요.
+[파일 준비 안내](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/scripts/inspection/README.md)와
+[실제 분류 설정](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java)을 참고하세요.
 
 ### 모델 요구 사항
 

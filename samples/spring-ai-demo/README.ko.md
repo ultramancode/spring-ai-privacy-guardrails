@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 4fc9967f4a96c72608c3c407f8b7b04deb313d83a3436f7aeeda92e1cb04a10d -->
+<!-- i18n-source-sha256: db90d2def2c096b314f03b461a86928a52f3d5761a7394df71112e6ec778f092 -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
@@ -279,7 +279,8 @@ node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
 ```
 
 JavaScript 테스트는 간단한 DOM 대역을 사용해 Node.js에서 렌더링과 요청 로직을 실행합니다.
-Java 검사는 로컬 시나리오를 실행하고 선택적 실제 모델 테스트를 컴파일합니다.
+Java 검사는 로컬 시나리오를 실행하고, 모델 호출 없이 실제 모델 테스트 설정의 기동과
+사용자 정의 개인정보 규칙을 검증합니다.
 실제 모델과 분석기 검사는 아래에서 설명하는 별도의 활성화 설정이 필요합니다.
 
 ## 선택적 OpenAI 호환 실제 모델 검증

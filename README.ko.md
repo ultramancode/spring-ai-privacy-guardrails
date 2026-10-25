@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: ca80ea83116ae915602929bf0c647b504c382b6f9874a0e2b2f3c5dad9d35bf8 -->
+<!-- i18n-source-sha256: eec9c473e532ccf266bea430fb4fbd99bb949e288fef06b1bf93ab4ad3d92811 -->
 
 **모델에 전달할 개인정보를 토큰으로 바꾸고, 도구에는 필요한 원문만 공개합니다. 도구 결과는 다시 보호합니다.**
 
@@ -23,12 +23,21 @@
 이 라이브러리는 지원되는 Spring AI 호출 경로에서 탐지 결과와 정책을 적용합니다.
 
 <p align="center">
-  <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="개인정보 탐지, 모델 입력 토큰화와 도구별 원문 공개 흐름" width="100%"></a>
+  <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="개인정보 토큰화와 도구별 원문 공개 흐름, 선택 가능한 도구 권한과 콘텐츠 검사" width="100%"></a>
 </p>
 
-[큰 그림 보기](docs/images/hero.svg) · **데모 영상:** [한국어](https://youtu.be/vir-x78e9j8) · [English](https://youtu.be/IeeA5ogIX_I)
+<p align="center">
+  <strong>데모 영상:</strong>
+  <a href="https://youtu.be/vir-x78e9j8">한국어</a> ·
+  <a href="https://youtu.be/IeeA5ogIX_I">English</a>
+</p>
 
-**외부 소개:** [Spring 공식 블로그](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/) · [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
+**외부 소개**
+
+- **Spring 공식 블로그** — [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)에 소개
+- **Spring AI Community** — [Awesome Spring AI의 Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)에 소개
+
+<br>
 
 ## 샘플 실행
 
@@ -51,14 +60,14 @@ RAG·MCP·Security·Inspection의 관찰 항목은 [샘플 가이드](docs/ko/sa
 ## 애플리케이션에 적용
 
 Java 17, Spring AI 2.0.0, Spring Boot 4.0.0 이상이며, 모델 연결이 구성된 `ChatModel`이
-있는 앱을 전제로 합니다. 아래 `0.4.0-SNAPSHOT`은 개발 버전입니다.
-[로컬 SNAPSHOT 준비와 Maven 설정](docs/ko/getting-started.md#add-the-client-starter)을 확인하세요.
+있는 앱을 전제로 합니다. 예제는 `0.4.0`을 사용합니다.
+[저장소 설정과 Maven 안내](docs/ko/getting-started.md#add-the-client-starter)를 확인하세요.
 
 클라이언트 스타터를 추가합니다.
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -82,8 +91,11 @@ spring:
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy()
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+            .build();
 }
 ```
 
@@ -163,20 +175,10 @@ Boot 스타터의 Security 버전은 Spring Boot BOM이 선택합니다.
 
 ## 보안 경계
 
-이 라이브러리는 지원되는 Spring AI 실행 경로에서 우발적으로 개인정보가 공개될 위험을
-줄이지만, 완전한 DLP 시스템이나 법률 준수 보장은 아닙니다.
+이 라이브러리는 개인정보 노출 위험을 줄이지만, 완전한 데이터 유출 방지(DLP) 시스템을
+대체하거나 법률 준수를 보장하지는 않습니다.
 
-애플리케이션은 다음 영역을 별도로 관리해야 합니다.
-
-- 인증, 권한 정책 설계, 애플리케이션 자체 실행 경로와 로깅 정책
-- 저장된 `ChatMemory`·벡터 저장소·데이터베이스의 접근 제어 및 데이터 보존 정책
-- 운영 환경에 맞는 분석기 품질 검증과 조정
-- 라이브러리가 명시적으로 지원하는 추론 텍스트 외의 응답 메타데이터와 비텍스트 미디어
-  보호
-- 원격 분석기의 인증 및 전송 암호화
-
-운영 환경에서 사용하기 전에 [보안 정책](SECURITY.md)과
-[위협 모델](docs/ko/threat-model.md)을 확인하세요.
+자세한 보호 범위와 한계는 [위협 모델](docs/ko/threat-model.md)을 참고하세요.
 
 ## 빌드와 검증
 

@@ -27,12 +27,12 @@ For a rules-based setup, add these modules to an application that provides a Spr
 
 The client starter does not include an inspection backend.
 
-For `build.gradle`, use the following after [preparing the development snapshot](getting-started.md#add-the-client-starter):
+For `build.gradle`, add the following with [Maven Central configured](getting-started.md#add-the-client-starter):
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0"
 }
 ```
 
@@ -48,8 +48,11 @@ ContentInspector applicationRules() {
 
 @Bean
 ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().inspection().build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .inspection()
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+            .build();
 }
 ```
 
@@ -102,7 +105,8 @@ GuardrailsPolicy policy = GuardrailsPolicy.builder()
         .build())
     .build();
 
-ChatClient client = factory.builder(chatModel, policy).build();
+ChatClient client = factory.builder(chatModel, policy)
+        .build();
 ```
 
 To run inspection, set the services on the factory and select inspection in the client policy.
@@ -167,9 +171,12 @@ Output inspection is disabled by default. Enable it on the configured client wit
 
 ```java
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build())
+        .inspection(GuardrailsPolicy.Inspection.builder()
+                .finalOutputInspectionEnabled(true)
+                .build())
         .build();
-ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+        .build();
 ```
 
 Output inspection checks the assistant text, including `returnDirect` tool
@@ -381,8 +388,8 @@ bean and `inspection()` policy as in [input inspection setup](#set-up-input-insp
 These English toxicity tests do not establish Korean detection or prompt-injection classification performance.
 
 Passing tests compare token windows, scores, thresholds and partial results with reference data.
-See [file preparation](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/scripts/inspection/README.md) and the
-[actual classification settings](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java).
+See [file preparation](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/scripts/inspection/README.md) and the
+[actual classification settings](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java).
 
 ### Model requirements
 

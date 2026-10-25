@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="820" viewBox="0 0 1600 820" role="img" aria-labelledby="title desc">
   <title id="title">Spring AI Privacy Guardrails</title>
-  <desc id="desc">PII detection results drive privacy policy enforcement across model and tool calls. Detected model-bound PII is replaced with opaque tokens that do not directly reveal the original values, while each scoped tool receives only explicitly allowed original values and its result is protected again. Optional Spring Security controls which tools the user can access and execute.</desc>
+  <desc id="desc">Privacy protection, tool authorization and content inspection can be selected independently. The privacy flow replaces detected model-bound PII with opaque tokens, restores only policy-allowed originals for tools and protects their results again. Spring Security controls tool visibility and execution. Content inspection checks model input and optional final output with rules, local ONNX or HTTP models.</desc>
 
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
@@ -87,7 +87,7 @@
     <text x="26" y="42" class="sans node-title">PII detection</text>
     <text x="26" y="76" class="sans node-body">Local rules · Presidio · OpenNLP · Custom</text>
     <rect x="24" y="106" width="324" height="40" rx="12" fill="#211d3c"/>
-    <text x="186" y="132" text-anchor="middle" class="mono" font-size="15" fill="#c9b6ff">PHONE · CUSTOMER_ID</text>
+    <text x="186" y="132" text-anchor="middle" class="mono" font-size="15" fill="#c9b6ff">PHONE_NUMBER · CUSTOMER_ID</text>
     <text x="26" y="181" class="sans tiny" font-weight="700">DETECTORS ANSWER “WHAT”</text>
   </g>
 
@@ -96,7 +96,7 @@
   <!-- Guardrail boundary -->
   <g transform="translate(924 264)">
     <rect width="356" height="292" rx="30" fill="#0f2a36" stroke="#38d6d0" stroke-width="3"/>
-    <text x="28" y="48" class="sans node-title" fill="#38d6d0">Guardrail boundary</text>
+    <text x="28" y="48" class="sans node-title" fill="#38d6d0">Privacy boundary</text>
     <text x="28" y="83" class="sans node-body">Validate · Normalize · Tokenize</text>
     <text x="28" y="108" class="sans node-body">Scoped disclosure</text>
 
@@ -122,12 +122,22 @@
         fill="none" stroke="#52e29a" stroke-width="3" marker-end="url(#arrowGreen)"/>
 
   <!-- Optional tool authorization -->
-  <g transform="translate(106 602)">
-    <rect width="4" height="100" rx="2" fill="#62a7ff"/>
+  <g transform="translate(106 574)">
+    <rect width="4" height="96" rx="2" fill="#62a7ff"/>
     <text x="24" y="22" class="sans node-title" style="fill: #8bbcff">OPTIONAL SPRING SECURITY</text>
     <text x="24" y="56" class="sans node-body" style="font-size: 18px">
-      <tspan x="24">Control which tools the user</tspan>
-      <tspan x="24" dy="26">can access and execute.</tspan>
+      <tspan x="24">Control tool visibility and execution</tspan>
+      <tspan x="24" dy="26">using the current user's permissions.</tspan>
+    </text>
+  </g>
+
+  <!-- Optional content inspection -->
+  <g transform="translate(106 704)">
+    <rect width="4" height="100" rx="2" fill="#af8cff"/>
+    <text x="24" y="22" class="sans node-title" style="fill: #c9b6ff">OPTIONAL CONTENT INSPECTION</text>
+    <text x="24" y="56" class="sans node-body" style="font-size: 18px">
+      <tspan x="24">Inspect model input and optional output.</tspan>
+      <tspan x="24" dy="26">Rules · local ONNX · HTTP models</tspan>
     </text>
   </g>
 

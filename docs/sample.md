@@ -23,13 +23,11 @@ service accounts or API keys are required. The first run needs network access to
 ```bash
 git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
 cd spring-ai-privacy-guardrails
-git checkout 516982fd6644f50f38b2ff3b6c4ce0a28c2fab39
+git checkout v0.4.0
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-This commit includes the presets used by this development guide. If you already have that code,
-run only the final command from the repository root. After startup, open `http://127.0.0.1:8080`.
-The server accepts local connections only.
+After startup, open `http://127.0.0.1:8080`. The server accepts local connections only.
 
 In **Local Tool**, check model raw exposure `0/4`, allowed original restoration `1/1`, protected tool
 results and `PASS`. An open page confirms the server is running. These metrics check protection of
@@ -45,7 +43,7 @@ the four fixed example values. See [metric interpretation](#local-tool).
 | Inspection | 0 model calls on blocked input, 1 call and withheld output on blocked output, passing cases | [Inspection setup](inspection.md) |
 
 After the fixed examples, try your own synthetic input through the [input API](#inspect-results-through-the-api),
-or choose analyzer and real-model profiles in the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/samples/spring-ai-demo/README.md).
+or choose analyzer and real-model profiles in the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md).
 See [Troubleshooting](troubleshooting.md) if results differ.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">

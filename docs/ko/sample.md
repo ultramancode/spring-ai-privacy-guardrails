@@ -9,7 +9,7 @@ description: >-
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: 6586fd961c1bb1a8a142c60b41ad00668620b17a23032015412767a80f48455e -->
+<!-- i18n-source-sha256: 2de2ac4dc4b77c906104eb2f6e1120973ffbf0ab4fd12b6dd0b32b8c854c6714 -->
 
 샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
 보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수
@@ -27,12 +27,11 @@ API 키가 필요하지 않습니다. 처음 실행할 때 Gradle과 의존성�
 ```bash
 git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
 cd spring-ai-privacy-guardrails
-git checkout 516982fd6644f50f38b2ff3b6c4ce0a28c2fab39
+git checkout v0.4.0
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-위 커밋은 이 개발 문서의 프리셋 예제를 포함합니다. 이미 해당 코드를 받았다면 저장소 루트에서
-마지막 명령만 실행하세요. 서버가 시작되면 `http://127.0.0.1:8080`을 엽니다. 로컬 접속만 허용합니다.
+서버가 시작되면 `http://127.0.0.1:8080`을 엽니다. 로컬 접속만 허용합니다.
 
 **Local Tool**에서 모델 원문 노출 `0/4`, 허용 원문 복원 `1/1`, 도구 결과 재보호와 `PASS`를
 확인하세요. 화면이 열리는 것은 서버 실행 확인이며, 이 값들은 고정된 네 개인정보 값의 보호 확인입니다.
@@ -47,7 +46,7 @@ git checkout 516982fd6644f50f38b2ff3b6c4ce0a28c2fab39
 | Inspection | 입력 차단 전 호출 0회, 출력 차단 시 호출 1회와 응답 비공개, 통과 사례 | [검사 설정](inspection.md) |
 
 고정 예제 다음에는 [사용자 입력 API](#inspect-results-through-the-api)로 자신의 합성 입력을 확인하거나
-[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/samples/spring-ai-demo/README.ko.md)의 분석기·실제 모델 프로필을 선택하세요.
+[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md)의 분석기·실제 모델 프로필을 선택하세요.
 예상과 다르면 [문제 해결](troubleshooting.md)을 참고하세요.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">

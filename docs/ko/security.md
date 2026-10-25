@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: d7d392a0ebd6c4f5e6dd3af2b8192489165aa9c69cd2f5d81ff1dd17cfd14a9c -->
+<!-- i18n-source-sha256: be5fbe2d12df77e82cbe259d66effb167d812986e5284438ca93f48ac127a7e6 -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -45,13 +45,13 @@ Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라
 ## Spring Boot 스타터 추가
 
 `ChatModel`이 구성된 기존 Spring AI 앱에서 시작합니다. 다음 의존성 예제는
-`0.4.0-SNAPSHOT`을 사용하므로 [로컬 SNAPSHOT 준비](getting-started.md#add-the-client-starter)를 먼저 완료하세요.
+Maven Central의 `0.4.0`을 사용합니다. [저장소 설정](getting-started.md#add-the-client-starter)을 확인하세요.
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0"
 }
 ```
 
@@ -61,7 +61,7 @@ dependencies {
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-security-spring-boot-starter</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -144,7 +144,9 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 @Bean
 ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .toolAuthorization(true)
+            .build();
     return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
             .defaultTools(customerLookupToolCallback)
             .build();
@@ -224,7 +226,9 @@ ChatClient customToolAdvisorClient(
         GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback
 ) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .toolAuthorization(true)
+            .build();
     ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
     return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)
             .defaultTools(customerLookupToolCallback)
@@ -380,9 +384,13 @@ ToolAuthorizationChatClientFactory authorizationFactory = ToolAuthorizationChatC
         .build();
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .toolAuthorization(authorizationFactory::prepareToolAuthorization)
-        .defaultPolicy(GuardrailsPolicy.builder().toolAuthorization(true).build())
+        .defaultPolicy(GuardrailsPolicy.builder()
+                .toolAuthorization(true)
+                .build())
         .build();
-ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel).defaultTools(customerLookupToolCallback).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel)
+        .defaultTools(customerLookupToolCallback)
+        .build();
 ```
 
 개인정보 보호나 콘텐츠 검사를 추가하려면 해당 서비스를 전달하고 정책에서 선택하세요.
@@ -405,7 +413,10 @@ ChatClient toolSearchClient(
         GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolIndex toolIndex
 ) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().toolAuthorization(true).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy()
+            .toolAuthorization(true)
+            .build();
     return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy,
                     ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();

@@ -8,7 +8,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 75e482a620990019443504732266419dc9661ac4ec829b46a47f6a144963e404 -->
+<!-- i18n-source-sha256: 92f2f6090f403ef0f94927477e7fc3a2cec230419f600e095413ae602b8e14e8 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
@@ -19,7 +19,7 @@ description: >-
 Spring AI 모델 연동 모듈과 함께 클라이언트 스타터를 추가합니다.
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
 ```
 
 Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인정보 보호와 검사 연동을
@@ -51,8 +51,11 @@ Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인�
 ```java
 @Bean
 ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+            .privacy()
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+            .build();
 }
 ```
 
@@ -137,8 +140,10 @@ GuardrailsPolicy privacyOnly = supportPolicy.mutate()
         .toolAuthorization(false)
         .build();
 
-ChatClient inputClient = guardrailsChatClientFactory.builder(chatModel, inputPolicy).build();
-ChatClient privacyClient = guardrailsChatClientFactory.builder(chatModel, privacyOnly).build();
+ChatClient inputClient = guardrailsChatClientFactory.builder(chatModel, inputPolicy)
+        .build();
+ChatClient privacyClient = guardrailsChatClientFactory.builder(chatModel, privacyOnly)
+        .build();
 ```
 
 `privacy(false)`와 `inspection(false)`는 해당 기능 전체를 제외합니다.
@@ -154,12 +159,15 @@ ChatClient privacyClient = guardrailsChatClientFactory.builder(chatModel, privac
 ```java
 @Bean
 GuardrailsPolicy defaultGuardrailsPolicy() {
-    return GuardrailsPolicy.builder().privacy().build();
+    return GuardrailsPolicy.builder()
+            .privacy()
+            .build();
 }
 
 @Bean
 ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    return guardrailsChatClientFactory.builder(chatModel).build();
+    return guardrailsChatClientFactory.builder(chatModel)
+            .build();
 }
 ```
 
@@ -205,7 +213,10 @@ Factory는 빌더를 복사하면서 Tool Search를 포함한 Advisor 타입을 
 GuardrailsChatClientFactory guardrailsChatClientFactory = GuardrailsChatClientFactory.builder()
         .privacyService(privacyService)
         .inputInspectionService(inspectionService)
-        .defaultPolicy(GuardrailsPolicy.builder().privacy().inspection().build())
+        .defaultPolicy(GuardrailsPolicy.builder()
+                .privacy()
+                .inspection()
+                .build())
         .build();
 ```
 

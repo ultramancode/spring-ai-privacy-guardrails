@@ -22,6 +22,8 @@ root.
 
 ## Run
 
+For Git/JDK setup through the first success checks, follow the [sample setup](../../docs/sample.md#run-the-inspector). Run the commands below from that prepared repository root.
+
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```

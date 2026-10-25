@@ -17,6 +17,7 @@ nav = [
     { "Home" = "index.md" },
     { "Getting Started" = "getting-started.md" },
     { "Configuration" = "configuration.md" },
+    { "Troubleshooting" = "troubleshooting.md" },
     { "Reference" = [
       { "Sample / Demo Guide" = "sample.md" },
       { "Privacy Protection" = "privacy.md" },
@@ -31,6 +32,7 @@ nav = [
     { "홈" = "ko/index.md" },
     { "시작하기" = "ko/getting-started.md" },
     { "설정" = "ko/configuration.md" },
+    { "문제 해결" = "ko/troubleshooting.md" },
     { "참고 문서" = [
       { "샘플 / 데모 가이드" = "ko/sample.md" },
       { "개인정보 보호" = "ko/privacy.md" },
@@ -50,6 +52,7 @@ translated_pages = [
   "",
   "getting-started/",
   "configuration/",
+  "troubleshooting/",
   "sample/",
   "privacy/",
   "security/",

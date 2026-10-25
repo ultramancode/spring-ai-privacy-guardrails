@@ -7,160 +7,62 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 057b466170a502eb5e06c8e2d830edbb56be4db022700e6148f503871cb709ee -->
+<!-- i18n-source-sha256: ca80ea83116ae915602929bf0c647b504c382b6f9874a0e2b2f3c5dad9d35bf8 -->
+
+**모델에 전달할 개인정보를 토큰으로 바꾸고, 도구에는 필요한 원문만 공개합니다. 도구 결과는 다시 보호합니다.**
+
+**[API 키 없이 데모 실행](docs/ko/sample.md#run-the-inspector)** · **[기존 Spring AI 앱에 적용](#애플리케이션에-적용)**
+
+| 원하는 동작 | 사용할 기능 |
+| --- | --- |
+| 모델에는 탐지된 개인정보를 감추고 도구별로 원문 공개 범위를 지정 | [Privacy](docs/ko/privacy.md) |
+| 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행할 도구를 제한 | [Tool Authorization](docs/ko/security.md) |
+| 규칙·로컬 ONNX·HTTP 검사 모델로 요청과 응답을 점검 | [Content Inspection](docs/ko/inspection.md) |
+
+세 기능은 독립적으로 선택하거나 함께 사용할 수 있습니다. 분석기는 민감정보를 식별하고,
+이 라이브러리는 지원되는 Spring AI 호출 경로에서 탐지 결과와 정책을 적용합니다.
 
 <p align="center">
-  <img src="docs/images/hero.svg" alt="Spring AI Privacy Guardrails 실행 경계" width="100%">
+  <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="개인정보 탐지, 모델 입력 토큰화와 도구별 원문 공개 흐름" width="100%"></a>
 </p>
 
-<p align="center">
-  <strong>데모 영상:</strong>
-  <a href="https://youtu.be/vir-x78e9j8">한국어</a> ·
-  <a href="https://youtu.be/IeeA5ogIX_I">English</a>
-</p>
+[큰 그림 보기](docs/images/hero.svg) · **데모 영상:** [한국어](https://youtu.be/vir-x78e9j8) · [English](https://youtu.be/IeeA5ogIX_I)
 
-**외부 소개**
-
-- **Spring 공식 블로그** — [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)에 소개
-- **Spring AI Community** — [Awesome Spring AI의 Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)에 소개
-
-<br>
-
-**내장 및 확장 가능한 분석기로 개인정보를 탐지하고, 원문 값이 어디까지 이동할 수
-있는지 통제합니다.**
-
-`ChatClient`에 보호를 적용하면 **개인정보 토큰화**로 모델에 전달할 입력을 보호합니다.
-분석기가 탐지한 개인정보 원문을 요청별 **불투명 토큰(opaque token)**으로 바꾸며,
-이 대체 문자열은 원문 값을 직접 드러내지 않습니다.
-보호된 도구를 호출할 때는 정책이 허용한 엔티티 유형의 값만 실행 직전에 원문으로
-복원하고, 도구 결과는 다시 보호합니다. 필요하면 최종 응답 검사도 활성화할 수 있습니다.
-
-Spring AI Privacy Guardrails는 Spring에 의존하지 않는 개인정보 보호 `core`와 Spring AI
-통합을 결합해 채팅, RAG, 메모리, 도구 호출과 출력 경계에 개인정보 보호 정책을
-적용합니다.
-
-선택적으로 [Spring Security 연동](docs/ko/security.md)을 추가해 모델에 공개할 도구를
-제한하고, 도구 실행 전에 권한을 검사할 수 있습니다. 도구 권한 검사는 개인정보 보호
-기능 없이도 사용할 수 있습니다.
-
-선택적 [콘텐츠 검사](docs/ko/inspection.md)는 애플리케이션에서 정의한
-규칙, 로컬 ONNX 분류 모델이나 HTTP 검사 모델로 모델 입력과 출력을 검사합니다.
-개인정보 보호 및 도구 권한 검사와 함께 사용하거나 독립적으로 사용할 수 있습니다.
-
-## 왜 필요한가
-
-**탐지는 첫 단계입니다. 원문이 어디까지 전달되는지도 통제해야 합니다.**
-
-모델에는 탐지된 개인정보를 불투명 토큰으로 전달하고, 도구에는 정책이 허용한 원문만 복원합니다.
-도구 결과는 모델에 다시 전달하기 전에 보호합니다.
-
-선택적으로 Spring Security를 연동하면 모델에 제공할 도구를 사용자 권한에 따라 제한하고,
-실행 직전에도 권한을 확인합니다.
-
-```mermaid
-flowchart TD
-    A["입력 · 메모리 · RAG"] --> B["개인정보 탐지 후<br/>탐지된 값 토큰화"]
-    B --> C["모델"]
-    C -. "도구 호출" .-> D["도구<br/>(허용된 유형만 원문으로 전달)"]
-    D -. "결과의 개인정보<br/>토큰화" .-> C
-    C --> E["최종 응답 검사<br/>(출력 보호 사용 시)"]
-    E --> F["애플리케이션"]
-```
+**외부 소개:** [Spring 공식 블로그](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/) · [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
 
 ## 샘플 실행
 
-기본 샘플에는 로컬 `ChatModel`이 포함되어 있어 외부 모델 API 키가 필요하지 않습니다.
-JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행하세요.
+기본 샘플은 로컬 모델과 고정 예제로 보호 흐름을 보여줍니다. 외부 서비스 계정이나 모델
+API 키가 필요하지 않습니다. JDK 17을 설치하고 [저장소 준비 안내](docs/ko/sample.md#run-the-inspector)에 따라
+저장소 루트에서 실행하세요.
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-`http://127.0.0.1:8080`을 열면 샘플 전용 **Privacy Boundary Inspector**를 사용할 수
-있습니다. 모델과 도구가 실제로 전달받은 값을 비교할 수 있습니다.
-
-- **Local Tool**은 탐지된 개인정보가 모델에 전달되기 전에 불투명 토큰으로 바뀌는 과정을
-  보여줍니다. 도구에는 허용된 `CUSTOMER_ID`만 원문으로 복원하며, 도구 결과는 모델에
-  다시 전달하기 전에 보호합니다.
-- **RAG**는 검색된 원문 문서와 모델이 전달받은 보호된 프롬프트를 비교합니다.
-- **MCP**는 Streamable HTTP를 통한 로컬 MCP 도구 호출에서 같은 보호 과정을 보여줍니다.
-- **Security**는 일반 직원과 고객 지원 담당자의 도구 공개·실행 권한을 비교하고,
-  허용된 호출에서 개인정보가 보호되는 모습을 보여줍니다.
-- **Inspection**은 입력·출력 검사에서 프롬프트 인젝션과 모욕적 응답을 차단하는 사례와
-  검사를 통과하는 사례를 비교합니다.
+`http://127.0.0.1:8080`의 **Local Tool**에서 모델 원문 노출 `0/4`, 허용 원문 복원 `1/1`,
+도구 결과 재보호와 `PASS`를 확인하세요. 이 수치는 고정 예제의 확인 결과입니다.
+RAG·MCP·Security·Inspection의 관찰 항목은 [샘플 가이드](docs/ko/sample.md)에 있습니다.
 
 <p align="center">
-  <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델에서 관찰된 고정 예제 데이터의 개인정보 원문 0건과 범위가 지정된 도구 공개 1건을 보여주는 Privacy Boundary Inspector" width="960">
+  <img src="docs/images/privacy-boundary-inspector-demo-ko.gif" alt="모델에는 토큰, 허용된 도구에는 고객번호 원문을 전달하는 Inspector" width="960">
 </p>
-
-데모의 탐지 규칙에 해당하지 않는 텍스트는 로컬 모델이 변경하지 않고 반환할 수 있으며,
-Inspector는 불투명 토큰 매핑을 노출하지 않습니다. Local Tool, RAG, MCP, Security, Inspection 데모와 선택형
-Presidio·OpenNLP 구성 및 실제 모델 연동 방법은
-[샘플 가이드](samples/spring-ai-demo/README.ko.md)에 설명되어 있습니다.
-
-기본 저장소 검증 과정에서는 원격 모델을 호출하지 않습니다. 이에 대응하는 재현 가능한
-자동 검증 범위는
-[개인정보 보호 경계 검증 매트릭스](docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
-참고하세요.
 
 ## 애플리케이션에 적용
 
-단계별 설정 방법은 [시작하기](docs/ko/getting-started.md)를 참고하세요.
+Java 17, Spring AI 2.0.0, Spring Boot 4.0.0 이상이며, 모델 연결이 구성된 `ChatModel`이
+있는 앱을 전제로 합니다. 아래 `0.4.0-SNAPSHOT`은 개발 버전입니다.
+[로컬 SNAPSHOT 준비와 Maven 설정](docs/ko/getting-started.md#add-the-client-starter)을 확인하세요.
 
-다음 예제는 클라이언트 스타터와 애플리케이션이 제공하는 `ChatModel`을 사용합니다.
-
-### PII 분석기 선택
-
-PII 분석기는 **무엇이 민감한 정보인지** 판별합니다. Privacy Guardrails는 탐지한 원문
-값이 모델, RAG, 메모리, 도구, MCP 및 출력 경계 중 **어디까지 전달될 수 있는지**
-제어합니다.
-
-| 분석기 | 적합한 경우 |
-| --- | --- |
-| Presidio | 자연어에 포함된 다양한 PII 유형을 탐지할 때 |
-| 로컬 규칙 (`PiiRule`) | 내장 식별자와 애플리케이션 전용 규칙으로 탐지할 때 |
-| Apache OpenNLP | 애플리케이션이 보유한 호환 NER 모델을 JVM 안에서 실행할 때 |
-
-다양한 PII 유형을 탐지하려면 Presidio를 기본 선택지로 권장합니다.
-
-Presidio를 사용하려면 외부 Presidio Analyzer 서비스가 필요합니다. OpenNLP는 JVM
-안에서 실행되며, 애플리케이션이 호환되는 모델을 제공해야 합니다.
-
-### 스타터 선택
-
-클라이언트 스타터에 필요한 분석기·권한 스타터를 추가하세요.
-
-| 필요한 기능 | 추가할 스타터 |
-| --- | --- |
-| 정책에 따른 클라이언트 구성과 개인정보 보호·검사 | `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` |
-| Presidio 연동 | `spring-ai-privacy-guardrails-presidio-spring-boot-starter` |
-| Apache OpenNLP 연동 | `spring-ai-privacy-guardrails-opennlp-spring-boot-starter` |
-| 사용자별 도구 공개·실행 권한 검사 | `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` |
-
-클라이언트, Presidio와 OpenNLP 스타터에는
-`spring-ai-privacy-guardrails-spring-boot-starter`가 포함됩니다.
-이 기본 개인정보 보호 스타터를 별도로 추가할 필요는 없습니다.
-
-도구 권한 검사만 사용하는 경우에는 PII 분석기를 설정할 필요가 없습니다.
-
-콘텐츠 검사는 `0.4.0` 이상에서 사용할 수 있으며, 검사기 구현도 선택해야 합니다.
-[검사 설정 안내](docs/ko/inspection.md#입력-검사-설정)에서 설정 방법을 확인하세요.
-
-스타터 의존성을 추가하는 것만으로는 보호 기능이 적용되지 않습니다. 아래 예제와 각
-가이드를 참고해 필요한 설정을 완료하세요.
-
-### 의존성과 기본 설정
-
-아래 예제는 버전 `0.4.0-SNAPSHOT`을 사용합니다.
-
-외부 분석 서비스 없이 시작하려면 클라이언트 스타터와 Java로 정의한 애플리케이션 규칙을
-사용할 수 있습니다.
+클라이언트 스타터를 추가합니다.
 
 ```gradle
 dependencies {
     implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
 }
 ```
+
+`src/main/resources/application.yml`에서 내장 프리셋을 선택합니다. 사용자 정의 규칙 Bean은 필요하지 않습니다.
 
 ```yaml
 spring:
@@ -169,33 +71,13 @@ spring:
       rules:
         enabled: true
         presets: [COMMON, KR]
-        include: [employee-id]
 ```
 
-```java
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
+`COMMON`은 이메일·카드번호, `KR`은 한국 휴대전화번호·주민등록번호의 지원 형식을 탐지합니다.
+이름·주소 전반을 탐지하는 기능은 아닙니다. [지원 범위와 다른 분석기 선택](docs/ko/getting-started.md#choose-an-analyzer)을 참고하세요.
 
-@Bean
-PiiRule employeeIdRule() {
-    PatternDefinition pattern = PatternDefinition.builder()
-            .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
-            .score(0.90)
-            .build();
-    return PatternPiiRule.builder()
-            .id("employee-id")
-            .entityType("EMPLOYEE_ID")
-            .addPattern(pattern)
-            .build();
-}
-```
-
-이 규칙은 `EMP-1234` 형식만 탐지하는 애플리케이션 전용 예제입니다. 일반적인 개인정보
-탐지 성능을 의미하지 않으므로, 운영에 사용할 분석기는 해당 환경을 대표하는 데이터로
-별도 검증해야 합니다.
-
-### ChatClient에 보호 적용
-
-설정한 정책을 적용할 클라이언트는 Factory로 생성합니다.
+애플리케이션의 `@Configuration` 클래스에서 보호된 클라이언트를 생성합니다.
+의존성과 분석기 설정만으로 기존 클라이언트가 모두 보호되지는 않습니다.
 
 ```java
 @Bean
@@ -205,126 +87,49 @@ ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory gu
 }
 ```
 
-콘텐츠 검사와 도구 권한도 같은 Factory를 사용합니다. 기능 선택과 클라이언트별 정책은
-[설정](docs/ko/configuration.md)을 참고하세요.
+서비스에서 `@Qualifier("privacyChatClient")`로 이 빈을 주입받아 호출합니다.
+전체 import와 클래스는 [시작하기](docs/ko/getting-started.md#create-a-protected-client)에 있습니다.
 
-직접 호출하는 `ChatModel`은 자동 보호 범위에 포함되지 않습니다. 파생 클라이언트,
-분석기 조합과 실패 정책은 [개인정보 보호](docs/ko/privacy.md)를 참고하세요.
+```java
+String response = privacyChatClient.prompt()
+        .user("Contact alice@example.com or 010-2345-6789.")
+        .call()
+        .content();
+```
+
+**모델에 전달되는 입력**은 다음과 같습니다. `<opaque>`는 요청별 난수의 자리 표시자입니다.
+
+```text
+Contact [PII_EMAIL_ADDRESS_1:<opaque>] or [PII_PHONE_NUMBER_1:<opaque>].
+```
+
+`response`는 모델이 생성한 답변이므로 위 입력과 같다고 보장하지 않습니다.
+[모델 입력 확인](docs/ko/getting-started.md#call-and-check) 방법으로 보호 여부를 확인하세요.
+`ChatModel` 직접 호출은 이 클라이언트의 보호 범위에 포함되지 않습니다.
 
 ## 도구별 원문 공개
 
-도구 등록과 개인정보 원문 공개 권한은 별개입니다. 원문 공개는 기본적으로 거부되며,
-대소문자를 구분하는 정확한 도구 이름과 필요한 정규 엔티티 유형을 설정해야만 실행 직전에
-해당 값을 복원합니다.
+모델에는 탐지된 값을 불투명 토큰으로 전달합니다. 도구에는 정책이 허용한 유형만 실행 직전에
+원문으로 복원하고 결과를 다시 보호합니다. 도구 등록만으로 원문 공개가 허용되지는 않습니다.
 
-```java
-GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(GuardrailsPolicy.Privacy.builder()
-                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
-                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
-                .build())
-        .build();
-```
+고객 조회를 구성하려면 **고객번호 탐지 규칙 → 규칙 선택 → 도구 등록 → 원문 공개 정책**이 필요합니다.
+`CUSTOMER_ID`는 내장 프리셋에 없으므로 [완전한 고객 조회 예제](docs/ko/getting-started.md#local-and-mcp-tools)를 따라 설정하세요.
+같은 안내에서 MCP 제공자와 최종 도구 이름을 사용하는 방법도 확인할 수 있습니다.
 
-애플리케이션 도구와 MCP 제공자를 그대로 등록합니다.
+## 필요한 기능 추가
 
-```java
-ChatClient chatClient = guardrails.builder(chatModel, toolPolicy)
-        .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
-        .build();
-```
-
-각 요청에서 확정된 도구에 개인정보 보호가 적용됩니다. 요청별 `.tools(...)`와
-제공자가 갱신한 도구 목록도 포함됩니다. 도구 결과는 모델이나 애플리케이션으로
-전달되기 전에 다시 보호됩니다.
-
-Spring AI의 표준 도구 등록 경로가 아닌 사용자 정의 실행 경로에는 별도의 보호 구성이
-필요합니다. 자세한 규칙은
-[도구별 원문 공개](docs/ko/privacy.md#도구별-원문-공개)를 참고하세요.
-
-## Spring Security 도구 권한
-
-Spring Security 스타터를 별도로 추가해 권한 없는 도구 명세(이름·설명·입력
-형식)를 모델에 노출하지 않고, 허용된 개인정보 원문을 복원하기 전에 도구 실행 권한을
-다시 확인할 수 있습니다.
-
-```gradle
-dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0-SNAPSHOT"
-}
-```
-
-`AuthorizationManager<ToolAuthorizationContext>` Bean을 제공하고
-`GuardrailsPolicy`에서 `toolAuthorization(true)`를 선택합니다.
-클라이언트는 `guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)`로 생성합니다.
-개인정보 보호가 필요하면 별도로 선택하세요. 사용자 인증은 애플리케이션이 담당합니다.
-
-개인정보 보호와 함께 사용해도 도구 권한과 개인정보 원문 공개 범위는 서로 다른 정책으로
-관리합니다. 권한 정책은 현재 사용자에게 공개하고 실행할 도구를 결정하고, 원문 공개
-정책은 권한 검사를 통과한 도구에 어떤 개인정보 원문 값을 제공할지 결정합니다. 함께
-사용하는 Privacy Guardrails 모듈의 버전은 모두 같아야 합니다.
-
-전체 설정 방법과 필요한 API 및 지원 범위는
-[Spring Security 도구 권한](docs/ko/security.md)을 참고하세요.
-
-## 핵심 보호 동작
-
-<p align="center">
-  <img src="docs/images/execution-boundary.svg" alt="분석기, 개인정보 보호 core, Spring AI 실행 통합" width="100%">
-</p>
-
-- 보호된 각 요청은 독립된 `PrivacySession`을 사용합니다. 메모리와 RAG 콘텐츠를 포함한
-  지원 형식의 모델 입력에서 탐지된 개인정보는 모델 호출 전에 불투명 토큰으로 바뀝니다.
-- 보호된 도구에는 정책이 허용한 원문 값만 공개합니다. 구조화된 도구 입력에도 최소 권한을
-  적용하고, `returnDirect`를 포함한 도구 결과는 모델이나 애플리케이션에 전달되기 전에
-  다시 보호합니다.
-- 출력 보호를 활성화하면 완성된 응답에 `TOKENIZE`, `REDACT` 또는 `BLOCK`을 적용합니다.
-  스트리밍 응답은 검사를 위해 버퍼링하며, 요청이 완료·실패·취소되면 관리 중인 세션
-  매핑을 정리합니다.
-
-구성별 세부 동작은 [개인정보 보호](docs/ko/privacy.md), 요청 흐름과 모듈 역할은
-[아키텍처](docs/ko/architecture.md)를 참고하세요.
-
-## 개인정보 보호 런타임 관측
-
-애플리케이션은 선택적으로 `PrivacyEnforcementObserver`를 등록해 모델·도구 입력·도구
-결과·애플리케이션 출력 경계에서 발생하는 개인정보 보호 처리 이벤트를 받을 수 있습니다.
-각 이벤트에는 이벤트가 발생한 경계(`boundary`)와 해당 경계의 처리 결과(`outcome`)만
-포함됩니다. 개인정보 원문, 불투명 토큰, 페이로드, 도구 이름과 요청 식별자는 포함되지 않습니다.
-
-등록 방법, 결과의 의미와 콜백 실행 지침은
-[개인정보 보호 런타임 관측](docs/ko/privacy.md#개인정보-보호-런타임-관측)을 참고하세요.
-
-## 라이브러리 모듈
-
-규칙, 로컬 ONNX 텍스트 분류 모델, HTTP 검사 모델로 모델 입력과 응답을 검사하고
-개인정보 보호와 함께 사용하는 방법은 [콘텐츠 검사](docs/ko/inspection.md)를 참고하세요.
-
-분석기별 스타터는 해당 런타임 모듈을 전이 의존성으로 가져옵니다. 테스트 지원은
-애플리케이션의 테스트 범위에 별도로 추가합니다.
-
-| 모듈 | 목적 |
+| 목적 | 다음 단계 |
 | --- | --- |
-| `spring-ai-privacy-guardrails-core` | 개인정보 탐지·토큰화, 내장 로컬 규칙 분석과 요청별 세션 관리 |
-| `spring-ai-privacy-guardrails-spring-ai-boundary` | 모델 호출 전 개인정보 보호·도구 권한·콘텐츠 검사 조합 |
-| `spring-ai-privacy-guardrails-spring-ai` | Spring AI 모델 호출·도구 실행·응답의 개인정보 보호 |
-| `spring-ai-privacy-guardrails-presidio` | Presidio Analyzer HTTP 어댑터 |
-| `spring-ai-privacy-guardrails-opennlp` | 사용자 제공 OpenNLP 모델용 JVM 전용 어댑터 |
-| `spring-ai-privacy-guardrails-spring-security` | Spring Security를 이용한 도구 공개·실행 권한 검사 |
-| `spring-ai-privacy-guardrails-spring-security-spring-boot-starter` | 도구 권한 검사를 위한 Spring Boot 설정 |
-| `spring-ai-privacy-guardrails-inspection-core` | 콘텐츠 검사, 허용·차단 정책과 검사 결과 |
-| `spring-ai-privacy-guardrails-inspection-rules` | 문자열 및 RE2/J 규칙 검사 |
-| `spring-ai-privacy-guardrails-inspection-onnx` | ONNX 기반 로컬 콘텐츠 검사 |
-| `spring-ai-privacy-guardrails-inspection-openai-compatible` | OpenAI 호환 HTTP API를 통한 검사 모델 호출 |
-| `spring-ai-privacy-guardrails-inspection-spring-ai` | 모델 입력 검사와 선택적 출력 검사 |
-| `spring-ai-privacy-guardrails-inspection-spring-boot-starter` | 선택한 클라이언트의 콘텐츠 검사를 위한 Spring Boot 설정 |
-| `spring-ai-privacy-guardrails-chat-client` | 정책에 따른 클라이언트 구성과 도구 자동 보호 |
-| `spring-ai-privacy-guardrails-chat-client-spring-boot-starter` | 정책에 따른 클라이언트 구성을 위한 Spring Boot 자동 구성 |
-| `spring-ai-privacy-guardrails-test` | 선택형 모델·도구 프로브와 AssertJ 검증 API |
+| 사번·고객번호 등 자체 식별자 탐지 | [Java 규칙과 프리셋](docs/ko/privacy.md#로컬-규칙과-프리셋) |
+| 더 넓은 탐지 범위 또는 NER 모델 사용 | [Presidio·OpenNLP 선택](docs/ko/getting-started.md#choose-an-analyzer) |
+| 사용자별 도구 공개·실행 권한 | [Spring Security 최소 설정](docs/ko/security.md#spring-boot-스타터-추가) |
+| 입력 검사와 선택적 출력 검사 | [콘텐츠 검사 최소 설정](docs/ko/inspection.md#입력-검사-설정) |
+| 최종 응답의 개인정보 토큰화·마스킹·차단 | [출력 보호](docs/ko/getting-started.md#protect-final-responses) |
+| 예상과 다른 동작 진단 | [문제 해결](docs/ko/troubleshooting.md) |
 
-모듈의 책임과 의존성 구조는 [아키텍처](docs/ko/architecture.md)를 참고하세요. 저장소 전용
-JMH 벤치마크는 라이브러리로 배포되지 않으며, 측정 대상과 실행 방법은
-[평가 문서](docs/ko/evaluation.md#jmh-벤치마크)에 설명되어 있습니다.
+출력 보호·검사를 켜면 스트리밍 응답은 전체 결과를 검사한 뒤 전달됩니다.
+모듈 구성은 [아키텍처](docs/ko/architecture.md), 처리 이벤트 관측은
+[런타임 관측](docs/ko/privacy.md#개인정보-보호-런타임-관측)을 참고하세요.
 
 ## 호환성과 상태
 

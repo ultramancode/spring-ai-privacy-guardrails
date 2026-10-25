@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 6b8758dd53e47eb93a1b2d160744203c75a04f1a2d2c98bfbfa9136ddba96b33 -->
+<!-- i18n-source-sha256: 2ea1762d1aee3e62b3f86e54a5fc35286c714865c32caf2a20d7e4d265084259 -->
 
 콘텐츠 검사는 규칙, 로컬 ONNX 텍스트 분류 모델이나 HTTP 검사 모델을 사용해
 모델에 전달할 텍스트를 검사합니다.
@@ -17,6 +17,8 @@ description: >-
 애플리케이션에 전달할 응답도 검사하도록 설정할 수 있습니다.
 
 콘텐츠 검사를 사용하려면 모든 Privacy Guardrails 모듈을 `0.4.0` 이상의 같은 버전으로 맞춥니다.
+
+[입력 검사](#입력-검사-설정) · [출력 검사](#선택적-최종-출력-검사) · [HTTP 모델](#http-guard-모델과-개인정보-처리) · [ONNX](#onnx-기반-로컬-콘텐츠-검사) · [문제 해결](troubleshooting.md#inspection-not-running)
 
 ## 입력 검사 설정
 
@@ -27,6 +29,15 @@ description: >-
 - `spring-ai-privacy-guardrails-inspection-rules`
 
 클라이언트 스타터에는 검사 백엔드가 포함되어 있지 않습니다.
+
+`build.gradle`의 예시는 다음과 같습니다. [개발 SNAPSHOT 준비](getting-started.md#add-the-client-starter)를 먼저 완료하세요.
+
+```gradle
+dependencies {
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0-SNAPSHOT"
+}
+```
 
 규칙을 등록하고 클라이언트 정책에서 검사를 선택합니다.
 
@@ -45,9 +56,21 @@ ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory 
 }
 ```
 
-이 예제에서는 입력에 `ignore previous instructions`가 포함되어 있으면 모델을 호출하지
-않고 `InspectionBlockedException`을 던집니다. 검사는 위와 같이 구성한 클라이언트에만
-적용됩니다. 스타터는 `ContentInspector` 빈이 하나 이상 있으면 기본 서비스를 생성합니다.
+위 `@Bean` 메서드를 앱의 `@Configuration` 클래스에 두고, 서비스에
+`@Qualifier("inspectedChatClient")`로 클라이언트를 주입합니다. 개인정보 분석기는 필요하지 않습니다.
+
+```java
+String response = inspectedChatClient.prompt()
+        .user("Please summarize our public support guide.")
+        .call()
+        .content();
+```
+
+이 입력은 규칙에 걸리지 않아 모델이 답변합니다. 입력을 정확히 `ignore previous instructions`로
+바꾸면 `InspectionBlockedException`이 발생하고 모델은 호출되지 않습니다.
+입력·출력 차단과 통과 사례를 직접 비교하려면 [Inspection 데모](sample.md#inspection)를 실행하세요.
+
+검사는 위와 같이 구성한 클라이언트에만 적용됩니다. 스타터는 `ContentInspector` 빈이 하나 이상 있으면 기본 서비스를 생성합니다.
 직접 구성한 검사기와 정책을 사용하는 `InspectionService` 빈을 제공할 수도 있습니다.
 클라이언트 스타터는 단일 서비스 빈 또는 `@Primary` 서비스를 입력과 출력에 연결합니다.
 실행할 검사는 클라이언트 정책에서 선택합니다.
@@ -148,7 +171,7 @@ InspectionReport report = inspectionService.inspect(request);
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
         .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build())
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 ```
 
 출력 검사는 답변을 애플리케이션에 반환하기 전에 실행하며, `returnDirect`로
@@ -324,6 +347,40 @@ OnnxContentInspector localGuard() {
 검사기는 토크나이저와 ONNX 세션의 네이티브 자원을 사용합니다.
 Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 수명을 직접 관리할 때는 try-with-resources를 사용합니다.
+
+<a id="reproduce-onnx-tests"></a>
+
+### 저장소의 ONNX 예제 재현
+
+위 코드는 `SAFE`·`INJECTION` 두 클래스 모델을 위한 구성 예시입니다. 저장소의 실제 테스트 모델은
+영어 독성 분류용 `Xenova/toxic-bert`이며 같은 분류 설정을 사용하지 않습니다.
+저장소 루트에서 다음을 실행합니다.
+
+```bash
+./gradlew prepareOnnxTestModel
+./gradlew :spring-ai-privacy-guardrails-inspection-onnx:test
+```
+
+최초 준비 시 약 439MB를 `.gradle/inspection-models/65cbc2607cb7fad64f98d1e8a5a3d1f8577895fd/`에
+다운로드하고 고정된 체크섬을 검증합니다. 이후에는 캐시를 재사용합니다. 캐시에 `model.onnx`,
+`tokenizer.json`, `tokenizer_config.json`, `config.json`이 준비됩니다.
+
+| 테스트 모델 설정 | 값 |
+| --- | --- |
+| 출력 | `logits`, 6개 클래스 |
+| 활성화 | `SIGMOID` |
+| 검사할 클래스 | 인덱스 4의 `insult` |
+| 결과 매핑 | `TOXICITY` / `INSULT`, 임계값 `0.8` |
+| 입력 창 | 128토큰, 겹침 32토큰 |
+
+앱에서 이 모델을 시험하려면 위 `localGuard()`의 디렉터리를 준비한 파일 경로로 바꾸고,
+`logitCount(6)`, `SIGMOID`, 인덱스 4와 위 결과 매핑을 사용하세요. 검사 빈과
+`inspection()` 정책을 [입력 검사 설정](#입력-검사-설정)처럼 연결합니다. 한국어 탐지나
+프롬프트 인젝션 분류 성능을 이 영어 독성 테스트에서 추론하지 마세요.
+
+성공한 테스트는 토큰 창, 점수·임계값, 부분 결과를 기준 데이터와 비교합니다.
+[파일 준비 안내](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/scripts/inspection/README.md)와
+[실제 분류 설정](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java)을 참고하세요.
 
 ### 모델 요구 사항
 

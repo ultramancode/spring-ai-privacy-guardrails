@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: b45450e9481e4624d3aa06d38e901f0f9e9508313005a463aeddb8a481e98d86 -->
+<!-- i18n-source-sha256: 4fc9967f4a96c72608c3c407f8b7b04deb313d83a3436f7aeeda92e1cb04a10d -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
@@ -22,6 +22,8 @@
 이 문서의 명령은 Linux 셸을 기준으로 하며 저장소 루트에서 실행합니다.
 
 ## 실행
+
+Git·JDK 준비부터 첫 성공 지표까지는 [샘플 실행 안내](../../docs/ko/sample.md#run-the-inspector)를 참고하세요. 아래 명령은 준비한 저장소 루트에서 실행합니다.
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run

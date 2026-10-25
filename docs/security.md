@@ -17,6 +17,8 @@ When both are used, Spring Security authorizes tool exposure and execution,
 while privacy protection detects PII and controls which original values each
 tool may receive.
 
+[Dependencies](#add-the-spring-boot-starter) → [Authorization policy](#define-the-authorization-policy) → [Client](#configure-the-chatclient) → [Verification](#verify-authorization). Use your existing application authentication. No PII analyzer is required. [Troubleshooting](troubleshooting.md#tool-access)
+
 ## Guarantees
 
 The integration checks authorization at the following stages of a protected
@@ -42,6 +44,9 @@ value is provided only when the authorization policy allows execution and its
 entity type is configured under `ToolDisclosurePolicy`.
 
 ## Add the Spring Boot Starter
+
+Use an existing Spring AI app with a configured `ChatModel`. These dependency examples use
+`0.4.0-SNAPSHOT`. Complete [local snapshot preparation](getting-started.md#add-the-client-starter) first.
 
 ### Gradle
 
@@ -151,6 +156,26 @@ ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory
             .build();
 }
 ```
+
+### Verify Authorization
+
+In a service handling an existing authenticated request, inject the bean with
+`@Qualifier("authorizedToolClient")` and run this code. `customerLookupToolCallback` must be your
+application's actual tool bean:
+
+```java
+String response = authorizedToolClient.prompt()
+        .user("Look up customer CUST-123456.")
+        .call()
+        .content();
+```
+
+The model's tool list includes `customerLookup` for a `ROLE_SUPPORT` user and excludes it for an
+unauthorized user. A model may choose not to call tools, so do not infer authorization from the
+answer text alone. The [Security demo](sample.md#security) deliberately attempts tool calls and
+shows 0 executions for a general employee and 1 for customer support. This authorization-only
+configuration does not tokenize the customer ID in the input.
+
 
 When privacy is also selected, the factory protects tools automatically.
 Select the permitted original-value disclosure in the client policy:

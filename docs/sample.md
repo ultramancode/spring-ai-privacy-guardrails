@@ -17,15 +17,36 @@ accounts or API keys are required.
 
 ## Run the Inspector
 
-From the repository root, with JDK 17 installed:
+Install Git and JDK 17. The default sample uses a local model and fixed examples, so no external
+service accounts or API keys are required. The first run needs network access to download Gradle and dependencies.
 
 ```bash
+git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
+cd spring-ai-privacy-guardrails
+git checkout 516982fd6644f50f38b2ff3b6c4ce0a28c2fab39
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-Open `http://127.0.0.1:8080` in a browser. The sample accepts only local connections.
-Use the `Local Tool | RAG | MCP | Security | Inspection` selector to run a scenario, and use
-`EN | 한국어` to rerun it in the selected language.
+This commit includes the presets used by this development guide. If you already have that code,
+run only the final command from the repository root. After startup, open `http://127.0.0.1:8080`.
+The server accepts local connections only.
+
+In **Local Tool**, check model raw exposure `0/4`, allowed original restoration `1/1`, protected tool
+results and `PASS`. An open page confirms the server is running. These metrics check protection of
+the four fixed example values. See [metric interpretation](#local-tool).
+`EN | 한국어` changes both the UI and the fixed example language.
+
+| Scenario | What to check | Apply it to your app |
+| --- | --- | --- |
+| Local Tool | Model tokenization, customer-ID-only disclosure, protected results | [Tool disclosure](getting-started.md#local-and-mcp-tools) |
+| RAG | Original document versus the protected copy sent to the model | [Memory and RAG](configuration.md#advisor-configuration) |
+| MCP | Protection on a local Streamable HTTP tool call | [MCP providers](getting-started.md#local-and-mcp-tools) |
+| Security | Role-based tool visibility/execution and privacy on allowed calls | [Authorization setup](security.md) |
+| Inspection | 0 model calls on blocked input, 1 call and withheld output on blocked output, passing cases | [Inspection setup](inspection.md) |
+
+After the fixed examples, try your own synthetic input through the [input API](#inspect-results-through-the-api),
+or choose analyzer and real-model profiles in the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/samples/spring-ai-demo/README.md).
+See [Troubleshooting](troubleshooting.md) if results differ.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
   <iframe

@@ -23,8 +23,8 @@ Use the same version for all Guardrails modules. This starter includes the priva
 and inspection integrations, but does not include Spring Security, ONNX Runtime,
 Presidio or an inspection backend.
 
-For PII detection with an additional analyzer, add the [Presidio](getting-started.md#5-use-presidio-for-pii-detection)
-or [OpenNLP](getting-started.md#6-use-opennlp-for-jvm-local-detection) starter.
+For PII detection with an additional analyzer, add the [Presidio](getting-started.md#use-presidio)
+or [OpenNLP](getting-started.md#use-opennlp) starter.
 
 | Selected feature | Required component | Setup |
 | --- | --- | --- |
@@ -40,6 +40,32 @@ missing components causes an error when creating the client builder.
 Select features, output handling and tool disclosure in `GuardrailsPolicy`.
 Configure analyzers through their starter properties. Supply model paths and
 connection settings when creating HTTP or ONNX inspector beans.
+
+### Start with One Feature
+
+After preparing [built-in presets](getting-started.md#enable-built-in-presets) and the application's
+`ChatModel`, select only privacy in an application `@Configuration` class:
+
+```java
+@Bean
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+}
+```
+
+Follow the [first-call example](getting-started.md#call-and-check) to verify it. For inspection alone,
+use `GuardrailsPolicy.builder().inspection().build()`. For authorization alone, use
+`GuardrailsPolicy.builder().toolAuthorization(true).build()`. First prepare the corresponding
+components in the table above. [Inspection setup](inspection.md#set-up-input-inspection) and
+[authorization setup](security.md#add-the-spring-boot-starter) provide independent paths.
+
+### Combine Features and Output Policies
+
+The following advanced example combines all three features. Here, `chatModel` and
+`guardrailsChatClientFactory` are injected beans. `customerLookupToolCallback` and
+`mcpToolCallbackProvider` are your application's tool and MCP provider. Configure the customer ID
+rule separately as in the [customer lookup example](getting-started.md#local-and-mcp-tools).
 
 ```java
 GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
@@ -57,8 +83,8 @@ GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
         .toolAuthorization(true)
         .build();
 
-ChatClient chatClient = guardrails.builder(chatModel, supportPolicy)
-        .defaultTools(customerLookup, mcpTools)
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, supportPolicy)
+        .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
         .build();
 ```
 
@@ -111,8 +137,8 @@ GuardrailsPolicy privacyOnly = supportPolicy.mutate()
         .toolAuthorization(false)
         .build();
 
-ChatClient inputClient = guardrails.builder(chatModel, inputPolicy).build();
-ChatClient privacyClient = guardrails.builder(chatModel, privacyOnly).build();
+ChatClient inputClient = guardrailsChatClientFactory.builder(chatModel, inputPolicy).build();
+ChatClient privacyClient = guardrailsChatClientFactory.builder(chatModel, privacyOnly).build();
 ```
 
 `privacy(false)` and `inspection(false)` remove the entire feature.
@@ -161,9 +187,9 @@ that creates your `ChatClient`, then change only the settings you need.
 Supply a tool advisor builder to customize its order or use Tool Search:
 
 ```java
-ChatClient chatClient = guardrails.builder(chatModel, supportPolicy,
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, supportPolicy,
         ToolCallingAdvisor.builder().advisorOrder(100))
-    .defaultTools(customerLookup)
+    .defaultTools(customerLookupToolCallback)
     .build();
 ```
 

@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: d6b800d2e9e619cd7e6d8eb6d36aff58e7330e21be6b1efed97cc47f28753c95 -->
+<!-- i18n-source-sha256: bcf99975074060ca7c49802b402e0f8cb4adb2bf2a96a0dc35cded12a8eabb23 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -22,6 +22,8 @@ description: >-
 Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 그 밖의 제공자 전용 메시지나 사용자 정의 메시지는 알 수 없는 필드의 개인정보가
 보호되지 않은 채 전달되지 않도록 거부합니다.
+
+[첫 보호 호출](getting-started.md) · [규칙·프리셋](#로컬-규칙과-프리셋) · [도구 원문 공개](getting-started.md#local-and-mcp-tools) · [출력 보호](#출력-정책과-스트리밍) · [문제 해결](troubleshooting.md)
 
 ## 설정 속성
 

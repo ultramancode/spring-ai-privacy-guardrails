@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: 7411485cd1a9f0967fbc5eedea7180681e523877be419ef34ad8412d1ccab105 -->
+<!-- i18n-source-sha256: d7d392a0ebd6c4f5e6dd3af2b8192489165aa9c69cd2f5d81ff1dd17cfd14a9c -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -17,6 +17,8 @@ Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라
 
 두 기능을 함께 사용하면 Spring Security는 도구의 공개·실행 권한을 확인하고, 개인정보
 보호 기능은 개인정보를 탐지해 각 도구에 전달할 원문의 범위를 제어합니다.
+
+[의존성](#spring-boot-스타터-추가) → [인가 정책](#권한-정책-정의) → [클라이언트](#chatclient-구성) → [확인](#verify-authorization). 앱의 기존 인증 설정이 필요하며, 개인정보 분석기 없이 사용할 수 있습니다. [문제 해결](troubleshooting.md#tool-access)
 
 ## 보장 범위
 
@@ -41,6 +43,9 @@ Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라
 전달합니다.
 
 ## Spring Boot 스타터 추가
+
+`ChatModel`이 구성된 기존 Spring AI 앱에서 시작합니다. 다음 의존성 예제는
+`0.4.0-SNAPSHOT`을 사용하므로 [로컬 SNAPSHOT 준비](getting-started.md#add-the-client-starter)를 먼저 완료하세요.
 
 ### Gradle
 
@@ -145,6 +150,27 @@ ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory
             .build();
 }
 ```
+
+<a id="verify-authorization"></a>
+
+### 권한 적용 확인
+
+기존 인증된 요청을 처리하는 서비스에서 `@Qualifier("authorizedToolClient")`로 위 빈을 주입받고
+다음 코드를 실행합니다. `customerLookupToolCallback`은 앱의 실제 도구 빈이어야 합니다.
+
+```java
+String response = authorizedToolClient.prompt()
+        .user("Look up customer CUST-123456.")
+        .call()
+        .content();
+```
+
+`ROLE_SUPPORT` 사용자의 모델 도구 목록에는 `customerLookup`이 포함되고, 권한이 없는 사용자의
+목록에서는 제외됩니다. 모델은 도구를 호출하지 않을 수도 있으므로 답변 문자열만으로 인가를 판정하지 마세요.
+강제로 도구 호출을 시도하는 [Security 데모](sample.md#security)에서는 일반 직원의 도구 실행 0회와
+고객 지원 담당자의 실행 1회를 확인할 수 있습니다. 개인정보 보호를 선택하지 않은 이 구성에서는
+입력의 고객번호가 토큰화되지 않습니다.
+
 
 개인정보 보호도 선택했다면 Factory가 도구를 자동으로 보호합니다.
 허용할 원문 공개 범위는 클라이언트 정책에 지정합니다.

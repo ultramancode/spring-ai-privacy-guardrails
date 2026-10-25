@@ -15,6 +15,8 @@ You can also inspect responses before they reach your application.
 
 Use the same version, `0.4.0` or later, for all Privacy Guardrails modules when enabling content inspection.
 
+[Input checks](#set-up-input-inspection) · [Output checks](#optional-final-output-inspection) · [HTTP models](#http-guard-models-and-privacy) · [ONNX](#local-content-inspection-with-onnx) · [Troubleshooting](troubleshooting.md#inspection-not-running)
+
 ## Set up input inspection
 
 For a rules-based setup, add these modules to an application that provides a Spring AI
@@ -24,6 +26,15 @@ For a rules-based setup, add these modules to an application that provides a Spr
 - `spring-ai-privacy-guardrails-inspection-rules`
 
 The client starter does not include an inspection backend.
+
+For `build.gradle`, use the following after [preparing the development snapshot](getting-started.md#add-the-client-starter):
+
+```gradle
+dependencies {
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0-SNAPSHOT"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0-SNAPSHOT"
+}
+```
 
 Register a rule and select inspection in the client policy:
 
@@ -42,9 +53,21 @@ ChatClient inspectedChatClient(ChatModel chatModel, GuardrailsChatClientFactory 
 }
 ```
 
-The example blocks input containing `ignore previous instructions` by throwing
-`InspectionBlockedException` before the model runs. Only clients configured this way
-are inspected. The starter creates a default service when at least one
+Place these `@Bean` methods in your application's `@Configuration` class and inject the client
+into a service with `@Qualifier("inspectedChatClient")`. No privacy analyzer is needed.
+
+```java
+String response = inspectedChatClient.prompt()
+        .user("Please summarize our public support guide.")
+        .call()
+        .content();
+```
+
+This input passes the rule and the model can answer. Change the input to exactly
+`ignore previous instructions` to get `InspectionBlockedException` with no model call.
+Run the [Inspection demo](sample.md#inspection) to compare blocked and allowed input/output cases.
+
+Only clients configured this way are inspected. The starter creates a default service when at least one
 `ContentInspector` bean is available.
 You can instead provide an `InspectionService` bean with your own inspectors and policies.
 The client starter uses a single service bean, or the `@Primary` service, for both input
@@ -146,7 +169,7 @@ Output inspection is disabled by default. Enable it on the configured client wit
 GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
         .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build())
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
 ```
 
 Output inspection checks the assistant text, including `returnDirect` tool
@@ -325,6 +348,41 @@ OnnxContentInspector localGuard() {
 The inspector uses native resources for its tokenizer and ONNX session. Register
 it as a Spring bean with `destroyMethod = "close"`, or use try-with-resources when
 managing its lifetime directly.
+
+<a id="reproduce-onnx-tests"></a>
+
+### Reproduce the Repository's ONNX Example
+
+The example above configures a two-class `SAFE`/`INJECTION` model. The repository's actual test
+model is `Xenova/toxic-bert`, an English toxicity classifier with different classification settings.
+Run from the repository root:
+
+```bash
+./gradlew prepareOnnxTestModel
+./gradlew :spring-ai-privacy-guardrails-inspection-onnx:test
+```
+
+Initial preparation downloads about 439 MB into
+`.gradle/inspection-models/65cbc2607cb7fad64f98d1e8a5a3d1f8577895fd/` and verifies pinned checksums.
+Later runs reuse the cache. It contains `model.onnx`, `tokenizer.json`, `tokenizer_config.json`
+and `config.json`.
+
+| Test model setting | Value |
+| --- | --- |
+| Output | `logits`, 6 classes |
+| Activation | `SIGMOID` |
+| Selected class | `insult` at index 4 |
+| Finding mapping | `TOXICITY` / `INSULT`, threshold `0.8` |
+| Input window | 128 tokens, overlap 32 tokens |
+
+To try this model in your app, point `localGuard()` above at the prepared files and use
+`logitCount(6)`, `SIGMOID`, index 4 and the finding mapping in this table. Connect the inspector
+bean and `inspection()` policy as in [input inspection setup](#set-up-input-inspection).
+These English toxicity tests do not establish Korean detection or prompt-injection classification performance.
+
+Passing tests compare token windows, scores, thresholds and partial results with reference data.
+See [file preparation](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/scripts/inspection/README.md) and the
+[actual classification settings](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java).
 
 ### Model requirements
 

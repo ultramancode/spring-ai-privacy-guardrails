@@ -21,6 +21,8 @@ Standard Spring AI messages and `DeepSeekAssistantMessage` are supported. Other
 provider-specific or custom messages are rejected to prevent PII in unknown fields
 from passing through unprotected.
 
+[First protected call](getting-started.md) · [Rules and presets](#local-rules-and-presets) · [Tool disclosure](getting-started.md#local-and-mcp-tools) · [Output protection](#output-policy-and-streaming) · [Troubleshooting](troubleshooting.md)
+
 ## Configuration Properties
 
 Unless a full path is shown, all properties in the following table are

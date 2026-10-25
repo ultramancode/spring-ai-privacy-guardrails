@@ -9,7 +9,7 @@ description: >-
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: c22817756a998ff098062b29222ca13a870eaf6b454f0a91876238c0f24b2fc9 -->
+<!-- i18n-source-sha256: 6586fd961c1bb1a8a142c60b41ad00668620b17a23032015412767a80f48455e -->
 
 샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
 보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수
@@ -17,17 +17,38 @@ description: >-
 기본 샘플은 모델, 문서 검색, MCP 서버를 모두 로컬 환경에서 실행하므로
 외부 서비스 계정이나 API 키가 필요하지 않습니다.
 
+<a id="run-the-inspector"></a>
+
 ## Inspector 실행
 
-JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합니다.
+Git과 JDK 17을 설치합니다. 기본 샘플은 로컬 모델과 고정 예제를 사용하며 외부 서비스 계정이나
+API 키가 필요하지 않습니다. 처음 실행할 때 Gradle과 의존성을 다운로드하므로 네트워크 연결이 필요합니다.
 
 ```bash
+git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
+cd spring-ai-privacy-guardrails
+git checkout 516982fd6644f50f38b2ff3b6c4ce0a28c2fab39
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-브라우저에서 `http://127.0.0.1:8080`을 엽니다. 샘플은 로컬 접속만 허용합니다.
-`Local Tool | RAG | MCP | Security | Inspection` 선택기로 시나리오를 실행하고, `EN | 한국어`로 언어를 선택해
-시나리오를 다시 실행할 수 있습니다.
+위 커밋은 이 개발 문서의 프리셋 예제를 포함합니다. 이미 해당 코드를 받았다면 저장소 루트에서
+마지막 명령만 실행하세요. 서버가 시작되면 `http://127.0.0.1:8080`을 엽니다. 로컬 접속만 허용합니다.
+
+**Local Tool**에서 모델 원문 노출 `0/4`, 허용 원문 복원 `1/1`, 도구 결과 재보호와 `PASS`를
+확인하세요. 화면이 열리는 것은 서버 실행 확인이며, 이 값들은 고정된 네 개인정보 값의 보호 확인입니다.
+[지표 해석](#local-tool)을 참고하세요. `EN | 한국어`는 UI와 고정 예제의 언어를 바꿉니다.
+
+| 시나리오 | 확인할 동작 | 앱에 적용 |
+| --- | --- | --- |
+| Local Tool | 모델 토큰화, 고객번호만 원문 복원, 결과 재보호 | [도구 공개 정책](getting-started.md#local-and-mcp-tools) |
+| RAG | 원문 문서와 모델에 전달되는 보호된 복사본 비교 | [메모리·RAG](configuration.md#advisor-구성) |
+| MCP | 로컬 Streamable HTTP 도구 호출의 보호 | [MCP 제공자](getting-started.md#local-and-mcp-tools) |
+| Security | 사용자 역할에 따른 도구 공개·실행과 허용 호출의 개인정보 보호 | [권한 설정](security.md) |
+| Inspection | 입력 차단 전 호출 0회, 출력 차단 시 호출 1회와 응답 비공개, 통과 사례 | [검사 설정](inspection.md) |
+
+고정 예제 다음에는 [사용자 입력 API](#inspect-results-through-the-api)로 자신의 합성 입력을 확인하거나
+[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/516982fd6644f50f38b2ff3b6c4ce0a28c2fab39/samples/spring-ai-demo/README.ko.md)의 분석기·실제 모델 프로필을 선택하세요.
+예상과 다르면 [문제 해결](troubleshooting.md)을 참고하세요.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
   <iframe
@@ -119,6 +140,8 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 탐지하는 규칙은 아닙니다.
 
 ![입력 검사에서 프롬프트 인젝션을 차단하고 출력 검사에서 모욕적 응답 전달을 막는 사례](../images/privacy-boundary-inspector-inspection-ko.png)
+
+<a id="inspect-results-through-the-api"></a>
 
 ## API로 결과 확인
 

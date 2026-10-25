@@ -8,7 +8,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 3c65d95f6edc4230f8d200e85fc672cb9fc13b85793e128b00c860f21c429b67 -->
+<!-- i18n-source-sha256: 75e482a620990019443504732266419dc9661ac4ec829b46a47f6a144963e404 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
@@ -25,8 +25,8 @@ implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-
 Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인정보 보호와 검사 연동을
 포함하지만 Spring Security, ONNX Runtime, Presidio와 검사 백엔드는 포함하지 않습니다.
 
-추가 분석기로 개인정보를 탐지하려면 [Presidio](getting-started.md#5-presidio로-다양한-pii-유형-탐지)나
-[OpenNLP](getting-started.md#6-jvm-내부-탐지에-opennlp-사용) 스타터를 추가합니다.
+추가 분석기로 개인정보를 탐지하려면 [Presidio](getting-started.md#use-presidio)나
+[OpenNLP](getting-started.md#use-opennlp) 스타터를 추가합니다.
 
 | 선택한 기능 | 필수 구성 요소 | 설정 |
 | --- | --- | --- |
@@ -42,6 +42,32 @@ Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인�
 `GuardrailsPolicy`에서 사용할 기능과 출력 처리, 도구 원문 공개 범위를 선택합니다.
 분석기는 스타터의 설정 프로퍼티로 구성합니다. HTTP·ONNX 검사기는 빈을 만들 때
 모델 경로와 연결 설정을 전달합니다.
+
+### 한 기능으로 시작
+
+[내장 프리셋 설정](getting-started.md#enable-built-in-presets)과 앱의 `ChatModel`을 준비한 뒤,
+애플리케이션의 `@Configuration` 클래스에서 개인정보 보호만 선택할 수 있습니다.
+
+```java
+@Bean
+ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder().privacy().build();
+    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy).build();
+}
+```
+
+호출과 확인은 [첫 호출 예제](getting-started.md#call-and-check)를 따르세요. 콘텐츠 검사만 필요하면
+`GuardrailsPolicy.builder().inspection().build()`, 도구 권한만 필요하면
+`GuardrailsPolicy.builder().toolAuthorization(true).build()`를 사용합니다. 위 표의 구성 요소는
+각각 먼저 준비해야 합니다. [검사 설정](inspection.md#입력-검사-설정)과
+[도구 권한 설정](security.md#spring-boot-스타터-추가)에 독립적인 적용 경로가 있습니다.
+
+### 기능과 출력 정책 조합
+
+다음은 세 기능을 함께 구성하는 응용 예제입니다. 코드에서 `chatModel`과
+`guardrailsChatClientFactory`는 주입받은 빈입니다. `customerLookupToolCallback`과
+`mcpToolCallbackProvider`는 앱에서 준비한 도구와 MCP 제공자입니다.
+고객번호 규칙은 [고객 조회 예제](getting-started.md#local-and-mcp-tools)처럼 별도로 설정합니다.
 
 ```java
 GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
@@ -59,8 +85,8 @@ GuardrailsPolicy supportPolicy = GuardrailsPolicy.builder()
         .toolAuthorization(true)
         .build();
 
-ChatClient chatClient = guardrails.builder(chatModel, supportPolicy)
-        .defaultTools(customerLookup, mcpTools)
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, supportPolicy)
+        .defaultTools(customerLookupToolCallback, mcpToolCallbackProvider)
         .build();
 ```
 
@@ -111,8 +137,8 @@ GuardrailsPolicy privacyOnly = supportPolicy.mutate()
         .toolAuthorization(false)
         .build();
 
-ChatClient inputClient = guardrails.builder(chatModel, inputPolicy).build();
-ChatClient privacyClient = guardrails.builder(chatModel, privacyOnly).build();
+ChatClient inputClient = guardrailsChatClientFactory.builder(chatModel, inputPolicy).build();
+ChatClient privacyClient = guardrailsChatClientFactory.builder(chatModel, privacyOnly).build();
 ```
 
 `privacy(false)`와 `inspection(false)`는 해당 기능 전체를 제외합니다.
@@ -159,9 +185,9 @@ Factory는 `ChatClientCustomizer` 빈을 먼저 적용한 뒤 `ChatClientBuilder
 도구 실행 순서를 바꾸거나 Tool Search를 사용하려면 도구 Advisor 빌더를 전달합니다.
 
 ```java
-ChatClient chatClient = guardrails.builder(chatModel, supportPolicy,
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, supportPolicy,
         ToolCallingAdvisor.builder().advisorOrder(100))
-    .defaultTools(customerLookup)
+    .defaultTools(customerLookupToolCallback)
     .build();
 ```
 

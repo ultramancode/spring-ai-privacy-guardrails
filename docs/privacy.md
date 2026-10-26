@@ -29,7 +29,7 @@ You can also [combine analyzers](#detection-and-resolution).
 | Analyzer | Detection |
 | --- | --- |
 | [Presidio](#presidio-analyzer) | PII detection through a Presidio service |
-| [OpenNLP](#opennlp-analyzer-jvm-only-optional) | Named entity recognition with models in the application JVM |
+| [OpenNLP](#opennlp-analyzer) | Named entity recognition with models in the application JVM |
 | [Local rules](#local-rules-and-presets) | Built-in rules or application-defined patterns and validation logic |
 
 To connect another detection model or service, implement `PiiAnalyzer` and register it
@@ -481,7 +481,7 @@ included in application health checks.
 The local Docker setup is in
 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio).
 
-## OpenNLP Analyzer (JVM-Only, Optional)
+## OpenNLP Analyzer
 
 Use compatible OpenNLP NER models to analyze PII in the application JVM.
 Add its starter alongside the client starter and supply model files for the target language and entities.

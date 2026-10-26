@@ -63,8 +63,9 @@ output inspection are configured separately. See [Configuration](configuration.m
 
 The modules separate feature implementations from client assembly and Spring Boot
 configuration. The diagram and table omit the common `spring-ai-privacy-guardrails-`
-prefix. Arrows point from a module to its direct dependency, not in request execution
-order. Modules with the same internal dependencies are grouped in one box.
+prefix. Solid arrows point from a module to its direct dependency. The dashed arrow
+shows optional integration through a configurer. Modules with the same internal
+dependencies are grouped in one box.
 
 The diagram shows the main library modules. Spring Boot starters are described below.
 
@@ -88,31 +89,34 @@ flowchart LR
 
     CLIENT --> ISA
     CLIENT --> SAI
+    CLIENT -. "Optional integration" .-> SEC
     SAI --> BOUNDARY["spring-ai-boundary"]
     SEC --> BOUNDARY
     ISA --> BOUNDARY
 ```
 
-`chat-client` accepts a tool-authorization configurer without a direct dependency on
-`spring-security`. The client starter has a compile-only Security dependency for
-optional integration. Applications add the Security starter when they need it.
+`chat-client` integrates `spring-security` through a tool-authorization configurer.
+With Spring Boot, the configurer is supplied automatically when the Security starter
+and a tool-authorization policy are configured.
 
 | Module | Responsibility and main internal dependencies |
 | --- | --- |
-| `core` | Detection resolution, PII tokenization, request sessions and local rules. No Spring dependency. |
+| `core` | Privacy engine for detection resolution, PII tokenization, request sessions and local rules. No Spring dependency. |
 | `spring-ai` | Applies privacy protection to model, tool and output boundaries. Uses `core` and `spring-ai-boundary`. |
 | `spring-security` | Authorizes tool discovery and execution. Uses `spring-ai-boundary` and Spring Security Core. |
 | `inspection-core` | Provides `InspectionService`, inspector contracts and content policies. No Spring dependency. |
 | `inspection-spring-ai` | Applies model-input and final-output content inspection. Uses `inspection-core` and `spring-ai-boundary`. |
 | `spring-ai-boundary` | Composes the shared model-request stages used by privacy, tool authorization and content inspection. |
-| `chat-client` | Assembles selected features through `GuardrailsChatClientFactory`. Depends on `spring-ai` and `inspection-spring-ai`, and accepts a tool-authorization configurer for optional Security integration. |
-| `presidio`, `opennlp` | Add analyzer integrations on top of `core`. |
+| `chat-client` | Combines selected privacy, tool authorization and content inspection features through `GuardrailsChatClientFactory`. Depends on `spring-ai` and `inspection-spring-ai`, and integrates with `spring-security` for tool authorization. |
+| `presidio`, `opennlp` | Use `core` to integrate Presidio services over HTTP and OpenNLP models running in the application JVM. |
 | `inspection-rules`, `inspection-onnx`, `inspection-openai-compatible` | Provide content-inspection backends based on `inspection-core`. |
 
 The client Spring Boot starter includes the privacy and inspection starters, which configure
 the shared services. Analyzer and inspection backend dependencies are selected separately.
 The Spring Security starter is optional and can also be used without the privacy starter.
-The core and privacy modules do not depend on Spring Security.
+
+`core` and `inspection-core` are independent engines for privacy protection and content
+inspection. Neither `spring-security` nor `spring-ai-boundary` depends on these engines.
 
 The privacy, security and inspection integrations share `spring-ai-boundary` to compose
 the stages that run before each model call. Unconfigured stages are skipped.

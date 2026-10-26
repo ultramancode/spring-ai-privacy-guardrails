@@ -158,6 +158,8 @@ Use these APIs to retrieve the results shown in the Inspector as JSON:
 | `GET /demo/security-tool-boundary` | Tool visibility, authorization decisions, execution counts for two roles, and privacy checks for the allowed call. |
 | `GET /demo/inspection?example=block` | Independent input/output block cases with actual inspection reports, model call counts, and withheld responses. Use `example=allow` for allowed cases. |
 
+`activeSessionsAfterCall` is the service-wide active session count after the call.
+
 See the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md)
 for request and response examples, configuration for other analyzers, and
 instructions for running optional checks with a live model.
@@ -172,9 +174,6 @@ well as the UI labels. For direct API calls, set the `Accept-Language: en` or
 selected language.
 
 ## Interpretation and Verification
-
-The active session count is observed across the service after the call. Concurrent
-requests can make it nonzero. This value alone does not prove a session leak.
 
 The demo's employee and customer ID rules and all example values are sample-oriented. Text not
 matched by an enabled analyzer may remain unchanged, and these fixed scenarios

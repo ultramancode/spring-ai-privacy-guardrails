@@ -63,7 +63,7 @@ the data your application handles:
 | Analyzer | Detection |
 | --- | --- |
 | [Presidio](privacy.md#presidio-analyzer) | PII detection through a Presidio service |
-| [OpenNLP](privacy.md#opennlp-analyzer-jvm-only-optional) | Named entity recognition with models in the application JVM |
+| [OpenNLP](privacy.md#opennlp-analyzer) | Named entity recognition with models in the application JVM |
 | [Local rules](privacy.md#local-rules-and-presets) | Built-in rules or application-defined patterns and validation logic |
 
 You can also [combine analyzers](privacy.md#detection-and-resolution).

@@ -24,7 +24,7 @@ and inspection integrations, but does not include Spring Security, ONNX Runtime,
 Presidio or an inspection backend.
 
 For PII detection with an additional analyzer, add the [Presidio](privacy.md#presidio-analyzer)
-or [OpenNLP](privacy.md#opennlp-analyzer-jvm-only-optional) starter.
+or [OpenNLP](privacy.md#opennlp-analyzer) starter.
 
 | Selected feature | Required component | Setup |
 | --- | --- | --- |

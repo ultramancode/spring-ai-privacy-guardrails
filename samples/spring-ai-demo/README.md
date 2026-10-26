@@ -54,10 +54,7 @@ The `EN | 한국어` toggle sends `Accept-Language: en` or `ko` with these
 requests and reruns the selected flow. This changes the UI labels, example
 input, and results.
 
-Responses that include `activeSessionsAfterCall` report the service-wide active
-session count after the call. This is normally `0` when running a single request.
-Concurrent requests can make it nonzero, so it does not measure session leaks
-for an individual request.
+`activeSessionsAfterCall` is the service-wide active session count after the call.
 
 These runtime demonstrations complement the reproducible automated coverage in
 the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).

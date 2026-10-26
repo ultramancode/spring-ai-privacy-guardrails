@@ -8,7 +8,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: b7790ef2c1db9b321b45532bb5243ffdd6b7261b809267f1acc83e5876857138 -->
+<!-- i18n-source-sha256: 7f997e81c3436b3a02867ed357a88fa4b24f7475b84a5c3b0a2087ce7efbf7e3 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
@@ -26,7 +26,7 @@ Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인�
 포함하지만 Spring Security, ONNX Runtime, Presidio와 검사 백엔드는 포함하지 않습니다.
 
 추가 분석기로 개인정보를 탐지하려면 [Presidio](privacy.md#presidio-분석기)나
-[OpenNLP](privacy.md#opennlp-분석기-jvm-전용-선택-사항) 스타터를 추가합니다.
+[OpenNLP](privacy.md#opennlp-분석기) 스타터를 추가합니다.
 
 | 선택한 기능 | 필수 구성 요소 | 설정 |
 | --- | --- | --- |

@@ -8,7 +8,7 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 15d5f966b3c4357c28421367eb30139492180ece579a6d45f596b4c0d1358c16 -->
+<!-- i18n-source-sha256: e713027d620a4ceaf3b7eb16f326ddf4d05ac80b0ebeb30fe91dae0b0dd189a4 -->
 
 ## 책임 범위
 
@@ -61,7 +61,7 @@ flowchart LR
 
 모듈은 각 기능의 구현, 클라이언트 조합과 Spring Boot 자동 설정의 역할을 나눕니다.
 그림과 표에서는 공통 접두사 `spring-ai-privacy-guardrails-`를 생략합니다.
-화살표는 해당 모듈에서 직접 의존하는 모듈을 가리킵니다. 요청 실행 순서를 나타내지는 않습니다.
+실선 화살표는 해당 모듈에서 직접 의존하는 모듈을, 점선은 설정기를 통한 선택적 연동을 나타냅니다.
 같은 내부 모듈 의존성을 가진 모듈은 한 상자에 묶었습니다.
 
 그림은 주요 라이브러리 모듈을 보여줍니다. Spring Boot 스타터 구성은 아래에서 설명합니다.
@@ -86,31 +86,33 @@ flowchart LR
 
     CLIENT --> ISA
     CLIENT --> SAI
+    CLIENT -. "선택적 연동" .-> SEC
     SAI --> BOUNDARY["spring-ai-boundary"]
     SEC --> BOUNDARY
     ISA --> BOUNDARY
 ```
 
-`chat-client`는 `spring-security`에 직접 의존하지 않고 도구 권한 설정기를 받습니다.
-클라이언트 스타터는 선택적 연동을 위해 Security 모듈에 컴파일 시점에만 의존합니다.
-애플리케이션에서 필요할 때 Security 스타터를 추가합니다.
+`chat-client`는 도구 권한 설정기를 통해 `spring-security`를 연동합니다.
+Spring Boot에서는 Security 스타터와 도구 권한 정책을 구성하면 이 설정기를 자동으로 연결합니다.
 
 | 모듈 | 역할과 주요 내부 의존성 |
 | --- | --- |
-| `core` | 탐지 결과 해석, 개인정보 토큰화, 요청별 세션과 로컬 규칙을 제공합니다. Spring에 의존하지 않습니다. |
+| `core` | 탐지 결과 해석, 토큰화, 요청별 세션과 로컬 규칙을 제공하는 개인정보 보호 엔진입니다. Spring에 의존하지 않습니다. |
 | `spring-ai` | 모델·도구·출력 경계에 개인정보 보호를 적용합니다. `core`와 `spring-ai-boundary`를 사용합니다. |
 | `spring-security` | 도구 공개와 실행 권한을 검사합니다. `spring-ai-boundary`와 Spring Security Core를 사용합니다. |
 | `inspection-core` | `InspectionService`, 검사기 인터페이스와 콘텐츠 정책을 제공합니다. Spring에 의존하지 않습니다. |
 | `inspection-spring-ai` | 모델 입력과 최종 출력의 콘텐츠 검사를 적용합니다. `inspection-core`와 `spring-ai-boundary`를 사용합니다. |
 | `spring-ai-boundary` | 개인정보 보호, 도구 권한과 콘텐츠 검사가 공유하는 모델 요청 단계를 조합합니다. |
-| `chat-client` | `GuardrailsChatClientFactory`로 선택한 기능을 조합합니다. `spring-ai`와 `inspection-spring-ai`에 의존하며, 도구 권한 설정기를 받아 선택적으로 Security를 연동합니다. |
-| `presidio`, `opennlp` | `core` 위에 외부 분석기 연동을 추가합니다. |
+| `chat-client` | `GuardrailsChatClientFactory`로 선택한 개인정보 보호, 도구 권한과 콘텐츠 검사를 조합합니다. `spring-ai`와 `inspection-spring-ai`에 의존하며, 도구 권한 검사는 `spring-security` 모듈과 연동합니다. |
+| `presidio`, `opennlp` | `core` 기반으로 Presidio HTTP 서비스와 애플리케이션 JVM 내부의 OpenNLP 모델을 연동합니다. |
 | `inspection-rules`, `inspection-onnx`, `inspection-openai-compatible` | `inspection-core` 기반의 콘텐츠 검사 백엔드를 제공합니다. |
 
 클라이언트 Spring Boot 스타터는 개인정보 보호와 콘텐츠 검사 스타터를 포함해
 공통 서비스를 구성합니다. 분석기와 콘텐츠 검사 백엔드 의존성은 별도로 선택합니다.
 Spring Security 스타터는 선택 사항이며 개인정보 보호 스타터 없이도 사용할 수 있습니다.
-코어와 개인정보 보호 모듈은 Spring Security에 의존하지 않습니다.
+
+`core`와 `inspection-core`는 각각 개인정보 보호와 콘텐츠 검사를 위한 독립된 엔진입니다.
+`spring-security`와 `spring-ai-boundary`는 이 두 엔진에 의존하지 않습니다.
 
 개인정보 보호, 권한 검사와 콘텐츠 검사 연동은 `spring-ai-boundary`를 공유해
 매 모델 호출 전에 실행할 단계를 조합합니다. 등록하지 않은 단계는 건너뜁니다.

@@ -8,7 +8,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: b673d07fc223a3c6a588bae1ded04010317db7a5f0700991f1ed4636fdee9671 -->
+<!-- i18n-source-sha256: 194986bfea266c6c79de8cf1a2de094df7c29d7434834209ef23ebd320d5bdf4 -->
 
 `GuardrailsChatClientFactory`로 `ChatClient`를 생성하고,
 `GuardrailsPolicy`에서 애플리케이션에 필요한 기능을 선택합니다.
@@ -70,7 +70,7 @@ Maven은 기본으로 Central을 사용합니다. `pom.xml`의 `dependencies`에
 | 분석기 | 탐지 방식 |
 | --- | --- |
 | [Presidio](privacy.md#presidio-분석기) | Presidio 서비스를 통한 개인정보 탐지 |
-| [OpenNLP](privacy.md#opennlp-분석기-jvm-전용-선택-사항) | 애플리케이션 JVM 내부의 모델로 개체명 인식 |
+| [OpenNLP](privacy.md#opennlp-분석기) | 애플리케이션 JVM 내부의 모델로 개체명 인식 |
 | [로컬 규칙](privacy.md#로컬-규칙과-프리셋) | 내장 규칙 또는 애플리케이션에서 정의한 패턴·검증 로직 |
 
 [여러 분석기를 조합](privacy.md#탐지와-해석)할 수도 있습니다.

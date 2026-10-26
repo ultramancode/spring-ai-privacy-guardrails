@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: 9e3cc5f4b780ba99ddfde8dcb45c20351620156c4c52ccd26b89614bdd087bb1 -->
+<!-- i18n-source-sha256: f162c09315e982d1e693cf533a1373b3d0f574bdefd1505c7dd8dcacb7081803 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -33,7 +33,7 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 | 분석기 | 탐지 방식 |
 | --- | --- |
 | [Presidio](#presidio-분석기) | Presidio 서비스를 통한 개인정보 탐지 |
-| [OpenNLP](#opennlp-분석기-jvm-전용-선택-사항) | 애플리케이션 JVM 내부의 모델로 개체명 인식 |
+| [OpenNLP](#opennlp-분석기) | 애플리케이션 JVM 내부의 모델로 개체명 인식 |
 | [로컬 규칙](#로컬-규칙과-프리셋) | 내장 규칙 또는 애플리케이션에서 정의한 패턴·검증 로직 |
 
 다른 탐지 모델이나 서비스를 연결하려면 `PiiAnalyzer`를 구현한
@@ -471,7 +471,7 @@ Spring Boot의 상태 점검 기능을 사용하는 경우 Presidio 서비스의
 로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio)에
 있습니다.
 
-## OpenNLP 분석기 (JVM 전용, 선택 사항)
+## OpenNLP 분석기
 
 호환되는 OpenNLP NER 모델로 애플리케이션 JVM 내부에서 개인정보를 분석합니다.
 클라이언트 스타터와 함께 OpenNLP 스타터를 추가하고 대상 언어와 엔티티에 맞는 모델 파일을 준비합니다.

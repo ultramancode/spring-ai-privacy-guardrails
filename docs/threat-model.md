@@ -144,22 +144,15 @@ Exact policies and processing bounds are documented in
 
 ## Important Limitations
 
-Privacy protection applies to content detected by the configured analyzers. It
-does not guarantee detection or classification of every sensitive value. Coverage
-depends on the analyzers and score thresholds. Allowing some analyzer failures
-lets processing continue with successful results, which may reduce coverage. See
-[Detection and Resolution](privacy.md#detection-and-resolution) for details.
+Privacy protection applies to content detected by the configured analyzers.
+Detection coverage depends on the analyzers and score thresholds. When analyzer
+failures are allowed, processing continues using only successful results.
+See [Detection and Resolution](privacy.md#detection-and-resolution) for details.
 
-Replacing PII with opaque tokens does not guarantee anonymization. Opaque tokens and session handles
-(`PrivacyContextHandle`) must not be used as proof of user identity or permission.
+Closing a session clears the original-value mappings held by the library.
 
-Session cleanup releases the mappings held by the library. It does not delete
-data already saved in storage or strings and copies retained by other components.
-
-Spring Security integration controls which tools the model may discover and
-execute. When combined with privacy protection, the `ToolDisclosurePolicy`
-still applies per tool and entity type. Enabling authorization does not make the
-disclosure policy user-specific.
+Spring Security checks tool access. `ToolDisclosurePolicy` separately controls
+which PII types each tool receives as original values.
 
 ## Areas Managed Separately
 

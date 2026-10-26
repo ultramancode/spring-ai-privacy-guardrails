@@ -9,7 +9,7 @@ description: >-
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: 4d5e5615490a8dea7b293c7c29dfab8960547622219733562874f48d7873985e -->
+<!-- i18n-source-sha256: 9290a70996dd57852c407814d4f0f3cd0e9ccf83ace20d5bc2f91c6a70035311 -->
 
 샘플은 고정된 예제로 개인정보 보호, 도구 권한과 콘텐츠 검사를 보여줍니다.
 **Privacy Boundary Inspector**에서 Local Tool, RAG, MCP, Security, Inspection 시나리오를
@@ -154,6 +154,8 @@ Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API
 | `GET /demo/security-tool-boundary` | 두 역할의 도구 목록, 권한 판정, 실행 횟수와 허용된 호출의 개인정보 보호 검증 결과 |
 | `GET /demo/inspection?example=block` | 독립된 입력·출력 차단 사례의 실제 검사 보고서, 모델 호출 횟수와 차단된 응답. `example=allow`로 허용 사례 실행 |
 
+응답의 `activeSessionsAfterCall`은 호출 후 서비스 전체의 활성 세션 수입니다.
+
 요청·응답 예제, 다른 분석기를 사용하는 설정과 실제 모델을 연결하는 검증 방법은
 [전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md)를
 참고하세요.
@@ -167,9 +169,6 @@ Inspector에서 언어를 바꾸면 화면 문구뿐 아니라 예제 입력과 
 `POST /demo/protect`는 선택한 언어와 관계없이 전달된 `text`를 분석합니다.
 
 ## 해석과 검증
-
-활성 세션 수는 호출 후 서비스 전체에서 관측한 값입니다. 동시에 실행 중인 다른 요청이
-있으면 0보다 클 수 있으므로, 이 값만으로 현재 요청의 세션 누수를 판단할 수는 없습니다.
 
 데모의 사번·고객번호 규칙과 모든 예제 값은 샘플용입니다. 활성화된 분석기가 탐지하지 못한 텍스트는
 변경되지 않을 수 있으며, 이 고정 시나리오는 일반적인 탐지 정확도나 지원되지 않는 실행

@@ -6,15 +6,9 @@
 
 [English](README.md) | [한국어](README.ko.md) | [Documentation](https://ultramancode.github.io/spring-ai-privacy-guardrails/)
 
-**Tokenize detected PII before it reaches the model. Reveal only the originals a tool needs, then protect its result again.**
+**Apply privacy protection, tool authorization and content inspection to your application.**
 
-| What you need | Feature |
-| --- | --- |
-| Keep detected PII out of the model and allow originals only for selected tools | [Privacy](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/) |
-| Limit tool visibility and execution using the current user's permissions | [Tool Authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/security/) |
-| Check requests and responses with rules, local ONNX or an HTTP guard model | [Content Inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/inspection/) |
-
-Use these features independently or together.
+Tokenize detected PII before it reaches the model. Reveal only the originals a tool needs, then protect its result again.
 
 <p align="center">
   <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="PII tokenization and per-tool disclosure, with optional tool authorization and content inspection" width="100%"></a>
@@ -26,6 +20,16 @@ Use these features independently or together.
 - **Spring AI Community** — Listed in [Awesome Spring AI's Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
 
 <br>
+
+## Three Core Features
+
+Use these features independently or together.
+
+| What you need | Feature |
+| --- | --- |
+| Keep detected PII out of the model and allow originals only for selected tools | [Privacy](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/) |
+| Limit tool visibility and execution using the current user's permissions | [Tool Authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/security/) |
+| Check requests and responses with rules, local ONNX or an HTTP guard model | [Content Inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/inspection/) |
 
 ## Add Protection to an Application
 
@@ -82,15 +86,7 @@ For readability, the examples below use `[EMAIL_TOKEN]` to represent the generat
 Contact [EMAIL_TOKEN].
 ```
 
-Configure the features your application needs:
-
-| Feature setup | Policy selection |
-| --- | --- |
-| [Privacy protection](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#privacy-protection) | `privacy()` |
-| [Tool authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#tool-authorization) | `toolAuthorization(true)` |
-| [Content inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#content-inspection) | `inspection()` |
-
-See [Getting Started](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/) for feature combinations, tool registration and verification.
+See [Getting Started](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/) for feature setup and combinations.
 
 ## Use All Three Features Together
 

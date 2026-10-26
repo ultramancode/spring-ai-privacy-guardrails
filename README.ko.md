@@ -7,17 +7,11 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 1e65d53feca1cdf73d5e11352d06f6d0a90a81d3a45b24ae827ae8ebff4192fa -->
+<!-- i18n-source-sha256: deb23571afe62a9292ff1d38b1e9f1daa6e202df6b248ae5992ad71cee2a6f6f -->
 
-**모델에 전달할 개인정보를 토큰으로 바꾸고, 도구에는 필요한 원문만 공개합니다. 도구 결과는 다시 보호합니다.**
+**애플리케이션에 개인정보 보호, 도구 권한 제어, 콘텐츠 검사를 적용합니다.**
 
-| 원하는 동작 | 사용할 기능 |
-| --- | --- |
-| 모델에는 탐지된 개인정보를 감추고 도구별로 원문 공개 범위를 지정 | [Privacy](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/privacy/) |
-| 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행할 도구를 제한 | [Tool Authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/security/) |
-| 규칙·로컬 ONNX·HTTP 검사 모델로 요청과 응답을 점검 | [Content Inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/inspection/) |
-
-세 기능은 독립적으로 선택하거나 함께 사용할 수 있습니다.
+탐지된 개인정보는 모델에 전달하기 전에 토큰화하고, 도구에는 필요한 원문만 공개합니다. 도구 결과는 다시 보호합니다.
 
 <p align="center">
   <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="개인정보 토큰화와 도구별 원문 공개 흐름, 선택 가능한 도구 권한과 콘텐츠 검사" width="100%"></a>
@@ -29,6 +23,16 @@
 - **Spring AI Community** — [Awesome Spring AI의 Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)에 소개
 
 <br>
+
+## 세 가지 핵심 기능
+
+세 기능은 독립적으로 선택하거나 함께 사용할 수 있습니다.
+
+| 원하는 동작 | 사용할 기능 |
+| --- | --- |
+| 모델에는 탐지된 개인정보를 감추고 도구별로 원문 공개 범위를 지정 | [Privacy](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/privacy/) |
+| 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행할 도구를 제한 | [Tool Authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/security/) |
+| 규칙·로컬 ONNX·HTTP 검사 모델로 요청과 응답을 점검 | [Content Inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/inspection/) |
 
 ## 애플리케이션에 적용
 
@@ -85,15 +89,7 @@ String response = chatClient.prompt()
 Contact [EMAIL_TOKEN].
 ```
 
-애플리케이션에 필요한 기능을 설정합니다.
-
-| 기능 설정 | 정책에서 선택 |
-| --- | --- |
-| [개인정보 보호](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/#privacy-protection) | `privacy()` |
-| [도구 권한](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/#tool-authorization) | `toolAuthorization(true)` |
-| [콘텐츠 검사](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/#content-inspection) | `inspection()` |
-
-기능 조합, 도구 등록과 동작 확인은 [시작하기](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/)를 참고하세요.
+각 기능의 설정과 조합 방법은 [시작하기](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/)를 참고하세요.
 
 ## 세 가지 기능 함께 사용하기
 

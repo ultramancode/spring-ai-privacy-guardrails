@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: d83cc1f6329d8a25d3fa1c25ecf6f04ab790141375d5518e450a07a1c7a94527 -->
+<!-- i18n-source-sha256: 85bd601265c8084553499358265847afe761da3a005717a3c6d48b1c731af22d -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -186,10 +186,6 @@ ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, policy)
 제공되는 프로토콜이나 직접 구현한 프로토콜을 Spring 빈으로 등록해 HTTP 검사기에 전달합니다.
 `your-model`은 배포한 모델 이름으로 바꿉니다.
 
-아래 예제는 개인정보 처리가 완료된 콘텐츠를 요구합니다.
-[앞의 조합 예제](#개인정보-보호-또는-도구-권한-검사와-조합)처럼 같은 클라이언트에서 개인정보 보호와 검사를 선택하세요. 출력 검사도 활성화한다면
-[출력 정책과 스트리밍](privacy.md#출력-정책과-스트리밍)에 따라 개인정보 출력 보호도 활성화해야 합니다.
-
 ```java
 @Bean
 ContentInspector httpGuard(GuardModelProtocol guardModelProtocol) {
@@ -207,10 +203,10 @@ ContentInspector httpGuard(GuardModelProtocol guardModelProtocol) {
 `requestTimeout`은 HTTP 요청별 제한 시간이며, `maxResponseBytes`는 응답 본문의 최대 크기입니다.
 빌더의 기본값은 요청별 제한 시간 1분과 응답 본문 최대 크기 2 MiB입니다.
 
-`requirePrivacyProcessedContent`는 검사 모델에 텍스트를 보내기 전에 개인정보 처리 완료를
-요구할지 정합니다. `true`이면 모든 검사 구간의 상태가 `PROCESSED`여야 합니다.
-`false`이면 다른 상태의 구간도 전송할 수 있습니다.
-이 설정은 전달받은 상태를 확인할 뿐, 개인정보 처리를 실행하지는 않습니다.
+`requirePrivacyProcessedContent`의 기본값은 `false`입니다. `true`로 설정하면 전송할 모든 구간의
+상태가 `PROCESSED`여야 합니다. `ChatClient`에서 이 조건을 적용하려면
+[개인정보 보호와 검사를 함께 선택](#개인정보-보호-또는-도구-권한-검사와-조합)하고,
+출력 검사에는 [개인정보 출력 보호](privacy.md#출력-정책과-스트리밍)도 활성화합니다.
 
 | 개인정보 처리 상태 | 의미 |
 | --- | --- |
@@ -427,7 +423,6 @@ Spring 빈으로 등록할 때는 `destroyMethod = "close"`를 지정하고,
 탐지 임계값은 각 검사기에 설정합니다. 서로 다른 모델의 점수를 직접 비교할 수는 없습니다.
 
 서비스는 검사기를 실행하기 전에 입력이 개인정보 처리 조건을 충족하는지 확인합니다.
-로컬 ONNX 검사기와 규칙 검사기는 사전 개인정보 처리를 요구하지 않습니다.
 `PROCESSED` 상태를 요구하는 검사기가 있는데 입력 구간 중 하나라도 `UNKNOWN` 또는
 `UNPROCESSED`이면 요청을 중단합니다. 이때 `PRIVACY_PROCESSING_REQUIRED` 오류 코드를 담은
 `InspectionException`을 던지며, `FAIL_OPEN`으로 설정했어도 어떤 검사기도 실행하지 않습니다.

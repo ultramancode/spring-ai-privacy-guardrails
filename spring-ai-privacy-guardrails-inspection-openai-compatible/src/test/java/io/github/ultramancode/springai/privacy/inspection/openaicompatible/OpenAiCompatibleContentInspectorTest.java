@@ -293,16 +293,19 @@ class OpenAiCompatibleContentInspectorTest {
 
     @ParameterizedTest
     @EnumSource(value = ContentSegment.PrivacyProcessingStatus.class, names = {"UNKNOWN", "UNPROCESSED"})
-    void disabledPrivacyRequirementAllowsStandaloneHttpInspection(ContentSegment.PrivacyProcessingStatus status) throws Exception {
+    void defaultConfigurationAllowsStandaloneHttpInspection(ContentSegment.PrivacyProcessingStatus status) throws Exception {
         startServer("<SAFE>");
-        OpenAiCompatibleContentInspector inspector =
-                new OpenAiCompatibleContentInspector("guard", config(false, Duration.ofSeconds(2), 4096), new KananaSafeguardPromptProtocol());
+        OpenAiCompatibleInspectionConfig config = OpenAiCompatibleInspectionConfig.builder(baseUrl, "test-model")
+                .build();
+        OpenAiCompatibleContentInspector inspector = new OpenAiCompatibleContentInspector(
+                "guard", config, new KananaSafeguardPromptProtocol());
         InspectionService service = new InspectionService(List.of(inspector));
 
         InspectionReport report = service.inspect(request(status, "synthetic raw"));
 
         assertThat(report.decision()).isEqualTo(InspectionDecision.ALLOW);
         assertThat(report.outcomes().get(0).result().status()).isEqualTo(InspectionResult.Status.COMPLETED);
+        assertThat(calls).hasValue(1);
         assertThat(receivedRequestBody.get()).contains("synthetic raw");
     }
 

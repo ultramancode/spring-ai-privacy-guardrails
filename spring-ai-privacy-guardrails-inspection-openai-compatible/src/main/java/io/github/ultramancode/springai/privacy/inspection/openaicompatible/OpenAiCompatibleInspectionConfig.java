@@ -14,7 +14,6 @@ import java.util.Objects;
  *        The remaining inspection time may impose a shorter limit.
  * @param maxResponseBytes maximum response body size in bytes
  * @param requirePrivacyProcessedContent whether all segments must be marked {@code PROCESSED} before sending.
- *        This setting does not perform privacy processing.
  */
 public record OpenAiCompatibleInspectionConfig(
         URI baseUrl,
@@ -67,7 +66,6 @@ public record OpenAiCompatibleInspectionConfig(
 
     /**
      * Creates a builder with a one-minute timeout and a 2 MiB response limit.
-     * Requires privacy-processed content by default.
      */
     public static Builder builder(URI baseUrl, String model) {
         return new Builder(baseUrl, model);
@@ -80,7 +78,7 @@ public record OpenAiCompatibleInspectionConfig(
         private String apiKey;
         private Duration requestTimeout = Duration.ofMinutes(1);
         private int maxResponseBytes = 2 * 1024 * 1024;
-        private boolean requirePrivacyProcessedContent = true;
+        private boolean requirePrivacyProcessedContent = false;
 
         private Builder(URI baseUrl, String model) {
             this.baseUrl = baseUrl;
@@ -102,6 +100,10 @@ public record OpenAiCompatibleInspectionConfig(
             return this;
         }
 
+        /**
+         * Requires every segment to be marked {@code PROCESSED} before sending when enabled.
+         * Defaults to {@code false}.
+         */
         public Builder requirePrivacyProcessedContent(boolean required) {
             this.requirePrivacyProcessedContent = required;
             return this;

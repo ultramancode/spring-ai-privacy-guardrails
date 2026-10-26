@@ -186,10 +186,6 @@ This module uses the official OpenAI Java SDK.
 Register a matching built-in protocol or your own implementation as a Spring bean
 and pass it to the HTTP inspector. Replace `your-model` with the deployed model name:
 
-The example below requires privacy-processed content. Select privacy and inspection together as shown [above](#combine-with-privacy-or-tool-authorization).
-If output inspection is enabled too, also enable privacy output protection as described
-in [Output Policy and Streaming](privacy.md#output-policy-and-streaming).
-
 ```java
 @Bean
 ContentInspector httpGuard(GuardModelProtocol guardModelProtocol) {
@@ -208,10 +204,10 @@ require authentication.
 `requestTimeout` limits each HTTP request, and `maxResponseBytes` limits its response body.
 The builder defaults to one minute per request and a 2 MiB response body limit.
 
-`requirePrivacyProcessedContent` controls whether the inspector requires privacy
-processing before sending text to the guard model. Set it to `true` to accept only
-segments marked `PROCESSED`. Set it to `false` to permit other processing statuses.
-This setting checks the supplied status. It does not perform privacy processing.
+`requirePrivacyProcessedContent` defaults to `false`. Set it to `true` to require every segment
+to be marked `PROCESSED` before sending. To apply this requirement with a `ChatClient`,
+select [privacy and inspection together](#combine-with-privacy-or-tool-authorization)
+and enable [privacy output protection](privacy.md#output-policy-and-streaming) for output inspection.
 
 | Privacy status | Meaning |
 | --- | --- |
@@ -433,8 +429,7 @@ Configure detection thresholds in each inspector, as scores from different model
 are not directly comparable.
 
 Before running any inspector, the service checks whether the input meets the
-inspectors' privacy processing requirements. Local ONNX and rule inspectors do not
-require prior privacy processing. If an inspector requires `PROCESSED` content and
+inspectors' privacy processing requirements. If an inspector requires `PROCESSED` content and
 any segment is `UNKNOWN` or `UNPROCESSED`, the service stops the request.
 It throws `InspectionException` with the failure code `PRIVACY_PROCESSING_REQUIRED`,
 even when `FAIL_OPEN` is configured. No inspector runs.

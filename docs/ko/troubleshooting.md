@@ -8,7 +8,7 @@ description: >-
 [English](../troubleshooting.md) | **한국어**
 
 <!-- i18n-source: docs/troubleshooting.md -->
-<!-- i18n-source-sha256: b8bb31359d4c7d7d08bd073424eede96de3374ea6f36bcf2f8681a8172c07fad -->
+<!-- i18n-source-sha256: 70148d54cea0e5d0270206a04cbaa584ec8c5e4d84d2b492708b133fbda6f67a -->
 
 관찰한 증상에서 시작하세요. 같은 클라이언트 정책과 합성 입력으로 재현하고,
 [Inspector](sample.md)의 로컬 구성과 비교합니다. 운영 로그에 원문이나 불투명 토큰 매핑을 남기지 마세요.
@@ -60,8 +60,7 @@ description: >-
 
 1. 원문 공개가 의도된 도구인지 먼저 확인합니다. 보호된 도구에는 기본적으로 토큰을 전달합니다.
 2. 정책의 도구 이름을 최종 `ToolDefinition.name()`과 비교합니다. 대소문자와 MCP 제공자의
-   접두사도 일치해야 합니다. 정규 엔티티 유형과 탐지 규칙 활성화를 확인합니다.
-   `CUSTOMER_ID`에는 [고객 조회 예제](getting-started.md#local-and-mcp-tools)의 애플리케이션 규칙이 필요합니다.
+   접두사도 일치해야 합니다. `ToolDisclosurePolicy`가 토큰의 최종 엔티티 유형을 허용하는지 확인합니다.
 3. 합성 입력으로 도구 호출을 반복하고 도구 입력과 보호된 결과를 확인합니다. 허용된 유형만
    복원되어야 합니다. [원문 공개 규칙](privacy.md#도구별-원문-공개)을 참고하세요.
 
@@ -96,7 +95,7 @@ description: >-
 2. 이름·주소는 적합한 인식기·모델과 언어를 구성합니다. Presidio 샘플 프로필은 영어 NLP를
    사용하며 한국어 NER을 제공하지 않습니다. UI 언어가 탐지 범위를 바꾸지는 않습니다.
 3. 해당 환경을 대표하는 합성 양성·음성 예제를 검증합니다.
-   [분석기 선택](getting-started.md#choose-an-analyzer)과 [내장 규칙 범위](privacy.md#내장-규칙)를 참고하세요.
+   [분석기 선택](privacy.md#choose-an-analyzer)과 [내장 규칙 범위](privacy.md#내장-규칙)를 참고하세요.
 
 <a id="inspection-not-running"></a>
 
@@ -107,8 +106,7 @@ description: >-
    `InspectionService`가 있는지도 확인하세요.
 2. 앞선 개인정보 처리나 인가 실패로 검사에 도달하지 못했는지, 검사기의 사전 조건에서
    실패했는지 확인합니다. 보고된 단계와 실패 코드는 [결과와 실패](inspection.md#결과-정책-실패)를 참고하세요.
-3. 문자열 규칙 예제의 `ignore previous instructions`는 모델 호출 전에 차단되고, 허용 입력은
-   모델에 도달해야 합니다. [Inspection 데모](sample.md#inspection)와 비교하세요.
+3. 검사기가 차단하도록 구성한 입력과 허용할 입력으로 각각 요청해 검사 보고서를 확인합니다.
 
 <a id="onnx"></a>
 
@@ -118,6 +116,4 @@ description: >-
    출력 클래스 설정을 확인합니다. 앱의 작업 디렉터리를 기준으로 경로를 확인하세요.
    [모델 요구 사항](inspection.md#모델-요구-사항)을 참고하세요.
 2. `MODEL_ERROR`이면 출력 형식·수치가 `logitCount`와 활성화 설정에 맞는지 확인합니다.
-   6개 클래스 독성 모델에 예제의 2개 클래스 설정을 그대로 사용할 수는 없습니다.
 3. [고정 테스트 모델 준비](inspection.md#reproduce-onnx-tests)를 실행해 알려진 모델과 비교합니다.
-   이 테스트의 성공이 모든 사용자 모델이나 언어의 동작을 검증하는 것은 아닙니다.

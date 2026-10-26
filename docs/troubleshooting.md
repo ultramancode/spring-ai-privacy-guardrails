@@ -59,8 +59,7 @@ See [stored data](privacy.md#stored-data-and-diagnostics) for application respon
 
 1. Confirm that original disclosure is intended. Tokens are the default for protected tools.
 2. Match the policy's tool name to the final `ToolDefinition.name()`, including case and an MCP
-   provider's prefix. Check the canonical entity type and ensure its detection rule is active.
-   `CUSTOMER_ID` needs an application rule, as shown in [customer lookup](getting-started.md#local-and-mcp-tools).
+   provider's prefix. Confirm that `ToolDisclosurePolicy` allows the token's final entity type.
 3. Repeat the synthetic tool call and inspect the tool input and its protected result. Only the
    permitted types should be restored. See [disclosure rules](privacy.md#per-tool-original-disclosure).
 
@@ -97,7 +96,7 @@ See [stored data](privacy.md#stored-data-and-diagnostics) for application respon
    formats. Employee and customer IDs in the demo use additional application rules.
 2. For names or addresses, configure a suitable recognizer/model and language. The sample Presidio
    profile uses English NLP and does not provide Korean NER. UI language does not change the analyzer's coverage.
-3. Test representative synthetic positive and negative examples. See [analyzer choices](getting-started.md#choose-an-analyzer)
+3. Test representative synthetic positive and negative examples. See [analyzer choices](privacy.md#choose-an-analyzer)
    and [built-in scope](privacy.md#built-in-rules).
 
 <a id="inspection-not-running"></a>
@@ -109,8 +108,7 @@ See [stored data](privacy.md#stored-data-and-diagnostics) for application respon
    `InspectionService`, either from inspector beans or supplied explicitly.
 2. Check whether an earlier privacy or authorization failure prevented inspection, or an inspector's
    prerequisites failed. Inspect the reported phase and failure code. See [results and failures](inspection.md#results-policies-and-failures).
-3. With the literal-rule example, `ignore previous instructions` should be blocked before any model
-   call, while the allowed input should reach it. Compare the [Inspection demo](sample.md#inspection).
+3. Send inputs your inspector is configured to block and allow, and check the inspection reports.
 
 <a id="onnx"></a>
 
@@ -120,6 +118,5 @@ See [stored data](privacy.md#stored-data-and-diagnostics) for application respon
    needed, input names/types/shapes, and output class settings. Resolve paths against the application's
    working directory. See [model requirements](inspection.md#model-requirements).
 2. For `MODEL_ERROR`, check the output shape and numeric values against the configured `logitCount`
-   and activation. A six-class toxicity model cannot use the example's two-class settings unchanged.
+   and activation.
 3. Run the [pinned test-model setup](inspection.md#reproduce-onnx-tests) to compare with a known model.
-   Passing those tests verifies that fixture, not every custom model or language.

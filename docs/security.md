@@ -17,8 +17,6 @@ When both are used, Spring Security authorizes tool exposure and execution,
 while privacy protection detects PII and controls which original values each
 tool may receive.
 
-[Dependencies](#add-the-spring-boot-starter) → [Authorization policy](#define-the-authorization-policy) → [Client](#configure-the-chatclient) → [Verification](#verify-authorization). Use your existing application authentication. No PII analyzer is required. [Troubleshooting](troubleshooting.md#tool-access)
-
 ## Guarantees
 
 The integration checks authorization at the following stages of a protected
@@ -39,14 +37,9 @@ and original PII disclosure separately:
 - `ToolDisclosurePolicy` decides which PII entity types an authorized tool may
   receive as original values.
 
-Authorizing a tool does not automatically disclose original PII. An original
-value is provided only when the authorization policy allows execution and its
-entity type is configured under `ToolDisclosurePolicy`.
-
 ## Add the Spring Boot Starter
 
-Use an existing Spring AI app with a configured `ChatModel`. These dependency examples use
-`0.4.0` from Maven Central. See [repository configuration](getting-started.md#add-the-client-starter).
+Add the Security starter alongside the [client starter](getting-started.md#add-the-client-starter):
 
 ### Gradle
 
@@ -78,7 +71,7 @@ bean, then select `toolAuthorization(true)` in `GuardrailsPolicy`. No privacy an
 
 ### With Privacy Protection
 
-Configure an analyzer as described in [Getting Started](getting-started.md) and select
+Configure an analyzer as described in [privacy setup](getting-started.md#privacy-protection) and select
 `privacy()` in the same policy.
 
 ## Define the Authorization Policy
@@ -87,21 +80,19 @@ Register your tool authorization policy as an
 `AuthorizationManager<ToolAuthorizationContext>` bean. `AuthorizationManager`
 is a standard Spring Security extension interface.
 
-The policy receives user information through `Authentication` and the tool's
-specification (`ToolDefinition`) and authorization phase through
-`ToolAuthorizationContext`. Tool argument values and the original request text
-are not passed to the policy. For example, it can check whether the user may
-use `customerLookup`, but it does not receive the actual `customerId` being
-looked up. Implement checks that depend on argument values, such as permission
-to view a particular customer, in the tool or application service.
+The policy receives `Authentication` and a `ToolAuthorizationContext` containing the
+tool definition and authorization phase. Implement checks on argument values, such as
+permission to view a particular customer, in the tool or application service.
 
 The following example allows only users with the `ROLE_SUPPORT` authority to
-use `customerLookup`. All other tools are denied.
+use `customerLookup`. All other tools are denied. Put the decision logic in
+`GuardrailsToolAuthorizationManager.java`:
 
 ```java
-@Bean
-AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
-    return (authentication, context) -> {
+public final class GuardrailsToolAuthorizationManager implements AuthorizationManager<ToolAuthorizationContext> {
+    @Override
+    public AuthorizationDecision authorize(Supplier<? extends Authentication> authentication,
+            ToolAuthorizationContext context) {
         Authentication currentAuthentication = authentication.get();
         if (currentAuthentication == null || !currentAuthentication.isAuthenticated()) {
             return new AuthorizationDecision(false);
@@ -115,7 +106,16 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
             default -> false;
         };
         return new AuthorizationDecision(granted);
-    };
+    }
+}
+```
+
+Register the implementation in an application `@Configuration` class:
+
+```java
+@Bean
+AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+    return new GuardrailsToolAuthorizationManager();
 }
 ```
 
@@ -128,7 +128,7 @@ If the policy returns `null` or a denied result, the integration omits the tool
 from the list during the definition phase and rejects the call during the
 execution phase.
 
-The following example allows all tools:
+To allow all tools, configure the `toolAuthorizationManager` bean as follows:
 
 ```java
 @Bean
@@ -148,12 +148,12 @@ After preparing dependencies and the authorization policy, create the client thr
 
 ```java
 @Bean
-ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
             .toolAuthorization(true)
             .build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+    return guardrailsChatClientFactory.builder(chatModel, policy)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
@@ -161,39 +161,28 @@ ChatClient authorizedToolClient(ChatModel chatModel, GuardrailsChatClientFactory
 
 ### Verify Authorization
 
-In a service handling an existing authenticated request, inject the bean with
-`@Qualifier("authorizedToolClient")` and run this code. `customerLookupToolCallback` must be your
-application's actual tool bean:
+Inject the client into a service handling an authenticated request and run this code:
 
 ```java
-String response = authorizedToolClient.prompt()
+String response = chatClient.prompt()
         .user("Look up customer CUST-123456.")
         .call()
         .content();
 ```
 
-The model's tool list includes `customerLookup` for a `ROLE_SUPPORT` user and excludes it for an
-unauthorized user. A model may choose not to call tools, so do not infer authorization from the
-answer text alone. The [Security demo](sample.md#security) deliberately attempts tool calls and
-shows 0 executions for a general employee and 1 for customer support. This authorization-only
-configuration does not tokenize the customer ID in the input.
+With the example authorization policy, only users with `ROLE_SUPPORT` may discover
+and execute `customerLookup`.
 
-
-When privacy is also selected, the factory protects tools automatically.
-Select the permitted original-value disclosure in the client policy:
+To combine privacy protection with tool authorization, add `privacy()` to the client policy:
 
 ```java
-GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
-        .privacy(GuardrailsPolicy.Privacy.builder()
-                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
-                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
-                .build())
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy()
         .toolAuthorization(true)
         .build();
-ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
-        .defaultTools(customerLookupToolCallback)
-        .build();
 ```
+
+If a tool needs original PII, use `ToolDisclosurePolicy` to specify which entity types it may receive.
 
 ## Tool Advisor Configuration
 
@@ -221,7 +210,7 @@ For clients that use tools:
 ### Custom Tool Advisor
 
 Pass the builder for your chosen tool-calling advisor to
-`guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)`. The factory connects tool
+`guardrailsChatClientFactory.builder(chatModel, policy, toolAdvisorBuilder)`. The factory connects tool
 authorization checks when configuring the client.
 
 The following example sets the tool-calling advisor's execution order to `100`
@@ -229,16 +218,16 @@ on a client using tool authorization alone:
 
 ```java
 @Bean
-ChatClient customToolAdvisorClient(
+ChatClient chatClient(
         ChatModel chatModel,
         GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolCallback customerLookupToolCallback
 ) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
             .toolAuthorization(true)
             .build();
     ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder().advisorOrder(100);
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy, toolAdvisorBuilder)
+    return guardrailsChatClientFactory.builder(chatModel, policy, toolAdvisorBuilder)
             .defaultTools(customerLookupToolCallback)
             .build();
 }
@@ -309,7 +298,7 @@ Pass this builder to the factory when creating the client:
 
 ```java
 ChatClient chatClient = guardrailsChatClientFactory
-        .builder(chatModel, guardrailsPolicy, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
+        .builder(chatModel, policy, new CustomToolCallingAdvisor.Builder().advisorOrder(100))
         .defaultTools(customerLookupToolCallback)
         .build();
 ```
@@ -423,16 +412,16 @@ protection by passing the tool-search advisor's builder to the factory.
 
 ```java
 @Bean
-ChatClient toolSearchClient(
+ChatClient chatClient(
         ChatModel chatModel,
         GuardrailsChatClientFactory guardrailsChatClientFactory,
         ToolIndex toolIndex
 ) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
             .privacy()
             .toolAuthorization(true)
             .build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy,
+    return guardrailsChatClientFactory.builder(chatModel, policy,
                     ToolSearchToolCallingAdvisor.builder().toolIndex(toolIndex))
             .build();
 }
@@ -447,7 +436,7 @@ registers a tool and passes the application's `conversationId` to a client that
 also uses privacy protection:
 
 ```java
-String response = toolSearchClient.prompt()
+String response = chatClient.prompt()
         .user("Find customer CUST-123456.")
         .tools(customerLookupToolCallback)
         .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, conversationId))
@@ -458,7 +447,7 @@ String response = toolSearchClient.prompt()
 With this setup, only authorized tools registered for the request are searchable,
 and permission is checked again immediately before a selected tool executes.
 When privacy protection is also used, detected PII in the search query is
-replaced with **opaque tokens** before the search runs. These replacement
+replaced with opaque tokens before the search runs. These replacement
 strings do not directly reveal the original values.
 
 The library allows the tool that performs the search. The application's
@@ -536,9 +525,13 @@ thrown directly by the application's `AuthorizationManager` propagate unchanged.
 
 ## Compatibility
 
-| Component | Supported versions |
+| Component | Minimum supported version |
 | --- | --- |
-| Java | 17 or later |
-| Spring AI | `2.0.x` |
-| Spring Boot | `4.x` |
-| Spring Security | `7.x` |
+| Java | 17 |
+| Spring AI | 2.0.0 |
+| Spring Boot | 4.0.0 |
+| Spring Security | 7.0.0 |
+
+We continue to verify compatibility and support new releases of Java, Spring AI, Spring Boot
+and Spring Security as they become available.
+The Boot starter uses the Spring Security version selected by the Spring Boot BOM.

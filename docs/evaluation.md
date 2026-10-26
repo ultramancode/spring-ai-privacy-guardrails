@@ -1,7 +1,7 @@
 ---
 description: >-
-  Verify Spring AI Privacy Guardrails with privacy boundary and tool authorization
-  tests, reproducible analyzer checks, and performance benchmarks.
+  Verify privacy protection, tool authorization and content inspection with boundary tests,
+  reproducible analyzer checks and performance benchmarks.
 hide:
   - footer
 ---
@@ -10,11 +10,8 @@ hide:
 
 **English** | [한국어](ko/evaluation.md)
 
-This repository includes a regression test for the demo analyzer,
-privacy-boundary tests, and JMH benchmarks. The regression test checks detection
-results, the boundary tests check policy enforcement, and the JMH benchmarks
-measure local processing time. These results are not interchangeable and do
-not guarantee accuracy or latency in a production environment.
+This repository tests privacy protection, tool authorization and content inspection.
+It also includes a regression test for the demo analyzer and JMH benchmarks for local processing time.
 
 ## Demo Analyzer Regression Test
 
@@ -22,7 +19,7 @@ The demo's local rule analyzer uses the same configuration as the runnable sampl
 is tested against a synthetic dataset. The test checks that the expected entity
 types and raw values are detected, those raw values are absent from the
 protected output, and request sessions are cleaned up. Detected PII is replaced
-with **opaque tokens**, replacement strings that do not directly reveal the
+with opaque tokens, replacement strings that do not directly reveal the
 original values.
 
 To run only the regression test with the default demo configuration:
@@ -36,20 +33,24 @@ represent general PII-detection accuracy or detection performance across
 languages and domains. Validate analyzers intended for production separately
 with data representative of the target environment.
 
-## Privacy Boundary Tests
+## Boundary Tests
 
 Boundary tests do not measure detection accuracy. They verify configured policy
 enforcement at the model, tool, output, and request-lifecycle boundaries. Run
 all repository checks with:
 
-The full checks include ONNX tests. Review [model preparation](inspection.md#reproduce-onnx-tests) and the initial download of about 439 MB. You can prepare it with `./gradlew prepareOnnxTestModel`. Successful checks end with Gradle reporting `BUILD SUCCESSFUL`.
-
 ```bash
 ./gradlew --no-daemon clean check
 ```
 
+The ONNX tests download their test model on the first run and reuse the cached files afterward.
+See [ONNX test model preparation](inspection.md#reproduce-onnx-tests) for details.
+
 By default, the test suite uses test models and local components. Tests that use
 live remote models or analyzer services are opt-in.
+
+Content inspection tests cover rules, ONNX models, HTTP backends and Spring AI integration.
+See [inspection verification](inspection.md#verification) for their scope.
 
 ### Privacy Boundary Verification Matrix
 
@@ -57,19 +58,19 @@ The matrix records privacy boundaries verified by reproducible automated tests.
 
 | Boundary | Verified behavior | Test |
 | --- | --- | --- |
-| Direct prompt → model | Raw detected PII is replaced with a request-scoped opaque token before the model call. | [`PrivacyChatClientIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatClientIntegrationTest.java) |
-| Spring AI chat memory → model copy | Stored memory can retain application-owned raw text while detected PII in the copy sent to the model is replaced with opaque tokens. | [`PrivacyChatMemoryIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatMemoryIntegrationTest.java) |
-| Spring AI VectorStore RAG → model | When retrieval returns a document containing detected PII, the raw value is replaced with an opaque token before the model call. | [`PrivacyVectorStoreRagIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyVectorStoreRagIntegrationTest.java) |
-| Allowed tool input value disclosure | A scoped tool receives originals only for explicitly allowed entity types. | [`PrivacyToolCallbackWrapperTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
-| Denied tool input value disclosure | Raw values of disallowed inputs remain protected. | [`PrivacyToolCallbackWrapperTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
-| Tool result → model | Detected PII in tool results is replaced with opaque tokens before returning to the model. | [`PrivacySequentialToolIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
-| MCP Streamable HTTP tool round trip | The local MCP round trip restores only allowed input values, keeps denied values protected, and re-protects results before they return to the model. | [`McpToolLoopIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/mcp/infrastructure/McpToolLoopIntegrationTest.java) |
-| Spring Security tool discovery and execution authorization | Only allowed tools are shown to the model, and every tool requested in one response is authorized before any starts. Permission is checked again immediately before each tool runs. When privacy protection is also used, original PII is restored only after authorization. | [`SpringSecurityToolBoundaryIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java), [`ToolAuthorizationStandaloneIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/ToolAuthorizationStandaloneIntegrationTest.java) |
-| Tool Search and tool changes | Only allowed tools are registered for search, and selected tools are checked against those registered at the start of the request. Requests for denied tools by name and unsupported tool additions or replacements during the request are rejected before execution. | [`SpringSecurityToolSearchIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolSearchIntegrationTest.java), [`SpringSecurityToolMutationIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolMutationIntegrationTest.java) |
-| Tool authorization across call types | Tool permissions are checked using the user's authentication obtained at the start of the request. Tools do not execute without authentication. See [Authentication Handling for Tool Authorization](#authentication-handling-for-tool-authorization) for detailed checks. | [`SpringSecurityContextPropagationIntegrationTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityContextPropagationIntegrationTest.java) |
-| Request lifecycle on completion and error | Sessions are closed after normal completion and downstream failure. | [`PrivacyLifecycleAdvisorTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
-| Logical streaming response protection | Output frames are buffered as one logical response so PII split across frames is protected before delivery to the subscriber. | [`PrivacyOutputAdvisorStreamTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyOutputAdvisorStreamTest.java) |
-| Streaming cancellation after partial response buffering | Cancellation emits no raw PII, cancels upstream processing, closes the privacy session, and invalidates its mapping. | [`PrivacyLifecycleAdvisorTest`](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
+| Direct prompt → model | Raw detected PII is replaced with a request-scoped opaque token before the model call. | [ChatClient](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatClientIntegrationTest.java) |
+| Spring AI chat memory → model copy | Stored memory can retain application-owned raw text while detected PII in the copy sent to the model is replaced with opaque tokens. | [Chat memory](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyChatMemoryIntegrationTest.java) |
+| Spring AI VectorStore RAG → model | When retrieval returns a document containing detected PII, the raw value is replaced with an opaque token before the model call. | [VectorStore RAG](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyVectorStoreRagIntegrationTest.java) |
+| Allowed tool input value disclosure | A scoped tool receives originals only for explicitly allowed entity types. | [Original disclosure](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
+| Denied tool input value disclosure | Raw values of disallowed inputs remain protected. | [Original disclosure](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyToolCallbackWrapperTest.java) |
+| Tool result → model | Detected PII in tool results is replaced with opaque tokens before returning to the model. | [Sequential tool calls](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-test/src/test/java/io/github/ultramancode/springai/privacy/test/PrivacySequentialToolIntegrationTest.java) |
+| MCP Streamable HTTP tool round trip | The local MCP round trip restores only allowed input values, keeps denied values protected, and re-protects results before they return to the model. | [MCP round trip](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/src/test/java/io/github/ultramancode/springai/privacy/sample/mcp/infrastructure/McpToolLoopIntegrationTest.java) |
+| Spring Security tool discovery and execution authorization | Only authorized tools are exposed and executed. With privacy enabled, originals are restored after authorization. | [With privacy](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolBoundaryIntegrationTest.java), [Authorization alone](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/ToolAuthorizationStandaloneIntegrationTest.java) |
+| Tool Search and tool changes | Only permitted tools are searchable. Calls to unpermitted or unregistered tools and unsupported tool changes are rejected. | [Tool Search](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolSearchIntegrationTest.java), [Tool changes](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityToolMutationIntegrationTest.java) |
+| Tool authorization across call types | Tool permissions are checked using the user's authentication obtained at the start of the request. Tools do not execute without authentication. See [Authentication Handling for Tool Authorization](#authentication-handling-for-tool-authorization) for detailed checks. | [Authentication propagation](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-security/src/test/java/io/github/ultramancode/springai/privacy/security/SpringSecurityContextPropagationIntegrationTest.java) |
+| Request lifecycle on completion and error | Sessions are closed after normal completion and downstream failure. | [Request lifecycle](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
+| Logical streaming response protection | Output frames are buffered as one logical response so PII split across frames is protected before delivery to the subscriber. | [Streaming output](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyOutputAdvisorStreamTest.java) |
+| Streaming cancellation after partial response buffering | Cancellation emits no raw PII, cancels upstream processing, closes the privacy session, and invalidates its mapping. | [Request lifecycle](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-spring-ai/src/test/java/io/github/ultramancode/springai/privacy/springai/PrivacyLifecycleAdvisorTest.java) |
 
 ### Spring Security Test Configurations
 
@@ -77,6 +78,11 @@ Tool authorization and Tool Search are tested in both configurations:
 
 - Tool authorization alone.
 - Tool authorization combined with privacy protection.
+
+For each model response, all requested tools are authorized before any run.
+Permission is checked again immediately before each tool executes.
+
+Tool Search checks search results against the tools registered at the start of the request.
 
 ### Authentication Handling for Tool Authorization
 

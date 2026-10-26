@@ -1,6 +1,6 @@
 # Spring AI Privacy Guardrails
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.ultramancode/spring-ai-privacy-guardrails-spring-boot-starter?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.ultramancode/spring-ai-privacy-guardrails-spring-boot-starter)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.ultramancode/spring-ai-privacy-guardrails-chat-client-spring-boot-starter?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.ultramancode/spring-ai-privacy-guardrails-chat-client-spring-boot-starter)
 [![CI](https://github.com/ultramancode/spring-ai-privacy-guardrails/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ultramancode/spring-ai-privacy-guardrails/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
@@ -8,25 +8,16 @@
 
 **Tokenize detected PII before it reaches the model. Reveal only the originals a tool needs, then protect its result again.**
 
-**[Run the demo without an API key](docs/sample.md#run-the-inspector)** · **[Add to an existing Spring AI app](#add-protection-to-an-application)**
-
 | What you need | Feature |
 | --- | --- |
 | Keep detected PII out of the model and allow originals only for selected tools | [Privacy](docs/privacy.md) |
 | Limit tool visibility and execution using the current user's permissions | [Tool Authorization](docs/security.md) |
 | Check requests and responses with rules, local ONNX or an HTTP guard model | [Content Inspection](docs/inspection.md) |
 
-Use these features independently or together. Analyzers identify sensitive values.
-This library applies the findings and policies on supported Spring AI execution paths.
+Use these features independently or together.
 
 <p align="center">
   <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="PII tokenization and per-tool disclosure, with optional tool authorization and content inspection" width="100%"></a>
-</p>
-
-<p align="center">
-  <strong>Watch the demo:</strong>
-  <a href="https://youtu.be/IeeA5ogIX_I">English</a> ·
-  <a href="https://youtu.be/vir-x78e9j8">한국어</a>
 </p>
 
 **Featured In**
@@ -36,29 +27,9 @@ This library applies the findings and policies on supported Spring AI execution 
 
 <br>
 
-## Run the Sample
-
-The default sample uses a local model and fixed examples to show enforcement.
-No external service accounts or model API keys are required. Install JDK 17,
-follow the [repository setup](docs/sample.md#run-the-inspector), and run from its root:
-
-```bash
-./gradlew :spring-ai-privacy-guardrails-sample-demo:run
-```
-
-At `http://127.0.0.1:8080`, open **Local Tool**. Check model raw exposure `0/4`,
-allowed original restoration `1/1`, protected tool results and `PASS`. These counts
-refer to the fixed example. The [Sample Guide](docs/sample.md) also explains what
-to check in RAG, MCP, Security and Inspection.
-
-<p align="center">
-  <a href="docs/images/privacy-boundary-inspector-demo.gif"><img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Inspector showing tokens at the model and the original customer ID at an allowed tool" width="960"></a>
-</p>
-
 ## Add Protection to an Application
 
-Use Java 17, Spring AI 2.0.0 and Spring Boot 4.0.0 or later, with an application-provided
-`ChatModel` whose model connection is already configured. These examples use `0.4.0`.
+Use Java 17 or later, Spring AI 2.0.0 or later and Spring Boot 4.0.0 or later.
 See [repository configuration and Maven setup](docs/getting-started.md#add-the-client-starter).
 
 Add the client starter:
@@ -69,7 +40,8 @@ dependencies {
 }
 ```
 
-Select built-in presets in `src/main/resources/application.yml`. No custom rule bean is needed:
+For this privacy example, enable the `COMMON` preset to detect email addresses.
+Add to `src/main/resources/application.yml`:
 
 ```yaml
 spring:
@@ -77,74 +49,99 @@ spring:
     privacy:
       rules:
         enabled: true
-        presets: [COMMON, KR]
+        presets: [COMMON]
 ```
 
-`COMMON` covers supported email and card-number formats. `KR` covers Korean mobile-phone
-and resident-registration-number formats, not general names or addresses. See
-[supported scope and analyzer choices](docs/getting-started.md#choose-an-analyzer).
-
-Create a protected client in an application `@Configuration` class. Dependencies and analyzer
-configuration alone do not protect existing clients:
+Create the client through `GuardrailsChatClientFactory` in an application `@Configuration` class.
+Select privacy protection in its policy:
 
 ```java
 @Bean
-ChatClient privacyChatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory) {
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
             .privacy()
             .build();
-    return guardrailsChatClientFactory.builder(chatModel, guardrailsPolicy)
+    return guardrailsChatClientFactory.builder(chatModel, policy)
             .build();
 }
 ```
 
-Inject this bean into your service with `@Qualifier("privacyChatClient")` and call it.
-[Getting Started](docs/getting-started.md#create-a-protected-client) includes full imports and classes.
+Inject this bean into your service and call it:
 
 ```java
-String response = privacyChatClient.prompt()
-        .user("Contact alice@example.com or 010-2345-6789.")
+String response = chatClient.prompt()
+        .user("Contact alice@example.com.")
         .call()
         .content();
 ```
 
-**The input sent to the model** looks like this. `<opaque>` stands for a request-scoped random value:
+The model receives the following input, with the token's random part abbreviated as `<opaque>`:
 
 ```text
-Contact [PII_EMAIL_ADDRESS_1:<opaque>] or [PII_PHONE_NUMBER_1:<opaque>].
+Contact [PII_EMAIL_ADDRESS_1:<opaque>].
 ```
 
-`response` is the model's generated answer, so it need not match this input.
-Use the [model-input checks](docs/getting-started.md#call-and-check) to verify protection.
-Direct calls to `ChatModel` are outside this client's protection boundary.
+Configure the features your application needs:
+
+| Feature setup | Policy selection |
+| --- | --- |
+| [Privacy protection](docs/getting-started.md#privacy-protection) | `privacy()` |
+| [Tool authorization](docs/getting-started.md#tool-authorization) | `toolAuthorization(true)` |
+| [Content inspection](docs/getting-started.md#content-inspection) | `inspection()` |
+
+See [Getting Started](docs/getting-started.md) for feature combinations, tool registration and verification.
 
 ## Per-Tool Original Disclosure
 
 The model receives detected values as opaque tokens. Immediately before a tool runs,
 only permitted entity types are restored, and its result is protected again.
-Registering a tool does not grant access to originals.
 
-Customer lookup needs **a detection rule → rule selection → tool registration → a disclosure policy**.
-`CUSTOMER_ID` is not in the built-in presets. Follow the
-[complete customer lookup example](docs/getting-started.md#local-and-mcp-tools), which also
-shows how to use MCP providers and final tool names.
+In the `chatClient` bean, update the policy's privacy settings:
+
+```java
+ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
+        Map.of("sendEmail", List.of("EMAIL_ADDRESS")));
+GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
+        .toolDisclosurePolicy(toolDisclosurePolicy)
+        .build();
+policy = policy.mutate()
+        .privacy(privacySettings)
+        .build();
+```
+
+This allows the application's `sendEmail` tool to receive original `EMAIL_ADDRESS` values.
+Other entity types and tools keep opaque tokens.
+
+See [tool registration and MCP integration](docs/privacy.md#per-tool-original-disclosure).
+For custom disclosure logic, use a [separate policy class](docs/privacy.md#custom-tool-disclosure-policy).
 
 ## Add the Features You Need
 
 | Need | Next step |
 | --- | --- |
 | Detect your own employee or customer identifiers | [Java rules and presets](docs/privacy.md#local-rules-and-presets) |
-| Broader detection or NER models | [Presidio and OpenNLP choices](docs/getting-started.md#choose-an-analyzer) |
+| Broader detection or NER models | [Presidio and OpenNLP choices](docs/privacy.md#choose-an-analyzer) |
 | Per-user tool visibility and execution | [Spring Security setup](docs/security.md#add-the-spring-boot-starter) |
 | Input and optional output inspection | [Content inspection setup](docs/inspection.md#set-up-input-inspection) |
-| Tokenize, redact or block PII in the final answer | [Output protection](docs/getting-started.md#protect-final-responses) |
+| Tokenize, redact or block PII in the final answer | [Output protection](docs/privacy.md#output-policy-and-streaming) |
 | Diagnose unexpected behavior | [Troubleshooting](docs/troubleshooting.md) |
 
-Output protection or inspection buffers streaming responses until the complete result is checked.
-See [Architecture](docs/architecture.md) for modules and
-[runtime observation](docs/privacy.md#privacy-safe-runtime-observation) for enforcement events.
+## Sample
 
-## Compatibility and Status
+The sample application uses fixed examples to illustrate Local Tool, RAG, MCP, Security and Inspection.
+See the [Sample Guide](docs/sample.md) for screenshots and run instructions.
+
+<p align="center">
+  <a href="docs/images/privacy-boundary-inspector-demo.gif"><img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Inspector showing Local Tool, RAG, MCP, Security and Inspection" width="960"></a>
+</p>
+
+<p align="center">
+  <strong>Demo videos:</strong>
+  <a href="https://youtu.be/IeeA5ogIX_I">English</a> ·
+  <a href="https://youtu.be/vir-x78e9j8">한국어</a>
+</p>
+
+## Compatibility
 
 | Component | Minimum supported version |
 | --- | --- |
@@ -153,15 +150,14 @@ See [Architecture](docs/architecture.md) for modules and
 | Spring Boot | 4.0.0 |
 | Spring Security | 7.0.0 |
 
-Use Spring AI 2.0.x, Spring Boot 4.x and Spring Security 7.x. The Boot starter
-uses the Security version selected by the Spring Boot BOM.
-
-Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
+We continue to verify compatibility and support new releases of Java, Spring AI, Spring Boot
+and Spring Security as they become available.
+The Boot starter uses the Spring Security version selected by the Spring Boot BOM.
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md): step-by-step starter selection and
-  privacy-boundary setup
+- [Getting Started](docs/getting-started.md): common setup and first steps for privacy protection,
+  tool authorization and content inspection
 - [Configuration](docs/configuration.md): dependencies, client creation and reusable policies
 - [Privacy Protection](docs/privacy.md): analyzers, tokenization, tool disclosure,
   output protection and processing limits
@@ -174,17 +170,10 @@ Use Presidio Analyzer 2.2.361 or later to analyze structured JSON.
   controls, limitations, and separately managed areas
 - [Evaluation and Benchmarks](docs/evaluation.md): verification coverage and
   interpretation limits
-- [Sample / Demo Guide](docs/sample.md): Inspector scenarios, runtime endpoints,
+- [Sample Guide](docs/sample.md): Inspector scenarios, runtime endpoints,
   and the evidence each view verifies
 - [Full Sample Guide](samples/spring-ai-demo/README.md): optional analyzer and
   real-model integration examples
-
-## Security Boundary
-
-This library reduces the risk of PII disclosure, but it does not replace a complete
-data loss prevention (DLP) system or guarantee legal compliance.
-
-See the [Threat Model](docs/threat-model.md) for protection scope and limitations.
 
 ## Build and Verify
 

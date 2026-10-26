@@ -8,15 +8,15 @@ description: >-
 [English](../architecture.md) | **한국어**
 
 <!-- i18n-source: docs/architecture.md -->
-<!-- i18n-source-sha256: 7fa55081eebfe35b65798aa92d4cbffa7e8696eb8dda76e33a9e61a0a073ed94 -->
+<!-- i18n-source-sha256: 15d5f966b3c4357c28421367eb30139492180ece579a6d45f596b4c0d1358c16 -->
 
 ## 책임 범위
 
 라이브러리는 개인정보 보호, 도구 권한 검사와 콘텐츠 검사를 제공합니다.
 다음 흐름은 개인정보 보호 경계를 보여줍니다.
 
-Spring AI Privacy Guardrails는 **개인정보 토큰화**로 분석기가 탐지한 원문을
-요청별 **불투명 토큰(opaque token)**으로 바꿔 모델에 전달합니다. 불투명 토큰은
+Spring AI Privacy Guardrails는 개인정보 토큰화로 분석기가 탐지한 원문을
+요청별 불투명 토큰(opaque token)으로 바꿔 모델에 전달합니다. 불투명 토큰은
 원문 값을 직접 드러내지 않는 대체 문자열입니다.
 도구를 실행하기 직전에 정책이 허용한 원문 값만 복원하고, 실행 결과를 다시 보호합니다.
 출력 보호를 활성화하면 최종 응답에도 설정한 정책을 적용합니다.

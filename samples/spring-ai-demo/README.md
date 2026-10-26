@@ -4,8 +4,8 @@
 
 This runnable sample shows how PII is protected before reaching the model and
 which original values are allowed through to tools. The default configuration
-uses a local `ChatModel` provided by the sample, so no external LLM API key is required.
-Detected PII is replaced with **opaque tokens**, replacement strings that do not
+uses fixed examples and a local scripted `ChatModel`, so no external LLM API key is required.
+Detected PII is replaced with opaque tokens, replacement strings that do not
 directly reveal the original values.
 
 ```text
@@ -22,7 +22,7 @@ root.
 
 ## Run
 
-For Git/JDK setup through the first success checks, follow the [sample setup](../../docs/sample.md#run-the-inspector). Run the commands below from that prepared repository root.
+For prerequisites and run instructions, see the [sample setup](../../docs/sample.md#run-the-inspector).
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
@@ -250,13 +250,18 @@ It requires no external MCP infrastructure or model.
 ## Reading the sample code
 
 Start with [GuardrailsConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/GuardrailsConfiguration.java) for the privacy policy, tool disclosure policy, authorization manager, and guarded `ChatClient`.
+
+[DemoPiiRuleConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/DemoPiiRuleConfiguration.java) defines the sample's employee and customer ID rules.
+[application.yml](src/main/resources/application.yml) selects these rules alongside the built-in presets.
+
 [LocalChatModelConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/LocalChatModelConfiguration.java) supplies the local model.
 [DemoToolAuthorization](src/main/java/io/github/ultramancode/springai/privacy/sample/shared/security/authorization/DemoToolAuthorization.java) defines tool access for the demo roles.
+
 Follow the service for the flow you want to inspect:
 
 - [PromptProtectionDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/PromptProtectionDemoService.java): analyze and tokenize input through `PrivacyService`.
 - [ChatClientDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/ChatClientDemoService.java): call the guarded `ChatClient`.
-- [LocalToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/localtool/service/LocalToolLoopDemoService.java): local tools and role-based authorization.
+- [LocalToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/localtool/service/LocalToolLoopDemoService.java): local tool calls with privacy protection and authorization.
 - [SecurityDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/security/service/SecurityDemoService.java): compare tool access for two roles using the same tool execution.
 - [RagDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/rag/service/RagDemoService.java): retrieval followed by privacy protection.
 - [McpToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/mcp/service/McpToolLoopDemoService.java): run the guarded MCP tool loop and collect privacy boundary evidence.
@@ -272,6 +277,7 @@ Each feature separates HTTP handling in `controller`, execution in `service`, an
 API records in `dto.request` or `dto.response`. `infrastructure` contains model
 and tool implementations. `model` contains internal data types, including demo
 inputs, messages, execution results, and state.
+
 `shared.tool` contains the model, argument types, and evidence used by multiple tool demos.
 `shared.security` contains the demo roles, authorization rules, and authorization checks shared by those demos.
 

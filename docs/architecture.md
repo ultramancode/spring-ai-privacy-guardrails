@@ -14,7 +14,7 @@ The library provides privacy protection, tool authorization and content inspecti
 The following flow shows the privacy protection boundary.
 
 Spring AI Privacy Guardrails tokenizes PII detected by analyzers before sending
-data to a model, replacing it with request-scoped **opaque tokens**. These replacement
+data to a model, replacing it with request-scoped opaque tokens. These replacement
 strings do not directly reveal the original values. Immediately before tool
 execution, it restores only the original values allowed by policy and
 re-protects the results afterward. When output protection is enabled, it also

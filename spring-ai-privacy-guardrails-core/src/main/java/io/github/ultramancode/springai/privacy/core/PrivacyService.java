@@ -371,7 +371,8 @@ public final class PrivacyService {
     }
 
     /**
-     * Replaces tokens issued by this session with markers such as {@code [PII_EMAIL_ADDRESS_1]}.
+     * Replaces tokens issued by this session with markers such as {@code [EMAIL_ADDRESS_1]}.
+     * Markers omit the {@code PII_} prefix and random part.
      * Markers retain the entity type and index and cannot be used to restore original values.
      * Other text is preserved.
      *

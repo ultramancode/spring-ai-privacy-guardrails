@@ -102,7 +102,7 @@ class PiiTokenSimplificationIntegrationTest {
                 .filter(Objects::nonNull).collect(Collectors.joining());
 
         assertThat(httpInspectionTexts).containsExactly(
-                "Hello [PII_PERSON_1] and [PII_PERSON_2], [PII_PERSON_1]", "[PII_PERSON_2] [PII_PERSON_1]");
+                "Hello [PERSON_1] and [PERSON_2], [PERSON_1]", "[PERSON_2] [PERSON_1]");
         assertThat(modelInputText.get()).startsWith("Hello ").containsPattern(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
         String personTokenPattern = OpaquePiiTokenFormat.patternForEntityType("PERSON").pattern();
         assertThat(outputText).matches(personTokenPattern + " " + personTokenPattern);
@@ -119,7 +119,7 @@ class PiiTokenSimplificationIntegrationTest {
 
         assertThatThrownBy(() -> chatClient.prompt().user("Alice attack").call().content())
                 .isInstanceOf(InspectionBlockedException.class);
-        assertThat(httpInspectionTexts).containsExactly("[PII_PERSON_1] attack");
+        assertThat(httpInspectionTexts).containsExactly("[PERSON_1] attack");
         assertThat(modelInputText.get()).isNull();
         assertThat(privacyService.activeSessionCount()).isZero();
     }
@@ -153,7 +153,7 @@ class PiiTokenSimplificationIntegrationTest {
             }
         }).isInstanceOfSatisfying(InspectionException.class,
                 failure -> assertThat(failure.code()).isEqualTo(InspectionFailureCode.CONFIGURATION));
-        assertThat(httpInspectionTexts).containsExactly("Hello [PII_PERSON_1]");
+        assertThat(httpInspectionTexts).containsExactly("Hello [PERSON_1]");
         assertThat(modelInputText.get()).isNotNull();
         assertThat(privacyService.activeSessionCount()).isZero();
     }

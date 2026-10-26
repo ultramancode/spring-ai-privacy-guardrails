@@ -488,7 +488,7 @@ class GuardrailsChatClientFactoryTest {
 
         assertThat(output).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
         assertThat(inspections).hasSize(2).allSatisfy(request -> {
-            assertThat(request.segments()).extracting(ContentSegment::text).contains("[PII_PERSON_1]");
+            assertThat(request.segments()).extracting(ContentSegment::text).contains("[PERSON_1]");
             assertThat(request.segments()).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
         });

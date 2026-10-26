@@ -104,7 +104,7 @@ class InspectionPrivacyContractIntegrationTest {
         // JSON keys and tool metadata are outside the analysis scope.
         assertThat(privacyAnalyzedTexts).containsExactly("Alice", "42", "Alice", "42");
         if (simplifyPiiTokens) {
-            assertThat(protectedUserJsonByInvocation).containsOnly(userJson.replace("Alice", "[PII_PERSON_1]"));
+            assertThat(protectedUserJsonByInvocation).containsOnly(userJson.replace("Alice", "[PERSON_1]"));
         } else {
             assertThat(protectedUserJsonByInvocation).doesNotHaveDuplicates();
         }
@@ -272,7 +272,7 @@ class InspectionPrivacyContractIntegrationTest {
             public ChatResponse call(Prompt prompt) {
                 modelCallCount.incrementAndGet();
                 String userText = prompt.getUserMessage().getText();
-                assertThat(userText).containsPattern(PERSON_TOKEN).doesNotContain("[PII_PERSON_1]");
+                assertThat(userText).containsPattern(PERSON_TOKEN).doesNotContain("[PERSON_1]");
                 assertThat(PERSON_TOKEN.matcher(userText).replaceAll(" ")).doesNotContain("Alice");
                 // Request lookup first. Return done once its result appears in the conversation.
                 if (prompt.getInstructions().stream().noneMatch(ToolResponseMessage.class::isInstance)) {

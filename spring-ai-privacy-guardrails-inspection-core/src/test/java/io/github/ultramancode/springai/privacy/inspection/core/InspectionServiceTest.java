@@ -81,7 +81,7 @@ class InspectionServiceTest {
     void simplifiesTokensOnlyForSelectedInspectors() {
         InspectionRequest originalInspectionRequest = request();
         ContentSegment originalContentSegment = originalInspectionRequest.segments().get(0);
-        UnaryOperator<String> piiTokenSimplifier = ignoredText -> "[PII_PERSON_1]";
+        UnaryOperator<String> piiTokenSimplifier = ignoredText -> "[PERSON_1]";
 
         AtomicReference<InspectionRequest> requestReceivedByTargetInspector = new AtomicReference<>();
         ContentInspector simplificationTargetInspector = inspector("target", receivedInspectionRequest -> {
@@ -105,7 +105,7 @@ class InspectionServiceTest {
                 originalContentSegment.id(),
                 originalContentSegment.role(),
                 originalContentSegment.privacyProcessingStatus(),
-                "[PII_PERSON_1]"));
+                "[PERSON_1]"));
         assertThat(requestReceivedByOtherInspector.get().segments())
                 .extracting(ContentSegment::text)
                 .containsExactly("private raw text");
@@ -129,7 +129,7 @@ class InspectionServiceTest {
         InspectionRequest originalInspectionRequest = new InspectionRequest(request().segments(), inspectionLimits);
         UnaryOperator<String> delayedPiiTokenSimplifier = ignoredText -> {
             LockSupport.parkNanos(originalInspectionRequest.remaining().toNanos() / 2);
-            return "[PII_PERSON_1]";
+            return "[PERSON_1]";
         };
 
         AtomicReference<InspectionRequest> requestReceivedByInspector = new AtomicReference<>();

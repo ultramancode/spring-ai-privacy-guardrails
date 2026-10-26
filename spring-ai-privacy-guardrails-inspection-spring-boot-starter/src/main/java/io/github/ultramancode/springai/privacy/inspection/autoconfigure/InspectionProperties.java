@@ -19,7 +19,10 @@ public class InspectionProperties {
     /** Failure policy overrides keyed by inspector ID. Unspecified inspectors use the default policy. */
     private Map<String, InspectionFailurePolicy> failurePolicyOverrides = new LinkedHashMap<>();
 
-    /** Inspector IDs that receive session-issued PII tokens without their random part. Empty by default. */
+    /**
+     * Inspector IDs that receive session-issued PII tokens as markers retaining only the entity type and index.
+     * Empty by default.
+     */
     private Set<String> piiTokenSimplificationInspectors = Set.of();
 
     public Set<String> getPiiTokenSimplificationInspectors() {

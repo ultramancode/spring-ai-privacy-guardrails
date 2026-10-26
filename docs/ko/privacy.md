@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: f162c09315e982d1e693cf533a1373b3d0f574bdefd1505c7dd8dcacb7081803 -->
+<!-- i18n-source-sha256: 9e04349f3989c9faa835c3efb1b59bbdeac4f82ef31782ace606cdcd006f6786 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -928,7 +928,7 @@ Factory가 모델 요청과 도구의 개인정보 보호 처리에 옵저버를
 | --- | --- |
 | `ANALYSIS` | 개인정보 탐지 및 분석 |
 | `TOKENIZATION` | 개인정보 토큰화 |
-| `TOKEN_SIMPLIFICATION` | 세션에서 발급한 개인정보 토큰의 난수 부분 제거 |
+| `TOKEN_SIMPLIFICATION` | 세션에서 발급한 개인정보 토큰을 유형과 인덱스만 남긴 표기로 간결화 |
 | `REDACTION` | 개인정보를 마스킹 |
 | `DETOKENIZATION` | 허용된 원문 복원 |
 | `SESSION` | 개인정보 보호 세션 처리 |

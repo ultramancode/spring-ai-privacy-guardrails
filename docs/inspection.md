@@ -116,15 +116,15 @@ See [Spring Boot configuration](configuration.md#default-policy-in-spring-boot) 
 
 ### Simplify PII tokens for selected inspectors
 
-Some content inspection models may incorrectly flag random strings in PII tokens as unsafe input.
-If this occurs, configure the affected inspector IDs to receive tokens without the random part:
+Some content inspection models may incorrectly flag random strings or the `PII_` prefix in PII tokens as unsafe input.
+If this occurs, configure the affected inspector IDs to receive tokens without the `PII_` prefix or random part:
 
 ```properties
 spring.ai.inspection.pii-token-simplification-inspectors=primary-guard
 ```
 
 With privacy protection configured on the same client, session-issued tokens become
-markers such as `[PII_EMAIL_ADDRESS_1]`, retaining the entity type and index.
+markers such as `[EMAIL_ADDRESS_1]`, retaining the entity type and index.
 Only the copies sent to selected inspectors are simplified. Other text, including tokens
 not issued by the current session, is preserved.
 
@@ -571,7 +571,7 @@ and use the `spring.ai.inspection` prefix:
 | --- | --- | --- |
 | `failure-policy` | `FAIL_CLOSED` | Default handling of eligible operational inspection failures |
 | `failure-policy-overrides` | Empty map | Failure policies keyed by inspector ID |
-| `pii-token-simplification-inspectors` | Empty set | Inspector IDs that receive session-issued PII tokens without their random part |
+| `pii-token-simplification-inspectors` | Empty set | Inspector IDs that receive session-issued PII tokens as markers retaining only the entity type and index |
 
 Pass `InspectionLimits` to `inspection.limits(...)` in the policy and set output collection limits.
 

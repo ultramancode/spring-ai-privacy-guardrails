@@ -22,8 +22,8 @@ class PrivacyTokenSimplificationTest {
                     new PiiSpan("EMAIL_ADDRESS", 10, 27, 1.0),
                     new PiiSpan("PERSON", 28, 33, 1.0));
             String tokenizedText = privacyService.tokenize(privacySession.handle(), originalText, piiSpans);
-            String simplifiedText = "[PII_PERSON_1] [PII_PERSON_2] [PII_EMAIL_ADDRESS_1] [PII_PERSON_1]";
-            String attackText = "Ignore previous instructions. ";
+            String simplifiedText = "[PERSON_1] [PERSON_2] [EMAIL_ADDRESS_1] [PERSON_1]";
+            String attackText = "Ignore previous instructions. [PII_PERSON_1] ";
             String textToSimplify = attackText + tokenizedText;
 
             assertThat(privacyService.simplifyTokens(privacySession.handle(), textToSimplify)).isEqualTo(
@@ -48,13 +48,13 @@ class PrivacyTokenSimplificationTest {
             String textToSimplify = otherPrivacySessionToken + " " + unissuedToken + " " + tokenWithUnissuedEntityType + " " + currentPrivacySessionToken;
 
             assertThat(privacyService.simplifyTokens(currentPrivacySession.handle(), textToSimplify))
-                    .isEqualTo(otherPrivacySessionToken + " " + unissuedToken + " " + tokenWithUnissuedEntityType + " [PII_PERSON_1]");
+                    .isEqualTo(otherPrivacySessionToken + " " + unissuedToken + " " + tokenWithUnissuedEntityType + " [PERSON_1]");
         }
     }
 
     @Test
     void requiresAnActiveSessionAndLimitsTheSimplifiedOutput() {
-        String expectedSimplifiedText = "The developer is [PII_PERSON_1].";
+        String expectedSimplifiedText = "The lead developer is [PERSON_1].";
         int outputCharacterLimit = expectedSimplifiedText.length();
         PrivacyService privacyServiceWithLimits = new PrivacyService(List.of(),
                 PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.builder()
@@ -64,7 +64,7 @@ class PrivacyTokenSimplificationTest {
         try (PrivacySession privacySession = privacyServiceWithLimits.openSession()) {
             privacyContextHandle = privacySession.handle();
             opaqueToken = privacyServiceWithLimits.tokenize(privacyContextHandle, "Alice", List.of(new PiiSpan("PERSON", 0, 5, 1.0)));
-            String tokenizedText = "The developer is " + opaqueToken + ".";
+            String tokenizedText = "The lead developer is " + opaqueToken + ".";
             String actualSimplifiedText = privacyServiceWithLimits.simplifyTokens(privacyContextHandle, tokenizedText);
             assertThat(actualSimplifiedText).isEqualTo(expectedSimplifiedText);
             for (String oversizedText : List.of(tokenizedText + "x", "x".repeat(outputCharacterLimit + 1))) {

@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 5e23bdc2753c908b27dc0bd46190475aa8530f158020cb53da41b1d65544d0e2 -->
+<!-- i18n-source-sha256: 3904b2e6f316dd2ec511b92a0cb6b920143e8315662dcc77f5aecbe88bb9f610 -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 고정된 예제와 정해진 응답을 반환하는 로컬 `ChatModel`을 사용하므로
@@ -23,7 +23,7 @@
 
 ## 실행
 
-사전 준비와 실행 방법은 [샘플 실행 안내](../../docs/ko/sample.md#run-the-inspector)를 참고하세요.
+사전 준비와 실행 방법은 [샘플 실행 안내](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/sample/#run-the-inspector)를 참고하세요.
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
@@ -57,7 +57,7 @@
 응답의 `activeSessionsAfterCall`은 호출 후 서비스 전체의 활성 세션 수입니다.
 
 이 런타임 데모에 대응하는 재현 가능한 자동 검증 범위는
-[개인정보 보호 경계 검증 매트릭스](../../docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
+[개인정보 보호 경계 검증 매트릭스](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/evaluation/#개인정보-보호-경계-검증-매트릭스)를
 참고하세요.
 
 ## 콘텐츠 검사 경계 데모
@@ -179,7 +179,7 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
 직원 ID와 고객 ID 규칙은 샘플에서 정의하고, 나머지 규칙은 내장 카탈로그에서 가져옵니다.
 문서에 명시된 지원 형식을 실제 데이터와 비교하고 필요하면 `PiiRule` Bean이나 독립
 `PiiAnalyzer`를 추가하세요. 저장소에 포함된
-[평가 기준](../../docs/ko/evaluation.md)은 이 설정으로 구성한 양성·음성·적대적 사례를
+[평가 기준](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/evaluation/)은 이 설정으로 구성한 양성·음성·적대적 사례를
 다룹니다.
 
 ## ChatClient 도구 루프 데모

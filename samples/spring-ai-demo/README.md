@@ -22,7 +22,7 @@ root.
 
 ## Run
 
-For prerequisites and run instructions, see the [sample setup](../../docs/sample.md#run-the-inspector).
+For prerequisites and run instructions, see the [sample setup](https://ultramancode.github.io/spring-ai-privacy-guardrails/sample/#run-the-inspector).
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
@@ -57,7 +57,7 @@ input, and results.
 `activeSessionsAfterCall` is the service-wide active session count after the call.
 
 These runtime demonstrations complement the reproducible automated coverage in
-the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
+the [Privacy Boundary Verification Matrix](https://ultramancode.github.io/spring-ai-privacy-guardrails/evaluation/#privacy-boundary-verification-matrix).
 
 ## Content Inspection Boundary Demo
 
@@ -183,7 +183,7 @@ when `PERSON` detection is required.
 The employee and customer ID rules belong to this sample. The other rules come
 from the built-in catalog. Check their documented format limits against your own
 data, and add `PiiRule` beans or independent `PiiAnalyzer` providers as needed. The checked-in
-[evaluation baseline](../../docs/evaluation.md) covers positive, negative, and
+[evaluation baseline](https://ultramancode.github.io/spring-ai-privacy-guardrails/evaluation/) covers positive, negative, and
 adversarial synthetic cases using this configuration.
 
 ## ChatClient Tool Loop Demo

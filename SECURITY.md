@@ -15,6 +15,6 @@ scope, and coordinate a fix and disclosure.
 
 ## Security Scope
 
-The [threat model](docs/threat-model.md) documents protected assets, trust
+The [threat model](https://ultramancode.github.io/spring-ai-privacy-guardrails/threat-model/) documents protected assets, trust
 boundaries, controls, limitations, and separately managed areas. If a finding's
 scope is unclear, report it privately.

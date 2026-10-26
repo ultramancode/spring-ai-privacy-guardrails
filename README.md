@@ -10,9 +10,9 @@
 
 | What you need | Feature |
 | --- | --- |
-| Keep detected PII out of the model and allow originals only for selected tools | [Privacy](docs/privacy.md) |
-| Limit tool visibility and execution using the current user's permissions | [Tool Authorization](docs/security.md) |
-| Check requests and responses with rules, local ONNX or an HTTP guard model | [Content Inspection](docs/inspection.md) |
+| Keep detected PII out of the model and allow originals only for selected tools | [Privacy](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/) |
+| Limit tool visibility and execution using the current user's permissions | [Tool Authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/security/) |
+| Check requests and responses with rules, local ONNX or an HTTP guard model | [Content Inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/inspection/) |
 
 Use these features independently or together.
 
@@ -30,7 +30,7 @@ Use these features independently or together.
 ## Add Protection to an Application
 
 Use Java 17 or later, Spring AI 2.0.0 or later and Spring Boot 4.0.0 or later.
-See [repository configuration and Maven setup](docs/getting-started.md#add-the-client-starter).
+See [repository configuration and Maven setup](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#add-the-client-starter).
 
 Add the client starter:
 
@@ -85,11 +85,11 @@ Configure the features your application needs:
 
 | Feature setup | Policy selection |
 | --- | --- |
-| [Privacy protection](docs/getting-started.md#privacy-protection) | `privacy()` |
-| [Tool authorization](docs/getting-started.md#tool-authorization) | `toolAuthorization(true)` |
-| [Content inspection](docs/getting-started.md#content-inspection) | `inspection()` |
+| [Privacy protection](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#privacy-protection) | `privacy()` |
+| [Tool authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#tool-authorization) | `toolAuthorization(true)` |
+| [Content inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#content-inspection) | `inspection()` |
 
-See [Getting Started](docs/getting-started.md) for feature combinations, tool registration and verification.
+See [Getting Started](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/) for feature combinations, tool registration and verification.
 
 ## Per-Tool Original Disclosure
 
@@ -112,24 +112,24 @@ policy = policy.mutate()
 This allows the application's `sendEmail` tool to receive original `EMAIL_ADDRESS` values.
 Other entity types and tools keep opaque tokens.
 
-See [tool registration and MCP integration](docs/privacy.md#per-tool-original-disclosure).
-For custom disclosure logic, use a [separate policy class](docs/privacy.md#custom-tool-disclosure-policy).
+See [tool registration and MCP integration](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/#per-tool-original-disclosure).
+For custom disclosure logic, use a [separate policy class](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/#custom-tool-disclosure-policy).
 
 ## Add the Features You Need
 
 | Need | Next step |
 | --- | --- |
-| Detect your own employee or customer identifiers | [Java rules and presets](docs/privacy.md#local-rules-and-presets) |
-| Broader detection or NER models | [Presidio and OpenNLP choices](docs/privacy.md#choose-an-analyzer) |
-| Per-user tool visibility and execution | [Spring Security setup](docs/security.md#add-the-spring-boot-starter) |
-| Input and optional output inspection | [Content inspection setup](docs/inspection.md#set-up-input-inspection) |
-| Tokenize, redact or block PII in the final answer | [Output protection](docs/privacy.md#output-policy-and-streaming) |
-| Diagnose unexpected behavior | [Troubleshooting](docs/troubleshooting.md) |
+| Detect your own employee or customer identifiers | [Java rules and presets](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/#local-rules-and-presets) |
+| Broader detection or NER models | [Presidio and OpenNLP choices](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/#choose-an-analyzer) |
+| Per-user tool visibility and execution | [Spring Security setup](https://ultramancode.github.io/spring-ai-privacy-guardrails/security/#add-the-spring-boot-starter) |
+| Input and optional output inspection | [Content inspection setup](https://ultramancode.github.io/spring-ai-privacy-guardrails/inspection/#set-up-input-inspection) |
+| Tokenize, redact or block PII in the final answer | [Output protection](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/#output-policy-and-streaming) |
+| Diagnose unexpected behavior | [Troubleshooting](https://ultramancode.github.io/spring-ai-privacy-guardrails/troubleshooting/) |
 
 ## Sample
 
 The sample application uses fixed examples to illustrate Local Tool, RAG, MCP, Security and Inspection.
-See the [Sample Guide](docs/sample.md) for screenshots and run instructions.
+See the [Sample Guide](https://ultramancode.github.io/spring-ai-privacy-guardrails/sample/) for screenshots and run instructions.
 
 <p align="center">
   <a href="docs/images/privacy-boundary-inspector-demo.gif"><img src="docs/images/privacy-boundary-inspector-demo.gif" alt="Inspector showing Local Tool, RAG, MCP, Security and Inspection" width="960"></a>
@@ -156,21 +156,21 @@ The Boot starter uses the Spring Security version selected by the Spring Boot BO
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md): common setup and first steps for privacy protection,
+- [Getting Started](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/): common setup and first steps for privacy protection,
   tool authorization and content inspection
-- [Configuration](docs/configuration.md): dependencies, client creation and reusable policies
-- [Privacy Protection](docs/privacy.md): analyzers, tokenization, tool disclosure,
+- [Configuration](https://ultramancode.github.io/spring-ai-privacy-guardrails/configuration/): dependencies, client creation and reusable policies
+- [Privacy Protection](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/): analyzers, tokenization, tool disclosure,
   output protection and processing limits
-- [Spring Security Tool Authorization](docs/security.md): tool authorization
+- [Spring Security Tool Authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/security/): tool authorization
   policy, advanced tool configuration, Tool Search, and security-context handling
-- [Content Inspection](docs/inspection.md): opt-in rules, local ONNX classifiers and HTTP guard models
-- [Architecture](docs/architecture.md): modules and model, tool, and session
+- [Content Inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/inspection/): opt-in rules, local ONNX classifiers and HTTP guard models
+- [Architecture](https://ultramancode.github.io/spring-ai-privacy-guardrails/architecture/): modules and model, tool, and session
   execution flow
-- [Threat Model](docs/threat-model.md): protected assets, trust boundaries,
+- [Threat Model](https://ultramancode.github.io/spring-ai-privacy-guardrails/threat-model/): protected assets, trust boundaries,
   controls, limitations, and separately managed areas
-- [Evaluation and Benchmarks](docs/evaluation.md): verification coverage and
+- [Evaluation and Benchmarks](https://ultramancode.github.io/spring-ai-privacy-guardrails/evaluation/): verification coverage and
   interpretation limits
-- [Sample Guide](docs/sample.md): Inspector scenarios, runtime endpoints,
+- [Sample Guide](https://ultramancode.github.io/spring-ai-privacy-guardrails/sample/): Inspector scenarios, runtime endpoints,
   and the evidence each view verifies
 - [Full Sample Guide](samples/spring-ai-demo/README.md): optional analyzer and
   real-model integration examples
@@ -183,7 +183,7 @@ The Boot starter uses the Spring Security version selected by the Spring Boot BO
 
 This command runs the repository's tests and verifies its module rules.
 Run `./gradlew verifyDocTranslations` to check translation synchronization.
-See [Evaluation](docs/evaluation.md) for the demo analyzer
+See [Evaluation](https://ultramancode.github.io/spring-ai-privacy-guardrails/evaluation/) for the demo analyzer
 regression test and JMH benchmarks.
 
 ## Contributing

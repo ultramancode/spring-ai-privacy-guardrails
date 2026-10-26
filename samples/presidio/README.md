@@ -55,7 +55,7 @@ spring:
 components. Put credentials in `presidio.headers` rather than in the URL.
 
 Create a client through `GuardrailsChatClientFactory` with a policy that selects
-`privacy()`, as shown in [Getting Started](../../docs/getting-started.md#create-a-protected-client).
+`privacy()`, as shown in [Getting Started](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#create-a-protected-client).
 
 ## Manual API Check
 

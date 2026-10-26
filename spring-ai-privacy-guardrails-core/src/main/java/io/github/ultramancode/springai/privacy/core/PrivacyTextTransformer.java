@@ -125,7 +125,10 @@ final class PrivacyTextTransformer {
 
         String simplifiedText = OpaquePiiTokenFormat.canonicalTokenPattern().matcher(text).replaceAll(match -> {
             String token = match.group();
-            return privacyContext.ownsToken(token) ? token.substring(0, token.indexOf(':')) + "]" : token;
+            if (!privacyContext.ownsToken(token)) {
+                return token;
+            }
+            return "[" + token.substring("[PII_".length(), token.indexOf(':')) + "]";
         });
         return requireOutputWithinLimit(simplifiedText, PrivacyPhase.TOKEN_SIMPLIFICATION);
     }

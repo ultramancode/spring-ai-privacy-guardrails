@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 85bd601265c8084553499358265847afe761da3a005717a3c6d48b1c731af22d -->
+<!-- i18n-source-sha256: f3aa66d1e05bf3a03a63b734a87ee6dfad04279d25bda027cdf33984ec0a39d4 -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -119,15 +119,15 @@ ChatClient chatClient = factory.builder(chatModel, policy)
 
 ### 선택한 검사기의 개인정보 토큰 간결화
 
-일부 콘텐츠 검사 모델은 개인정보 토큰에 포함된 난수 문자열을 위험한 입력으로 오탐할 수 있습니다.
-이 경우 해당 검사기 ID를 지정해 토큰의 난수 부분을 제외하고 전달할 수 있습니다.
+일부 콘텐츠 검사 모델은 개인정보 토큰에 포함된 난수 문자열이나 `PII_` 접두사를 위험한 입력으로 오탐할 수 있습니다.
+이 경우 해당 검사기 ID를 지정해 토큰의 `PII_` 접두사와 난수 부분을 제외하고 전달할 수 있습니다.
 
 ```properties
 spring.ai.inspection.pii-token-simplification-inspectors=primary-guard
 ```
 
 같은 클라이언트에 개인정보 보호를 구성하면, 현재 세션에서 발급한 토큰을
-유형과 인덱스를 유지하는 `[PII_EMAIL_ADDRESS_1]` 같은 표기로 바꿉니다.
+유형과 인덱스를 유지하는 `[EMAIL_ADDRESS_1]` 같은 표기로 바꿉니다.
 선택한 검사기에 전달하는 복사본만 간결화합니다.
 현재 세션에서 발급하지 않은 토큰을 포함한 나머지 텍스트는 유지합니다.
 
@@ -564,7 +564,7 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 | --- | --- | --- |
 | `failure-policy` | `FAIL_CLOSED` | 위 실패 정책 표에 해당하는 오류가 발생했을 때 적용할 기본 정책 |
 | `failure-policy-overrides` | 빈 맵 | 검사기 ID별 실패 정책 |
-| `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 난수 부분 없이 전달받을 검사기 ID |
+| `pii-token-simplification-inspectors` | 빈 집합 | 세션에서 발급한 개인정보 토큰을 유형과 인덱스만 남긴 표기로 전달받을 검사기 ID |
 
 정책의 `inspection.limits(...)`에 `InspectionLimits`를 전달하고 출력 수집 한도를 설정합니다.
 

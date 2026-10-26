@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.0]
+
+This release adds content inspection and unifies client configuration for privacy protection, tool authorization and inspection.
+
+### Added
+
+- Added rule-based, ONNX and HTTP inspection for model input and optional final output.
+- Added `GuardrailsChatClientFactory` and `GuardrailsPolicy` for independent or combined feature setup.
+- Added built-in PII rules with `COMMON` and `KR` presets.
+
+### Changed
+
+- Limited PII detection and transformation to runtime values, preserving JSON keys, map keys, tool definitions and output schemas.
+- Reused successful analysis and completed tokenization within a privacy session.
+
+### Fixed
+
+- Fixed JSON output protection and output-size limit enforcement.
+
+### Compatibility
+
+Unifying the three features introduces breaking changes to public APIs and configuration.
+
+- Reorganized client integration and analyzer APIs. Moved output protection, tool disclosure and response-limit settings to client policies.
+- Replaced regex analyzer APIs and properties with rule-based APIs and `spring.ai.privacy.rules.*`. Changed the provider ID from `REGEX` to `RULES`.
+- Changed the opaque PII token format.
+
 ## [0.3.0]
 
 This release adds optional Spring Security-based tool authorization and improves PII analysis for structured inputs.

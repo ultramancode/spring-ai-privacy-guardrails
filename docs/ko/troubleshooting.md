@@ -8,7 +8,7 @@ description: >-
 [English](../troubleshooting.md) | **한국어**
 
 <!-- i18n-source: docs/troubleshooting.md -->
-<!-- i18n-source-sha256: 70148d54cea0e5d0270206a04cbaa584ec8c5e4d84d2b492708b133fbda6f67a -->
+<!-- i18n-source-sha256: 070110576dd25098ab308f486535bcc498c0a945a9568dfdcb86b3afda4f9825 -->
 
 관찰한 증상에서 시작하세요. 같은 클라이언트 정책과 합성 입력으로 재현하고,
 [Inspector](sample.md)의 로컬 구성과 비교합니다. 운영 로그에 원문이나 불투명 토큰 매핑을 남기지 마세요.
@@ -85,17 +85,6 @@ description: >-
    끄면 해당 보호도 사라집니다. 버퍼링하는 출력 보호를 유지한다면 응답 한도와 타임아웃을 설정하세요.
 3. 선택한 정책으로 다시 실행하고 전달 시점과 전달된 내용을 함께 확인합니다.
    [출력 보호](privacy.md#출력-정책과-스트리밍)와 [검사 한도](inspection.md#검사-범위와-한도)를 참고하세요.
-
-<a id="korean-detection"></a>
-
-## 한국어 예제는 되지만 다른 한국어 개인정보는 누락됨
-
-1. 실제 엔티티와 형식을 확인합니다. `KR`은 문서화된 휴대전화번호·주민등록번호 형식을
-   다룹니다. 데모의 사번·고객번호는 추가 애플리케이션 규칙으로 탐지합니다.
-2. 이름·주소는 적합한 인식기·모델과 언어를 구성합니다. Presidio 샘플 프로필은 영어 NLP를
-   사용하며 한국어 NER을 제공하지 않습니다. UI 언어가 탐지 범위를 바꾸지는 않습니다.
-3. 해당 환경을 대표하는 합성 양성·음성 예제를 검증합니다.
-   [분석기 선택](privacy.md#choose-an-analyzer)과 [내장 규칙 범위](privacy.md#내장-규칙)를 참고하세요.
 
 <a id="inspection-not-running"></a>
 

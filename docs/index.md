@@ -19,7 +19,7 @@ Use these features independently or together.
 
 [![Privacy flow with optional tool authorization and content inspection](images/hero.svg)](images/hero.svg)
 
-[View the full diagram](images/hero.svg) · [Architecture](architecture.md) · [Troubleshooting](troubleshooting.md)
+[View the full diagram](images/hero.svg) · [Architecture](architecture.md)
 
 **Featured in:** [Spring Blog](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/) · [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
 
@@ -36,6 +36,7 @@ Use these features independently or together.
 | [Architecture](architecture.md) | Module boundaries, request sessions, evidence resolution, and execution lifecycle. |
 | [Threat model](threat-model.md) | Protected assets, trust boundaries, controls, limitations, and separately managed areas. |
 | [Evaluation](evaluation.md) | Boundary tests, the deterministic analyzer baseline, and repository benchmarks. |
+| [Troubleshooting](troubleshooting.md) | PII detection, rule selection, tool disclosure, authorization, streaming and inspection setup issues. |
 
 ## Sample
 

@@ -88,17 +88,6 @@ See [stored data](privacy.md#stored-data-and-diagnostics) for application respon
 3. Retry with the chosen policy. Check both the delivery timing and the content that is released.
    See [output protection](privacy.md#output-policy-and-streaming) and [inspection limits](inspection.md#scope-and-limits).
 
-<a id="korean-detection"></a>
-
-## Korean Examples Work but Other Korean PII Is Missed
-
-1. Check the actual entity and format. `KR` covers documented mobile-phone and resident-registration-number
-   formats. Employee and customer IDs in the demo use additional application rules.
-2. For names or addresses, configure a suitable recognizer/model and language. The sample Presidio
-   profile uses English NLP and does not provide Korean NER. UI language does not change the analyzer's coverage.
-3. Test representative synthetic positive and negative examples. See [analyzer choices](privacy.md#choose-an-analyzer)
-   and [built-in scope](privacy.md#built-in-rules).
-
 <a id="inspection-not-running"></a>
 
 ## An Inspector Is Registered but Does Not Run

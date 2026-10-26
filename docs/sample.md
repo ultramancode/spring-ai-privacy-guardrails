@@ -1,31 +1,45 @@
 ---
 description: >-
-  Explore PII protection and role-based tool access with the Privacy Boundary
+  Explore PII protection, tool authorization and content inspection with the Privacy Boundary
   Inspector's Local Tool, RAG, MCP, Security, and Inspection scenarios.
 ---
 
-# Sample / Demo Guide
+# Sample Guide
 
 **English** | [한국어](ko/sample.md)
 
-The sample demonstrates privacy protection in local tool calls, document
-retrieval (RAG), and MCP tool calls. Its **Privacy Boundary Inspector** lets you
-compare the values received by the model and tools. The Security scenario also
-compares tool access for users with different roles. The default sample runs
-the model, document retrieval, and MCP server locally, so no external service
-accounts or API keys are required.
+The sample uses fixed examples to show privacy protection, tool authorization and
+content inspection. Its **Privacy Boundary Inspector** provides Local Tool, RAG,
+MCP, Security and Inspection scenarios. The default configuration uses a local
+scripted `ChatModel` and runs document retrieval and the MCP server locally.
 
 ## Run the Inspector
 
-From the repository root, with JDK 17 installed:
+Install Git and JDK 17 or later. No external service accounts or API keys are required.
+The first run needs network access to download Gradle and dependencies.
 
 ```bash
+git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
+cd spring-ai-privacy-guardrails
+git checkout v0.4.0
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-Open `http://127.0.0.1:8080` in a browser. The sample accepts only local connections.
-Use the `Local Tool | RAG | MCP | Security | Inspection` selector to run a scenario, and use
-`EN | 한국어` to rerun it in the selected language.
+After startup, open `http://127.0.0.1:8080`. The server accepts local connections only.
+
+Choose a scenario in the Inspector. `EN | 한국어` changes the UI and fixed example language.
+
+| Scenario | What to check | Apply it to your app |
+| --- | --- | --- |
+| Local Tool | Model tokenization, customer-ID-only disclosure, protected results | [Tool disclosure](privacy.md#per-tool-original-disclosure) |
+| RAG | Original document versus the protected copy sent to the model | [Memory and RAG](configuration.md#advisor-configuration) |
+| MCP | Protection on a local Streamable HTTP tool call | [MCP providers](privacy.md#per-tool-original-disclosure) |
+| Security | Role-based tool visibility/execution and privacy on allowed calls | [Authorization setup](security.md) |
+| Inspection | 0 model calls on blocked input, 1 call and withheld output on blocked output, passing cases | [Inspection setup](inspection.md) |
+
+After the fixed examples, try your own synthetic input through the [input API](#inspect-results-through-the-api),
+or choose analyzer and real-model profiles in the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md).
+See [Troubleshooting](troubleshooting.md) if results differ.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
   <iframe
@@ -43,7 +57,7 @@ Use the `Local Tool | RAG | MCP | Security | Inspection` selector to run a scena
 
 ### Local Tool
 
-The sample replaces detected PII with **opaque tokens**, replacement strings
+The sample replaces detected PII with opaque tokens, replacement strings
 that do not directly reveal the original values. Select **Local Tool** and
 check the values at each step:
 
@@ -144,7 +158,9 @@ Use these APIs to retrieve the results shown in the Inspector as JSON:
 | `GET /demo/security-tool-boundary` | Tool visibility, authorization decisions, execution counts for two roles, and privacy checks for the allowed call. |
 | `GET /demo/inspection?example=block` | Independent input/output block cases with actual inspection reports, model call counts, and withheld responses. Use `example=allow` for allowed cases. |
 
-See the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md)
+`activeSessionsAfterCall` is the service-wide active session count after the call.
+
+See the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md)
 for request and response examples, configuration for other analyzers, and
 instructions for running optional checks with a live model.
 
@@ -158,9 +174,6 @@ well as the UI labels. For direct API calls, set the `Accept-Language: en` or
 selected language.
 
 ## Interpretation and Verification
-
-The active session count is observed across the service after the call. Concurrent
-requests can make it nonzero. This value alone does not prove a session leak.
 
 The demo's employee and customer ID rules and all example values are sample-oriented. Text not
 matched by an enabled analyzer may remain unchanged, and these fixed scenarios

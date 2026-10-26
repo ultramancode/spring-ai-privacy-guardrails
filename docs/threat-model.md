@@ -12,7 +12,7 @@ description: >-
 
 This document describes threats to the following information, the library's
 protections, and the areas the application must manage separately.
-**Opaque tokens** are replacement strings for detected PII that do not directly
+Opaque tokens are replacement strings for detected PII that do not directly
 reveal the original values.
 
 - Original PII that may appear in model input, retrieved content, tool input and
@@ -25,6 +25,7 @@ reveal the original values.
   receive.
 - When Spring Security integration is enabled, decisions about which tools may
   be exposed to the model and executed for the current user.
+- Model requests and final responses evaluated by content inspection.
 
 ## Trust Boundaries
 
@@ -35,6 +36,10 @@ responsible for data sent through other paths.
 Remote analyzers such as Presidio receive the original text to inspect. The
 application must manage service credentials and transport security, and check
 the data retention policies of remote analyzers and model providers.
+
+HTTP guard models receive the text supplied to content inspectors. When privacy protection
+is selected, model requests are tokenized before content inspection. See
+[HTTP inspection and privacy](inspection.md#http-guard-models-and-privacy) for processing requirements.
 
 Custom analyzers, advisors, and tools are trusted application code. The library
 validates detection results and protects data at supported processing points.
@@ -94,6 +99,18 @@ opaque tokens for each tool.
   request start. To reflect permission revocation during a long-running request, the
   policy must consult current external state.
 
+### Content Inspection
+
+| Threat | Library control |
+| --- | --- |
+| Model requests rejected by the application's content policy | Input inspection runs before each model call. A block decision stops the call. |
+| Final responses rejected by the content policy | When output inspection is enabled, the complete response is inspected before delivery, including streaming responses. |
+| Inspection backend failure or incomplete inspection | The default failure policy blocks the request. Applications can configure failure policies for selected inspectors. |
+
+Detection depends on the configured rules, models and thresholds.
+See [inspection scope and limits](inspection.md#scope-and-limits) and
+[failure policies](inspection.md#results-policies-and-failures).
+
 ### Detection and Diagnostics
 
 | Threat | Library control |
@@ -127,26 +144,19 @@ Exact policies and processing bounds are documented in
 
 ## Important Limitations
 
-Privacy protection applies to content detected by the configured analyzers. It
-does not guarantee detection or classification of every sensitive value. Coverage
-depends on the analyzers and score thresholds. Allowing some analyzer failures
-lets processing continue with successful results, which may reduce coverage. See
-[Detection and Resolution](privacy.md#detection-and-resolution) for details.
+Privacy protection applies to content detected by the configured analyzers.
+Detection coverage depends on the analyzers and score thresholds. When analyzer
+failures are allowed, processing continues using only successful results.
+See [Detection and Resolution](privacy.md#detection-and-resolution) for details.
 
-Replacing PII with opaque tokens does not guarantee anonymization. Opaque tokens and session handles
-(`PrivacyContextHandle`) must not be used as proof of user identity or permission.
+Closing a session clears the original-value mappings held by the library.
 
-Session cleanup releases the mappings held by the library. It does not delete
-data already saved in storage or strings and copies retained by other components.
-
-Spring Security integration controls which tools the model may discover and
-execute. When combined with privacy protection, the `ToolDisclosurePolicy`
-still applies per tool and entity type. Enabling authorization does not make the
-disclosure policy user-specific.
+Spring Security checks tool access. `ToolDisclosurePolicy` separately controls
+which PII types each tool receives as original values.
 
 ## Areas Managed Separately
 
-The protections described here apply when using the library's privacy APIs and
+The protections described here apply to the selected features through the library's APIs and
 supported Spring AI integrations. The application and deployment environment
 must manage the following areas separately.
 

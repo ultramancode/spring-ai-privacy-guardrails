@@ -1,7 +1,7 @@
 [project]
 site_name = "Spring AI Privacy Guardrails"
 site_url = "https://ultramancode.github.io/spring-ai-privacy-guardrails/"
-site_description = "Request-scoped PII tokenization and least-privilege disclosure across Spring AI model and tool calls. Optional Spring Security integration adds tool authorization."
+site_description = "PII tokenization and per-tool disclosure, Spring Security tool authorization, and content inspection for Spring AI. Use features independently or together."
 site_author = "Taewoong Kim"
 copyright = """
 Copyright © 2026 Taewoong Kim · <a href="#__consent">Change cookie settings</a>
@@ -17,8 +17,9 @@ nav = [
     { "Home" = "index.md" },
     { "Getting Started" = "getting-started.md" },
     { "Configuration" = "configuration.md" },
+    { "Troubleshooting" = "troubleshooting.md" },
     { "Reference" = [
-      { "Sample / Demo Guide" = "sample.md" },
+      { "Sample Guide" = "sample.md" },
       { "Privacy Protection" = "privacy.md" },
       { "Tool Authorization" = "security.md" },
       { "Content Inspection" = "inspection.md" },
@@ -31,8 +32,9 @@ nav = [
     { "홈" = "ko/index.md" },
     { "시작하기" = "ko/getting-started.md" },
     { "설정" = "ko/configuration.md" },
+    { "문제 해결" = "ko/troubleshooting.md" },
     { "참고 문서" = [
-      { "샘플 / 데모 가이드" = "ko/sample.md" },
+      { "샘플 가이드" = "ko/sample.md" },
       { "개인정보 보호" = "ko/privacy.md" },
       { "도구 권한" = "ko/security.md" },
       { "콘텐츠 검사" = "ko/inspection.md" },
@@ -50,6 +52,7 @@ translated_pages = [
   "",
   "getting-started/",
   "configuration/",
+  "troubleshooting/",
   "sample/",
   "privacy/",
   "security/",

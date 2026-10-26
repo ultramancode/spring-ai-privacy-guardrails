@@ -14,9 +14,9 @@
     {% endif %}
     {% set share_image = config.site_url ~ "images/hero.png" %}
     {% if is_korean %}
-      {% set share_image_alt = "Spring AI Privacy Guardrails의 개인정보 탐지·토큰화와 도구별 원문 공개 흐름" %}
+      {% set share_image_alt = "Spring AI Privacy Guardrails의 개인정보 토큰화와 도구별 원문 공개, 선택적 도구 권한과 콘텐츠 검사" %}
     {% else %}
-      {% set share_image_alt = "Spring AI Privacy Guardrails: PII detection, tokenization, and scoped disclosure to tools" %}
+      {% set share_image_alt = "Spring AI Privacy Guardrails: PII tokenization and per-tool disclosure, with optional tool authorization and content inspection" %}
     {% endif %}
 
     <meta property="og:type" content="website">

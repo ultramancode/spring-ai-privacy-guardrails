@@ -1,33 +1,50 @@
 ---
 description: >-
-  Privacy Boundary Inspector의 Local Tool, RAG, MCP, Security, Inspection 시나리오로 개인정보 보호와 역할별 도구 접근 권한을
+  Privacy Boundary Inspector의 Local Tool, RAG, MCP, Security, Inspection 시나리오로 개인정보 보호, 도구 권한과 콘텐츠 검사를
   확인하는 방법을 설명합니다.
 ---
 
-# 샘플 / 데모 가이드
+# 샘플 가이드
 
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: c22817756a998ff098062b29222ca13a870eaf6b454f0a91876238c0f24b2fc9 -->
+<!-- i18n-source-sha256: 9290a70996dd57852c407814d4f0f3cd0e9ccf83ace20d5bc2f91c6a70035311 -->
 
-샘플은 로컬 도구, 문서 검색(RAG), MCP 도구 호출에서 개인정보가 보호되는 과정을
-보여줍니다. **Privacy Boundary Inspector**에서 모델과 도구가 전달받은 값을 비교할 수
-있습니다. Security 시나리오에서는 사용자 역할에 따른 도구 접근 권한도 비교합니다.
-기본 샘플은 모델, 문서 검색, MCP 서버를 모두 로컬 환경에서 실행하므로
-외부 서비스 계정이나 API 키가 필요하지 않습니다.
+샘플은 고정된 예제로 개인정보 보호, 도구 권한과 콘텐츠 검사를 보여줍니다.
+**Privacy Boundary Inspector**에서 Local Tool, RAG, MCP, Security, Inspection 시나리오를
+확인할 수 있습니다. 기본 구성은 정해진 응답을 반환하는 로컬 `ChatModel`을 사용하고,
+문서 검색과 MCP 서버도 로컬 환경에서 실행합니다.
+
+<a id="run-the-inspector"></a>
 
 ## Inspector 실행
 
-JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합니다.
+Git과 JDK 17 이상을 설치합니다. 외부 서비스 계정이나 API 키는 필요하지 않습니다.
+처음 실행할 때 Gradle과 의존성을 다운로드하므로 네트워크 연결이 필요합니다.
 
 ```bash
+git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
+cd spring-ai-privacy-guardrails
+git checkout v0.4.0
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
-브라우저에서 `http://127.0.0.1:8080`을 엽니다. 샘플은 로컬 접속만 허용합니다.
-`Local Tool | RAG | MCP | Security | Inspection` 선택기로 시나리오를 실행하고, `EN | 한국어`로 언어를 선택해
-시나리오를 다시 실행할 수 있습니다.
+서버가 시작되면 `http://127.0.0.1:8080`을 엽니다. 로컬 접속만 허용합니다.
+
+Inspector에서 확인할 시나리오를 선택하세요. `EN | 한국어`는 UI와 고정 예제의 언어를 바꿉니다.
+
+| 시나리오 | 확인할 동작 | 앱에 적용 |
+| --- | --- | --- |
+| Local Tool | 모델 토큰화, 고객번호만 원문 복원, 결과 재보호 | [도구 공개 정책](privacy.md#도구별-원문-공개) |
+| RAG | 원문 문서와 모델에 전달되는 보호된 복사본 비교 | [메모리·RAG](configuration.md#advisor-구성) |
+| MCP | 로컬 Streamable HTTP 도구 호출의 보호 | [MCP 제공자](privacy.md#도구별-원문-공개) |
+| Security | 사용자 역할에 따른 도구 공개·실행과 허용 호출의 개인정보 보호 | [권한 설정](security.md) |
+| Inspection | 입력 차단 전 호출 0회, 출력 차단 시 호출 1회와 응답 비공개, 통과 사례 | [검사 설정](inspection.md) |
+
+고정 예제 다음에는 [사용자 입력 API](#inspect-results-through-the-api)로 자신의 합성 입력을 확인하거나
+[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md)의 분석기·실제 모델 프로필을 선택하세요.
+예상과 다르면 [문제 해결](troubleshooting.md)을 참고하세요.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
   <iframe
@@ -45,7 +62,7 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 
 ### Local Tool
 
-샘플은 탐지된 개인정보를 원문 값을 직접 드러내지 않는 대체 문자열인 **불투명 토큰(opaque token)**으로
+샘플은 탐지된 개인정보를 원문 값을 직접 드러내지 않는 대체 문자열인 불투명 토큰(opaque token)으로
 바꿉니다. **Local Tool**을 선택하고 단계별로 전달되는 값을 확인하세요.
 
 1. **모델 입력과 도구 인자:** 예제의 사번, 이메일, 전화번호, 고객번호가 모두 불투명 토큰으로
@@ -120,6 +137,8 @@ JDK 17이 설치된 환경에서 저장소 루트의 다음 명령을 실행합�
 
 ![입력 검사에서 프롬프트 인젝션을 차단하고 출력 검사에서 모욕적 응답 전달을 막는 사례](../images/privacy-boundary-inspector-inspection-ko.png)
 
+<a id="inspect-results-through-the-api"></a>
+
 ## API로 결과 확인
 
 Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API를 사용하세요.
@@ -135,8 +154,10 @@ Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API
 | `GET /demo/security-tool-boundary` | 두 역할의 도구 목록, 권한 판정, 실행 횟수와 허용된 호출의 개인정보 보호 검증 결과 |
 | `GET /demo/inspection?example=block` | 독립된 입력·출력 차단 사례의 실제 검사 보고서, 모델 호출 횟수와 차단된 응답. `example=allow`로 허용 사례 실행 |
 
+응답의 `activeSessionsAfterCall`은 호출 후 서비스 전체의 활성 세션 수입니다.
+
 요청·응답 예제, 다른 분석기를 사용하는 설정과 실제 모델을 연결하는 검증 방법은
-[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md)를
+[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md)를
 참고하세요.
 
 ## 언어 선택
@@ -148,9 +169,6 @@ Inspector에서 언어를 바꾸면 화면 문구뿐 아니라 예제 입력과 
 `POST /demo/protect`는 선택한 언어와 관계없이 전달된 `text`를 분석합니다.
 
 ## 해석과 검증
-
-활성 세션 수는 호출 후 서비스 전체에서 관측한 값입니다. 동시에 실행 중인 다른 요청이
-있으면 0보다 클 수 있으므로, 이 값만으로 현재 요청의 세션 누수를 판단할 수는 없습니다.
 
 데모의 사번·고객번호 규칙과 모든 예제 값은 샘플용입니다. 활성화된 분석기가 탐지하지 못한 텍스트는
 변경되지 않을 수 있으며, 이 고정 시나리오는 일반적인 탐지 정확도나 지원되지 않는 실행

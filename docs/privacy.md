@@ -12,14 +12,28 @@ Privacy protection replaces detected PII with request-scoped opaque tokens befor
 sending it to a model. Tools receive only the original values allowed by policy,
 and their results are protected before reaching the model or application.
 
-Configure [Local rules](#local-rules-and-presets), [Presidio](#presidio-analyzer),
-[OpenNLP](#opennlp-analyzer-jvm-only-optional), or a [custom analyzer](#custom-analyzers),
-then select `privacy()` in the client policy.
+Choose analyzers for your data, then select `privacy()` in the client policy.
 See [Configuration](configuration.md) for dependencies, client creation and feature selection.
 
 Standard Spring AI messages and `DeepSeekAssistantMessage` are supported. Other
 provider-specific or custom messages are rejected to prevent PII in unknown fields
 from passing through unprotected.
+
+[Getting started](getting-started.md) · [Rules and presets](#local-rules-and-presets) · [Tool disclosure](#per-tool-original-disclosure) · [Output protection](#output-policy-and-streaming) · [Troubleshooting](troubleshooting.md)
+
+## Choose an Analyzer
+
+The following analyzers provide detection results to the same protection flow.
+You can also [combine analyzers](#detection-and-resolution).
+
+| Analyzer | Detection |
+| --- | --- |
+| [Presidio](#presidio-analyzer) | PII detection through a Presidio service |
+| [OpenNLP](#opennlp-analyzer) | Named entity recognition with models in the application JVM |
+| [Local rules](#local-rules-and-presets) | Built-in rules or application-defined patterns and validation logic |
+
+To connect another detection model or service, implement `PiiAnalyzer` and register it
+as a [custom analyzer](#custom-analyzers).
 
 ## Configuration Properties
 
@@ -64,6 +78,7 @@ configured under `spring.ai.privacy`.
 Rule selection lists (`rules.presets`, `rules.include`, and `rules.exclude`), Presidio
 `headers`, and OpenNLP `entity-models` are empty by default. Spring Boot configuration
 metadata provides IDE completion.
+
 `analysis.language` accepts a 1-to-64-character ASCII identifier made of
 alphanumeric segments separated by single hyphens or underscores. Letter case
 is ignored, and `core` passes the lowercase canonical form to every analyzer.
@@ -242,11 +257,9 @@ spring:
 Register application rules as individual Spring beans:
 
 ```java
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
-
 @Bean
 PiiRule employeeIdRule() {
-    PatternDefinition pattern = PatternDefinition.builder()
+    PatternPiiRule.PatternDefinition pattern = PatternPiiRule.PatternDefinition.builder()
             .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
             .score(0.90)
             .validator(candidate -> !candidate.equals("EMP-0000"))
@@ -265,9 +278,12 @@ Use `PiiEntityTypes` constants for library-defined labels, for example
 
 `PatternPiiRule.PatternDefinition` combines a Java regular expression with a score, capture
 group, and optional `Predicate<String>`. Its builder requires an expression and a score.
-The capture group defaults to 0, which selects the entire match. A predicate receives the
-captured candidate and returns `true` to accept it or `false` to discard it. It can parse the
-candidate or apply checksum and business checks. Without a predicate, every match is accepted.
+The capture group defaults to 0, which selects the entire match.
+
+A predicate receives the captured candidate and returns `true` to accept it or `false`
+to discard it. It can parse the candidate or apply checksum and business checks.
+Without a predicate, every match is accepted.
+
 Use `.addPattern(...)` to add one definition or `.addPatterns(...)` to add a collection.
 Both methods retain previously added patterns. Patterns are evaluated in the order they
 are added, each with its own score, capture group, and predicate.
@@ -275,6 +291,7 @@ are added, each with its own score, capture group, and predicate.
 For direct detection, implement `PiiRule.id()`, `entityTypes()`, and
 `analyze(text, options, limits)`. Return `PiiSpan` values with positions in the original text:
 UTF-16 offsets, inclusive start, and exclusive end. Return an empty list for no matches.
+
 Preset selection is independent of analysis language.
 Use `PiiAnalyzer` for independent remote services or model providers.
 
@@ -291,16 +308,22 @@ Use `addRule(...)` to register one application rule or `addRules(...)` to regist
 Both methods retain previously registered rules. Collections are copied in iteration order.
 
 The catalog expands presets in order, appends `include`, keeps the first occurrence of each
-rule ID, then applies `exclude`. COMMON must be selected explicitly. Rule IDs use 1–64 lowercase
-ASCII letters or digits separated by single hyphens. Preset names start with an ASCII letter
-and contain up to 64 ASCII letters, digits, hyphens, or underscores. Both are case-sensitive.
+rule ID, then applies `exclude`. COMMON must be selected explicitly.
+
+Rule IDs use 1–64 lowercase ASCII letters or digits separated by single hyphens.
+Preset names start with an ASCII letter and contain up to 64 ASCII letters, digits,
+hyphens, or underscores. Both are case-sensitive.
+
 Built-in rule IDs are available as `BuiltInPiiRuleIds` constants for Java configuration.
 Use `BuiltInPiiPresetNames` constants for built-in preset names and strings for
 application-defined names, such as `"COMPANY"`.
 
 Duplicate definitions, unknown references, and an empty active selection are configuration
-errors. Automatic rule configuration is disabled by default. When `rules.enabled=true`,
+errors.
+
+Automatic rule configuration is disabled by default. When `rules.enabled=true`,
 Boot creates a `RuleBasedPiiAnalyzer` from the configured selection.
+
 Declaring a `RuleBasedPiiAnalyzer` bean replaces automatic rule selection, even when
 `rules.enabled=true`. Use `RuleBasedPiiAnalyzer` as the bean method's return type so Boot can
 detect it. That bean owns rule registration and selection, including any application rules
@@ -311,8 +334,6 @@ To define an application preset, register a `PiiRulePreset` bean. Its name must 
 from built-in presets and other registered presets:
 
 ```java
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
-
 @Bean
 PiiRulePreset companyPreset() {
     return new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL));
@@ -323,8 +344,6 @@ Select it with `presets: [COMPANY]`. In pure Java, pass the rule created by
 `employeeIdRule()` above to `PiiRuleCatalog`:
 
 ```java
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
-
 PiiRule employeeRule = employeeIdRule();
 PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
         .addRule(employeeRule)
@@ -362,10 +381,10 @@ expressions carefully: a single match can backtrack for a long time before inter
 
 | Preset | Rule ID | Supported scope |
 | --- | --- | --- |
-| COMMON | email | ASCII addresses with dotted DNS domains. Unquoted local parts support special characters such as apostrophes and exclamation marks. Double-quoted local parts, internationalized addresses, and domain literals are unsupported. |
+| COMMON | email | ASCII email addresses with dotted DNS domains. The part before `@` supports special characters such as apostrophes and exclamation marks. Addresses with a double-quoted part before `@`, internationalized addresses, and domain literals are unsupported. |
 | COMMON | credit-card | 13–17 ASCII digits starting with 1, 3, 4, 50–55, or 6, with optional spaces or hyphens between digit groups. Excludes compact 13-digit numbers starting with 1. Checks Luhn. Does not verify issuance or account status. |
-| KR | kr-mobile-phone | Domestic 010 plus eight digits, compact or consistently space/hyphen separated. Supports +82 10 forms. Other 01X prefixes, landlines, and extensions are unsupported. |
-| KR | kr-rrn | YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
+| KR | kr-mobile-phone | South Korean mobile phone numbers: 010 plus eight digits, compact or consistently space/hyphen separated. Supports +82 10 forms. Other 01X prefixes, landlines, and extensions are unsupported. |
+| KR | kr-rrn | South Korean resident registration numbers: YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
 
 Built-in matches have a default score of 0.85. These are heuristic scores, not measured
 probabilities. Evaluate detection quality on data representative of your application.
@@ -377,9 +396,6 @@ Pass a map of built-in rule IDs to scores to `PiiRuleCatalog.Builder.builtInsWit
 set a fixed score for each specified rule. For example, register a Spring bean:
 
 ```java
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
-
 @Bean
 RuleBasedPiiAnalyzer localPiiAnalyzer() {
     PiiRuleCatalog catalog = PiiRuleCatalog.builder()
@@ -402,8 +418,25 @@ control which results are accepted after detection.
 ## Presidio Analyzer
 
 Presidio sends the source text to the configured Presidio server for analysis.
-After adding the Presidio starter, enable the analyzer and configure its server
-connection.
+Add its starter alongside the client starter.
+
+Gradle:
+
+```gradle
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0"
+```
+
+Maven:
+
+```xml
+<dependency>
+    <groupId>io.github.ultramancode</groupId>
+    <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
+    <version>0.4.0</version>
+</dependency>
+```
+
+Enable the analyzer and configure its server connection:
 
 ```yaml
 spring:
@@ -446,14 +479,30 @@ When Spring Boot health support is available, the Presidio service can also be
 included in application health checks.
 
 The local Docker setup is in
-[samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/main/samples/presidio).
+[samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio).
 
-## OpenNLP Analyzer (JVM-Only, Optional)
+## OpenNLP Analyzer
 
-This configuration is suitable when an application wants to analyze PII in the
-same JVM by using compatible OpenNLP NER models instead of a separate remote
-analyzer service. OpenNLP NER models are not bundled, so provide the model files
-separately.
+Use compatible OpenNLP NER models to analyze PII in the application JVM.
+Add its starter alongside the client starter and supply model files for the target language and entities.
+
+Gradle:
+
+```gradle
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0"
+```
+
+Maven:
+
+```xml
+<dependency>
+    <groupId>io.github.ultramancode</groupId>
+    <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
+    <version>0.4.0</version>
+</dependency>
+```
+
+Enable the analyzer and configure the model resources:
 
 ```yaml
 spring:
@@ -475,33 +524,31 @@ quality may change when the NER model and tokenization strategy are not
 compatible, so validate the configuration against representative application
 data.
 
-OpenNLP integration is an optional configuration for applications that already
-use suitable NER models. It is not the recommended default for general PII
-detection.
-
 The
-[runnable sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)
+[runnable sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)
 shows how to prepare models, configure the application, and run a live
 integration test.
 
 ## Per-Tool Original Disclosure
 
-Privacy-protected tools receive detected PII as **opaque tokens** by default.
+Privacy-protected tools receive detected PII as opaque tokens by default.
 These replacement strings do not directly reveal the original values. If a tool
 needs original values, specify the entity types it may receive in
 `ToolDisclosurePolicy`.
 
 ```java
-GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(GuardrailsPolicy.Privacy.builder()
-                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
-                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
-                .build())
+ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
+        Map.of("sendEmail", List.of("EMAIL_ADDRESS")));
+GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
+        .toolDisclosurePolicy(toolDisclosurePolicy)
+        .build();
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacySettings)
         .build();
 ```
 
-With the configuration above, only the `customerLookup` tool receives the
-original value of `CUSTOMER_ID`. Entity types not listed for disclosure and
+With the configuration above, only the `sendEmail` tool receives the
+original value of `EMAIL_ADDRESS`. Entity types not listed for disclosure and
 tools not registered under `ToolDisclosurePolicy` continue to receive protected
 values.
 
@@ -509,8 +556,8 @@ The factory protects tools automatically, so register the original callbacks or
 providers. MCP providers supply their current tool list for each request.
 
 ```java
-ChatClient chatClient = guardrails.builder(chatModel, toolPolicy)
-        .defaultTools(customerLookup, knowledgeSearch, mcpTools)
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, policy)
+        .defaultTools(sendEmailToolCallback, knowledgeSearchToolCallback, mcpToolCallbackProvider)
         .build();
 ```
 
@@ -547,23 +594,58 @@ using a custom `ToolCallingManager` with the optional Security integration,
 configure the boundary explicitly as described in
 [Custom ToolCallingManager](security.md#custom-toolcallingmanager).
 
+<a id="custom-tool-disclosure-policy"></a>
+
+### Implement a Separate Disclosure Policy
+
+Create `GuardrailsToolDisclosurePolicy.java` in your application to implement custom disclosure logic.
+This policy allows original `EMAIL_ADDRESS` values only for `sendEmail`:
+
+```java
+public final class GuardrailsToolDisclosurePolicy implements ToolDisclosurePolicy {
+    private static final AllowedEntityTypes EMAIL_ADDRESS_TYPES = AllowedEntityTypes.of(Set.of("EMAIL_ADDRESS"));
+
+    @Override
+    public AllowedEntityTypes getAllowedEntityTypes(ToolDefinition toolDefinition) {
+        if (toolDefinition != null && "sendEmail".equals(toolDefinition.name())) {
+            return EMAIL_ADDRESS_TYPES;
+        }
+        return AllowedEntityTypes.none();
+    }
+}
+```
+
+Register the implementation in an application `@Configuration` class:
+
+```java
+@Bean
+ToolDisclosurePolicy toolDisclosurePolicy() {
+    return new GuardrailsToolDisclosurePolicy();
+}
+```
+
+Inject this bean into the client configuration and pass it to `.toolDisclosurePolicy(toolDisclosurePolicy)`.
+You can inject application services into the policy's constructor when its logic grows.
+Keep `allowEntityTypesByToolName(...)` for a fixed tool-to-entity mapping.
+
 ## Output Policy and Streaming
 
 Final output protection is disabled by default. Enable it in the client policy:
 
 ```java
-GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
         .privacy(GuardrailsPolicy.Privacy.builder()
                 .outputProtection().tokenize()
                 .build())
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, policy)
+        .build();
 ```
 
 To customize the block message, use `block(message)`:
 
 ```java
-GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
         .outputProtection().block("Response contains personal information.")
         .build();
 ```
@@ -672,7 +754,7 @@ structures described below.
 When using `PrivacyService` directly, open a `PrivacySession` first.
 `session.handle()` identifies the session to use for PII analysis, tokenization,
 and restoration. This example replaces PII in the source text with opaque tokens
-and then restores only customer IDs (`CUSTOMER_ID`), whose disclosure the
+and then restores only email addresses (`EMAIL_ADDRESS`), whose disclosure the
 application has allowed, within the same session.
 
 ```java
@@ -682,7 +764,7 @@ try (PrivacySession session = privacyService.openSession()) {
     String protectedText = result.tokenizedText();
 
     String disclosedText = privacyService.detokenize(
-            session.handle(), protectedText, Set.of("CUSTOMER_ID"));
+            session.handle(), protectedText, Set.of("EMAIL_ADDRESS"));
 }
 ```
 
@@ -714,7 +796,7 @@ cleaned up after the request.
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0-SNAPSHOT"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0"
 }
 ```
 
@@ -743,7 +825,7 @@ restored to `"Alice"` before it reaches the tool.
 ```java
 @Test
 void protectsModelInputAndDisclosesAllowedToolInput() {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
             .privacy(GuardrailsPolicy.Privacy.builder()
                     .toolDisclosurePolicy(
                             ToolDisclosurePolicy.allowEntityTypesByToolName(
@@ -752,7 +834,7 @@ void protectsModelInputAndDisclosesAllowedToolInput() {
             .build();
 
     try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {
-        ChatClient chatClient = guardrailsChatClientFactory.builder(privacyProbe.wrapModel(testModel), guardrailsPolicy)
+        ChatClient chatClient = guardrailsChatClientFactory.builder(privacyProbe.wrapModel(testModel), policy)
                 .defaultTools(privacyProbe.wrapTool(customerLookup))
                 .build();
 

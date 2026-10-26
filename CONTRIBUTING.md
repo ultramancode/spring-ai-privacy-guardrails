@@ -36,7 +36,7 @@ not required when changing English documentation. Maintainers synchronize
 localized documentation separately and verify it before a release with
 `./gradlew verifyDocTranslations`.
 
-For a local snapshot consumed by another build, run
+For a local build consumed by another project, run
 `./gradlew publishToMavenLocal` and add `mavenLocal()` only in that local
 consumer.
 

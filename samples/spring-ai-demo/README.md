@@ -4,8 +4,8 @@
 
 This runnable sample shows how PII is protected before reaching the model and
 which original values are allowed through to tools. The default configuration
-uses a local `ChatModel` provided by the sample, so no external LLM API key is required.
-Detected PII is replaced with **opaque tokens**, replacement strings that do not
+uses fixed examples and a local scripted `ChatModel`, so no external LLM API key is required.
+Detected PII is replaced with opaque tokens, replacement strings that do not
 directly reveal the original values.
 
 ```text
@@ -21,6 +21,8 @@ Commands in this document assume a Linux shell and are run from the repository
 root.
 
 ## Run
+
+For prerequisites and run instructions, see the [sample setup](https://ultramancode.github.io/spring-ai-privacy-guardrails/sample/#run-the-inspector).
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
@@ -52,13 +54,10 @@ The `EN | 한국어` toggle sends `Accept-Language: en` or `ko` with these
 requests and reruns the selected flow. This changes the UI labels, example
 input, and results.
 
-Responses that include `activeSessionsAfterCall` report the service-wide active
-session count after the call. This is normally `0` when running a single request.
-Concurrent requests can make it nonzero, so it does not measure session leaks
-for an individual request.
+`activeSessionsAfterCall` is the service-wide active session count after the call.
 
 These runtime demonstrations complement the reproducible automated coverage in
-the [Privacy Boundary Verification Matrix](../../docs/evaluation.md#privacy-boundary-verification-matrix).
+the [Privacy Boundary Verification Matrix](https://ultramancode.github.io/spring-ai-privacy-guardrails/evaluation/#privacy-boundary-verification-matrix).
 
 ## Content Inspection Boundary Demo
 
@@ -184,7 +183,7 @@ when `PERSON` detection is required.
 The employee and customer ID rules belong to this sample. The other rules come
 from the built-in catalog. Check their documented format limits against your own
 data, and add `PiiRule` beans or independent `PiiAnalyzer` providers as needed. The checked-in
-[evaluation baseline](../../docs/evaluation.md) covers positive, negative, and
+[evaluation baseline](https://ultramancode.github.io/spring-ai-privacy-guardrails/evaluation/) covers positive, negative, and
 adversarial synthetic cases using this configuration.
 
 ## ChatClient Tool Loop Demo
@@ -248,13 +247,18 @@ It requires no external MCP infrastructure or model.
 ## Reading the sample code
 
 Start with [GuardrailsConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/GuardrailsConfiguration.java) for the privacy policy, tool disclosure policy, authorization manager, and guarded `ChatClient`.
+
+[DemoPiiRuleConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/DemoPiiRuleConfiguration.java) defines the sample's employee and customer ID rules.
+[application.yml](src/main/resources/application.yml) selects these rules alongside the built-in presets.
+
 [LocalChatModelConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/LocalChatModelConfiguration.java) supplies the local model.
 [DemoToolAuthorization](src/main/java/io/github/ultramancode/springai/privacy/sample/shared/security/authorization/DemoToolAuthorization.java) defines tool access for the demo roles.
+
 Follow the service for the flow you want to inspect:
 
 - [PromptProtectionDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/PromptProtectionDemoService.java): analyze and tokenize input through `PrivacyService`.
 - [ChatClientDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/ChatClientDemoService.java): call the guarded `ChatClient`.
-- [LocalToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/localtool/service/LocalToolLoopDemoService.java): local tools and role-based authorization.
+- [LocalToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/localtool/service/LocalToolLoopDemoService.java): local tool calls with privacy protection and authorization.
 - [SecurityDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/security/service/SecurityDemoService.java): compare tool access for two roles using the same tool execution.
 - [RagDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/rag/service/RagDemoService.java): retrieval followed by privacy protection.
 - [McpToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/mcp/service/McpToolLoopDemoService.java): run the guarded MCP tool loop and collect privacy boundary evidence.
@@ -270,6 +274,7 @@ Each feature separates HTTP handling in `controller`, execution in `service`, an
 API records in `dto.request` or `dto.response`. `infrastructure` contains model
 and tool implementations. `model` contains internal data types, including demo
 inputs, messages, execution results, and state.
+
 `shared.tool` contains the model, argument types, and evidence used by multiple tool demos.
 `shared.security` contains the demo roles, authorization rules, and authorization checks shared by those demos.
 
@@ -286,7 +291,8 @@ node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
 ```
 
 The JavaScript tests run the rendering and request logic in Node.js with a lightweight DOM substitute.
-The Java checks run the local scenarios and compile the optional live-model tests.
+The Java checks run the local scenarios and verify that the optional live-model
+configuration starts and loads its custom PII rules, without contacting a model.
 Live model and analyzer checks require separate opt-in configuration described below.
 
 ## Opt-In OpenAI-Compatible Live Model Verification

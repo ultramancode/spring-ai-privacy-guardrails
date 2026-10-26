@@ -3,12 +3,12 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: b45450e9481e4624d3aa06d38e901f0f9e9508313005a463aeddb8a481e98d86 -->
+<!-- i18n-source-sha256: 3904b2e6f316dd2ec511b92a0cb6b920143e8315662dcc77f5aecbe88bb9f610 -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
-원문만 전달하는 과정을 보여줍니다. 기본 구성은 샘플용 로컬 `ChatModel`을 사용하므로
+원문만 전달하는 과정을 보여줍니다. 기본 구성은 고정된 예제와 정해진 응답을 반환하는 로컬 `ChatModel`을 사용하므로
 외부 LLM API 키가 필요하지 않습니다. 탐지된 개인정보는 원문 값을 직접 드러내지 않는
-대체 문자열인 **불투명 토큰(opaque token)**으로 바뀝니다.
+대체 문자열인 불투명 토큰(opaque token)으로 바뀝니다.
 
 ```text
 사용자 원문 입력 -> 모델 프롬프트의 개인정보 토큰화
@@ -22,6 +22,8 @@
 이 문서의 명령은 Linux 셸을 기준으로 하며 저장소 루트에서 실행합니다.
 
 ## 실행
+
+사전 준비와 실행 방법은 [샘플 실행 안내](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/sample/#run-the-inspector)를 참고하세요.
 
 ```bash
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
@@ -53,11 +55,9 @@
 흐름을 다시 실행합니다. 선택한 언어에 맞춰 UI 문구, 예제 입력과 결과가 바뀝니다.
 
 응답의 `activeSessionsAfterCall`은 호출 후 서비스 전체의 활성 세션 수입니다.
-요청을 하나씩 실행하면 일반적으로 `0`입니다. 동시 요청 중에는 0보다 클 수 있으므로
-개별 요청의 세션 누수를 나타내는 지표는 아닙니다.
 
 이 런타임 데모에 대응하는 재현 가능한 자동 검증 범위는
-[개인정보 보호 경계 검증 매트릭스](../../docs/ko/evaluation.md#개인정보-보호-경계-검증-매트릭스)를
+[개인정보 보호 경계 검증 매트릭스](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/evaluation/#개인정보-보호-경계-검증-매트릭스)를
 참고하세요.
 
 ## 콘텐츠 검사 경계 데모
@@ -179,7 +179,7 @@ curl -X POST http://127.0.0.1:8080/demo/protect \
 직원 ID와 고객 ID 규칙은 샘플에서 정의하고, 나머지 규칙은 내장 카탈로그에서 가져옵니다.
 문서에 명시된 지원 형식을 실제 데이터와 비교하고 필요하면 `PiiRule` Bean이나 독립
 `PiiAnalyzer`를 추가하세요. 저장소에 포함된
-[평가 기준](../../docs/ko/evaluation.md)은 이 설정으로 구성한 양성·음성·적대적 사례를
+[평가 기준](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/evaluation/)은 이 설정으로 구성한 양성·음성·적대적 사례를
 다룹니다.
 
 ## ChatClient 도구 루프 데모
@@ -238,14 +238,19 @@ MCP 도구에서는 `CUSTOMER_ID`만 복원되며, MCP 결과에서 탐지된 �
 
 ## 샘플 코드 읽기
 
-개인정보 보호 정책, 도구 공개 정책, 인가 매니저와 보호된 `ChatClient` 구성은 [GuardrailsConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/GuardrailsConfiguration.java)부터 확인하세요.
+개인정보 보호 정책, 도구 공개 정책, 권한 관리자와 보호된 `ChatClient` 구성은 [GuardrailsConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/GuardrailsConfiguration.java)부터 확인하세요.
+
+[DemoPiiRuleConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/DemoPiiRuleConfiguration.java)은 샘플의 직원 ID와 고객 ID 규칙을 정의합니다.
+[application.yml](src/main/resources/application.yml)에서 이 규칙과 내장 프리셋을 선택합니다.
+
 [LocalChatModelConfiguration](src/main/java/io/github/ultramancode/springai/privacy/sample/config/LocalChatModelConfiguration.java)은 로컬 모델을 구성합니다.
 [DemoToolAuthorization](src/main/java/io/github/ultramancode/springai/privacy/sample/shared/security/authorization/DemoToolAuthorization.java)은 데모 역할별 도구 접근 권한을 정의합니다.
+
 확인하려는 실행 흐름에 맞춰 다음 서비스를 읽어보세요.
 
 - [PromptProtectionDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/PromptProtectionDemoService.java): `PrivacyService`를 통한 입력 분석과 토큰화.
 - [ChatClientDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/privacy/service/ChatClientDemoService.java): 보호된 `ChatClient` 호출.
-- [LocalToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/localtool/service/LocalToolLoopDemoService.java): 로컬 도구와 역할별 권한 검사.
+- [LocalToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/localtool/service/LocalToolLoopDemoService.java): 로컬 도구 호출과 개인정보 보호·권한 검사.
 - [SecurityDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/security/service/SecurityDemoService.java): 같은 도구 실행을 두 역할로 수행하고 접근 권한 비교.
 - [RagDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/rag/service/RagDemoService.java): 문서 검색 후 개인정보 보호.
 - [McpToolLoopDemoService](src/main/java/io/github/ultramancode/springai/privacy/sample/mcp/service/McpToolLoopDemoService.java): 보호된 MCP 도구 루프 실행과 개인정보 경계 검증 정보 수집.
@@ -261,6 +266,7 @@ MCP 도구에서는 `CUSTOMER_ID`만 복원되며, MCP 결과에서 탐지된 �
 API 요청·응답 레코드는 `dto.request`와 `dto.response`에 있습니다.
 모델·도구 구현체는 `infrastructure`에 둡니다.
 데모 입력, 메시지, 실행 결과와 상태 등 내부 데이터 타입은 `model`에 둡니다.
+
 여러 도구 데모가 함께 쓰는 모델, 인자 타입과 검증 정보는 `shared.tool`에 있습니다.
 이 데모들이 함께 쓰는 역할, 권한 규칙과 권한 검사 기록은 `shared.security`에 있습니다.
 
@@ -277,7 +283,8 @@ node --test samples/spring-ai-demo/src/test/javascript/*.test.cjs
 ```
 
 JavaScript 테스트는 간단한 DOM 대역을 사용해 Node.js에서 렌더링과 요청 로직을 실행합니다.
-Java 검사는 로컬 시나리오를 실행하고 선택적 실제 모델 테스트를 컴파일합니다.
+Java 검사는 로컬 시나리오를 실행하고, 모델 호출 없이 실제 모델 테스트 설정의 기동과
+사용자 정의 개인정보 규칙을 검증합니다.
 실제 모델과 분석기 검사는 아래에서 설명하는 별도의 활성화 설정이 필요합니다.
 
 ## 선택적 OpenAI 호환 실제 모델 검증

@@ -8,20 +8,36 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: d6b800d2e9e619cd7e6d8eb6d36aff58e7330e21be6b1efed97cc47f28753c95 -->
+<!-- i18n-source-sha256: f162c09315e982d1e693cf533a1373b3d0f574bdefd1505c7dd8dcacb7081803 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
 전달하기 전에 보호합니다.
 
-[로컬 규칙](#로컬-규칙과-프리셋), [Presidio](#presidio-분석기),
-[OpenNLP](#opennlp-분석기-jvm-전용-선택-사항) 또는 [사용자 정의 분석기](#사용자-정의-분석기)를
-구성한 뒤 클라이언트 정책에서 `privacy()`를 선택하세요.
+데이터에 맞는 분석기를 구성한 뒤 클라이언트 정책에서 `privacy()`를 선택하세요.
 의존성, 클라이언트 생성과 기능 선택은 [설정](configuration.md)을 참고하세요.
 
 Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 그 밖의 제공자 전용 메시지나 사용자 정의 메시지는 알 수 없는 필드의 개인정보가
 보호되지 않은 채 전달되지 않도록 거부합니다.
+
+[시작하기](getting-started.md) · [규칙·프리셋](#로컬-규칙과-프리셋) · [도구 원문 공개](#도구별-원문-공개) · [출력 보호](#출력-정책과-스트리밍) · [문제 해결](troubleshooting.md)
+
+<a id="choose-an-analyzer"></a>
+
+## 분석기 선택
+
+다음 분석기의 탐지 결과에 같은 보호 흐름을 적용합니다.
+[여러 분석기를 조합](#탐지와-해석)할 수도 있습니다.
+
+| 분석기 | 탐지 방식 |
+| --- | --- |
+| [Presidio](#presidio-분석기) | Presidio 서비스를 통한 개인정보 탐지 |
+| [OpenNLP](#opennlp-분석기) | 애플리케이션 JVM 내부의 모델로 개체명 인식 |
+| [로컬 규칙](#로컬-규칙과-프리셋) | 내장 규칙 또는 애플리케이션에서 정의한 패턴·검증 로직 |
+
+다른 탐지 모델이나 서비스를 연결하려면 `PiiAnalyzer`를 구현한
+[사용자 정의 분석기](#사용자-정의-분석기)를 등록합니다.
 
 ## 설정 속성
 
@@ -66,8 +82,9 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 규칙 선택 목록(`rules.presets`, `rules.include`, `rules.exclude`), Presidio `headers`,
 OpenNLP `entity-models`의 기본값은 비어 있습니다.
 Spring Boot 설정 메타데이터는 IDE 자동 완성을 제공합니다.
+
 `analysis.language`는 영숫자 단어를 하나의 하이픈 또는 밑줄로 구분한
-1~64자 ASCII 식별자를 받습니다. 대소문자를 구분하지 않으며 `core`는
+1–64자 ASCII 식별자를 받습니다. 대소문자를 구분하지 않으며 `core`는
 소문자 정규형을 모든 분석기에 전달합니다. 공백, 문법에 없는 문장부호,
 빈 구분자와 반복된 구분자는 자동으로 잘라내거나 보정하지 않고 거부합니다.
 
@@ -147,13 +164,13 @@ spring:
 
 분석기 ID(provider ID)는 `RULES`, `PRESIDIO`, `OPENNLP`처럼 각 분석기를 구분하는
 이름입니다. 영문자와 숫자로 이루어진 구간을 단일 하이픈(`-`) 또는 밑줄(`_`)로
-연결한 1~128자의 ASCII 식별자이며, 라이브러리는 분석기 ID의 대소문자를
+연결한 1–128자의 ASCII 식별자이며, 라이브러리는 분석기 ID의 대소문자를
 구분하지 않고 대문자 형태로 정규화합니다. 허용되지 않은 문장부호나 공백,
 잘못되거나 연속된 구분자는 거부합니다. 각 `PrivacyService`에 전달하는 분석기 ID는
 서로 달라야 합니다.
 
 엔티티 레이블은 대문자 영문자와 숫자로 이루어진 구간을 단일 밑줄(`_`)로 연결한
-1~128자의 ASCII 식별자입니다. 소문자, 공백, 하이픈(`-`), 허용되지 않은 문장부호와
+1–128자의 ASCII 식별자입니다. 소문자, 공백, 하이픈(`-`), 허용되지 않은 문장부호와
 빈 구간은 자동으로 보정하지 않고 거부합니다. 잘못된 설정값이나 분석기가 반환한
 유효하지 않은 레이블은 오류로 처리합니다.
 
@@ -233,11 +250,9 @@ spring:
 애플리케이션 규칙은 개별 Spring Bean으로 등록합니다.
 
 ```java
-import io.github.ultramancode.springai.privacy.core.PatternPiiRule.PatternDefinition;
-
 @Bean
 PiiRule employeeIdRule() {
-    PatternDefinition pattern = PatternDefinition.builder()
+    PatternPiiRule.PatternDefinition pattern = PatternPiiRule.PatternDefinition.builder()
             .expression("(?<![A-Za-z0-9_])EMP-[0-9]{4}(?![A-Za-z0-9_])")
             .score(0.90)
             .validator(candidate -> !candidate.equals("EMP-0000"))
@@ -256,15 +271,20 @@ PiiRule employeeIdRule() {
 
 `PatternPiiRule.PatternDefinition`은 Java 정규식, 점수, 캡처 그룹과 선택적인
 `Predicate<String>`을 묶습니다. 빌더에는 정규식과 점수를 반드시 지정해야 합니다.
-캡처 그룹의 기본값은 0이며 전체 매치를 선택합니다. 검증 함수는 캡처된 후보를 받아
-`true`면 채택하고 `false`면 제외합니다. 후보 파싱, 체크섬, 업무 조건을 검사할 수 있습니다.
-검증 함수를 지정하지 않으면 모든 매치를 채택합니다. 규칙 빌더의 `.addPattern(...)`으로
-정의 하나를 추가하거나 `.addPatterns(...)`으로 컬렉션의 정의들을 추가합니다.
+캡처 그룹의 기본값은 0이며 전체 매치를 선택합니다.
+
+검증 함수는 캡처된 후보를 받아 `true`면 채택하고 `false`면 제외합니다.
+후보 파싱, 체크섬, 업무 조건을 검사할 수 있습니다.
+검증 함수를 지정하지 않으면 모든 매치를 채택합니다.
+
+규칙 빌더의 `.addPattern(...)`으로 정의 하나를 추가하거나
+`.addPatterns(...)`으로 컬렉션의 정의들을 추가합니다.
 두 메소드 모두 기존 패턴을 유지하며, 추가한 순서대로 각각의 점수, 캡처 그룹과 검증 함수를 적용합니다.
 
 본문에서 직접 탐지하려면 `PiiRule`의 `id()`, `entityTypes()`, `analyze(text, options, limits)`를
 구현합니다. `PiiSpan`의 위치는 원문의 UTF-16 기준으로 start 포함, end 제외입니다.
 탐지 결과가 없으면 빈 목록을 반환합니다.
+
 프리셋 선택은 분석 언어와 독립적입니다. 독립적인 원격 서비스나 모델은 `PiiAnalyzer`로 연결합니다.
 
 ### 프리셋 선택
@@ -280,15 +300,21 @@ PiiRule employeeIdRule() {
 두 메소드는 기존에 등록한 규칙을 유지하며, 컬렉션은 순회 순서대로 복사합니다.
 
 카탈로그는 프리셋을 순서대로 펼치고 `include`를 추가한 뒤 중복 ID의 첫 위치를 유지하고
-`exclude`를 적용합니다. COMMON도 명시적으로 선택해야 합니다. 규칙 ID는 1~64자의 ASCII
-소문자·숫자와 그 사이의 단일 하이픈을 사용합니다. 프리셋 이름은 ASCII 문자로 시작하며
+`exclude`를 적용합니다. COMMON도 명시적으로 선택해야 합니다.
+
+규칙 ID는 1–64자의 ASCII 소문자·숫자와 그 사이의 단일 하이픈을 사용합니다.
+프리셋 이름은 ASCII 문자로 시작하며
 최대 64자의 ASCII 문자·숫자·하이픈·밑줄을 사용합니다. 두 이름 모두 대소문자를 구분합니다.
+
 Java에서는 `BuiltInPiiRuleIds` 상수로 내장 규칙 ID를 참조할 수 있습니다.
 내장 프리셋 이름은 `BuiltInPiiPresetNames` 상수로, 애플리케이션에서 정의한 이름은
 `"COMPANY"` 같은 문자열로 지정할 수 있습니다.
 
-중복 정의, 미등록 참조, 활성 상태의 빈 선택은 구성 오류입니다. 규칙 자동 구성은 기본적으로
-비활성이며, `rules.enabled=true`이면 Boot가 설정된 선택으로 `RuleBasedPiiAnalyzer`를 생성합니다.
+중복 정의, 미등록 참조, 활성 상태의 빈 선택은 구성 오류입니다.
+
+규칙 자동 구성은 기본적으로 비활성이며, `rules.enabled=true`이면
+Boot가 설정된 선택으로 `RuleBasedPiiAnalyzer`를 생성합니다.
+
 `RuleBasedPiiAnalyzer` Bean을 직접 선언하면 `rules.enabled=true`여도 자동 선택을
 대체합니다. Boot가 해당 Bean을 인식하도록 Bean 메서드의 반환 타입을
 `RuleBasedPiiAnalyzer`로 선언하세요.
@@ -300,8 +326,6 @@ Java에서는 `BuiltInPiiRuleIds` 상수로 내장 규칙 ID를 참조할 수 �
 프리셋이나 다른 등록된 프리셋과 달라야 합니다.
 
 ```java
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
-
 @Bean
 PiiRulePreset companyPreset() {
     return new PiiRulePreset("COMPANY", List.of("employee-id", BuiltInPiiRuleIds.EMAIL));
@@ -312,8 +336,6 @@ PiiRulePreset companyPreset() {
 규칙을 `PiiRuleCatalog`에 전달합니다.
 
 ```java
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
-
 PiiRule employeeRule = employeeIdRule();
 PiiRuleCatalog catalog = PiiRuleCatalog.builder().builtIns()
         .addRule(employeeRule)
@@ -351,10 +373,10 @@ List<String> presetNames = analyzer.presetNames();
 
 | 프리셋 | 규칙 ID | 지원 범위 |
 | --- | --- | --- |
-| COMMON | email | 점으로 구분한 DNS 도메인의 ASCII 이메일. local part에는 작은따옴표·느낌표 같은 특수 문자를 사용할 수 있습니다. 큰따옴표로 감싼 local part, 국제화 주소, 도메인 리터럴은 지원하지 않습니다. |
-| COMMON | credit-card | 1·3·4·50~55·6으로 시작하는 13~17자리 ASCII 숫자와 숫자 그룹 사이의 선택적 공백·하이픈. 1로 시작하는 구분자 없는 13자리 숫자는 제외합니다. Luhn 검사를 적용하며 실재 발급·계좌 상태를 확인하지 않습니다. |
-| KR | kr-mobile-phone | 010 뒤 8자리의 연속형 또는 일관된 공백·하이픈 구분형. +82 10 국제형도 지원합니다. 다른 01X·유선전화·내선은 지원하지 않습니다. |
-| KR | kr-rrn | YYMMDD, 1~4 구분 숫자와 6자리, 선택적 하이픈. 1900~2099년 달력 유효성을 검사합니다. 실재 신원·발급 여부를 확인하지 않습니다. |
+| COMMON | email | 점으로 구분한 DNS 도메인의 ASCII 이메일. `@` 앞부분에는 작은따옴표·느낌표 같은 특수 문자를 사용할 수 있습니다. `@` 앞부분을 큰따옴표로 감싼 주소, 국제화 주소, 도메인 리터럴은 지원하지 않습니다. |
+| COMMON | credit-card | 1·3·4·50–55·6으로 시작하는 13–17자리 ASCII 숫자와 숫자 그룹 사이의 선택적 공백·하이픈. 1로 시작하는 구분자 없는 13자리 숫자는 제외합니다. Luhn 검사를 적용하며 실재 발급·계좌 상태를 확인하지 않습니다. |
+| KR | kr-mobile-phone | 한국 휴대전화번호. 010 뒤 8자리의 연속형 또는 일관된 공백·하이픈 구분형이며 +82 10 국제형도 지원합니다. 다른 01X·유선전화·내선은 지원하지 않습니다. |
+| KR | kr-rrn | 한국 주민등록번호. 생년월일(YYMMDD), 세기·성별 구분 숫자(1–4)와 6자리로 구성되며 하이픈은 선택적입니다. 1900–2099년 생년월일의 달력 유효성을 검사합니다. 실재 신원·발급 여부를 확인하지 않습니다. |
 
 내장 탐지 결과의 기본 점수는 0.85입니다. 이 점수는 휴리스틱 값이며 측정된 확률이 아닙니다.
 애플리케이션 환경을 대표하는 데이터로 탐지 품질을 평가하세요.
@@ -365,9 +387,6 @@ List<String> presetNames = analyzer.presetNames();
 고정 점수를 설정할 수 있습니다. 예를 들어 Spring Bean으로 등록할 수 있습니다.
 
 ```java
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiPresetNames;
-import io.github.ultramancode.springai.privacy.core.rules.BuiltInPiiRuleIds;
-
 @Bean
 RuleBasedPiiAnalyzer localPiiAnalyzer() {
     PiiRuleCatalog catalog = PiiRuleCatalog.builder()
@@ -389,8 +408,26 @@ RuleBasedPiiAnalyzer localPiiAnalyzer() {
 
 ## Presidio 분석기
 
-Presidio는 분석할 원문 텍스트를 설정한 Presidio 서버로 전송합니다. Presidio 스타터를
-추가한 뒤 분석기를 활성화하고 서버 접속 정보를 설정합니다.
+Presidio는 분석할 원문 텍스트를 설정한 Presidio 서버로 전송합니다.
+클라이언트 스타터와 함께 Presidio 스타터를 추가합니다.
+
+Gradle:
+
+```gradle
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0"
+```
+
+Maven:
+
+```xml
+<dependency>
+    <groupId>io.github.ultramancode</groupId>
+    <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
+    <version>0.4.0</version>
+</dependency>
+```
+
+분석기를 활성화하고 서버 접속 정보를 설정합니다.
 
 ```yaml
 spring:
@@ -431,14 +468,31 @@ Presidio 응답이 크기나 깊이 제한을 초과하면 `ANALYZER_RESPONSE_IN
 Spring Boot의 상태 점검 기능을 사용하는 경우 Presidio 서비스의 상태도 함께 확인할
 수 있습니다.
 
-로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/main/samples/presidio)에
+로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio)에
 있습니다.
 
-## OpenNLP 분석기 (JVM 전용, 선택 사항)
+## OpenNLP 분석기
 
-이 구성은 호환되는 OpenNLP NER 모델을 사용해 별도의 외부 분석 서비스 없이
-애플리케이션과 같은 JVM에서 개인정보를 분석하려는 경우에 적합합니다. OpenNLP NER
-모델은 라이브러리에 포함되지 않으므로 사용할 모델 파일을 별도로 준비해야 합니다.
+호환되는 OpenNLP NER 모델로 애플리케이션 JVM 내부에서 개인정보를 분석합니다.
+클라이언트 스타터와 함께 OpenNLP 스타터를 추가하고 대상 언어와 엔티티에 맞는 모델 파일을 준비합니다.
+
+Gradle:
+
+```gradle
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0"
+```
+
+Maven:
+
+```xml
+<dependency>
+    <groupId>io.github.ultramancode</groupId>
+    <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
+    <version>0.4.0</version>
+</dependency>
+```
+
+분석기를 활성화하고 모델 파일의 위치를 설정합니다.
 
 ```yaml
 spring:
@@ -459,29 +513,28 @@ spring:
 사용하는 NER 모델과 토큰화 방식이 맞지 않으면 탐지 품질이 달라질 수 있으므로 실제
 데이터에 맞게 검증해야 합니다.
 
-OpenNLP 연동은 기존 NER 모델을 활용하려는 애플리케이션을 위한 선택적 구성으로,
-범용 개인정보 탐지의 기본 방식으로 권장하지는 않습니다.
-
-[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.ko.md#선택적-jvm-전용-opennlp-adapter)에서
+[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md#선택적-jvm-전용-opennlp-adapter)에서
 모델 준비, 설정 및 실제 연동 테스트 방법을 확인할 수 있습니다.
 
 ## 도구별 원문 공개
 
-개인정보 보호가 적용된 도구에는 탐지된 값을 기본적으로 **불투명 토큰(opaque token)**으로 전달합니다.
+개인정보 보호가 적용된 도구에는 탐지된 값을 기본적으로 불투명 토큰(opaque token)으로 전달합니다.
 불투명 토큰은 원문 값을 직접 드러내지 않는 대체 문자열입니다.
 특정 도구가 원문을 받아야 한다면 `ToolDisclosurePolicy`에 해당 도구에 공개할
 엔티티 유형을 지정하세요.
 
 ```java
-GuardrailsPolicy toolPolicy = GuardrailsPolicy.builder()
-        .privacy(GuardrailsPolicy.Privacy.builder()
-                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(
-                        Map.of("customerLookup", List.of("CUSTOMER_ID"))))
-                .build())
+ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
+        Map.of("sendEmail", List.of("EMAIL_ADDRESS")));
+GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
+        .toolDisclosurePolicy(toolDisclosurePolicy)
+        .build();
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacySettings)
         .build();
 ```
 
-위 설정에서는 `customerLookup` 도구에만 `CUSTOMER_ID`의 원문을 전달합니다.
+위 설정에서는 `sendEmail` 도구에만 `EMAIL_ADDRESS`의 원문을 전달합니다.
 공개하도록 지정하지 않은 엔티티 유형과 `ToolDisclosurePolicy`에 등록되지 않은 도구에는
 보호된 값이 그대로 전달됩니다.
 
@@ -489,8 +542,8 @@ Factory가 도구를 자동으로 보호하므로 원래 콜백이나 제공자�
 MCP 제공자는 요청마다 현재 도구 목록을 사용합니다.
 
 ```java
-ChatClient chatClient = guardrails.builder(chatModel, toolPolicy)
-        .defaultTools(customerLookup, knowledgeSearch, mcpTools)
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, policy)
+        .defaultTools(sendEmailToolCallback, knowledgeSearchToolCallback, mcpToolCallbackProvider)
         .build();
 ```
 
@@ -524,23 +577,58 @@ Spring Security 연동을 활성화하면 원문 공개 정책을 적용하기 �
 `ToolCallingManager`를 사용하는 방법은
 [사용자 정의 ToolCallingManager](security.md#사용자-정의-toolcallingmanager)를 참고하세요.
 
+<a id="custom-tool-disclosure-policy"></a>
+
+### 별도 원문 공개 정책 구현
+
+사용자 정의 공개 로직은 애플리케이션의 `GuardrailsToolDisclosurePolicy.java`에 구현합니다.
+이 정책은 `sendEmail`에만 `EMAIL_ADDRESS` 원문을 허용합니다.
+
+```java
+public final class GuardrailsToolDisclosurePolicy implements ToolDisclosurePolicy {
+    private static final AllowedEntityTypes EMAIL_ADDRESS_TYPES = AllowedEntityTypes.of(Set.of("EMAIL_ADDRESS"));
+
+    @Override
+    public AllowedEntityTypes getAllowedEntityTypes(ToolDefinition toolDefinition) {
+        if (toolDefinition != null && "sendEmail".equals(toolDefinition.name())) {
+            return EMAIL_ADDRESS_TYPES;
+        }
+        return AllowedEntityTypes.none();
+    }
+}
+```
+
+애플리케이션의 `@Configuration` 클래스에서 구현체를 빈으로 등록합니다.
+
+```java
+@Bean
+ToolDisclosurePolicy toolDisclosurePolicy() {
+    return new GuardrailsToolDisclosurePolicy();
+}
+```
+
+클라이언트 구성에 이 빈을 주입하고 개인정보 보호 설정의 `.toolDisclosurePolicy(toolDisclosurePolicy)`에 전달합니다.
+로직이 커지면 정책 클래스의 생성자로 애플리케이션 서비스를 주입할 수 있습니다.
+도구별 공개 유형을 고정된 맵으로 표현할 수 있다면 `allowEntityTypesByToolName(...)`을 사용하세요.
+
 ## 출력 정책과 스트리밍
 
 최종 출력 보호는 기본적으로 비활성화되어 있습니다. 클라이언트 정책에서 활성화합니다.
 
 ```java
-GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
         .privacy(GuardrailsPolicy.Privacy.builder()
                 .outputProtection().tokenize()
                 .build())
         .build();
-ChatClient chatClient = guardrails.builder(chatModel, guardrailsPolicy).build();
+ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, policy)
+        .build();
 ```
 
 차단 메시지를 직접 지정하려면 `block(message)`를 사용합니다.
 
 ```java
-GuardrailsPolicy.Privacy privacyPolicy = GuardrailsPolicy.Privacy.builder()
+GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
         .outputProtection().block("Response contains personal information.")
         .build();
 ```
@@ -644,8 +732,8 @@ JSON에서 추출한 텍스트는 최대 `processing.max-analysis-segments`개�
 
 `PrivacyService`를 직접 사용하는 경우에는 먼저 `PrivacySession`을 엽니다.
 `session.handle()`은 사용할 세션을 지정하는 값으로, 개인정보 분석·토큰화·원문 복원 메서드에
-전달합니다. 아래는 탐지된 개인정보를 불투명 토큰으로 바꾼 뒤, 애플리케이션이 공개를 허용한 고객번호
-(`CUSTOMER_ID`)만 같은 세션에서 복원하는 예시입니다.
+전달합니다. 아래는 탐지된 개인정보를 불투명 토큰으로 바꾼 뒤, 애플리케이션이 공개를 허용한
+이메일 주소(`EMAIL_ADDRESS`)만 같은 세션에서 복원하는 예시입니다.
 
 ```java
 try (PrivacySession session = privacyService.openSession()) {
@@ -654,7 +742,7 @@ try (PrivacySession session = privacyService.openSession()) {
     String protectedText = result.tokenizedText();
 
     String disclosedText = privacyService.detokenize(
-            session.handle(), protectedText, Set.of("CUSTOMER_ID"));
+            session.handle(), protectedText, Set.of("EMAIL_ADDRESS"));
 }
 ```
 
@@ -684,7 +772,7 @@ try 블록을 벗어나 세션이 닫히면 그 세션의 불투명 토큰을 �
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0-SNAPSHOT"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0"
 }
 ```
 
@@ -713,7 +801,7 @@ dependencies {
 ```java
 @Test
 void protectsModelInputAndDisclosesAllowedToolInput() {
-    GuardrailsPolicy guardrailsPolicy = GuardrailsPolicy.builder()
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
             .privacy(GuardrailsPolicy.Privacy.builder()
                     .toolDisclosurePolicy(
                             ToolDisclosurePolicy.allowEntityTypesByToolName(
@@ -722,7 +810,7 @@ void protectsModelInputAndDisclosesAllowedToolInput() {
             .build();
 
     try (PrivacyTestProbe privacyProbe = PrivacyTestProbe.create(privacyService)) {
-        ChatClient chatClient = guardrailsChatClientFactory.builder(privacyProbe.wrapModel(testModel), guardrailsPolicy)
+        ChatClient chatClient = guardrailsChatClientFactory.builder(privacyProbe.wrapModel(testModel), policy)
                 .defaultTools(privacyProbe.wrapTool(customerLookup))
                 .build();
 

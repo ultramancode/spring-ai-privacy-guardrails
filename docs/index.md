@@ -1,49 +1,35 @@
 ---
 description: >-
-  Spring AI Privacy Guardrails protects PII within each request, limits the original
-  values sent to tools, and optionally applies Spring Security tool authorization.
+  Tokenize model-bound PII, disclose originals per tool, and select tool authorization and content inspection.
 ---
 
 # Spring AI Privacy Guardrails
 
 **English** | [한국어](ko/index.md)
 
-![Spring AI Privacy Guardrails execution boundary](images/hero.svg)
+**Send detected PII to the model as tokens. Reveal only the originals each tool needs, then protect its result again.**
 
-Keep detected PII out of the model. Reveal only what each trusted tool needs.
-Protect every tool result before returning it to the model or application.
+| What you need | Start here |
+| --- | --- |
+| PII tokenization and per-tool original disclosure | [Privacy setup](getting-started.md#privacy-protection) |
+| Tool visibility and execution based on the user's permissions | [Tool authorization setup](getting-started.md#tool-authorization) |
+| Request and response checks using rules, ONNX or an HTTP model | [Content inspection setup](getting-started.md#content-inspection) |
 
-Detection answers **what text is sensitive**. Spring AI Privacy Guardrails
-tokenizes detected PII before sending it to a model. Each detected value is
-replaced with an **opaque token**, a string that does not directly reveal the
-original value. It also limits which original values each tool may receive.
+Use these features independently or together.
 
-The optional [Spring Security integration](security.md) controls which tools
-are shown to the model and checks authorization before tool execution. It can
-be used independently of PII protection.
+[![Privacy flow with optional tool authorization and content inspection](images/hero.svg)](images/hero.svg)
 
-**Featured In**
+[View the full diagram](images/hero.svg) · [Architecture](architecture.md) · [Troubleshooting](troubleshooting.md)
 
-- **Spring Blog** — Featured in [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
-- **Spring AI Community** — Listed in [Awesome Spring AI's Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
-
-## See It in Action
-
-The Privacy Boundary Inspector lets you compare the values received by the
-model and tools in Local Tool, RAG, and MCP scenarios. Security compares tool
-access for users with different roles.
-
-![Privacy Boundary Inspector showing Local Tool, RAG, MCP, Security, and blocked Inspection cases](images/privacy-boundary-inspector-demo.gif)
-
-See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
+**Featured in:** [Spring Blog](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/) · [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
 
 ## Reference
 
 | Guide | Covers |
 | --- | --- |
-| [Getting Started](getting-started.md) | Starter selection, basic setup, and model, tool, MCP, and output protection. |
+| [Getting Started](getting-started.md) | Common setup and first steps for privacy protection, tool authorization and content inspection. |
 | [Configuration](configuration.md) | Dependencies, client creation, feature selection and policy reuse. |
-| [Sample / Demo Guide](sample.md) | Inspector scenarios, expected results, endpoints, and language selection. |
+| [Sample Guide](sample.md) | Inspector scenarios, expected results, endpoints, and language selection. |
 | [Privacy Protection](privacy.md) | Analyzers, tokenization, tool disclosure, output protection and processing limits. |
 | [Spring Security Tool Authorization](security.md) | Optional principal-aware tool discovery and execution checks, Tool Search, and asynchronous context. |
 | [Content Inspection](inspection.md) | Input and optional output inspection with rules, local ONNX text classification models or HTTP guard models. |
@@ -51,17 +37,9 @@ See the [Sample / Demo Guide](sample.md) for the complete Inspector workflow.
 | [Threat model](threat-model.md) | Protected assets, trust boundaries, controls, limitations, and separately managed areas. |
 | [Evaluation](evaluation.md) | Boundary tests, the deterministic analyzer baseline, and repository benchmarks. |
 
-## Run the sample
+## Sample
 
-The default sample uses a local `ChatModel` and requires no external model API key.
+The sample application uses fixed examples to illustrate Local Tool, RAG, MCP, Security and Inspection.
+See the [Sample Guide](sample.md) for scenarios and run instructions.
 
-```bash
-./gradlew :spring-ai-privacy-guardrails-sample-demo:run
-```
-
-Open `http://127.0.0.1:8080` to check how PII is protected in Local Tool, RAG,
-and MCP scenarios, and compare role-based tool access in Security.
-
-See the [Sample / Demo Guide](sample.md) for the Inspector workflow and the
-[full sample application guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/spring-ai-demo/README.md)
-for Presidio and OpenNLP profiles and integration examples.
+[![Privacy Boundary Inspector with Local Tool, RAG, MCP, Security and Inspection](images/privacy-boundary-inspector-demo.gif)](images/privacy-boundary-inspector-demo.gif)

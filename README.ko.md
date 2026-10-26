@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: ada70dd456ebc27fdd103f527be8a05113283a0947bd802fcd9c4a9732d0e80a -->
+<!-- i18n-source-sha256: 1e65d53feca1cdf73d5e11352d06f6d0a90a81d3a45b24ae827ae8ebff4192fa -->
 
 **모델에 전달할 개인정보를 토큰으로 바꾸고, 도구에는 필요한 원문만 공개합니다. 도구 결과는 다시 보호합니다.**
 
@@ -78,10 +78,11 @@ String response = chatClient.prompt()
         .content();
 ```
 
-모델에는 다음 입력이 전달됩니다. 토큰의 난수 부분은 `<opaque>`로 줄여 표시했습니다.
+모델에는 이메일 원문 대신 대체 토큰이 전달됩니다.
+아래 예제에서는 설명을 위해 생성된 토큰을 `[EMAIL_TOKEN]`으로 표시합니다.
 
 ```text
-Contact [PII_EMAIL_ADDRESS_1:<opaque>].
+Contact [EMAIL_TOKEN].
 ```
 
 애플리케이션에 필요한 기능을 설정합니다.
@@ -94,29 +95,70 @@ Contact [PII_EMAIL_ADDRESS_1:<opaque>].
 
 기능 조합, 도구 등록과 동작 확인은 [시작하기](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/)를 참고하세요.
 
-## 도구별 원문 공개
+## 세 가지 기능 함께 사용하기
 
-모델에는 탐지된 값을 불투명 토큰으로 전달합니다. 도구에는 정책이 허용한 유형만 실행 직전에
-원문으로 복원하고 결과를 다시 보호합니다.
+다음은 개인정보 보호, Spring Security 기반 도구 권한, 콘텐츠 검사를 함께 사용하는 고객 조회 예제입니다.
+콘텐츠 검사를 통과한 요청에서도 조회 도구의 실행 권한을 별도로 확인합니다.
 
-`chatClient` 빈에서 정책의 개인정보 보호 설정을 변경합니다.
+아래 예제에서는 위의 `COMMON` 프리셋과 [Security 스타터](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/security/#spring-boot-스타터-추가),
+설정된 [검사기](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/#content-inspection)를 함께 사용합니다.
+이메일로 고객을 조회하는 `customerLookup` 도구가 `customerLookupToolCallback`이라는 `ToolCallback` 빈으로 등록되어 있다고 가정합니다.
+이 구성은 앞의 `chatClient` 빈을 대체하며, 관리자만 도구를 사용할 수 있도록 권한 정책을 함께 정의합니다.
 
 ```java
-ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
-        Map.of("sendEmail", List.of("EMAIL_ADDRESS")));
-GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
-        .toolDisclosurePolicy(toolDisclosurePolicy)
-        .build();
-policy = policy.mutate()
-        .privacy(privacySettings)
-        .build();
+@Bean
+AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+    return AuthorityAuthorizationManager.hasRole("ADMIN");
+}
+
+@Bean
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolCallback customerLookupToolCallback) {
+    // 원문 공개(Disclosure): customerLookup 도구에 이메일 원문만 전달
+    ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
+            Map.of("customerLookup", List.of("EMAIL_ADDRESS")));
+    GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
+            .toolDisclosurePolicy(toolDisclosurePolicy)
+            .build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
+            .privacy(privacySettings)   // Privacy: 탐지된 개인정보 토큰화
+            .toolAuthorization(true)   // Security: Spring Security로 ADMIN 역할 확인
+            .inspection()              // Inspection: 프롬프트 인젝션·프롬프트 누출·유해 표현 등 검사
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, policy)
+            .defaultTools(customerLookupToolCallback)
+            .build();
+}
 ```
 
-이 정책은 앱의 `sendEmail` 도구에 `EMAIL_ADDRESS` 원문만 전달하도록 허용합니다.
-다른 엔티티 유형과 도구에는 불투명 토큰을 유지합니다.
+권한 정책은 현재 사용자의 `ADMIN` 역할을 확인합니다.
+원문 공개 맵은 도구 이름을 키로, 원문 공개를 허용할 개인정보 유형 목록을 값으로 사용합니다.
+콘텐츠 검사 항목은 선택한 검사기와 설정에 따라 달라집니다.
+
+인증된 요청에서 이 클라이언트를 호출합니다.
+
+```java
+String response = chatClient.prompt()
+        .user("Look up the customer with email alice@example.com.")
+        .call()
+        .content();
+```
+
+검사기에는 이메일이 `[EMAIL_TOKEN]`으로 바뀐 요청이 전달됩니다.
+검사 결과가 `BLOCK`이면 업무 모델을 호출하지 않습니다. `ALLOW`이면 같은 보호된 요청을 모델에 전달하고,
+도구 사용 권한은 별도로 확인합니다.
+
+- **관리자(`ADMIN`):** 모델이 `customerLookup`을 요청할 수 있습니다. 실행 직전에 권한을 다시 확인하고,
+  도구에 전달할 `alice@example.com` 원문을 복원합니다. 다른 개인정보 유형은 토큰으로 유지합니다.
+- **일반 사용자(`ADMIN` 역할 없음):** 모델에 `customerLookup`을 공개하지 않습니다.
+  모델이 이름을 지정해 호출하더라도 도구를 실행하지 않고 이메일 원문도 복원하지 않습니다.
+
+조회 결과를 모델에 다시 보내기 전에도 탐지된 개인정보를 토큰화하고, 보호된 내용을 다시 검사합니다.
+이 검사에서 `BLOCK`이면 다음 모델 호출 전에 중단합니다.
 
 [도구 등록과 MCP 연동](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/privacy/#도구별-원문-공개)을 참고하세요.
 사용자 정의 공개 로직은 [별도 정책 클래스](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/privacy/#custom-tool-disclosure-policy)로 구현할 수 있습니다.
+최종 응답 보호와 출력 검사는 [출력 정책](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/configuration/#기능과-출력-정책-조합)에서 별도로 선택합니다.
 
 ## 필요한 기능 추가
 

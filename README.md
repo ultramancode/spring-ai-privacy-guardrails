@@ -75,10 +75,11 @@ String response = chatClient.prompt()
         .content();
 ```
 
-The model receives the following input, with the token's random part abbreviated as `<opaque>`:
+The model receives a replacement token instead of the email address.
+For readability, the examples below use `[EMAIL_TOKEN]` to represent the generated token:
 
 ```text
-Contact [PII_EMAIL_ADDRESS_1:<opaque>].
+Contact [EMAIL_TOKEN].
 ```
 
 Configure the features your application needs:
@@ -91,29 +92,71 @@ Configure the features your application needs:
 
 See [Getting Started](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/) for feature combinations, tool registration and verification.
 
-## Per-Tool Original Disclosure
+## Use All Three Features Together
 
-The model receives detected values as opaque tokens. Immediately before a tool runs,
-only permitted entity types are restored, and its result is protected again.
+This customer lookup example combines privacy protection, Spring Security tool authorization and content inspection.
+Passing content inspection does not grant permission to run the lookup tool.
 
-In the `chatClient` bean, update the policy's privacy settings:
+The example below uses the `COMMON` preset above with the [Security starter](https://ultramancode.github.io/spring-ai-privacy-guardrails/security/#add-the-spring-boot-starter)
+and a configured [inspector](https://ultramancode.github.io/spring-ai-privacy-guardrails/getting-started/#content-inspection).
+It assumes that a `ToolCallback` bean named `customerLookupToolCallback` provides a `customerLookup` tool that looks up customers by email address.
+This configuration replaces the earlier `chatClient` bean and adds an admin-only tool authorization policy:
 
 ```java
-ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
-        Map.of("sendEmail", List.of("EMAIL_ADDRESS")));
-GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
-        .toolDisclosurePolicy(toolDisclosurePolicy)
-        .build();
-policy = policy.mutate()
-        .privacy(privacySettings)
-        .build();
+@Bean
+AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
+    return AuthorityAuthorizationManager.hasRole("ADMIN");
+}
+
+@Bean
+ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrailsChatClientFactory,
+        ToolCallback customerLookupToolCallback) {
+    // Original PII disclosure: pass only original email addresses to customerLookup
+    ToolDisclosurePolicy toolDisclosurePolicy = ToolDisclosurePolicy.allowEntityTypesByToolName(
+            Map.of("customerLookup", List.of("EMAIL_ADDRESS")));
+    GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
+            .toolDisclosurePolicy(toolDisclosurePolicy)
+            .build();
+    GuardrailsPolicy policy = GuardrailsPolicy.builder()
+            .privacy(privacySettings)   // Privacy: tokenize detected PII
+            .toolAuthorization(true)   // Security: check the ADMIN role with Spring Security
+            .inspection()              // Inspection: check for prompt injection, prompt leaking and toxic language
+            .build();
+    return guardrailsChatClientFactory.builder(chatModel, policy)
+            .defaultTools(customerLookupToolCallback)
+            .build();
+}
 ```
 
-This allows the application's `sendEmail` tool to receive original `EMAIL_ADDRESS` values.
-Other entity types and tools keep opaque tokens.
+The authorization policy checks the current user's `ADMIN` role.
+The disclosure map uses the registered tool name as its key and the list of allowed PII entity types as its value.
+The inspection checks depend on the selected inspectors and their configuration.
+
+Call it from an authenticated request:
+
+```java
+String response = chatClient.prompt()
+        .user("Look up the customer with email alice@example.com.")
+        .call()
+        .content();
+```
+
+The inspector receives the request with the email replaced by `[EMAIL_TOKEN]`.
+A `BLOCK` decision stops the main model call. An `ALLOW` decision passes the same protected request to the model,
+while tool access still depends on the user:
+
+- **Admin (`ADMIN` role):** the model may request `customerLookup`. Immediately before execution,
+  permission is checked again, then `alice@example.com` is restored for the tool.
+  Other PII entity types remain tokenized.
+- **User without the `ADMIN` role:** `customerLookup` is omitted from the model's tool list.
+  Even if the model requests it by name, the tool is not executed and the email is not restored.
+
+Before a lookup result is sent back to the model, its detected PII is tokenized and the protected content is inspected again.
+If that inspection returns `BLOCK`, the next model call is stopped.
 
 See [tool registration and MCP integration](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/#per-tool-original-disclosure).
 For custom disclosure logic, use a [separate policy class](https://ultramancode.github.io/spring-ai-privacy-guardrails/privacy/#custom-tool-disclosure-policy).
+Final-response protection and inspection are separate opt-in [output policies](https://ultramancode.github.io/spring-ai-privacy-guardrails/configuration/#combine-features-and-output-policies).
 
 ## Add the Features You Need
 

@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.OutputResponseContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -49,6 +50,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
     private final PrivacyToolControlValidator toolControlValidator;
     private final PrivacyEnforcementNotifier enforcementNotifier;
     private final int order;
+    private final boolean simplifyTokens;
 
     /**
      * Creates a tokenizing output boundary with default limits and order.
@@ -178,6 +180,30 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
             PrivacyEnforcementObserver enforcementObserver,
             int order
     ) {
+        this(privacyService, action, blockExceptionMessage, responseInspectionLimits,
+                enforcementObserver, order, false);
+    }
+
+    /**
+     * Creates an output boundary with optional final response body token simplification.
+     *
+     * @param privacyService service that owns request sessions and transformations
+     * @param action action applied when sensitive output is detected
+     * @param blockExceptionMessage non-sensitive message used by {@link PrivacyOutputAction#BLOCK}
+     * @param responseInspectionLimits configured limits for inspecting call and stream responses
+     * @param enforcementObserver observer for boundary and outcome events only
+     * @param order Spring AI advisor order
+     * @param simplifyTokens whether to simplify session tokens in the protected final response body
+     */
+    public PrivacyOutputAdvisor(
+            PrivacyService privacyService,
+            PrivacyOutputAction action,
+            String blockExceptionMessage,
+            PrivacyResponseInspectionLimits responseInspectionLimits,
+            PrivacyEnforcementObserver enforcementObserver,
+            int order,
+            boolean simplifyTokens
+    ) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
         this.action = Objects.requireNonNull(action, "action must not be null");
         if (blockExceptionMessage == null || blockExceptionMessage.isBlank()) {
@@ -191,6 +217,7 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
         this.toolControlValidator = new PrivacyToolControlValidator();
         this.enforcementNotifier = new PrivacyEnforcementNotifier(enforcementObserver);
         this.order = order;
+        this.simplifyTokens = simplifyTokens;
     }
 
     @Override
@@ -223,7 +250,9 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
         for (Generation generation : originalChatResponse.getResults()) {
             Generation protectedGeneration = protectGeneration(handle, generation);
             generations.add(protectedGeneration);
-            changed = changed || protectedGeneration != generation;
+            if (protectedGeneration != generation) {
+                changed = true;
+            }
         }
 
         ChatClientResponse protectedResponse = response;
@@ -304,9 +333,26 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
             boolean returnDirect
     ) {
         this.toolControlValidator.validateToolCallStructure(message);
-        return PrivacyMessageTransformer.transformAssistantMessage(
+        AssistantMessage protectedMessage = PrivacyMessageTransformer.transformAssistantMessage(
                 message,
                 text -> protectText(handle, text, returnDirect)
+        );
+        if (!this.simplifyTokens
+                || protectedMessage.getText() == null
+                || OutputResponseContext.isThought(protectedMessage)) {
+            return protectedMessage;
+        }
+        String simplifiedText = this.privacyService.simplifyTokens(handle, protectedMessage.getText());
+        if (simplifiedText.equals(protectedMessage.getText())) {
+            return protectedMessage;
+        }
+        return PrivacyAssistantMessageSupport.rebuild(
+                protectedMessage,
+                simplifiedText,
+                protectedMessage.getMetadata(),
+                protectedMessage.getToolCalls(),
+                protectedMessage.getMedia(),
+                PrivacyAssistantMessageSupport.providerSpecificText(protectedMessage)
         );
     }
 

@@ -39,6 +39,12 @@ final class PrivacyAssistantMessageSupport {
                 : null;
     }
 
+    /**
+     * Rebuilds supported message types, including provider-specific fields.
+     * Uses builders because the minimum supported Spring AI version (2.0.0)
+     * has no {@code AssistantMessage.mutate()}. Callers must retain this rebuild path
+     * while that version is supported.
+     */
     static AssistantMessage rebuild(
             AssistantMessage source,
             String content,

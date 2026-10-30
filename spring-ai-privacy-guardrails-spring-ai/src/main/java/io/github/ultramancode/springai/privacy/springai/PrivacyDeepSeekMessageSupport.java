@@ -30,6 +30,8 @@ final class PrivacyDeepSeekMessageSupport {
             String reasoningContent
     ) {
         DeepSeekAssistantMessage deepSeekMessage = (DeepSeekAssistantMessage) source;
+        // Spring AI 2.0.0 has no DeepSeekAssistantMessage.mutate().
+        // Use the provider builder to retain reasoning content and prefix.
         return new DeepSeekAssistantMessage.Builder()
                 .content(content)
                 .reasoningContent(reasoningContent)

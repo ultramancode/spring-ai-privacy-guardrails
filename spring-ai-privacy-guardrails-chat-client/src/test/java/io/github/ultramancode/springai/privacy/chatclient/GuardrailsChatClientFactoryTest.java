@@ -80,6 +80,45 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 
 class GuardrailsChatClientFactoryTest {
+    @ParameterizedTest(name = "streaming={0}, returnDirect={1}")
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void simplifiesFinalBodyAfterToolExecutionAndBeforeOutputInspection(boolean streaming, boolean returnDirect) {
+        PrivacyService privacyService = privacyService();
+        List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
+        AtomicReference<String> toolInput = new AtomicReference<>();
+        LoopModel model = new LoopModel();
+        GuardrailsPolicy policy = GuardrailsPolicy.builder()
+            .privacy(privacy -> privacy
+                .toolDisclosurePolicy(ToolDisclosurePolicy.allowEntityTypesByToolName(Map.of("lookup", List.of("PERSON"))))
+                .outputProtection().simplifyTokens(true).tokenize())
+            .inspection(inspection -> inspection.modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true))
+            .build();
+        ChatClient client = GuardrailsChatClientFactory.builder().privacyService(privacyService)
+            .outputInspectionService(inspectionService(inspections)).build().builder(model, policy).build();
+
+        String output = invoke(client.prompt().user("Alice").tools(tool("lookup", returnDirect, toolInput)), streaming);
+
+        assertThat(output).isEqualTo("[PERSON_1]");
+        assertThat(toolInput.get()).isEqualTo("{\"value\":\"Alice\"}");
+
+        // Simplify only the final output, keeping model request tokens opaque.
+        assertThat(model.requests).hasSize(returnDirect ? 1 : 2).allSatisfy(prompt ->
+            assertThat(prompt.getUserMessage().getText()).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON")));
+        if (!returnDirect) {
+            assertThat(model.requests.get(1).getInstructions()).filteredOn(ToolResponseMessage.class::isInstance)
+                .singleElement().satisfies(message -> {
+                    ToolResponseMessage toolResponseMessage = (ToolResponseMessage) message;
+                    String toolResponse = toolResponseMessage.getResponses().get(0).responseData();
+                    assertThat(toolResponse).matches(OpaquePiiTokenFormat.patternForEntityType("PERSON"));
+                });
+        }
+
+        // Output inspection must see the simplified text returned to the caller.
+        assertThat(inspections).singleElement().satisfies(inspection ->
+            assertThat(inspection.segments()).anySatisfy(segment -> assertThat(segment.text()).isEqualTo(output)));
+        assertThat(privacyService.activeSessionCount()).isZero();
+    }
+
     @AfterEach
     void clearAuthentication() {
         SecurityContextHolder.clearContext();

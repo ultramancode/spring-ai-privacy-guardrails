@@ -26,6 +26,7 @@ public final class PrivacyChatClientConfigurer
     // Null means output protection is disabled.
     private final PrivacyOutputAction outputAction;
     private final String outputBlockMessage;
+    private final boolean simplifyOutputTokens;
     private final PrivacyResponseInspectionLimits responseInspectionLimits;
     private final PrivacyEnforcementObserver enforcementObserver;
     private final WeakHashMap<ChatClient.Builder, Boolean> configuredBuilders = new WeakHashMap<>();
@@ -50,6 +51,7 @@ public final class PrivacyChatClientConfigurer
         this.autoWrapToolCallbacksEnabled = privacyConfigurerBuilder.autoWrapToolCallbacksEnabled;
         this.outputAction = privacyConfigurerBuilder.outputAction;
         this.outputBlockMessage = privacyConfigurerBuilder.outputBlockMessage;
+        this.simplifyOutputTokens = privacyConfigurerBuilder.simplifyOutputTokens;
         this.responseInspectionLimits = privacyConfigurerBuilder.responseInspectionLimits;
         this.enforcementObserver = privacyConfigurerBuilder.enforcementObserver;
     }
@@ -140,7 +142,7 @@ public final class PrivacyChatClientConfigurer
             advisors.add(new PrivacyInputAdvisor(privacyService));
             if (outputAction != null) {
                 advisors.add(new PrivacyOutputAdvisor(privacyService, outputAction, outputBlockMessage,
-                    responseInspectionLimits, enforcementObserver, toolOrder - 2));
+                    responseInspectionLimits, enforcementObserver, toolOrder - 2, simplifyOutputTokens));
             }
             advisors.add(new PrivacyToolContextAdvisor(privacyService, expectedToolCallbackFactory, toolOrder - 1));
             advisors.add(new PrivacyToolCallValidationAdvisor(privacyService, responseInspectionLimits, toolOrder + 1));
@@ -159,6 +161,7 @@ public final class PrivacyChatClientConfigurer
         // Remains null unless outputProtection(...) is called.
         private PrivacyOutputAction outputAction;
         private String outputBlockMessage = "Response blocked by privacy guardrail.";
+        private boolean simplifyOutputTokens;
         private PrivacyResponseInspectionLimits responseInspectionLimits = PrivacyResponseInspectionLimits.defaults();
         private PrivacyEnforcementObserver enforcementObserver = PrivacyEnforcementObserver.noop();
 
@@ -202,8 +205,19 @@ public final class PrivacyChatClientConfigurer
 
         /** Enables output protection with a safe rejection message for the BLOCK action. */
         public Builder outputProtection(PrivacyOutputAction outputAction, String outputBlockMessage) {
+            return outputProtection(outputAction, outputBlockMessage, false);
+        }
+
+        /**
+         * Enables output protection and optional token simplification in the final response body.
+         * Simplified markers retain entity types and indexes but cannot restore original values.
+         * Model requests, tool arguments and response metadata are not simplified.
+         */
+        public Builder outputProtection(
+                PrivacyOutputAction outputAction, String outputBlockMessage, boolean simplifyOutputTokens) {
             this.outputAction = Objects.requireNonNull(outputAction, "outputAction");
             this.outputBlockMessage = Objects.requireNonNull(outputBlockMessage, "outputBlockMessage");
+            this.simplifyOutputTokens = simplifyOutputTokens;
             return this;
         }
 

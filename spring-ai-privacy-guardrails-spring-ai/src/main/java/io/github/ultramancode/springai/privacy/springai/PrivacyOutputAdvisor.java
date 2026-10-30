@@ -346,9 +346,14 @@ public final class PrivacyOutputAdvisor implements CallAdvisor, StreamAdvisor {
         if (simplifiedText.equals(protectedMessage.getText())) {
             return protectedMessage;
         }
-        return protectedMessage.mutate()
-                .content(simplifiedText)
-                .build();
+        return PrivacyAssistantMessageSupport.rebuild(
+                protectedMessage,
+                simplifiedText,
+                protectedMessage.getMetadata(),
+                protectedMessage.getToolCalls(),
+                protectedMessage.getMedia(),
+                PrivacyAssistantMessageSupport.providerSpecificText(protectedMessage)
+        );
     }
 
     private String protectText(

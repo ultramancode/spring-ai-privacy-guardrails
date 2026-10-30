@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: 9e04349f3989c9faa835c3efb1b59bbdeac4f82ef31782ace606cdcd006f6786 -->
+<!-- i18n-source-sha256: a5cb8d8d41124161e68686e6fc577472339f8d4263c188f24a63a6acf565f8e6 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -647,6 +647,23 @@ GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
 `outputProtection(settings)`에 직접 전달합니다.
 
 출력 보호는 일반 모델 응답, 도구 호출 인자와 `returnDirect` 결과에 적용됩니다.
+
+### 최종 응답 본문의 토큰 간결화
+
+최종 응답에 `[PERSON_1]` 같은 짧은 마커를 표시하려면 출력 처리 방식을
+선택하기 전에 `simplifyTokens(true)`를 설정합니다.
+
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy
+                .outputProtection().simplifyTokens(true).tokenize())
+        .build();
+```
+
+기본값은 비활성화입니다. 현재 요청 세션에서 발급한 토큰을 개인정보 유형과
+번호만 남긴 마커로 바꿉니다. 간결화된 마커로는 원문을 복원할 수 없습니다.
+
+`returnDirect` 결과와 버퍼링한 스트리밍 출력을 포함한 최종 응답 본문에 적용됩니다.
 
 ### `returnDirect` 도구 흐름
 

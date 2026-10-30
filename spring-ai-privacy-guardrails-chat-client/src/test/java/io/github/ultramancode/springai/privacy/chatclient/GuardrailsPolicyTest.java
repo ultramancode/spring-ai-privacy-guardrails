@@ -15,6 +15,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GuardrailsPolicyTest {
     @Test
+    void outputTokenSimplificationIsOptInAndSurvivesMutation() {
+        GuardrailsPolicy.Privacy original = GuardrailsPolicy.Privacy.builder()
+            .outputProtection().simplifyTokens(true).redact().build();
+
+        assertThat(original.outputProtection().simplifyTokens()).isTrue();
+        assertThat(original.mutate().build().outputProtection()).isEqualTo(original.outputProtection());
+        assertThat(original.mutate().outputProtection().tokenize().build().outputProtection().simplifyTokens()).isFalse();
+        assertThat(new GuardrailsPolicy.OutputProtection(PrivacyOutputAction.TOKENIZE, "blocked").simplifyTokens()).isFalse();
+    }
+
+    @Test
     void reusingSettingsBuildersPreservesPreviouslyBuiltPolicies() {
         GuardrailsPolicy.PrivacyBuilder privacyPolicyBuilder = GuardrailsPolicy.Privacy.builder();
         GuardrailsPolicy.InspectionBuilder inspectionPolicyBuilder = GuardrailsPolicy.Inspection.builder();

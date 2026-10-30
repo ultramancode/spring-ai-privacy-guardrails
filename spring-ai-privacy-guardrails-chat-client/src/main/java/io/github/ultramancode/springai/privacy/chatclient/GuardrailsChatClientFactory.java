@@ -264,7 +264,8 @@ public final class GuardrailsChatClientFactory {
                 .responseInspectionLimits(privacyPolicy.responseLimits()).enforcementObserver(privacyObserver);
         GuardrailsPolicy.OutputProtection outputProtection = privacyPolicy.outputProtection();
         if (outputProtection != null) {
-            privacyConfigurerBuilder.outputProtection(outputProtection.action(), outputProtection.blockMessage());
+            privacyConfigurerBuilder.outputProtection(
+                outputProtection.action(), outputProtection.blockMessage(), outputProtection.simplifyTokens());
         }
         return privacyConfigurerBuilder.build().forToolAdvisorOrder(toolAdvisorOrder);
     }

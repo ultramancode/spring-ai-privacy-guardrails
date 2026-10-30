@@ -667,6 +667,25 @@ to the privacy builder's `outputProtection(settings)` method.
 Output protection applies to normal model responses, tool-call arguments, and
 `returnDirect` results.
 
+### Simplifying Tokens in the Final Response Body
+
+To display short markers such as `[PERSON_1]` in the final response, enable
+`simplifyTokens(true)` before selecting the output action:
+
+```java
+GuardrailsPolicy policy = GuardrailsPolicy.builder()
+        .privacy(privacy -> privacy
+                .outputProtection().simplifyTokens(true).tokenize())
+        .build();
+```
+
+This option is disabled by default. It replaces tokens issued by the current
+request session with markers that retain only the entity type and index.
+These markers cannot restore original values.
+
+The option applies to the final response body, including `returnDirect` results
+and buffered streaming output.
+
 ### `returnDirect` Tool Flow
 
 `returnDirect` is a Spring AI setting that controls whether the model is invoked

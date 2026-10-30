@@ -64,8 +64,15 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
      *
      * @param action action applied when final output contains PII
      * @param blockMessage non-blank message used when BLOCK rejects the response
+     * @param simplifyTokens whether to replace session tokens in the final response body with
+     *                       non-restorable markers such as {@code [PERSON_1]}
      */
-    public record OutputProtection(PrivacyOutputAction action, String blockMessage) {
+    public record OutputProtection(PrivacyOutputAction action, String blockMessage, boolean simplifyTokens) {
+        /** Creates output protection without simplifying tokens. */
+        public OutputProtection(PrivacyOutputAction action, String blockMessage) {
+            this(action, blockMessage, false);
+        }
+
         public OutputProtection {
             Objects.requireNonNull(action, "action");
             Objects.requireNonNull(blockMessage, "blockMessage");
@@ -244,21 +251,32 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
         private static final String DEFAULT_BLOCK_MESSAGE = "Response blocked by privacy guardrail.";
 
         private final PrivacyBuilder privacyPolicyBuilder;
+        private boolean simplifyTokens;
 
         private OutputProtectionConfigurer(PrivacyBuilder privacyPolicyBuilder) {
             this.privacyPolicyBuilder = privacyPolicyBuilder;
         }
 
+        /**
+         * Simplifies session tokens in the final response body after output protection.
+         * Disabled by default. Select an action after this setting.
+         * The resulting markers retain entity types and indexes but cannot restore original values.
+         */
+        public OutputProtectionConfigurer simplifyTokens(boolean simplifyTokens) {
+            this.simplifyTokens = simplifyTokens;
+            return this;
+        }
+
         /** Enables final output protection with TOKENIZE. */
         public PrivacyBuilder tokenize() {
             return privacyPolicyBuilder.outputProtection(
-                new OutputProtection(PrivacyOutputAction.TOKENIZE, DEFAULT_BLOCK_MESSAGE));
+                new OutputProtection(PrivacyOutputAction.TOKENIZE, DEFAULT_BLOCK_MESSAGE, simplifyTokens));
         }
 
         /** Enables final output protection with REDACT. */
         public PrivacyBuilder redact() {
             return privacyPolicyBuilder.outputProtection(
-                new OutputProtection(PrivacyOutputAction.REDACT, DEFAULT_BLOCK_MESSAGE));
+                new OutputProtection(PrivacyOutputAction.REDACT, DEFAULT_BLOCK_MESSAGE, simplifyTokens));
         }
 
         /** Enables BLOCK output protection with the default block message. */
@@ -268,7 +286,8 @@ public record GuardrailsPolicy(Privacy privacy, Inspection inspection, boolean t
 
         /** Enables BLOCK output protection with the supplied block message. */
         public PrivacyBuilder block(String blockMessage) {
-            return privacyPolicyBuilder.outputProtection(new OutputProtection(PrivacyOutputAction.BLOCK, blockMessage));
+            return privacyPolicyBuilder.outputProtection(
+                new OutputProtection(PrivacyOutputAction.BLOCK, blockMessage, simplifyTokens));
         }
 
         /** Removes final output protection settings. */

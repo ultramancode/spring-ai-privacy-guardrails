@@ -168,6 +168,7 @@ privacyBuild {
     localizedDocument 'docs/architecture.md', 'docs/ko/architecture.md'
     localizedDocument 'docs/privacy.md', 'docs/ko/privacy.md'
     localizedDocument 'docs/inspection.md', 'docs/ko/inspection.md'
+    localizedDocument 'docs/observability.md', 'docs/ko/observability.md'
     localizedDocument 'docs/evaluation.md', 'docs/ko/evaluation.md'
     localizedDocument 'docs/getting-started.md', 'docs/ko/getting-started.md'
     localizedDocument 'docs/configuration.md', 'docs/ko/configuration.md'

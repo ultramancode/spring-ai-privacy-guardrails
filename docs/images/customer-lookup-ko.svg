@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="624" viewBox="0 0 1120 624" role="img" aria-labelledby="title desc">
+  <title id="title">고객 조회 과정에서 전달되는 값</title>
+  <desc id="desc">고객번호와 이메일을 모델에는 토큰으로 전달합니다. 고객 조회 도구에는 고객번호만 복원합니다. 조회 결과는 다시 보호하고 배송 상태와 도착 예정일로 답변합니다.</desc>
+  <!-- Reconstructed from recorded customer requests used in presentation scenes 01–03.
+       Text, colors and values follow those scenes. This is an editable diagram, not an application screenshot. -->
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; fill: #192943; }
+    .label { font-size: 16px; fill: #61738c; }
+    .heading { font-size: 23px; font-weight: 700; }
+    .body { font-size: 20px; }
+    .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 21px; }
+    .token { fill: #2459d6; }
+    .original { fill: #16804b; }
+    .note { font-size: 17px; fill: #4c6079; }
+  </style>
+  <rect x="1" y="1" width="1118" height="622" rx="18" fill="#f7faff" stroke="#dce5ef"/>
+  <rect x="24" y="24" width="1072" height="88" rx="10" fill="#fff" stroke="#dce5ef"/>
+    <text x="44" y="51" class="label" >고객 문의</text>
+    <text x="44" y="86" class="mono" >CUST-1042  ·  minsu@example.com</text>
+    <text x="590" y="86" class="body" >배송 상태를 확인해 주세요.</text>
+  <g>
+    <rect x="24" y="148" width="340" height="324" rx="12" fill="#fff" stroke="#bfd0f7" stroke-width="1.5"/>
+    <path d="M36 148H352Q364 148 364 160V207H24V160Q24 148 36 148Z" fill="#eef4ff"/>
+    <text x="44" y="185" class="mono" style="fill:#2459d6;font-weight:700">01</text>
+    <text x="90" y="185" class="heading" >모델 입력</text>
+    <text x="44" y="242" class="label" >고객번호</text>
+    <text x="44" y="272" class="mono token" >[CUSTOMER_ID_1]</text>
+    <text x="44" y="311" class="label" >이메일</text>
+    <text x="44" y="341" class="mono token" >[EMAIL_ADDRESS_1]</text>
+    <path d="M44 365H344" stroke="#e2e9f2"/>
+    <text x="44" y="402" class="note" >두 값 모두 토큰으로 전달</text>
+    <text x="44" y="433" class="note" >모델은 토큰으로 도구 호출</text>
+  </g>
+  <path d="M370 307h14m-5-5 5 5-5 5" fill="none" stroke="#6884bd" stroke-width="2"/>
+  <g>
+    <rect x="390" y="148" width="340" height="324" rx="12" fill="#fff" stroke="#9ed8b5" stroke-width="1.5"/>
+    <path d="M402 148H718Q730 148 730 160V207H390V160Q390 148 402 148Z" fill="#edf9f2"/>
+    <text x="410" y="185" class="mono" style="fill:#16804b;font-weight:700">02</text>
+    <text x="456" y="185" class="heading" >도구 입력</text>
+    <text x="410" y="242" class="label" >고객번호</text>
+    <text x="410" y="272" class="mono original" >CUST-1042</text>
+    <text x="410" y="311" class="label" >이메일</text>
+    <text x="410" y="341" class="mono token" >[EMAIL_ADDRESS_1]</text>
+    <path d="M410 365H710" stroke="#e2e9f2"/>
+    <text x="410" y="402" class="mono" >customerLookup</text>
+    <text x="410" y="433" class="note" >고객번호만 원문 공개</text>
+  </g>
+  <path d="M736 307h14m-5-5 5 5-5 5" fill="none" stroke="#6884bd" stroke-width="2"/>
+  <g>
+    <rect x="756" y="148" width="340" height="324" rx="12" fill="#fff" stroke="#bfd0f7" stroke-width="1.5"/>
+    <path d="M768 148H1084Q1096 148 1096 160V207H756V160Q756 148 768 148Z" fill="#eef4ff"/>
+    <text x="776" y="185" class="mono" style="fill:#2459d6;font-weight:700">03</text>
+    <text x="822" y="185" class="heading" >모델에 전달되는 결과</text>
+    <text x="776" y="242" class="label" >고객번호</text>
+    <text x="776" y="272" class="mono token" >[CUSTOMER_ID_1]</text>
+    <text x="776" y="311" class="label" >이메일</text>
+    <text x="776" y="341" class="mono token" >[EMAIL_ADDRESS_1]</text>
+    <path d="M776 365H1076" stroke="#e2e9f2"/>
+    <text x="776" y="402" class="body original" >배송 중</text>
+    <text x="776" y="433" class="body original" >다음 영업일 도착 예정</text>
+  </g>
+  <rect x="24" y="496" width="1072" height="86" rx="10" fill="#edf9f2" stroke="#c7e8d5"/>
+    <text x="44" y="523" class="label" style="fill:#16804b">고객에게 전달한 답변</text>
+    <text x="44" y="558" class="body" >배송 중이며, 도착 예정일은 다음 영업일입니다.</text>
+    <text x="24" y="607" class="label" style="font-size:15px">토큰은 읽기 쉽게 축약</text>
+</svg>

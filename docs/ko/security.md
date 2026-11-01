@@ -9,7 +9,7 @@ description: >-
 [English](../security.md) | **한국어**
 
 <!-- i18n-source: docs/security.md -->
-<!-- i18n-source-sha256: c4929d3ed6516d1fd5d1968e48a32e409ba4ac30b24ca520b4ddb6fcb2da7585 -->
+<!-- i18n-source-sha256: 709239599bb034d8cd139a4405bdabb21ac1de9ba34019c1973778516d891cfb -->
 
 Spring Security 연동은 현재 사용자(`Authentication`)의 권한에 따라 모델에 보여 줄
 도구와 실제로 실행할 수 있는 도구를 제한합니다. 도구 권한 검사만 사용하거나 개인정보
@@ -186,7 +186,7 @@ GuardrailsPolicy policy = GuardrailsPolicy.builder()
 
 Factory로 생성한 클라이언트에도 대화 메모리나 RAG 같은 일반 Advisor를
 `defaultAdvisors(...)`나 요청의 `advisors(...)`로 추가할 수 있습니다. 개인정보 보호도
-함께 사용한다면 [Advisor 순서](configuration.md#advisor-구성)를 참고해
+함께 사용한다면 [Advisor 구성](configuration.md#advisor-구성)을 참고해
 추가한 데이터가 보호 검사를 거치도록 구성하세요.
 
 도구 호출 Advisor는 Factory가 권한 검사를 연결해 구성합니다. 도구를 사용하는

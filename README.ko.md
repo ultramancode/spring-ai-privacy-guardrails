@@ -7,22 +7,38 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: deb23571afe62a9292ff1d38b1e9f1daa6e202df6b248ae5992ad71cee2a6f6f -->
+<!-- i18n-source-sha256: 23bd4349dccb415ee19c91a30928e2e37c4a53d92e3ffe46aabafcaf2f5ee088 -->
 
 **애플리케이션에 개인정보 보호, 도구 권한 제어, 콘텐츠 검사를 적용합니다.**
 
 탐지된 개인정보는 모델에 전달하기 전에 토큰화하고, 도구에는 필요한 원문만 공개합니다. 도구 결과는 다시 보호합니다.
 
+<br>
+
 <p align="center">
-  <a href="docs/images/hero.svg"><img src="docs/images/hero.svg" alt="개인정보 토큰화와 도구별 원문 공개 흐름, 선택 가능한 도구 권한과 콘텐츠 검사" width="100%"></a>
+  <a href="https://www.youtube.com/watch?v=AqlubcLOtSc"><img src="https://i.ytimg.com/vi/AqlubcLOtSc/maxresdefault.jpg" alt="YouTube에서 한국어 데모 영상 보기" width="480"></a>
 </p>
 
-**외부 소개**
+<p align="center">
+  <strong>데모 영상 (YouTube):</strong>
+  <a href="https://www.youtube.com/watch?v=AqlubcLOtSc">한국어</a> ·
+  <a href="https://www.youtube.com/watch?v=gu5pPaA-NQc&amp;t=5s">English</a>
+</p>
 
-- **Spring 공식 블로그** — [This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)에 소개
-- **Spring AI Community** — [Awesome Spring AI의 Extensions and Forks](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)에 소개
+## 외부 소개
 
-<br>
+- [Spring 공식 블로그 — This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
+- [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
+
+## 고객 조회 한 건에서 일어나는 일
+
+[![모델에는 토큰, 조회 도구에는 고객번호 원문만 전달하고 고객에게 배송 상태를 답변하는 흐름](docs/images/customer-lookup-ko.svg)](docs/images/customer-lookup-ko.svg)
+
+고객이 고객번호와 이메일로 배송 상태를 문의합니다.
+모델은 토큰으로 고객 조회 도구(`customerLookup`)를 호출합니다. 도구에는 고객번호만 원문으로 전달하고 이메일은 토큰으로 유지합니다.
+조회 결과의 개인정보는 다시 보호한 뒤 모델이 답변하도록 합니다.
+
+이 예시는 고객번호를 탐지하는 사용자 정의 규칙과 도구별 원문 공개 정책을 사용합니다.
 
 ## 세 가지 핵심 기능
 
@@ -34,7 +50,23 @@
 | 현재 사용자의 권한에 따라 모델에 공개할 도구와 실행할 도구를 제한 | [Tool Authorization](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/security/) |
 | 규칙·로컬 ONNX·HTTP 검사 모델로 요청과 응답을 점검 | [Content Inspection](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/inspection/) |
 
+## 실제 실행과 차단 기록
+
+아래는 별도 고객 조회 요청의 실행 기록입니다.
+두 번의 상담 모델 호출 사이에 고객 조회가 한 번 실행되고, 최종 응답은 출력 검사를 통과했습니다.
+앱에서 모델 호출·도구 실행과 가드레일 판정을 Langfuse에 기록했습니다.
+
+[![고객 조회와 개인정보 보호를 거쳐 최종 출력 검사를 통과한 실제 Langfuse 기록](docs/images/runtime-trace-ko.svg)](docs/images/runtime-trace-ko.svg)
+
+### 출력 검사로 차단된 응답
+
+출력 검사에서 답변의 모욕적인 표현을 감지해 응답 전달을 차단했습니다.
+
+[![모델 응답 후 출력 검사에서 차단되어 본문을 전달하지 않은 별도 Langfuse 기록](docs/images/runtime-blocked-trace-ko.svg)](docs/images/runtime-blocked-trace-ko.svg)
+
 ## 애플리케이션에 적용
+
+이메일 토큰화부터 시작하는 최소 구성입니다.
 
 Java 17 이상, Spring AI 2.0.0 이상, Spring Boot 4.0.0 이상을 사용합니다.
 [저장소 설정과 Maven 안내](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/getting-started/#add-the-client-starter)를 확인하세요.
@@ -128,7 +160,7 @@ ChatClient chatClient(ChatModel chatModel, GuardrailsChatClientFactory guardrail
 ```
 
 권한 정책은 현재 사용자의 `ADMIN` 역할을 확인합니다.
-원문 공개 맵은 도구 이름을 키로, 원문 공개를 허용할 개인정보 유형 목록을 값으로 사용합니다.
+원문 공개 맵은 등록한 도구 이름을 키로, 원문 공개를 허용할 개인정보 유형 목록을 값으로 사용합니다.
 콘텐츠 검사 항목은 선택한 검사기와 설정에 따라 달라집니다.
 
 인증된 요청에서 이 클라이언트를 호출합니다.
@@ -177,7 +209,7 @@ String response = chatClient.prompt()
 </p>
 
 <p align="center">
-  <strong>데모 영상:</strong>
+  <strong>Inspector 데모 영상:</strong>
   <a href="https://youtu.be/vir-x78e9j8">한국어</a> ·
   <a href="https://youtu.be/IeeA5ogIX_I">English</a>
 </p>
@@ -203,6 +235,7 @@ Boot 스타터의 Spring Security 버전은 Spring Boot BOM이 선택합니다.
 - [Spring Security 도구 권한](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/security/): 도구 권한 정책, 고급 도구
   구성, Tool Search와 보안 컨텍스트 전달
 - [콘텐츠 검사](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/inspection/): 선택적 규칙, 로컬 ONNX 분류 모델과 HTTP 검사 모델
+- [런타임 관측](docs/ko/observability.md): 정상·차단 실행 기록과 Observer 사용법
 - [아키텍처](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/architecture/): 모듈과 모델·도구·세션 실행 흐름
 - [위협 모델](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/threat-model/): 보호 대상, 신뢰 경계, 통제, 한계와 별도 관리 영역
 - [평가와 벤치마크](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/evaluation/): 검증 항목과 해석 범위

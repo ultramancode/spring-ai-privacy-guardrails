@@ -194,7 +194,7 @@ results back to it. `ToolCallingAdvisor` and the search-enabled
 Factory-created clients can also use ordinary advisors, such as conversation
 memory or RAG advisors, registered through `defaultAdvisors(...)` or request-level
 `advisors(...)`. When combining them with privacy protection, follow the
-[advisor ordering guidance](configuration.md#advisor-configuration) so added data
+[Advisor Configuration](configuration.md#advisor-configuration) so added data
 passes through privacy inspection.
 
 The factory configures the tool-calling advisor with authorization checks.

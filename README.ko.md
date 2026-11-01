@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 23bd4349dccb415ee19c91a30928e2e37c4a53d92e3ffe46aabafcaf2f5ee088 -->
+<!-- i18n-source-sha256: 75bc936f404d7f8c3b7c9a06aa7ff4d289f80f35dccb2ebadac4cfdeb9fd5301 -->
 
 **애플리케이션에 개인정보 보호, 도구 권한 제어, 콘텐츠 검사를 적용합니다.**
 

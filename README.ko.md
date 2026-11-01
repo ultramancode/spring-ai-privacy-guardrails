@@ -30,7 +30,7 @@
 - [Spring 공식 블로그 — This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
 - [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
 
-## 고객 조회 한 건에서 일어나는 일
+## 개인정보 보호 동작 예시
 
 [![모델에는 토큰, 조회 도구에는 고객번호 원문만 전달하고 고객에게 배송 상태를 답변하는 흐름](docs/images/customer-lookup-ko.svg)](docs/images/customer-lookup-ko.svg)
 

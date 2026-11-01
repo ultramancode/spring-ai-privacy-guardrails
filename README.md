@@ -27,7 +27,7 @@ Tokenize detected PII before it reaches the model. Reveal only the originals a t
 - [Spring Blog — This Week in Spring](https://spring.io/blog/2026/08/18/this-week-in-spring-august-18-2026/)
 - [Awesome Spring AI](https://github.com/spring-ai-community/awesome-spring-ai#extensions-and-forks)
 
-## A Customer Lookup, Step by Step
+## Privacy Protection in Action
 
 [![The model receives tokens, the lookup tool receives only the original customer ID, and the customer receives a delivery update](docs/images/customer-lookup.svg)](docs/images/customer-lookup.svg)
 

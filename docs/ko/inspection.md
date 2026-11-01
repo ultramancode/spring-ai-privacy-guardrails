@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: f3aa66d1e05bf3a03a63b734a87ee6dfad04279d25bda027cdf33984ec0a39d4 -->
+<!-- i18n-source-sha256: 5f3951ae7e42a082572e3911a2cf852877cad2077628b4cb3572815dc9c49d6c -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -502,6 +502,8 @@ HTTP 검사기는 제한 시간이 지나거나 인터럽트되면 응답 대기
 보고서가 없는 예외도 있으므로 반환된 `Optional`을 확인해야 합니다.
 
 ## 검사 결과 기록
+
+정상·차단 실행 기록과 판정의 해석은 [런타임 관측](observability.md)을 참고하세요.
 
 `InspectionObserver` 빈을 등록하면 검사 보고서와 실패를 받을 수 있습니다.
 

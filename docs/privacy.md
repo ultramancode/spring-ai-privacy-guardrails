@@ -887,6 +887,8 @@ probe remains open.
 
 ## Privacy-Safe Runtime Observation
 
+See [Runtime Observation](observability.md) for recorded traces and Observer usage.
+
 Applications can register an optional Spring bean of type
 `PrivacyEnforcementObserver` to observe privacy enforcement at starter-managed
 boundaries:

@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: a5cb8d8d41124161e68686e6fc577472339f8d4263c188f24a63a6acf565f8e6 -->
+<!-- i18n-source-sha256: 6231013786981be0633a64b69f1f3d58673f664cc9bd77e403f8f7630ad2d83d -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -859,6 +859,8 @@ void protectsModelInputAndDisclosesAllowedToolInput() {
 테스트 도중 기록만 초기화하려면 `clear()`를 사용할 수 있습니다.
 
 ## 개인정보 보호 런타임 관측
+
+실제 실행 기록과 Observer 사용법은 [런타임 관측](observability.md)을 참고하세요.
 
 애플리케이션은 선택적으로 `PrivacyEnforcementObserver` 타입의 Spring 빈을 하나 등록해
 스타터가 관리하는 개인정보 보호 경계의 처리 결과를 받을 수 있습니다.

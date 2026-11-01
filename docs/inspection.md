@@ -508,6 +508,8 @@ to a failed inspection. The returned `Optional` is empty when no report is avail
 
 ## Observability
 
+See [Runtime Observation](observability.md) for normal and blocked request traces and how to interpret the reported decisions.
+
 Register an `InspectionObserver` bean to receive reports and failures:
 
 ```java

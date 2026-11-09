@@ -28,7 +28,7 @@ final class ContentInspectionStage implements ModelRequestInspectionStage {
     @Override
     public void inspect(ChatClientRequest chatClientRequest, boolean streaming) {
         UnaryOperator<String> piiTokenSimplifier = PiiTokenSimplifierContext.findSimplifier(chatClientRequest);
-        inspectionEnforcement.inspectAndEnforce(() -> extractInputSegments(chatClientRequest), null, piiTokenSimplifier,
+        inspectionEnforcement.inspectAndEnforce(() -> extractInputSegments(chatClientRequest), piiTokenSimplifier,
             new InspectionExecution(InspectionExecution.Phase.MODEL_REQUEST, streaming));
     }
 

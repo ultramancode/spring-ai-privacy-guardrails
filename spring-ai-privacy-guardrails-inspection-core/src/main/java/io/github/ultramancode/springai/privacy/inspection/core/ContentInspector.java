@@ -15,8 +15,6 @@ public interface ContentInspector {
      *
      * <p>A {@link InspectionResult.Status#COMPLETED} result must include every request segment ID
      * in {@link InspectionResult#completedSegmentIds()}, even when no findings were produced.
-     * The optional {@link InspectionRequest#userMessage()} provides reference context only.
-     * Findings and completion IDs must refer to the inspected segments.
      *
      * <p>On failure, return {@code InspectionResult.failed(code, completedIds, findings)}
      * with the IDs of fully inspected segments and all findings collected so far, including
@@ -34,7 +32,7 @@ public interface ContentInspector {
     String inspectorId();
 
     /**
-     * Returns whether this inspector requires every segment and any reference user message to be marked
+     * Returns whether this inspector requires all text in the inspection request to be marked
      * {@link ContentSegment.PrivacyProcessingStatus#PROCESSED}.
      * {@link InspectionService} checks this requirement before running any inspector.
      * If the input does not meet the requirement, the service stops the request regardless

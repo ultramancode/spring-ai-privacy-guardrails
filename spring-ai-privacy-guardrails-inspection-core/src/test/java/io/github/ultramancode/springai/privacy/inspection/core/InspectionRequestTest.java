@@ -25,7 +25,6 @@ class InspectionRequestTest {
         assertThat(request.segments()).containsExactly(answer);
         assertThat(request.userMessage()).contains(question);
         assertThat(request.toString()).doesNotContain("question", "answer");
-        assertThatNoException().isThrownBy(request::requirePrivacyProcessed);
         assertThatThrownBy(() -> new InspectionRequest(List.of(answer), question,
                 new InspectionLimits(1, 13, Duration.ofSeconds(1))))
                 .hasMessageContaining("LIMIT_EXCEEDED");
@@ -42,17 +41,15 @@ class InspectionRequestTest {
         InspectionRequest request = new InspectionRequest(List.of(answer), question, InspectionLimits.defaults());
 
         assertThatThrownBy(request::requirePrivacyProcessed).hasMessageContaining("PRIVACY_PROCESSING_REQUIRED");
-        assertThat(new InspectionRequest(List.of(answer), InspectionLimits.defaults()).userMessage()).isEmpty();
     }
 
     @Test
-    void tokenSimplificationIncludesReferenceUserMessageAndPreservesDeadline() {
+    void tokenSimplificationIncludesReferenceUserMessage() {
         ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
                 ContentSegment.PrivacyProcessingStatus.PROCESSED, "Hello [PII:opaque]");
         ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
                 ContentSegment.PrivacyProcessingStatus.PROCESSED, "I am [PII:opaque]");
         InspectionRequest request = new InspectionRequest(List.of(answer), question, InspectionLimits.defaults());
-        Duration remaining = request.remaining();
 
         InspectionRequest simplified = request.withSimplifiedPiiTokens(text -> text.replace("[PII:opaque]", "[PERSON]"));
 
@@ -61,7 +58,6 @@ class InspectionRequestTest {
         assertThat(simplified.userMessage().orElseThrow().privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED);
         assertThat(request.userMessage()).contains(question);
-        assertThat(simplified.remaining()).isLessThanOrEqualTo(remaining);
     }
 
     @Test

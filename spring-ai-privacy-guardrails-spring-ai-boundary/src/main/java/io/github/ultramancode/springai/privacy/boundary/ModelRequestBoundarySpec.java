@@ -7,9 +7,8 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
- * Registers privacy, authorization and inspection stages for a model request boundary.
+ * Registers model request protection stages and optional user-message capture for output inspection.
  * Applications combine feature configurers through {@link ModelRequestBoundaryConfigurer#compose}.
- * A boundary without protection stages can capture reference context for output inspection.
  */
 public final class ModelRequestBoundarySpec {
     /** Default order of the common model request boundary advisor. */
@@ -18,6 +17,7 @@ public final class ModelRequestBoundarySpec {
     private UnaryOperator<ChatClientRequest> privacyStage;
     private UnaryOperator<ChatClientRequest> authorizationStage;
     private ModelRequestInspectionStage inspectionStage;
+    private boolean captureUserMessage;
     private boolean allowAdvisorsAfterBoundary;
 
     ModelRequestBoundarySpec() {
@@ -47,12 +47,21 @@ public final class ModelRequestBoundarySpec {
         inspectionStage = Objects.requireNonNull(stage, "inspection stage");
     }
 
+    /** Captures the latest user message after the configured stages for output inspection. */
+    public void captureUserMessage() {
+        captureUserMessage = true;
+    }
+
     void allowAdvisorsAfterBoundary(boolean allow) {
         allowAdvisorsAfterBoundary = allow;
     }
 
     ModelRequestBoundaryPlan build() {
-        return new ModelRequestBoundaryPlan(privacyStage, authorizationStage, inspectionStage, allowAdvisorsAfterBoundary);
+        if (privacyStage == null && authorizationStage == null && inspectionStage == null && !captureUserMessage) {
+            throw new IllegalStateException("At least one model request stage or user-message capture is required");
+        }
+        return new ModelRequestBoundaryPlan(privacyStage, authorizationStage, inspectionStage,
+                captureUserMessage, allowAdvisorsAfterBoundary);
     }
 
     /** Supports identity validation of a feature's required model stage. */

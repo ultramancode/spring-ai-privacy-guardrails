@@ -161,6 +161,10 @@ results, before returning it to the application. An `ALLOW` decision returns the
 response unchanged. A `BLOCK` decision throws `InspectionBlockedException`.
 Tools may already have run by the time the output is inspected.
 
+Depending on the protocol, output inspection also sends the latest user question to the guard model
+to help interpret the response. If input privacy protection is enabled, it uses the question
+after that processing.
+
 When privacy output protection is also enabled, content inspection runs after it.
 An inspector that requires privacy processing can inspect the output only after
 privacy processing has completed for that text. Input protection alone does not
@@ -204,8 +208,9 @@ require authentication.
 `requestTimeout` limits each HTTP request, and `maxResponseBytes` limits its response body.
 The builder defaults to one minute per request and a 2 MiB response body limit.
 
-`requirePrivacyProcessedContent` defaults to `false`. Set it to `true` to require every segment
-to be marked `PROCESSED` before sending. To apply this requirement with a `ChatClient`,
+`requirePrivacyProcessedContent` defaults to `false`. Set it to `true` to require all text
+in the inspection request to be marked `PROCESSED`.
+To apply this requirement with a `ChatClient`,
 select [privacy and inspection together](#combine-with-privacy-or-tool-authorization)
 and enable [privacy output protection](privacy.md#output-policy-and-streaming) for output inspection.
 
@@ -227,20 +232,19 @@ of `requestTimeout` and the time remaining for the inspection.
 
 The following protocol implementations are provided:
 
-| Protocol | Expected response |
-| --- | --- |
-| `KananaSafeguardPromptProtocol` | Kanana Safeguard-Prompt labels: `<SAFE>`, `<UNSAFE-A1>` or `<UNSAFE-A2>`. [Model card](https://huggingface.co/kakaocorp/kanana-safeguard-prompt-2.1b/blob/main/README.md) · [Serving sample](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/openai-compatible-inspection/README.md) |
-| `KananaSafeguardOutputProtocol` | Kanana Safeguard 8B labels: `<SAFE>` or `<UNSAFE-S1>` through `<UNSAFE-S7>`. [Model card](https://huggingface.co/kakaocorp/kanana-safeguard-8b/blob/main/README.md) |
-| `JsonVerdictProtocol` | Exactly `{"verdict":"SAFE"}` or `{"verdict":"UNSAFE"}` |
+| Protocol | Expected response | Default token limit |
+| --- | --- | --- |
+| `KananaSafeguardPromptProtocol` | `<SAFE>`, `<UNSAFE-A1>` or `<UNSAFE-A2>`. [Model card](https://huggingface.co/kakaocorp/kanana-safeguard-prompt-2.1b/blob/main/README.md) · [Serving sample](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/openai-compatible-inspection/README.md#input-inspection-with-vllm) | 1 |
+| `KananaSafeguardOutputProtocol` | `<SAFE>` or `<UNSAFE-S1>` through `<UNSAFE-S7>`. [Model card](https://huggingface.co/kakaocorp/kanana-safeguard-8b/blob/main/README.md) · [Serving sample](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/openai-compatible-inspection/README.md#output-inspection-with-llamacpp) | 1 |
+| `JsonVerdictProtocol` | Exactly `{"verdict":"SAFE"}` or `{"verdict":"UNSAFE"}` | 32 |
 
 To define model-specific request construction and response parsing, implement
 `GuardModelProtocol` and register the implementation as a Spring bean.
 Its `request` method returns SDK `ChatCompletionCreateParams`, and `parse` interprets
 the model output. The HTTP inspector handles transport, timeouts and response limits.
 
-Override `request(model, text, userMessage)` when a protocol uses the reference question.
-The default implementation inspects only `text`. `KananaSafeguardOutputProtocol` sends
-the question and answer together, using an empty user message when no question is supplied.
+Override `request(model, text, userMessage)` when a protocol uses the user question.
+The default implementation uses only `text`.
 
 ### JSON verdict protocol
 
@@ -269,8 +273,8 @@ and representative inputs before use.
 ### Generation settings
 
 Use `GuardModelGenerationOptions` to configure generation settings for the built-in
-protocols. The default token limits are 32 for `JsonVerdictProtocol` and 1 for
-`KananaSafeguardPromptProtocol` and `KananaSafeguardOutputProtocol`, all with `temperature` 0.
+protocols. Default token limits are listed in the protocol table.
+All built-in protocols use `temperature` 0 by default.
 
 Setting `temperature` to `null` omits it from the request and uses the model server's
 default. `maxCompletionTokens` limits generated tokens, including reasoning tokens.
@@ -576,13 +580,6 @@ tool-call arguments and metadata are excluded. Text-bearing thought frames marke
 `isThought=true` or `thinking=true` are inspected separately from answer frames.
 Complete `returnDirect` tool results are inspected as separate bodies from preceding
 model text.
-
-Output inspection also supplies the latest user text as optional reference context.
-`GuardrailsChatClientFactory` captures it at the model request boundary, after configured
-input privacy processing. Later advisor changes are outside this snapshot. If no boundary
-is reached, inspection uses the initially captured user text or its privacy-processed replacement.
-The reference text is not a separate inspection target and excludes earlier conversation
-turns. Its privacy status is checked with the output, and its length counts toward `limits.maxCharacters`.
 
 Each input or output body is passed to inspectors as one complete segment. JSON keys,
 values, structure and escape sequences are preserved. Rules match this text without

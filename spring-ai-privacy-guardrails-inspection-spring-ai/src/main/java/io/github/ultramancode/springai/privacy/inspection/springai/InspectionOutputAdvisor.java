@@ -39,9 +39,11 @@ import java.util.function.UnaryOperator;
  * structure and escape sequences. Rules match the text without JSON unescaping.
  * Inspection never rewrites the returned response.
  * Complete {@code returnDirect} tool results are inspected separately from preceding model text.
- * The latest user text is supplied separately as reference context and shares the inspection
- * character limit with the output. A managed model request boundary refreshes this context
- * after configured request privacy processing. Later advisor changes are not captured.
+ *
+ * <p>When available, the latest user message is provided as context for output inspection.
+ * A managed model request boundary captures it after its configured stages.
+ * Without a managed boundary, this advisor starts with the user message available on entry.
+ * Configured input privacy processing updates the captured message after transformation.
  *
  * <p>Streaming responses are collected before inspection, including intermediate text from the tool loop.
  * Collected response chunks are delivered in their original order only after inspection allows the complete output.
@@ -105,9 +107,9 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
         validateChain(callAdvisorChain.getCallAdvisors());
-        ChatClientRequest chatClientRequestWithPrivacyTracking =
-                OutputResponseContext.requestPrivacyTracking(chatClientRequest, simplifyPiiTokens);
-        ChatClientResponse chatClientResponse = callAdvisorChain.nextCall(chatClientRequestWithPrivacyTracking);
+        ChatClientRequest inspectionContextRequest =
+                OutputResponseContext.requestInspectionContext(chatClientRequest, simplifyPiiTokens);
+        ChatClientResponse chatClientResponse = callAdvisorChain.nextCall(inspectionContextRequest);
 
         ContentSegment.PrivacyProcessingStatus privacyProcessingStatus =
                 OutputResponseContext.isPrivacyProcessed(chatClientResponse)
@@ -118,7 +120,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
 
         inspectOutput(
             () -> extractOutputSegments(chatClientResponse, privacyProcessingStatus),
-            OutputResponseContext.findUserMessage(chatClientRequestWithPrivacyTracking),
+            OutputResponseContext.findUserMessage(inspectionContextRequest),
             simplifiedTextsByOriginalText, false);
         return OutputResponseContext.clearPrivacyTracking(chatClientResponse);
     }
@@ -128,9 +130,9 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         return Flux.defer(() -> {
             validateChain(streamAdvisorChain.getStreamAdvisors());
             InspectionOutputBuffer inspectionOutputBuffer = new InspectionOutputBuffer(inspectionLimits, maxFrames);
-            ChatClientRequest trackedRequest = OutputResponseContext.requestPrivacyTracking(chatClientRequest, simplifyPiiTokens);
+            ChatClientRequest inspectionContextRequest = OutputResponseContext.requestInspectionContext(chatClientRequest, simplifyPiiTokens);
             Mono<InspectionOutputBuffer> collectedOutput = streamAdvisorChain
-                .nextStream(trackedRequest)
+                .nextStream(inspectionContextRequest)
                 .doOnNext(chatClientResponse -> {
                     try {
                         inspectionOutputBuffer.accept(chatClientResponse);
@@ -148,7 +150,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
             // Mono timeout bounds total assembly time, not merely the gap between frames.
             return collectedOutput
                     .timeout(streamTimeout, timeoutFailure)
-                    .flatMapMany(buffer -> inspectAndEmit(buffer, OutputResponseContext.findUserMessage(trackedRequest)));
+                    .flatMapMany(buffer -> inspectAndEmit(buffer, OutputResponseContext.findUserMessage(inspectionContextRequest)));
         });
     }
 
@@ -189,6 +191,8 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         }
         UnaryOperator<String> piiTokenSimplifier = null;
         if (simplifiedTextsByOriginalText != null) {
+            // Both output text and the reference question use this simplifier.
+            // The question's simplified text is stored separately from the output mappings.
             piiTokenSimplifier = text -> {
                 if (userMessageContext != null && userMessageContext.simplifiedText() != null
                         && text.equals(userMessageContext.text())) {

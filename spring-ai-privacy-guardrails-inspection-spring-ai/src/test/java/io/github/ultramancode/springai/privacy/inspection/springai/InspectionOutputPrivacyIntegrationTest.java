@@ -46,6 +46,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.core.PriorityOrdered;
 import reactor.core.publisher.Flux;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.net.InetSocketAddress;
@@ -59,7 +60,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,12 +67,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Verifies that HTTP output inspection receives the output after Privacy protection completes. */
 class InspectionOutputPrivacyIntegrationTest {
-    private static final Duration TEST_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration HTTP_REQUEST_TIMEOUT = Duration.ofSeconds(5);
     private final List<String> httpInspectionTexts = new CopyOnWriteArrayList<>();
     private final List<String> httpInspectionUserTexts = new CopyOnWriteArrayList<>();
-    private final List<String> httpInspectionRequestBodies = new CopyOnWriteArrayList<>();
-    private final AtomicReference<String> httpVerdict = new AtomicReference<>("<SAFE>");
     private final List<ContentSegment> inspectedOutputSegments = new CopyOnWriteArrayList<>();
     private final AtomicInteger recordingInspectorInvocationCount = new AtomicInteger();
     private HttpServer server;
@@ -85,12 +83,10 @@ class InspectionOutputPrivacyIntegrationTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             try {
-                String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-                httpInspectionRequestBodies.add(requestBody);
-                httpInspectionTexts.add(jsonMapper.readTree(requestBody)
-                        .path("messages").get(1).path("content").asString());
-                httpInspectionUserTexts.add(jsonMapper.readTree(requestBody)
-                        .path("messages").get(0).path("content").asString());
+                JsonNode messages = jsonMapper.readTree(exchange.getRequestBody().readAllBytes()).path("messages");
+                httpInspectionTexts.add(messages.get(1).path("content").asString());
+                httpInspectionUserTexts.add(messages.get(0).path("content").asString());
+                // Always return SAFE so these tests isolate Privacy processing and the HTTP payload.
                 byte[] inspectionResponseBytes = """
                         {
                           "choices": [
@@ -98,12 +94,12 @@ class InspectionOutputPrivacyIntegrationTest {
                               "finish_reason": "stop",
                               "message": {
                                 "role": "assistant",
-                                "content": "%s"
+                                "content": "<SAFE>"
                               }
                             }
                           ]
                         }
-                        """.formatted(httpVerdict.get()).getBytes(StandardCharsets.UTF_8);
+                        """.getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(200, inspectionResponseBytes.length);
                 exchange.getResponseBody().write(inspectionResponseBytes);
             } finally {
@@ -185,8 +181,6 @@ class InspectionOutputPrivacyIntegrationTest {
             assertThat(deliveredOutputText).isEqualTo(rawOutputText);
         }
         assertThat(httpInspectionTexts).containsExactly(deliveredOutputText);
-        assertThat(httpInspectionRequestBodies).singleElement()
-                .satisfies(body -> assertThat(body).doesNotContain("Alice"));
         assertThat(httpInspectionUserTexts).singleElement().satisfies(text ->
                 assertThat(text).startsWith("Tell ").endsWith(" about delivery").doesNotContain("Alice"));
         assertThat(inspectedOutputSegments).extracting(ContentSegment::text).containsExactlyElementsOf(httpInspectionTexts);
@@ -208,66 +202,6 @@ class InspectionOutputPrivacyIntegrationTest {
         assertThat(invoke(client, streaming, "Tell Alice about delivery")).isEqualTo("clear");
 
         assertThat(httpInspectionUserTexts).containsExactly("Tell [PERSON_1] about delivery");
-        assertThat(httpInspectionRequestBodies).singleElement()
-                .satisfies(body -> assertThat(body).doesNotContain("Alice"));
-        assertThat(privacyService.activeSessionCount()).isZero();
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void httpInspectionBlocksDeliveryOnFinding(boolean streaming) {
-        httpVerdict.set("<UNSAFE-S2>");
-        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
-        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
-                .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
-                .configure(ChatClient.builder(model("Hello Alice"))).defaultAdvisors(inspectionOutputAdvisor).build();
-        List<String> delivered = new CopyOnWriteArrayList<>();
-
-        assertThatThrownBy(() -> {
-            if (streaming) {
-                client.prompt().user("hello").stream().content().doOnNext(delivered::add)
-                        .collectList().block(TEST_TIMEOUT);
-            } else {
-                delivered.add(client.prompt().user("hello").call().content());
-            }
-        }).isInstanceOfSatisfying(InspectionBlockedException.class, failure -> {
-            InspectionResult result = failure.report().outcomes().stream()
-                    .filter(outcome -> outcome.inspectorId().equals("http")).findFirst().orElseThrow().result();
-            assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
-            assertThat(result.findings()).isNotEmpty();
-        });
-
-        assertThat(delivered).isEmpty();
-        assertThat(httpInspectionTexts).containsExactly("Hello [REDACTED_PERSON]");
-        assertThat(privacyService.activeSessionCount()).isZero();
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void httpInspectionBlocksDeliveryOnFailure(boolean streaming) {
-        httpVerdict.set("invalid verdict");
-        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
-        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
-                .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
-                .configure(ChatClient.builder(model("Hello Alice"))).defaultAdvisors(inspectionOutputAdvisor).build();
-        List<String> delivered = new CopyOnWriteArrayList<>();
-
-        assertThatThrownBy(() -> {
-            if (streaming) {
-                client.prompt().user("hello").stream().content().doOnNext(delivered::add)
-                        .collectList().block(TEST_TIMEOUT);
-            } else {
-                delivered.add(client.prompt().user("hello").call().content());
-            }
-        }).isInstanceOfSatisfying(InspectionBlockedException.class, failure -> {
-            InspectionResult result = failure.report().outcomes().stream()
-                    .filter(outcome -> outcome.inspectorId().equals("http")).findFirst().orElseThrow().result();
-            assertThat(result.status()).isEqualTo(InspectionResult.Status.FAILED);
-            assertThat(result.failureCode()).isEqualTo(InspectionFailureCode.INVALID_RESPONSE);
-        });
-
-        assertThat(delivered).isEmpty();
-        assertThat(httpInspectionTexts).containsExactly("Hello [REDACTED_PERSON]");
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 

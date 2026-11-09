@@ -44,14 +44,12 @@ import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
-import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
-import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
-import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
-import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.client.advisor.toolsearch.ToolSearchToolCallingAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -73,6 +71,7 @@ import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -568,9 +567,9 @@ class GuardrailsChatClientFactoryTest {
             new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, streaming));
     }
 
-    @ParameterizedTest(name = "streaming={0}, afterBoundary={1}")
-    @CsvSource({"false, false", "true, false", "false, true", "true, true"})
-    void outputOnlyInspectionUsesQuestionCapturedAtModelBoundary(boolean streaming, boolean afterBoundary) {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void outputOnlyInspectionRejectsQuestionRewritesAfterModelBoundary(boolean streaming) {
         List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
         List<String> modelQuestions = new CopyOnWriteArrayList<>();
         ChatModel model = new ChatModel() {
@@ -582,7 +581,7 @@ class GuardrailsChatClientFactoryTest {
                 return Flux.defer(() -> Flux.just(call(prompt)));
             }
         };
-        BaseAdvisor questionAdvisor = new BaseAdvisor() {
+        BaseAdvisor questionRewriteAdvisor = new BaseAdvisor() {
             public String getName() { return "question-rewrite"; }
             public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
                 return request.mutate().prompt(new Prompt("updated question", request.prompt().getOptions())).build();
@@ -591,86 +590,73 @@ class GuardrailsChatClientFactoryTest {
                 return response;
             }
             public int getOrder() {
-                return afterBoundary ? ModelRequestBoundarySpec.DEFAULT_ORDER + 1 : 0;
+                return ModelRequestBoundarySpec.DEFAULT_ORDER + 1;
             }
         };
         GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection(inspection -> inspection
             .modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true)).build();
         ChatClient client = GuardrailsChatClientFactory.builder()
             .outputInspectionService(inspectionService(inspections)).build().builder(model, policy)
-            .defaultAdvisors(questionAdvisor).build();
+            .defaultAdvisors(questionRewriteAdvisor).build();
 
-        assertThat(invoke(client.prompt().user("original question"), streaming)).isEqualTo("answer");
-
-        assertThat(modelQuestions).containsExactly("updated question");
-        String expectedReference = afterBoundary ? "original question" : "updated question";
-        assertThat(inspections).singleElement().satisfies(inspection -> {
-            assertThat(inspection.segments()).extracting(ContentSegment::text).containsExactly("answer");
-            assertThat(inspection.userMessage()).hasValueSatisfying(question -> {
-                assertThat(question.text()).isEqualTo(expectedReference);
-                assertThat(question.privacyProcessingStatus()).isEqualTo(ContentSegment.PrivacyProcessingStatus.UNKNOWN);
-            });
-        });
+        assertThatThrownBy(() -> invoke(client.prompt().user("original question"), streaming))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("explicit opt-in");
+        assertThat(modelQuestions).isEmpty();
+        assertThat(inspections).isEmpty();
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void outputOnlyInspectionUsesInitialQuestionForCachedResponses(boolean streaming) {
-        List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
-        ChatModel model = new ChatModel() {
-            public ChatResponse call(Prompt prompt) {
-                throw new AssertionError("A cached response must not invoke the model");
-            }
-            public Flux<ChatResponse> stream(Prompt prompt) {
-                throw new AssertionError("A cached response must not invoke the model");
-            }
-        };
-        ChatClientResponse cachedResponse = ChatClientResponse.builder().chatResponse(response("cached answer")).build();
-        class CacheAdvisor implements CallAdvisor, StreamAdvisor {
-            public String getName() { return "cache"; }
-            public int getOrder() { return 100; }
-            public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-                return cachedResponse;
-            }
-            public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-                return Flux.just(cachedResponse);
-            }
-        }
-        GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection(inspection -> inspection
-            .modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true)).build();
-        ChatClient client = GuardrailsChatClientFactory.builder()
-            .outputInspectionService(inspectionService(inspections)).build().builder(model, policy)
-            .defaultAdvisors(new CacheAdvisor()).build();
-
-        assertThat(invoke(client.prompt().user("original question"), streaming)).isEqualTo("cached answer");
-
-        assertThat(inspections).singleElement().satisfies(inspection -> {
-            assertThat(inspection.segments()).extracting(ContentSegment::text).containsExactly("cached answer");
-            assertThat(inspection.userMessage()).hasValueSatisfying(question ->
-                assertThat(question.text()).isEqualTo("original question"));
-        });
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void outputOnlyInspectionSupportsCustomToolAdvisorOrder(boolean streaming) {
+    void outputOnlyInspectionRejectsToolAdvisorAfterModelBoundary(boolean streaming) {
         List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
         LoopModel model = new LoopModel();
         GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection(inspection -> inspection
             .modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true)).build();
-        ToolCallingAdvisor.Builder<?> toolAdvisor = ToolCallingAdvisor.builder()
+        ToolCallingAdvisor.Builder<?> toolAdvisorBuilder = ToolCallingAdvisor.builder()
             .advisorOrder(ModelRequestBoundarySpec.DEFAULT_ORDER + 1);
         ChatClient client = GuardrailsChatClientFactory.builder()
-            .outputInspectionService(inspectionService(inspections)).build().builder(model, policy, toolAdvisor)
+            .outputInspectionService(inspectionService(inspections)).build().builder(model, policy, toolAdvisorBuilder)
             .defaultTools(tool("lookup", false, new AtomicReference<>())).build();
 
-        assertThat(invoke(client.prompt().user("Alice"), streaming)).isEqualTo("Alice");
+        assertThatThrownBy(() -> invoke(client.prompt().user("Alice"), streaming))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Tool advisors must run before");
+        assertThat(model.requests).isEmpty();
+        assertThat(inspections).isEmpty();
+    }
 
-        assertThat(model.requests).hasSize(2);
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void outputOnlyInspectionCapturesTheQuestionUpdatedDuringTheToolLoop(boolean streaming) {
+        List<InspectionRequest> inspections = new CopyOnWriteArrayList<>();
+        LoopModel model = new LoopModel();
+        AtomicInteger modelCallCount = new AtomicInteger();
+        BaseAdvisor questionRewriteAdvisor = new BaseAdvisor() {
+            public String getName() { return "question-rewrite"; }
+            public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
+                List<Message> messages = new ArrayList<>(request.prompt().getInstructions());
+                messages.set(0, new UserMessage("question " + modelCallCount.incrementAndGet()));
+                return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
+            }
+            public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
+            public int getOrder() { return ModelRequestBoundarySpec.DEFAULT_ORDER - 1; }
+        };
+        GuardrailsPolicy policy = GuardrailsPolicy.builder().inspection(inspection -> inspection
+            .modelRequestInspectionEnabled(false).finalOutputInspectionEnabled(true)).build();
+        ChatClient client = GuardrailsChatClientFactory.builder()
+            .outputInspectionService(inspectionService(inspections)).build().builder(model, policy)
+            .defaultAdvisors(questionRewriteAdvisor)
+            .defaultTools(tool("lookup", false, new AtomicReference<>())).build();
+
+        assertThat(invoke(client.prompt().user("original question"), streaming)).isEqualTo("Alice");
+
+        assertThat(model.requests).extracting(prompt -> prompt.getUserMessage().getText())
+            .containsExactly("question 1", "question 2");
         assertThat(inspections).singleElement().satisfies(inspection -> {
             assertThat(inspection.segments()).extracting(ContentSegment::text).containsExactly("Alice");
             assertThat(inspection.userMessage()).hasValueSatisfying(question ->
-                assertThat(question.text()).isEqualTo("Alice"));
+                assertThat(question.text()).isEqualTo("question 2"));
         });
     }
 

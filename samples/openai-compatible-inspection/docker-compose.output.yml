@@ -1,0 +1,34 @@
+name: guardrails-kanana-output
+
+services:
+  kanana-output:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11371@sha256:460ff87b6dfd6b9e8ee0f4018540e007eb333a574994033b70dd6be46069de01
+    ports:
+      - "127.0.0.1:8002:8000"
+    volumes:
+      - "${KANANA_OUTPUT_MODEL_DIR:-../../build/kanana-output-model}:/models"
+    command:
+      - --model
+      - /models/kakaocorp.kanana-safeguard-8b.Q4_K_M.gguf
+      - --model-url
+      - https://huggingface.co/DevQuasar/kakaocorp.kanana-safeguard-8b-GGUF/resolve/6d8461cdc07c0afe0ff91a336cbbe499e6ae0539/kakaocorp.kanana-safeguard-8b.Q4_K_M.gguf
+      - --alias
+      - kakaocorp/kanana-safeguard-8b
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --ctx-size
+      - "2048"
+      - --parallel
+      - "1"
+      - --threads
+      - "4"
+      - --jinja
+      - --no-prefill-assistant
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 180
+      start_period: 180s

@@ -95,15 +95,14 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
                 observer, Objects.requireNonNull(advisor, "advisor"));
     }
 
-    /**
-     * Registers input inspection before each model call and adds the output advisor if configured.
-     */
+    /** Registers input inspection and optional output inspection support. */
     @Override
     public void contributeToBoundary(ChatClient.Builder builder, ModelRequestBoundarySpec boundary) {
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(boundary, "boundary");
         boundary.inspection(new ContentInspectionStage(service, limits, privacyProcessingStatusResolver, observer));
         if (outputAdvisor != null) {
+            boundary.captureUserMessage();
             builder.defaultAdvisors(outputAdvisor);
         }
     }

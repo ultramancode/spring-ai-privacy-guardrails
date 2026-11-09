@@ -28,6 +28,11 @@ final class InspectionEnforcement {
     }
 
     void inspectAndEnforce(Supplier<List<ContentSegment>> contentSegmentsSupplier,
+        UnaryOperator<String> piiTokenSimplifier, InspectionExecution inspectionExecution) {
+        inspectAndEnforce(contentSegmentsSupplier, null, piiTokenSimplifier, inspectionExecution);
+    }
+
+    void inspectAndEnforce(Supplier<List<ContentSegment>> contentSegmentsSupplier,
         ContentSegment userMessage, UnaryOperator<String> piiTokenSimplifier, InspectionExecution inspectionExecution) {
         InspectionReport inspectionReport;
         try {

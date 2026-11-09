@@ -38,6 +38,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ModelRequestBoundaryIntegrationTest {
 
+    @Test
+    void boundaryWithoutStagesOrUserMessageCaptureIsRejected() {
+        assertThatThrownBy(() -> ModelRequestBoundaryConfigurer.compose()
+                .configure(ChatClient.builder(new RecordingModel())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("At least one model request stage or user-message capture is required");
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void stagesExecuteInFixedOrderRegardlessOfRegistrationOrder(boolean streaming) {
@@ -144,15 +152,19 @@ class ModelRequestBoundaryIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void lateAdvisorRequiresClientScopedOptIn(boolean streaming) {
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    void lateAdvisorRequiresClientScopedOptIn(boolean streaming, boolean captureOnly) {
         RecordingModel model = new RecordingModel();
         AtomicInteger inspectionCount = new AtomicInteger();
-        ModelRequestBoundaryConfigurer inspectionConfigurer = (clientBuilder, boundarySpec) -> {
-            boundarySpec.inspection((request, streamed) -> inspectionCount.incrementAndGet());
+        ModelRequestBoundaryConfigurer boundaryConfigurer = (clientBuilder, boundarySpec) -> {
+            if (captureOnly) {
+                boundarySpec.captureUserMessage();
+            } else {
+                boundarySpec.inspection((request, streamed) -> inspectionCount.incrementAndGet());
+            }
         };
-        ChatClient strictClient = inspectionConfigurer.configure(ChatClient.builder(model)).build();
-        ChatClient optedInClient = inspectionConfigurer.allowAdvisorsAfterBoundary(true)
+        ChatClient strictClient = boundaryConfigurer.configure(ChatClient.builder(model)).build();
+        ChatClient optedInClient = boundaryConfigurer.allowAdvisorsAfterBoundary(true)
                 .configure(ChatClient.builder(model)).build();
 
         assertThatThrownBy(() -> execute(strictClient, streaming, "hello", new LateAdvisor("changed by late advisor")))
@@ -163,7 +175,7 @@ class ModelRequestBoundaryIntegrationTest {
 
         execute(optedInClient, streaming, "hello", new LateAdvisor("changed by late advisor"));
 
-        assertThat(inspectionCount).hasValue(1);
+        assertThat(inspectionCount).hasValue(captureOnly ? 0 : 1);
         assertThat(model.receivedContents).containsExactly("changed by late advisor");
     }
 

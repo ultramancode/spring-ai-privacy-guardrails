@@ -15,8 +15,8 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 
 /**
- * Internal response support shared by Privacy output protection and output inspection.
- * Tracks Privacy processing for each response and prepares text with simplified PII tokens for output inspection.
+ * Internal context shared by Privacy processing and output inspection.
+ * Carries the latest user message, response privacy status and text with simplified PII tokens.
  * Also identifies complete tool responses.
  * Applications should use the feature configurers.
  *
@@ -31,43 +31,40 @@ public final class OutputResponseContext {
     }
 
     /**
-     * Requests a marker on responses after Privacy output processing succeeds.
-     * When simplification is requested, the same request marker asks for both tracking and
-     * preparation of text with simplified PII tokens for output inspection.
+     * Requests context for output inspection and captures the initial user message.
      *
-     * @param chatClientRequest request to attach the tracking request to
-     * @param simplifyPiiTokens {@code true} to request tracking and preparation of simplified inspection text,
-     *                         or {@code false} to request tracking only
-     * @return a new request containing the tracking request marker
+     * @param chatClientRequest request to attach the inspection context to
+     * @param simplifyPiiTokens whether to also prepare inspection text with simplified PII tokens
+     * @return a new request with its own inspection context
      */
-    public static ChatClientRequest requestPrivacyTracking(
+    public static ChatClientRequest requestInspectionContext(
             ChatClientRequest chatClientRequest,
             boolean simplifyPiiTokens
     ) {
-        ChatClientRequest trackedRequest = chatClientRequest.mutate()
-                .context(PRIVACY_PROCESSING_KEY, new TrackingRequest(simplifyPiiTokens)).build();
-        captureUserMessage(trackedRequest, false);
-        return trackedRequest;
+        ChatClientRequest inspectionContextRequest = chatClientRequest.mutate()
+                .context(PRIVACY_PROCESSING_KEY, new InspectionContextRequest(simplifyPiiTokens)).build();
+        captureUserMessage(inspectionContextRequest, false);
+        return inspectionContextRequest;
     }
 
-    /** Returns whether tracking is requested, including requests that also prepare simplified inspection text. */
-    public static boolean isPrivacyTrackingRequested(ChatClientRequest chatClientRequest) {
-        return chatClientRequest.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest;
+    /** Returns whether this invocation requests context for output inspection. */
+    public static boolean isInspectionContextRequested(ChatClientRequest chatClientRequest) {
+        return chatClientRequest.context().get(PRIVACY_PROCESSING_KEY) instanceof InspectionContextRequest;
     }
 
     public static boolean isPiiTokenSimplificationRequested(ChatClientRequest chatClientRequest) {
-        return chatClientRequest.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest tracking
+        return chatClientRequest.context().get(PRIVACY_PROCESSING_KEY) instanceof InspectionContextRequest tracking
                 && tracking.simplifyPiiTokens;
     }
 
     /**
      * Captures the latest user text while preparing the model request.
      * Privacy processing calls this with {@code true} after transformation succeeds.
-     * The model boundary calls it again to capture any later changes. Unchanged text retains its status.
+     * Recapturing unchanged text without processing preserves its previous status.
      * Token simplification runs now, while the request's privacy session is active.
      */
     public static void captureUserMessage(ChatClientRequest request, boolean privacyProcessed) {
-        if (!(request.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest tracking)) {
+        if (!(request.context().get(PRIVACY_PROCESSING_KEY) instanceof InspectionContextRequest tracking)) {
             return;
         }
         List<Message> messages = request.prompt().getInstructions();
@@ -98,7 +95,7 @@ public final class OutputResponseContext {
 
     /** Returns the captured user message, or {@code null} when the request has no user text. */
     public static UserMessageContext findUserMessage(ChatClientRequest request) {
-        if (request.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest tracking) {
+        if (request.context().get(PRIVACY_PROCESSING_KEY) instanceof InspectionContextRequest tracking) {
             return tracking.userMessage;
         }
         return null;
@@ -112,17 +109,17 @@ public final class OutputResponseContext {
         }
     }
 
-    private static final class TrackingRequest {
+    private static final class InspectionContextRequest {
         private final boolean simplifyPiiTokens;
         private volatile UserMessageContext userMessage;
 
-        private TrackingRequest(boolean simplifyPiiTokens) {
+        private InspectionContextRequest(boolean simplifyPiiTokens) {
             this.simplifyPiiTokens = simplifyPiiTokens;
         }
 
         @Override
         public String toString() {
-            return "TrackingRequest[content=<redacted>]";
+            return "InspectionContextRequest[content=<redacted>]";
         }
     }
 

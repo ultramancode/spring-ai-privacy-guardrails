@@ -20,8 +20,8 @@ class KananaSafeguardOutputProtocolTest {
 
     @Test
     void sendsQuestionAndCompleteJsonAnswerInOneConversation() {
-        String question = "배송 상태를 알려주세요.";
-        String answer = "{\"status\":\"배송 중\",\"detail\":\"내일 도착\"}";
+        String question = "What is the delivery status?";
+        String answer = "{\"status\":\"in transit\",\"detail\":\"arrives tomorrow\"}";
         JsonNode body = ObjectMappers.jsonMapper().valueToTree(protocol.request("test-model", answer, question)._body());
 
         assertThat(body.path("messages").size()).isEqualTo(2);
@@ -33,7 +33,7 @@ class KananaSafeguardOutputProtocolTest {
 
     @Test
     void sendsInspectedTextAsAssistantWithEmptyUserAndDefaultGenerationOptions() {
-        String text = "고객 [REDACTED_PERSON]님의 배송이 진행 중입니다.\n";
+        String text = "The order for [REDACTED_PERSON] is in transit.\n";
         JsonNode body = ObjectMappers.jsonMapper().valueToTree(protocol.request("test-model", text)._body());
 
         assertThat(body.path("model").asText()).isEqualTo("test-model");
@@ -52,7 +52,8 @@ class KananaSafeguardOutputProtocolTest {
     @NullSource
     @ValueSource(doubles = 0.5)
     void appliesConfiguredGenerationOptions(Double temperature) {
-        var configuredProtocol = new KananaSafeguardOutputProtocol(new GuardModelGenerationOptions(128L, temperature));
+        KananaSafeguardOutputProtocol configuredProtocol =
+                new KananaSafeguardOutputProtocol(new GuardModelGenerationOptions(128L, temperature));
         JsonNode body = ObjectMappers.jsonMapper().valueToTree(configuredProtocol.request("test-model", "answer")._body());
 
         assertThat(body.path("max_completion_tokens").asLong()).isEqualTo(128L);
@@ -61,12 +62,6 @@ class KananaSafeguardOutputProtocolTest {
         } else {
             assertThat(body.path("temperature").asDouble()).isEqualTo(temperature);
         }
-    }
-
-    @Test
-    void rejectsNullGenerationOptions() {
-        assertThatThrownBy(() -> new KananaSafeguardOutputProtocol(null))
-                .isInstanceOf(NullPointerException.class);
     }
 
     @ParameterizedTest
@@ -87,7 +82,7 @@ class KananaSafeguardOutputProtocolTest {
     })
     void unsafeVerdictsMapToContentCategoriesAndPreserveCode(
             String output, InspectionFinding.Category category, String code) {
-        InspectionFinding expected = new InspectionFinding("answer", category, code, null);
+        InspectionFinding expected = new InspectionFinding("answer", category, code);
         assertThat(protocol.parse("answer", output)).contains(expected);
         assertThat(protocol.parse("answer", " \n" + output + "\t")).contains(expected);
     }

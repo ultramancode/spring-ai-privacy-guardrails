@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
- * Configures protection stages and supporting advisors for model requests.
+ * Configures protection stages, user-message capture and supporting advisors for model requests.
  * Combine feature configurers with {@link #compose(ModelRequestBoundaryConfigurer...)}
  * before applying them to a client builder.
  */
@@ -43,15 +43,17 @@ public interface ModelRequestBoundaryConfigurer extends UnaryOperator<ChatClient
 
     /**
      * Returns a new configurer that applies this configuration and sets whether
-     * application advisors may run after the model request inspection boundary.
+     * application advisors may run after the model request boundary.
      * The current configurer is unchanged.
      *
-     * <p>Application advisors after inspection are rejected by default.
+     * <p>When inspection or user-message capture is enabled, application advisors after the boundary
+     * are rejected by default.
      * When allowed advisors are present, boundary execution logs a warning.
-     * Changes these advisors make to model input are not inspected again before the model call.
+     * Their changes to model input are not inspected again or reflected in the captured user message.
+     * Tool advisors must still run before the boundary.
      * This option does not bypass stage rejections or other chain validation.</p>
      *
-     * @param allow whether to allow application advisors after the model request inspection boundary
+     * @param allow whether to allow application advisors after the model request boundary
      * @return a new configurer with the selected setting
      */
     default ModelRequestBoundaryConfigurer allowAdvisorsAfterBoundary(boolean allow) {

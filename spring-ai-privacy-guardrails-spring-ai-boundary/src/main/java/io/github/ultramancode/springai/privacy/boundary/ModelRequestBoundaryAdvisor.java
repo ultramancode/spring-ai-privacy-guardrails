@@ -41,7 +41,7 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        validateAdvisorChain(chain.getCallAdvisors(), true);
+        validateAdvisorChain(request, chain.getCallAdvisors(), true);
         ChatClientRequest prepared = plan.prepare(request, false);
         checkInterrupted();
         return chain.nextCall(prepared);
@@ -51,14 +51,14 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
         if (!plan.hasInspection()) {
             return Flux.defer(() -> {
-                validateAdvisorChain(chain.getStreamAdvisors(), true);
+                validateAdvisorChain(request, chain.getStreamAdvisors(), true);
                 return chain.nextStream(plan.prepare(request, true));
             });
         }
         // Schedule request preparation per subscription for blocking inspection.
         // Cancellation requests interruption. Inspectors must cooperate to stop promptly.
         return Mono.fromCallable(() -> {
-                    validateAdvisorChain(chain.getStreamAdvisors(), true);
+                    validateAdvisorChain(request, chain.getStreamAdvisors(), true);
                     return plan.prepare(request, true);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
@@ -68,7 +68,8 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
                 });
     }
 
-    void validateAdvisorChain(List<? extends Advisor> advisors, boolean warnAboutAdvisorsAfterBoundary) {
+    void validateAdvisorChain(ChatClientRequest request, List<? extends Advisor> advisors,
+            boolean warnAboutAdvisorsAfterBoundary) {
         int boundaryIndex = advisors.indexOf(this);
         long boundaryCount = advisors.stream().filter(ModelRequestBoundaryAdvisor.class::isInstance).count();
         if (boundaryIndex < 0 || boundaryCount != 1) {
@@ -76,33 +77,36 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
         }
         long modelAdvisorCount = advisors.stream().filter(ModelRequestBoundaryAdvisor::isModelAdvisor).count();
         Advisor lastAdvisor = advisors.get(advisors.size() - 1);
-        if (plan.hasInspection()
+        boolean captureUserMessage = plan.capturesUserMessage(request);
+        if ((plan.hasInspection() || captureUserMessage)
                 && (modelAdvisorCount != 1 || !isModelAdvisor(lastAdvisor))) {
             throw new IllegalStateException(
                     "The advisor chain must contain exactly one model advisor, and that advisor must be last.");
         }
-        validateAdvisorsAfterBoundary(advisors, boundaryIndex, warnAboutAdvisorsAfterBoundary);
+        validateAdvisorsAfterBoundary(advisors, boundaryIndex, captureUserMessage, warnAboutAdvisorsAfterBoundary);
     }
 
     private void validateAdvisorsAfterBoundary(List<? extends Advisor> advisors, int boundaryIndex,
-            boolean warnAboutAdvisorsAfterBoundary) {
+            boolean captureUserMessage, boolean warnAboutAdvisorsAfterBoundary) {
         List<String> downstreamAdvisorDescriptions = new ArrayList<>();
         for (int i = boundaryIndex + 1; i < advisors.size(); i++) {
             Advisor advisor = advisors.get(i);
-            if (advisor instanceof ToolAdvisor && plan.hasProtectionStages()) {
+            if (advisor instanceof ToolAdvisor) {
                 throw new IllegalStateException("Tool advisors must run before the model request boundary");
             }
             if (!isModelAdvisor(advisor)) {
                 downstreamAdvisorDescriptions.add(advisor.getName() + "(order=" + advisor.getOrder() + ")");
             }
         }
-        if (plan.hasInspection() && !downstreamAdvisorDescriptions.isEmpty()) {
+        if ((plan.hasInspection() || captureUserMessage) && !downstreamAdvisorDescriptions.isEmpty()) {
             if (!plan.allowsAdvisorsAfterBoundary()) {
-                throw new IllegalStateException("Advisors after inspection require explicit opt-in: " + downstreamAdvisorDescriptions);
+                throw new IllegalStateException(
+                        "Advisors after the model request boundary require explicit opt-in: " + downstreamAdvisorDescriptions);
             }
             if (warnAboutAdvisorsAfterBoundary) {
                 logger.warn("Advisors after the model request boundary were explicitly allowed: {}. "
-                        + "Their changes to model input are not inspected again before the model call.", downstreamAdvisorDescriptions);
+                        + "Their changes to model input are not inspected again or reflected in the captured user message.",
+                        downstreamAdvisorDescriptions);
             }
         }
     }

@@ -10,21 +10,8 @@ import java.util.Optional;
 
 /**
  * Builds Kanana Safeguard 8B requests to inspect model responses and parses single-token verdicts.
- * Sends the response as an {@code assistant} message and the reference question as a {@code user} message.
- * When no question is supplied, the user message is empty. Earlier conversation turns are not sent.
- *
- * <p>{@code <SAFE>} produces no finding. Unsafe verdicts map to these categories:
- * <ul>
- * <li>{@code <UNSAFE-S1>}: {@link InspectionFinding.Category#HATE_SPEECH}</li>
- * <li>{@code <UNSAFE-S2>}: {@link InspectionFinding.Category#HARASSMENT}</li>
- * <li>{@code <UNSAFE-S3>}: {@link InspectionFinding.Category#SEXUAL_CONTENT}</li>
- * <li>{@code <UNSAFE-S4>}: {@link InspectionFinding.Category#CRIMINAL_ACTIVITY}</li>
- * <li>{@code <UNSAFE-S5>}: {@link InspectionFinding.Category#CHILD_SEXUAL_EXPLOITATION}</li>
- * <li>{@code <UNSAFE-S6>}: {@link InspectionFinding.Category#SELF_HARM}</li>
- * <li>{@code <UNSAFE-S7>}: {@link InspectionFinding.Category#MISINFORMATION}</li>
- * </ul>
- * <p>Findings preserve the model's code, such as {@code UNSAFE-S3}, without a confidence score.
- * Unknown, incomplete or multiple labels fail with {@link InspectionFailureCode#INVALID_RESPONSE}.
+ * Sends the response as an {@code assistant} message and the question as a {@code user} message.
+ * When no question is supplied, the user message is empty.
  */
 public final class KananaSafeguardOutputProtocol implements GuardModelProtocol {
 
@@ -80,6 +67,6 @@ public final class KananaSafeguardOutputProtocol implements GuardModelProtocol {
             default -> throw new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
         };
         String code = verdict.substring(1, verdict.length() - 1);
-        return Optional.of(new InspectionFinding(segmentId, category, code, null));
+        return Optional.of(new InspectionFinding(segmentId, category, code));
     }
 }

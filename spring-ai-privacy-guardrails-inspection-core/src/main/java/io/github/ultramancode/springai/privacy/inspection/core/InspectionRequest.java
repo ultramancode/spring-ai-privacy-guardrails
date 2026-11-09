@@ -26,13 +26,12 @@ public final class InspectionRequest {
     }
 
     /**
-     * Creates an inspection with optional user text for interpreting the inspected content.
-     * The user message must have role USER. It is not a separate inspection target.
-     * Its text counts toward the character limit, but not the target segment limit.
+     * The user message must have role USER and is not an inspection target.
+     * Its text counts toward the character limit.
      *
      * @param segments text segments to inspect
-     * @param userMessage reference user message, or {@code null} for text-only inspection
-     * @param limits limits shared by the targets and reference text
+     * @param userMessage user message providing context, or {@code null}
+     * @param limits size and time limits for the inspection
      */
     public InspectionRequest(List<ContentSegment> segments, ContentSegment userMessage, InspectionLimits limits) {
         this(segments, userMessage, limits, System.nanoTime());
@@ -68,7 +67,7 @@ public final class InspectionRequest {
         return segments;
     }
 
-    /** Reference text available to inspectors that use question context. */
+    /** Optional user message for interpreting the inspected text. */
     public Optional<ContentSegment> userMessage() {
         return Optional.ofNullable(userMessage);
     }
@@ -118,16 +117,16 @@ public final class InspectionRequest {
     }
 
     /**
-     * Checks that every segment and any reference user message are marked
+     * Checks that all text in this request is marked
      * {@link ContentSegment.PrivacyProcessingStatus#PROCESSED}.
      * This method checks the supplied status and does not perform privacy processing.
      *
-     * @throws InspectionException with {@link InspectionFailureCode#PRIVACY_PROCESSING_REQUIRED} if any segment
+     * @throws InspectionException with {@link InspectionFailureCode#PRIVACY_PROCESSING_REQUIRED} if any text
      *         is not marked as privacy-processed
      */
     public void requirePrivacyProcessed() {
-        if (userMessage != null && userMessage.privacyProcessingStatus()
-                != ContentSegment.PrivacyProcessingStatus.PROCESSED) {
+        if (userMessage != null
+                && userMessage.privacyProcessingStatus() != ContentSegment.PrivacyProcessingStatus.PROCESSED) {
             throw new InspectionException(InspectionFailureCode.PRIVACY_PROCESSING_REQUIRED);
         }
         for (ContentSegment segment : segments) {

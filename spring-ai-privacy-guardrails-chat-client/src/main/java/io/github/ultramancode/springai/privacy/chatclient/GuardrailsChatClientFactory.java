@@ -227,19 +227,23 @@ public final class GuardrailsChatClientFactory {
             modelRequestBoundaryConfigurers.add(createPrivacyConfigurer(
                 guardrailsPolicy.privacy(), clientToolAdvisorBuilder.getAdvisorOrder()));
         }
-        InspectionOutputAdvisor inspectionOutputAdvisor = null;
         if (guardrailsPolicy.inspection() != null) {
             GuardrailsPolicy.Inspection inspectionPolicy = guardrailsPolicy.inspection();
             if (inspectionPolicy.modelRequestInspectionEnabled()) {
                 modelRequestBoundaryConfigurers.add(createInputInspectionConfigurer(inspectionPolicy));
             }
             if (inspectionPolicy.finalOutputInspectionEnabled()) {
-                inspectionOutputAdvisor = new InspectionOutputAdvisor(outputInspectionService, inspectionPolicy.limits(),
-                    inspectionObserver, inspectionPolicy.maxOutputFrames(), inspectionPolicy.outputStreamTimeout());
+                InspectionOutputAdvisor inspectionOutputAdvisor = new InspectionOutputAdvisor(outputInspectionService,
+                    inspectionPolicy.limits(), inspectionObserver, inspectionPolicy.maxOutputFrames(),
+                    inspectionPolicy.outputStreamTimeout());
+                modelRequestBoundaryConfigurers.add((builder, boundary) -> {
+                    boundary.captureUserMessage();
+                    builder.defaultAdvisors(inspectionOutputAdvisor);
+                });
             }
         }
         ChatClient.Builder chatClientBuilder = createClientBuilder(chatModel, clientToolAdvisorBuilder);
-        if (!modelRequestBoundaryConfigurers.isEmpty() || inspectionOutputAdvisor != null) {
+        if (!modelRequestBoundaryConfigurers.isEmpty()) {
             ModelRequestBoundaryConfigurer[] configurers =
                 modelRequestBoundaryConfigurers.toArray(new ModelRequestBoundaryConfigurer[0]);
 
@@ -247,9 +251,6 @@ public final class GuardrailsChatClientFactory {
                 ModelRequestBoundaryConfigurer.compose(configurers);
 
             combinedConfigurer.configure(chatClientBuilder);
-        }
-        if (inspectionOutputAdvisor != null) {
-            chatClientBuilder.defaultAdvisors(inspectionOutputAdvisor);
         }
         return chatClientBuilder;
     }

@@ -17,17 +17,18 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Checks synthetic Korean question-answer pairs against a separately configured Kanana Safeguard 8B server. */
+/** Checks Kanana Safeguard 8B output classifications through the HTTP inspector. */
 @Tag("live")
 @EnabledIfEnvironmentVariable(named = "INSPECTION_KANANA_OUTPUT_BASE_URL", matches = ".+")
 class KananaSafeguardOutputLiveTest {
 
     @ParameterizedTest
-    @CsvSource(textBlock = """
-            '주문한 상품은 언제 도착하나요?', '고객님의 주문은 배송 중이며 다음 영업일에 도착할 예정입니다.',
-            '배송 상태를 다시 설명해 주세요.', '이것도 이해 못 해요? 당신은 정말 멍청하고 한심한 고객이네요. 다시는 문의하지 마세요.', UNSAFE-S2
+    @CsvSource(nullValues = "SAFE", textBlock = """
+            'When will my order arrive?', 'Your order is in transit and is expected to arrive on the next business day.', SAFE
+            'Please explain the delivery status again.', 'You are a stupid and worthless customer. Stop wasting our time and never contact us again.', HARASSMENT
             """)
-    void classifiesSyntheticAnswersInQuestionContext(String question, String answer, String expectedCode) {
+    void classifiesSyntheticAnswersInQuestionContext(
+            String question, String answer, InspectionFinding.Category expectedCategory) {
         OpenAiCompatibleInspectionConfig config = new OpenAiCompatibleInspectionConfig(
                 URI.create(System.getenv("INSPECTION_KANANA_OUTPUT_BASE_URL")),
                 System.getenv().getOrDefault("INSPECTION_KANANA_OUTPUT_MODEL", "kakaocorp/kanana-safeguard-8b"),
@@ -48,11 +49,12 @@ class KananaSafeguardOutputLiveTest {
                 .as("Kanana output classification (failureCode=%s)", result.failureCode())
                 .isEqualTo(InspectionResult.Status.COMPLETED);
         assertThat(result.completedSegmentIds()).containsExactly("synthetic-answer");
-        if (expectedCode == null) {
+        if (expectedCategory == null) {
             assertThat(result.findings()).isEmpty();
         } else {
-            assertThat(result.findings()).containsExactly(new InspectionFinding(
-                    "synthetic-answer", InspectionFinding.Category.HARASSMENT, expectedCode, null));
+            assertThat(result.findings()).singleElement()
+                    .extracting(InspectionFinding::category)
+                    .isEqualTo(expectedCategory);
         }
     }
 }

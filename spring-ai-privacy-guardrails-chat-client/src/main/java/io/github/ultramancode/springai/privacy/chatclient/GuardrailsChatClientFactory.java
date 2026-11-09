@@ -239,7 +239,7 @@ public final class GuardrailsChatClientFactory {
             }
         }
         ChatClient.Builder chatClientBuilder = createClientBuilder(chatModel, clientToolAdvisorBuilder);
-        if (!modelRequestBoundaryConfigurers.isEmpty()) {
+        if (!modelRequestBoundaryConfigurers.isEmpty() || inspectionOutputAdvisor != null) {
             ModelRequestBoundaryConfigurer[] configurers =
                 modelRequestBoundaryConfigurers.toArray(new ModelRequestBoundaryConfigurer[0]);
 

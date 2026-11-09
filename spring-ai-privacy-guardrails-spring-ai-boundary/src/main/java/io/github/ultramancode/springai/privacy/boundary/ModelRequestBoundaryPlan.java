@@ -36,6 +36,10 @@ final class ModelRequestBoundaryPlan {
         return stageType.isInstance(privacyStage) || stageType.isInstance(authorizationStage) || stageType.isInstance(inspectionStage);
     }
 
+    boolean hasProtectionStages() {
+        return privacyStage != null || authorizationStage != null || inspectionStage != null;
+    }
+
     boolean hasInspection() {
         return inspectionStage != null;
     }
@@ -55,6 +59,7 @@ final class ModelRequestBoundaryPlan {
         if (inspectionStage != null) {
             inspectionStage.inspect(preparedRequest, streaming);
         }
+        OutputResponseContext.captureUserMessage(preparedRequest, false);
         return preparedRequest;
     }
 

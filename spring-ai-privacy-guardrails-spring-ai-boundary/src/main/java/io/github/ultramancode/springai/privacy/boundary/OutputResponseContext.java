@@ -3,11 +3,14 @@ package io.github.ultramancode.springai.privacy.boundary;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
@@ -23,8 +26,6 @@ public final class OutputResponseContext {
     private static final String PRIVACY_PROCESSING_KEY = "io.github.ultramancode.springai.privacy.output-processing";
     // ToolCallLimitExceededException is unavailable in the supported Spring AI 2.0.0 baseline.
     private static final String TOOL_CALL_LIMIT_EXCEEDED = "toolCallLimitExceeded";
-    private static final Object PRIVACY_TRACKING_ONLY_REQUESTED = new Object();
-    private static final Object PRIVACY_TRACKING_WITH_SIMPLIFICATION_REQUESTED = new Object();
 
     private OutputResponseContext() {
     }
@@ -43,23 +44,86 @@ public final class OutputResponseContext {
             ChatClientRequest chatClientRequest,
             boolean simplifyPiiTokens
     ) {
-        Object trackingRequestMarker = PRIVACY_TRACKING_ONLY_REQUESTED;
-        if (simplifyPiiTokens) {
-            trackingRequestMarker = PRIVACY_TRACKING_WITH_SIMPLIFICATION_REQUESTED;
-        }
-        return chatClientRequest.mutate().context(PRIVACY_PROCESSING_KEY, trackingRequestMarker).build();
+        ChatClientRequest trackedRequest = chatClientRequest.mutate()
+                .context(PRIVACY_PROCESSING_KEY, new TrackingRequest(simplifyPiiTokens)).build();
+        captureUserMessage(trackedRequest, false);
+        return trackedRequest;
     }
 
     /** Returns whether tracking is requested, including requests that also prepare simplified inspection text. */
     public static boolean isPrivacyTrackingRequested(ChatClientRequest chatClientRequest) {
-        Object trackingRequestMarker = chatClientRequest.context().get(PRIVACY_PROCESSING_KEY);
-        return trackingRequestMarker == PRIVACY_TRACKING_ONLY_REQUESTED
-                || trackingRequestMarker == PRIVACY_TRACKING_WITH_SIMPLIFICATION_REQUESTED;
+        return chatClientRequest.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest;
     }
 
     public static boolean isPiiTokenSimplificationRequested(ChatClientRequest chatClientRequest) {
-        Object trackingRequestMarker = chatClientRequest.context().get(PRIVACY_PROCESSING_KEY);
-        return trackingRequestMarker == PRIVACY_TRACKING_WITH_SIMPLIFICATION_REQUESTED;
+        return chatClientRequest.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest tracking
+                && tracking.simplifyPiiTokens;
+    }
+
+    /**
+     * Captures the latest user text while preparing the model request.
+     * Privacy processing calls this with {@code true} after transformation succeeds.
+     * The model boundary calls it again to capture any later changes. Unchanged text retains its status.
+     * Token simplification runs now, while the request's privacy session is active.
+     */
+    public static void captureUserMessage(ChatClientRequest request, boolean privacyProcessed) {
+        if (!(request.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest tracking)) {
+            return;
+        }
+        List<Message> messages = request.prompt().getInstructions();
+        String text = null;
+        for (int index = messages.size() - 1; index >= 0; index--) {
+            if (messages.get(index) instanceof UserMessage userMessage) {
+                text = userMessage.getText();
+                break;
+            }
+        }
+        if (text == null) {
+            tracking.userMessage = null;
+            return;
+        }
+        UserMessageContext previous = tracking.userMessage;
+        if (!privacyProcessed && previous != null && text.equals(previous.text())) {
+            return;
+        }
+        String simplifiedText = null;
+        if (privacyProcessed && tracking.simplifyPiiTokens) {
+            UnaryOperator<String> simplifier = PiiTokenSimplifierContext.findSimplifier(request);
+            if (simplifier != null) {
+                simplifiedText = simplifier.apply(text);
+            }
+        }
+        tracking.userMessage = new UserMessageContext(text, privacyProcessed, simplifiedText);
+    }
+
+    /** Returns the captured user message, or {@code null} when the request has no user text. */
+    public static UserMessageContext findUserMessage(ChatClientRequest request) {
+        if (request.context().get(PRIVACY_PROCESSING_KEY) instanceof TrackingRequest tracking) {
+            return tracking.userMessage;
+        }
+        return null;
+    }
+
+    /** Snapshot used by output inspection after the privacy session closes. */
+    public record UserMessageContext(String text, boolean privacyProcessed, String simplifiedText) {
+        @Override
+        public String toString() {
+            return "UserMessageContext[content=<redacted>]";
+        }
+    }
+
+    private static final class TrackingRequest {
+        private final boolean simplifyPiiTokens;
+        private volatile UserMessageContext userMessage;
+
+        private TrackingRequest(boolean simplifyPiiTokens) {
+            this.simplifyPiiTokens = simplifyPiiTokens;
+        }
+
+        @Override
+        public String toString() {
+            return "TrackingRequest[content=<redacted>]";
+        }
     }
 
     /**

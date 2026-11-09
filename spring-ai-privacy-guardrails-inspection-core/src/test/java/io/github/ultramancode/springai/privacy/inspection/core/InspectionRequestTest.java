@@ -14,6 +14,57 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InspectionRequestTest {
 
     @Test
+    void referenceUserMessageSharesCharacterBudgetWithoutBecomingATarget() {
+        ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
+                ContentSegment.PrivacyProcessingStatus.PROCESSED, "answer");
+        ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
+                ContentSegment.PrivacyProcessingStatus.PROCESSED, "question");
+        InspectionLimits limits = new InspectionLimits(1, 14, Duration.ofSeconds(1));
+        InspectionRequest request = new InspectionRequest(List.of(answer), question, limits);
+
+        assertThat(request.segments()).containsExactly(answer);
+        assertThat(request.userMessage()).contains(question);
+        assertThat(request.toString()).doesNotContain("question", "answer");
+        assertThatNoException().isThrownBy(request::requirePrivacyProcessed);
+        assertThatThrownBy(() -> new InspectionRequest(List.of(answer), question,
+                new InspectionLimits(1, 13, Duration.ofSeconds(1))))
+                .hasMessageContaining("LIMIT_EXCEEDED");
+        assertThatThrownBy(() -> new InspectionRequest(List.of(answer), answer, limits))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void privacyRequirementIncludesReferenceUserMessage() {
+        ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
+                ContentSegment.PrivacyProcessingStatus.PROCESSED, "safe answer");
+        ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
+                ContentSegment.PrivacyProcessingStatus.UNKNOWN, "private question");
+        InspectionRequest request = new InspectionRequest(List.of(answer), question, InspectionLimits.defaults());
+
+        assertThatThrownBy(request::requirePrivacyProcessed).hasMessageContaining("PRIVACY_PROCESSING_REQUIRED");
+        assertThat(new InspectionRequest(List.of(answer), InspectionLimits.defaults()).userMessage()).isEmpty();
+    }
+
+    @Test
+    void tokenSimplificationIncludesReferenceUserMessageAndPreservesDeadline() {
+        ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
+                ContentSegment.PrivacyProcessingStatus.PROCESSED, "Hello [PII:opaque]");
+        ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
+                ContentSegment.PrivacyProcessingStatus.PROCESSED, "I am [PII:opaque]");
+        InspectionRequest request = new InspectionRequest(List.of(answer), question, InspectionLimits.defaults());
+        Duration remaining = request.remaining();
+
+        InspectionRequest simplified = request.withSimplifiedPiiTokens(text -> text.replace("[PII:opaque]", "[PERSON]"));
+
+        assertThat(simplified.segments().get(0).text()).isEqualTo("Hello [PERSON]");
+        assertThat(simplified.userMessage().orElseThrow().text()).isEqualTo("I am [PERSON]");
+        assertThat(simplified.userMessage().orElseThrow().privacyProcessingStatus())
+                .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED);
+        assertThat(request.userMessage()).contains(question);
+        assertThat(simplified.remaining()).isLessThanOrEqualTo(remaining);
+    }
+
+    @Test
     void validatesLimitsAndDoesNotExposeRequestText() {
         ContentSegment segment = new ContentSegment("s1", ContentSegment.Role.USER,
                 ContentSegment.PrivacyProcessingStatus.UNPROCESSED, "private raw text");

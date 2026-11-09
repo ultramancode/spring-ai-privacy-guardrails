@@ -39,6 +39,9 @@ import java.util.function.UnaryOperator;
  * structure and escape sequences. Rules match the text without JSON unescaping.
  * Inspection never rewrites the returned response.
  * Complete {@code returnDirect} tool results are inspected separately from preceding model text.
+ * The latest user text is supplied separately as reference context and shares the inspection
+ * character limit with the output. A managed model request boundary refreshes this context
+ * after configured request privacy processing. Later advisor changes are not captured.
  *
  * <p>Streaming responses are collected before inspection, including intermediate text from the tool loop.
  * Collected response chunks are delivered in their original order only after inspection allows the complete output.
@@ -115,6 +118,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
 
         inspectOutput(
             () -> extractOutputSegments(chatClientResponse, privacyProcessingStatus),
+            OutputResponseContext.findUserMessage(chatClientRequestWithPrivacyTracking),
             simplifiedTextsByOriginalText, false);
         return OutputResponseContext.clearPrivacyTracking(chatClientResponse);
     }
@@ -124,8 +128,9 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         return Flux.defer(() -> {
             validateChain(streamAdvisorChain.getStreamAdvisors());
             InspectionOutputBuffer inspectionOutputBuffer = new InspectionOutputBuffer(inspectionLimits, maxFrames);
+            ChatClientRequest trackedRequest = OutputResponseContext.requestPrivacyTracking(chatClientRequest, simplifyPiiTokens);
             Mono<InspectionOutputBuffer> collectedOutput = streamAdvisorChain
-                .nextStream(OutputResponseContext.requestPrivacyTracking(chatClientRequest, simplifyPiiTokens))
+                .nextStream(trackedRequest)
                 .doOnNext(chatClientResponse -> {
                     try {
                         inspectionOutputBuffer.accept(chatClientResponse);
@@ -143,7 +148,7 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
             // Mono timeout bounds total assembly time, not merely the gap between frames.
             return collectedOutput
                     .timeout(streamTimeout, timeoutFailure)
-                    .flatMapMany(this::inspectAndEmit);
+                    .flatMapMany(buffer -> inspectAndEmit(buffer, OutputResponseContext.findUserMessage(trackedRequest)));
         });
     }
 
@@ -160,10 +165,11 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
         return inspectionTextExtractor.buildSegments();
     }
 
-    private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer inspectionOutputBuffer) {
+    private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer inspectionOutputBuffer,
+            OutputResponseContext.UserMessageContext userMessageContext) {
         Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
             Map<String, String> simplifiedTextsByOriginalText = inspectionOutputBuffer.collectSimplifiedTextsByOriginalText();
-            inspectOutput(inspectionOutputBuffer::buildSegments, simplifiedTextsByOriginalText, true);
+            inspectOutput(inspectionOutputBuffer::buildSegments, userMessageContext, simplifiedTextsByOriginalText, true);
             return inspectionOutputBuffer.framesWithoutPrivacyTracking();
         });
         return inspectedFrames
@@ -172,12 +178,26 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
     }
 
     private void inspectOutput(Supplier<List<ContentSegment>> outputSegmentsSupplier,
+        OutputResponseContext.UserMessageContext userMessageContext,
         Map<String, String> simplifiedTextsByOriginalText, boolean streaming) {
+        ContentSegment userMessage = null;
+        if (userMessageContext != null) {
+            ContentSegment.PrivacyProcessingStatus status = userMessageContext.privacyProcessed()
+                    ? ContentSegment.PrivacyProcessingStatus.PROCESSED
+                    : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
+            userMessage = new ContentSegment("reference-user", ContentSegment.Role.USER, status, userMessageContext.text());
+        }
         UnaryOperator<String> piiTokenSimplifier = null;
         if (simplifiedTextsByOriginalText != null) {
-            piiTokenSimplifier = outputText -> simplifiedTextsByOriginalText.getOrDefault(outputText, outputText);
+            piiTokenSimplifier = text -> {
+                if (userMessageContext != null && userMessageContext.simplifiedText() != null
+                        && text.equals(userMessageContext.text())) {
+                    return userMessageContext.simplifiedText();
+                }
+                return simplifiedTextsByOriginalText.getOrDefault(text, text);
+            };
         }
-        inspectionEnforcement.inspectAndEnforce(outputSegmentsSupplier, piiTokenSimplifier,
+        inspectionEnforcement.inspectAndEnforce(outputSegmentsSupplier, userMessage, piiTokenSimplifier,
             new InspectionExecution(InspectionExecution.Phase.FINAL_OUTPUT, streaming));
     }
 

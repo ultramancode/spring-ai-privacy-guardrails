@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 16f26883b82dcb23533636bfe97746b4a6e37d47e062f185be24a72955ff1b91 -->
+<!-- i18n-source-sha256: 98a3fadc7c8498205baf5e0f8b40694075c1f8fc179a85937e211306161d934f -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -229,11 +229,16 @@ ContentInspector httpGuard(GuardModelProtocol guardModelProtocol) {
 | 프로토콜 | 요구하는 응답 |
 | --- | --- |
 | `KananaSafeguardPromptProtocol` | Kanana Safeguard-Prompt 레이블: `<SAFE>`, `<UNSAFE-A1>`, `<UNSAFE-A2>`. [모델 카드](https://huggingface.co/kakaocorp/kanana-safeguard-prompt-2.1b/blob/main/README.md) · [서빙 샘플](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/openai-compatible-inspection/README.md) |
+| `KananaSafeguardOutputProtocol` | Kanana Safeguard 8B 레이블: `<SAFE>` 또는 `<UNSAFE-S1>`부터 `<UNSAFE-S7>`까지. [모델 카드](https://huggingface.co/kakaocorp/kanana-safeguard-8b/blob/main/README.md) |
 | `JsonVerdictProtocol` | 정확히 `{"verdict":"SAFE"}` 또는 `{"verdict":"UNSAFE"}` |
 
 모델에 맞는 요청 생성과 응답 해석을 직접 정의하려면 `GuardModelProtocol`을 구현하고
 Spring 빈으로 등록합니다. `request`는 SDK의 `ChatCompletionCreateParams`를
 반환하고, `parse`는 모델 출력을 해석합니다. HTTP 검사기는 통신, 제한 시간과 응답 크기 제한을 처리합니다.
+
+질문 문맥을 사용하는 프로토콜은 `request(model, text, userMessage)`를 재정의합니다.
+기본 구현은 `text`만 검사합니다. `KananaSafeguardOutputProtocol`은 질문과 답변을 함께
+보내며, 질문을 전달하지 않으면 빈 사용자 메시지를 사용합니다.
 
 ### JSON 판정 프로토콜
 
@@ -262,8 +267,8 @@ GuardModelProtocol guardModelProtocol() {
 ### 생성 옵션
 
 기본 제공 프로토콜의 생성 옵션은 `GuardModelGenerationOptions`로 설정합니다.
-기본 토큰 한도는 `JsonVerdictProtocol`이 32, `KananaSafeguardPromptProtocol`이 1이며,
-`temperature`는 둘 다 0입니다.
+기본 토큰 한도는 `JsonVerdictProtocol`이 32, `KananaSafeguardPromptProtocol`과
+`KananaSafeguardOutputProtocol`이 1이며, `temperature`는 모두 0입니다.
 
 `temperature`에 `null`을 지정하면 요청에서 생략하고 모델 서버의 기본값을 사용합니다.
 `maxCompletionTokens`는 추론 토큰을 포함한 생성 토큰 한도입니다.
@@ -440,6 +445,13 @@ ID, 범주, 코드가 포함되며 검사한 원문은 담기지 않습니다.
 | `PROMPT_LEAKING` | 숨겨진 프롬프트나 지침을 추출하려는 시도 |
 | `TOXICITY` | 모욕·욕설·위협 같은 독성 표현 |
 | `POLICY_VIOLATION` | 다른 범주에 해당하지 않는 애플리케이션 정의 콘텐츠 정책 위반 |
+| `HATE_SPEECH` | 정체성을 이유로 사람을 공격하는 혐오·차별 표현 |
+| `HARASSMENT` | 특정 대상을 모욕하거나 수치심을 주거나 위협하는 콘텐츠 |
+| `SEXUAL_CONTENT` | 성적 설명·묘사나 성적 암시를 담은 콘텐츠 |
+| `CRIMINAL_ACTIVITY` | 범죄 행위를 계획·조장하거나 돕는 콘텐츠 |
+| `CHILD_SEXUAL_EXPLOITATION` | 아동 성착취를 묘사·조장하거나 돕는 콘텐츠 |
+| `SELF_HARM` | 의도적인 자해나 자살을 묘사하거나 조장하는 콘텐츠 |
+| `MISINFORMATION` | 거짓이거나 오해를 유발하는 정보로 분류된 콘텐츠 |
 
 범주 내의 구체적인 탐지 유형은 `code`로 구분합니다. 예를 들어 `TOXICITY` 범주에서
 모욕 표현을 `INSULT` 코드로 나타낼 수 있습니다.
@@ -557,6 +569,13 @@ DeepSeek의 `reasoningContent`와 assistant 메타데이터의 문자열
 메타데이터는 제외합니다. `isThought=true` 또는 `thinking=true`로 표시된 텍스트 프레임은
 답변 프레임과 분리해서 검사합니다.
 `returnDirect`로 직접 반환된 도구 결과는 앞선 모델 텍스트와 별개의 본문으로 검사합니다.
+
+출력 검사에는 최근 사용자 메시지의 텍스트도 선택적인 참고 정보로 전달합니다.
+`GuardrailsChatClientFactory`는 모델 요청 경계에서 설정된 입력 개인정보 처리 후의 텍스트를 저장합니다.
+그 뒤에 Advisor가 변경한 내용은 반영하지 않습니다. 경계에 도달하지 않으면 처음 저장한 사용자
+텍스트나 그 텍스트에 개인정보 처리를 적용한 값을 사용합니다. 참고 텍스트는 별도의 검사 대상이
+아니며 이전 대화 이력은 포함하지 않습니다. 개인정보 처리 상태는 출력과 함께 확인하고,
+길이는 `limits.maxCharacters`에 합산합니다.
 
 각 입력 또는 출력 본문을 하나의 검사 구간으로 전달하며, JSON의 키, 값, 구조와 이스케이프 표기를
 그대로 유지합니다. 규칙은 JSON 이스케이프를 해석하지 않고 전달받은 텍스트에 적용합니다.

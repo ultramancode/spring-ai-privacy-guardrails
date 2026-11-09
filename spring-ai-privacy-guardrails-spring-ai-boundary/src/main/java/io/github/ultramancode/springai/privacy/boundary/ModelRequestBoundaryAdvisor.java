@@ -89,7 +89,7 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
         List<String> downstreamAdvisorDescriptions = new ArrayList<>();
         for (int i = boundaryIndex + 1; i < advisors.size(); i++) {
             Advisor advisor = advisors.get(i);
-            if (advisor instanceof ToolAdvisor) {
+            if (advisor instanceof ToolAdvisor && plan.hasProtectionStages()) {
                 throw new IllegalStateException("Tool advisors must run before the model request boundary");
             }
             if (!isModelAdvisor(advisor)) {

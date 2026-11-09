@@ -230,12 +230,17 @@ The following protocol implementations are provided:
 | Protocol | Expected response |
 | --- | --- |
 | `KananaSafeguardPromptProtocol` | Kanana Safeguard-Prompt labels: `<SAFE>`, `<UNSAFE-A1>` or `<UNSAFE-A2>`. [Model card](https://huggingface.co/kakaocorp/kanana-safeguard-prompt-2.1b/blob/main/README.md) · [Serving sample](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/openai-compatible-inspection/README.md) |
+| `KananaSafeguardOutputProtocol` | Kanana Safeguard 8B labels: `<SAFE>` or `<UNSAFE-S1>` through `<UNSAFE-S7>`. [Model card](https://huggingface.co/kakaocorp/kanana-safeguard-8b/blob/main/README.md) |
 | `JsonVerdictProtocol` | Exactly `{"verdict":"SAFE"}` or `{"verdict":"UNSAFE"}` |
 
 To define model-specific request construction and response parsing, implement
 `GuardModelProtocol` and register the implementation as a Spring bean.
 Its `request` method returns SDK `ChatCompletionCreateParams`, and `parse` interprets
 the model output. The HTTP inspector handles transport, timeouts and response limits.
+
+Override `request(model, text, userMessage)` when a protocol uses the reference question.
+The default implementation inspects only `text`. `KananaSafeguardOutputProtocol` sends
+the question and answer together, using an empty user message when no question is supplied.
 
 ### JSON verdict protocol
 
@@ -265,7 +270,7 @@ and representative inputs before use.
 
 Use `GuardModelGenerationOptions` to configure generation settings for the built-in
 protocols. The default token limits are 32 for `JsonVerdictProtocol` and 1 for
-`KananaSafeguardPromptProtocol`, both with `temperature` 0.
+`KananaSafeguardPromptProtocol` and `KananaSafeguardOutputProtocol`, all with `temperature` 0.
 
 Setting `temperature` to `null` omits it from the request and uses the model server's
 default. `maxCompletionTokens` limits generated tokens, including reasoning tokens.
@@ -447,6 +452,13 @@ segment, category and code without including the inspected text.
 | `PROMPT_LEAKING` | An attempt to extract hidden prompts or instructions |
 | `TOXICITY` | Toxic language, such as insults, profanity or threats |
 | `POLICY_VIOLATION` | An application-defined content violation not covered by the other categories |
+| `HATE_SPEECH` | Hateful or discriminatory expression targeting people based on identity |
+| `HARASSMENT` | Content that targets someone with insults, humiliation or threats |
+| `SEXUAL_CONTENT` | Sexual descriptions, depictions or suggestive content |
+| `CRIMINAL_ACTIVITY` | Content that plans, encourages or facilitates criminal activity |
+| `CHILD_SEXUAL_EXPLOITATION` | Content depicting, encouraging or facilitating sexual exploitation of children |
+| `SELF_HARM` | Content depicting or encouraging intentional self-injury or suicide |
+| `MISINFORMATION` | Content classified as false or misleading information |
 
 Use `code` for a specific finding within a category, such as `INSULT` under `TOXICITY`.
 Keep custom IDs and codes free of user content.
@@ -564,6 +576,13 @@ tool-call arguments and metadata are excluded. Text-bearing thought frames marke
 `isThought=true` or `thinking=true` are inspected separately from answer frames.
 Complete `returnDirect` tool results are inspected as separate bodies from preceding
 model text.
+
+Output inspection also supplies the latest user text as optional reference context.
+`GuardrailsChatClientFactory` captures it at the model request boundary, after configured
+input privacy processing. Later advisor changes are outside this snapshot. If no boundary
+is reached, inspection uses the initially captured user text or its privacy-processed replacement.
+The reference text is not a separate inspection target and excludes earlier conversation
+turns. Its privacy status is checked with the output, and its length counts toward `limits.maxCharacters`.
 
 Each input or output body is passed to inspectors as one complete segment. JSON keys,
 values, structure and escape sequences are preserved. Rules match this text without

@@ -12,6 +12,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.GuardModelProtocol;
+import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaSafeguardOutputProtocol;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaSafeguardPromptProtocol;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class OpenAiCompatibleWindowInspectionTest {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private final List<String> receivedWindows = new CopyOnWriteArrayList<>();
+    private final List<JsonNode> receivedMessages = new CopyOnWriteArrayList<>();
     private HttpServer server;
     private URI baseUrl;
 
@@ -56,6 +58,7 @@ class OpenAiCompatibleWindowInspectionTest {
         server.createContext("/v1/chat/completions", exchange -> {
             try {
                 JsonNode messages = JSON.readTree(exchange.getRequestBody()).path("messages");
+                receivedMessages.add(messages);
                 String text = messages.get(messages.size() - 1).path("content").asText();
                 receivedWindows.add(text);
                 String output = verdict.apply(text);
@@ -89,6 +92,27 @@ class OpenAiCompatibleWindowInspectionTest {
                     ContentSegment.PrivacyProcessingStatus.PROCESSED, texts[i]));
         }
         return new InspectionRequest(segments, InspectionLimits.defaults());
+    }
+
+    @Test
+    void repeatsReferenceQuestionWithEachAnswerWindowWithoutInspectingItSeparately() throws Exception {
+        startServer(text -> "<SAFE>");
+        ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
+                ContentSegment.PrivacyProcessingStatus.PROCESSED, "complete question");
+        ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
+                ContentSegment.PrivacyProcessingStatus.PROCESSED, "abcdef");
+        OpenAiCompatibleContentInspector inspector = new OpenAiCompatibleContentInspector(
+                "guard", config(), new KananaSafeguardOutputProtocol(), new TextWindowConfig(3, 0, 2));
+
+        InspectionResult result = inspector.inspect(new InspectionRequest(List.of(answer), question, InspectionLimits.defaults()));
+
+        assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
+        assertThat(result.completedSegmentIds()).containsExactly("answer");
+        assertThat(receivedWindows).containsExactly("abc", "def");
+        assertThat(receivedMessages).allSatisfy(messages -> {
+            assertThat(messages.size()).isEqualTo(2);
+            assertThat(messages.get(0).path("content").asText()).isEqualTo("complete question");
+        });
     }
 
     @Test

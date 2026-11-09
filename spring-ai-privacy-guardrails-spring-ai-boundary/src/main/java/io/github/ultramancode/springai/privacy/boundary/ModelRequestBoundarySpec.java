@@ -9,6 +9,7 @@ import java.util.function.UnaryOperator;
 /**
  * Registers privacy, authorization and inspection stages for a model request boundary.
  * Applications combine feature configurers through {@link ModelRequestBoundaryConfigurer#compose}.
+ * A boundary without protection stages can capture reference context for output inspection.
  */
 public final class ModelRequestBoundarySpec {
     /** Default order of the common model request boundary advisor. */
@@ -51,9 +52,6 @@ public final class ModelRequestBoundarySpec {
     }
 
     ModelRequestBoundaryPlan build() {
-        if (privacyStage == null && authorizationStage == null && inspectionStage == null) {
-            throw new IllegalStateException("At least one model request stage is required");
-        }
         return new ModelRequestBoundaryPlan(privacyStage, authorizationStage, inspectionStage, allowAdvisorsAfterBoundary);
     }
 

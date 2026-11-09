@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.OutputResponseContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -102,7 +103,9 @@ final class PrivacyModelRequestStage implements UnaryOperator<ChatClientRequest>
         );
         Map<String, Object> context = new HashMap<>(protectedRequest.context());
         context.put(MODEL_CONTENT_PROTECTION, new ModelContentProtection(protectedRequest.prompt().getInstructions()));
-        return protectedRequest.mutate().context(context).build();
+        ChatClientRequest processedRequest = protectedRequest.mutate().context(context).build();
+        OutputResponseContext.captureUserMessage(processedRequest, true);
+        return processedRequest;
     }
 
 }

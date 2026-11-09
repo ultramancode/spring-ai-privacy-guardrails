@@ -198,7 +198,8 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
 
     private String requestModelOutput(InspectionRequest request, String text) {
         ChatCompletionCreateParams protocolParams = Objects.requireNonNull(
-                protocol.request(config.model(), text), "protocol request");
+                protocol.request(config.model(), text, request.userMessage().map(ContentSegment::text).orElse(null)),
+                "protocol request");
         if (protocolParams.n().orElse(1L) != 1L) {
             throw new IllegalArgumentException("Guard requests must use n=1");
         }

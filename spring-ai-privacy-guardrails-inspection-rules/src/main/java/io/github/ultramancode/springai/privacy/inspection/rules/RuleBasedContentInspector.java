@@ -53,7 +53,7 @@ public final class RuleBasedContentInspector implements ContentInspector {
                     request.checkActive();
                     if (rule.matches(segment.text())) {
                         InspectionFinding finding =
-                                new InspectionFinding(segment.id(), rule.category(), rule.id(), null);
+                                new InspectionFinding(segment.id(), rule.category(), rule.id());
                         findings.add(finding);
                     }
                 }

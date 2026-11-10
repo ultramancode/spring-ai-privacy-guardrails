@@ -136,7 +136,7 @@ public final class OnnxContentInspector implements ContentInspector, AutoCloseab
             }
             FindingKey key = new FindingKey(segmentId, label.code());
             InspectionFinding existingFinding = requestFindings.get(key);
-            if (existingFinding == null || score > existingFinding.score()) {
+            if (existingFinding == null || score > existingFinding.score().orElseThrow()) {
                 requestFindings.put(key, new InspectionFinding(segmentId, label.category(), label.code(), score));
             }
         }

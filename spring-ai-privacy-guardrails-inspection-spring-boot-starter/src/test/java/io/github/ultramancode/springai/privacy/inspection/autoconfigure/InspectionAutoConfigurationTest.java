@@ -388,7 +388,7 @@ class InspectionAutoConfigurationTest {
 
             public InspectionResult inspect(InspectionRequest request) {
                 List<InspectionFinding> findings = findingPresent ? List.of(new InspectionFinding(
-                        request.segments().get(0).id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
+                        request.segments().get(0).id(), InspectionFinding.Category.PROMPT_ATTACK, "attack"))
                         : List.of();
                 return InspectionResult.failed(code, Set.of(), findings);
             }

@@ -83,7 +83,7 @@ class JsonVerdictProtocolTest {
         assertThat(protocol.parse("s1", """
                 {"verdict":"UNSAFE"}
                 """.strip()))
-                .contains(new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "UNSAFE", null));
+                .contains(new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "UNSAFE"));
     }
 
     @ParameterizedTest

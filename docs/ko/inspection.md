@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 5f3951ae7e42a082572e3911a2cf852877cad2077628b4cb3572815dc9c49d6c -->
+<!-- i18n-source-sha256: 16f26883b82dcb23533636bfe97746b4a6e37d47e062f185be24a72955ff1b91 -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -445,8 +445,17 @@ ID, 범주, 코드가 포함되며 검사한 원문은 담기지 않습니다.
 모욕 표현을 `INSULT` 코드로 나타낼 수 있습니다.
 사용자 정의 ID와 코드에도 사용자 입력이나 응답 내용을 넣지 마세요.
 
-`InspectionFinding.score`는 0에서 1 사이의 선택적 점수입니다. ONNX 검사기는 점수를 제공합니다.
-점수가 없는 탐지 결과에서는 `null`입니다.
+`InspectionFinding.score()`는 0에서 1 사이의 점수를 담은 `OptionalDouble`을 반환합니다.
+점수가 없으면 `OptionalDouble.empty()`를 반환합니다. ONNX 검사기는 점수를 제공합니다.
+
+탐지 결과는 점수를 지정하거나 생략하여 생성할 수 있습니다.
+
+```java
+InspectionFinding unscored = new InspectionFinding(
+    "segment-1", InspectionFinding.Category.PROMPT_INJECTION, "INJECTION");
+InspectionFinding scored = new InspectionFinding(
+    "segment-1", InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.9);
+```
 
 기본 실패 정책인 `FAIL_CLOSED`는 검사기가 실패하면 요청을 차단합니다.
 아래 표에서 허용하는 종류의 실패가 발생해도 검사를 이어가려면

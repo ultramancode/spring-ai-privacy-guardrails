@@ -119,7 +119,7 @@ class OnnxModelReferenceTest {
                 String expectedCode = "LABEL_" + labelIndex;
                 double expectedScore = expectedMaximumScores[labelIndex];
                 assertThat(actualResult.findings()).filteredOn(finding -> finding.code().equals(expectedCode)).singleElement()
-                        .satisfies(finding -> assertThat(finding.score()).isCloseTo(expectedScore, within(1e-4)));
+                        .satisfies(finding -> assertThat(finding.score().orElseThrow()).isCloseTo(expectedScore, within(1e-4)));
             }
         }
     }

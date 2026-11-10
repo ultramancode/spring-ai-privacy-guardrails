@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -116,7 +117,7 @@ class OpenAiCompatibleWindowInspectionTest {
         assertThat(receivedWindows).containsExactly(expectedWindows);
         assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
         assertThat(result.completedSegmentIds()).containsExactly("s0");
-        assertThat(result.findings()).containsExactly(new InspectionFinding("s0", PROMPT_INJECTION, "UNSAFE-A1", null));
+        assertThat(result.findings()).containsExactly(new InspectionFinding("s0", PROMPT_INJECTION, "UNSAFE-A1"));
     }
 
     @Test
@@ -171,11 +172,11 @@ class OpenAiCompatibleWindowInspectionTest {
                 if (output.equals("f")) {
                     return Optional.of(new InspectionFinding(segmentId, PROMPT_LEAKING, "RISK", 0.4));
                 }
-                Double score = switch (output) {
-                    case "b" -> 0.6;
-                    case "c" -> 0.8;
-                    case "d" -> 0.7;
-                    default -> null;
+                OptionalDouble score = switch (output) {
+                    case "b" -> OptionalDouble.of(0.6);
+                    case "c" -> OptionalDouble.of(0.8);
+                    case "d" -> OptionalDouble.of(0.7);
+                    default -> OptionalDouble.empty();
                 };
                 return Optional.of(new InspectionFinding(segmentId, PROMPT_INJECTION, "RISK", score));
             }

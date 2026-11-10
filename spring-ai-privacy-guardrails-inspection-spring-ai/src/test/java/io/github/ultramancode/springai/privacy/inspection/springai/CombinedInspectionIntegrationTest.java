@@ -114,7 +114,7 @@ class CombinedInspectionIntegrationTest {
                 inspectionRequests.add(request);
                 List<InspectionFinding> findings = request.segments().stream()
                         .filter(segment -> segment.text().contains("attack"))
-                        .map(segment -> new InspectionFinding(segment.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack", null))
+                        .map(segment -> new InspectionFinding(segment.id(), InspectionFinding.Category.PROMPT_ATTACK, "attack"))
                         .toList();
                 return InspectionResult.completed(
                         request.segments().stream().map(ContentSegment::id).collect(Collectors.toSet()), findings);

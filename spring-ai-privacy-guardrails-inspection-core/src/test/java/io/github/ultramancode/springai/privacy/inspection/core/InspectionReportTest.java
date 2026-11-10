@@ -12,7 +12,7 @@ class InspectionReportTest {
     @Test
     void uninvokedInspectorsCannotReportCompletedWorkOrFindings() {
         InspectionFinding finding = new InspectionFinding(
-                "s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+                "s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         List<InspectionResult> invalidResults = List.of(
                 InspectionResult.completed(Set.of(), List.of()),
                 InspectionResult.failed(InspectionFailureCode.TIMEOUT, Set.of("s1"), List.of()),

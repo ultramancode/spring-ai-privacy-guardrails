@@ -121,8 +121,7 @@ public final class JsonVerdictProtocol implements GuardModelProtocol {
                         Optional.of(new InspectionFinding(
                                 segmentId,
                                 InspectionFinding.Category.PROMPT_ATTACK,
-                                "UNSAFE",
-                                null));
+                                "UNSAFE"));
                 default -> throw new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
             };
         } catch (JsonProcessingException ex) {

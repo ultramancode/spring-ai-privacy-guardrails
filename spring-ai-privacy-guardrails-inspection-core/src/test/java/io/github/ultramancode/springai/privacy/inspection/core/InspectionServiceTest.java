@@ -186,7 +186,7 @@ class InspectionServiceTest {
     @Test
     void contentPolicyReceivesInspectorIdAndPartialFindings() {
         InspectionFinding finding =
-                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult partial = InspectionResult.failed(
                 InspectionFailureCode.INCOMPLETE, Set.of(), List.of(finding));
         AtomicReference<String> evaluatedInspectorId = new AtomicReference<>();
@@ -318,7 +318,7 @@ class InspectionServiceTest {
     @Test
     void perInspectorFailOpenRetainsFindingsAndCannotOverrideContentBlock() {
         InspectionFinding finding = new InspectionFinding(
-                "s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+                "s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult failedResult = InspectionResult.failed(
                 InspectionFailureCode.TIMEOUT, Set.of("s1"), List.of(finding));
         AtomicInteger laterInspectorCalls = new AtomicInteger();
@@ -398,7 +398,7 @@ class InspectionServiceTest {
     @Test
     void contentBlockStopsLaterInspectors() {
         InspectionFinding finding =
-                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult completedResult = InspectionResult.completed(Set.of("s1"), List.of(finding));
         ContentInspector blockingInspector = inspector("one", ignoredRequest -> completedResult);
         AtomicInteger laterInspectorCalls = new AtomicInteger();
@@ -513,17 +513,17 @@ class InspectionServiceTest {
     @EnumSource(InspectionFailurePolicy.class)
     void invalidResultsCannotFailOpenOrClaimCompletion(InspectionFailurePolicy failurePolicy) {
         InspectionFinding finding =
-                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult[] invalidResults = {
                 null,
                 InspectionResult.completed(Set.of(), List.of()),
                 InspectionResult.completed(Set.of(), List.of(finding)),
                 InspectionResult.completed(Set.of("other"), List.of(finding)),
                 InspectionResult.completed(Set.of("s1"), List.of(
-                        new InspectionFinding("other", InspectionFinding.Category.PROMPT_ATTACK, "x", null))),
+                        new InspectionFinding("other", InspectionFinding.Category.PROMPT_ATTACK, "x"))),
                 InspectionResult.failed(InspectionFailureCode.MODEL_ERROR, Set.of("other"), List.of(finding)),
                 InspectionResult.failed(InspectionFailureCode.MODEL_ERROR, Set.of(), List.of(
-                        new InspectionFinding("other", InspectionFinding.Category.PROMPT_ATTACK, "x", null)))
+                        new InspectionFinding("other", InspectionFinding.Category.PROMPT_ATTACK, "x")))
         };
 
         for (InspectionResult result : invalidResults) {
@@ -555,7 +555,7 @@ class InspectionServiceTest {
         List<InspectionResult> invalidResults = List.of(
                 InspectionResult.failed(failureCode, Set.of("unknown"), List.of()),
                 InspectionResult.failed(failureCode, Set.of(), List.of(
-                        new InspectionFinding("unknown", InspectionFinding.Category.PROMPT_ATTACK, "x", null))));
+                        new InspectionFinding("unknown", InspectionFinding.Category.PROMPT_ATTACK, "x"))));
 
         for (InspectionResult result : invalidResults) {
             InspectionService service = new InspectionService(List.of(inspector("one", ignoredRequest -> result)),
@@ -574,7 +574,7 @@ class InspectionServiceTest {
     @Test
     void hardFailureKeepsEarlierOutcomesAndValidPartialFindings() {
         InspectionFinding finding =
-                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+                new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult partial = InspectionResult.failed(
                 InspectionFailureCode.LIMIT_EXCEEDED, Set.of(), List.of(finding));
         AtomicInteger laterInspectorCalls = new AtomicInteger();
@@ -616,7 +616,7 @@ class InspectionServiceTest {
     @ValueSource(booleans = {false, true})
     void expiredDeadlinePreservesReportedFailureAndPreventsLaterInspection(boolean throwsException) {
         InspectionFinding finding = new InspectionFinding(
-                "s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+                "s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult failedResult = InspectionResult.failed(
                 InspectionFailureCode.MODEL_ERROR, Set.of("s1"), List.of(finding));
         AtomicInteger laterInspectorCalls = new AtomicInteger();
@@ -682,7 +682,7 @@ class InspectionServiceTest {
     @CsvSource({"COMPLETED, false", "COMPLETED, true", "FAILED, false", "FAILED, true"})
     void interruptionPreservesInspectorResultAndCannotFailOpen(
             InspectionResult.Status status, boolean interruptInPolicy) {
-        InspectionFinding finding = new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+        InspectionFinding finding = new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult inspectorResult;
         if (status == InspectionResult.Status.COMPLETED) {
             inspectorResult = InspectionResult.completed(Set.of("s1"), List.of(finding));
@@ -739,7 +739,7 @@ class InspectionServiceTest {
     })
     void completedResultsSurviveDeadlineExpiryDuringInspectorOrPolicy(
             InspectionDecision contentDecision, boolean expireInPolicy) {
-        InspectionFinding finding = new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack", null);
+        InspectionFinding finding = new InspectionFinding("s1", InspectionFinding.Category.PROMPT_ATTACK, "attack");
         InspectionResult inspectorResult = InspectionResult.completed(Set.of("s1"), List.of(finding));
         InspectionRequest boundedRequest = new InspectionRequest(request().segments(),
                 new InspectionLimits(1, 100, Duration.ofMillis(100)));

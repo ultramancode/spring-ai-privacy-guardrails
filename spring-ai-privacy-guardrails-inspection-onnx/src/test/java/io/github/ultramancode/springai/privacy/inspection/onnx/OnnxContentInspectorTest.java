@@ -83,9 +83,9 @@ class OnnxContentInspectorTest {
                 assertThat(finding.category()).isEqualTo(TOXICITY);
                 assertThat(finding.code()).isEqualTo("INSULT");
             });
-            assertThat(result.findings().get(0).score())
+            assertThat(result.findings().get(0).score().orElseThrow())
                     .isCloseTo(expectedLongTextScore, within(0.0001));
-            assertThat(result.findings().get(1).score())
+            assertThat(result.findings().get(1).score().orElseThrow())
                     .isCloseTo(expectedInsultScore, within(0.0001));
         }
     }
@@ -147,7 +147,7 @@ class OnnxContentInspectorTest {
             InspectionResult result = inspector.inspect(request(SAFE));
             assertThat(result.status()).isEqualTo(InspectionResult.Status.COMPLETED);
             assertThat(result.findings()).hasSize(expectedFindingCount)
-                    .allSatisfy(finding -> assertThat(finding.score()).isEqualTo(0.5));
+                    .allSatisfy(finding -> assertThat(finding.score()).hasValue(0.5));
         }
     }
 

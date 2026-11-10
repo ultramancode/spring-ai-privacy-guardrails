@@ -62,7 +62,7 @@ class KananaSafeguardPromptProtocolTest {
             "<UNSAFE-A2>, PROMPT_LEAKING, UNSAFE-A2"
     })
     void unsafeVerdictsMapToTheirCategories(String output, InspectionFinding.Category category, String code) {
-        assertThat(protocol.parse("s1", output)).contains(new InspectionFinding("s1", category, code, null));
+        assertThat(protocol.parse("s1", output)).contains(new InspectionFinding("s1", category, code));
     }
 
     @ParameterizedTest

@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -184,13 +185,13 @@ public final class OpenAiCompatibleContentInspector implements ContentInspector 
             return;
         }
 
-        Double newScore = finding.score();
-        if (newScore == null) {
+        OptionalDouble newScore = finding.score();
+        if (newScore.isEmpty()) {
             return;
         }
 
-        Double existingScore = existingFinding.score();
-        if (existingScore == null || newScore > existingScore) {
+        OptionalDouble existingScore = existingFinding.score();
+        if (existingScore.isEmpty() || newScore.getAsDouble() > existingScore.getAsDouble()) {
             requestFindings.put(key, finding);
         }
     }

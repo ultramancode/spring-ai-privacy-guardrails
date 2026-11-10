@@ -451,8 +451,17 @@ segment, category and code without including the inspected text.
 Use `code` for a specific finding within a category, such as `INSULT` under `TOXICITY`.
 Keep custom IDs and codes free of user content.
 
-`InspectionFinding.score` is optional and ranges from zero to one when present.
-ONNX inspectors provide scores. Findings without a score use `null`.
+`InspectionFinding.score()` returns an `OptionalDouble` with a score between zero and one,
+or `OptionalDouble.empty()` when no score is provided. ONNX inspectors provide scores.
+
+Create a finding with or without a score:
+
+```java
+InspectionFinding unscored = new InspectionFinding(
+    "segment-1", InspectionFinding.Category.PROMPT_INJECTION, "INJECTION");
+InspectionFinding scored = new InspectionFinding(
+    "segment-1", InspectionFinding.Category.PROMPT_INJECTION, "INJECTION", 0.9);
+```
 
 The default failure policy, `FAIL_CLOSED`, blocks the request if an inspector fails.
 Set `spring.ai.inspection.failure-policy=FAIL_OPEN` to continue after the failures

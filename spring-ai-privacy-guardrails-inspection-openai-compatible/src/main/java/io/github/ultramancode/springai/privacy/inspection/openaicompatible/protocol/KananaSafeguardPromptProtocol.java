@@ -48,14 +48,12 @@ public final class KananaSafeguardPromptProtocol implements GuardModelProtocol {
                     Optional.of(new InspectionFinding(
                             segmentId,
                             InspectionFinding.Category.PROMPT_INJECTION,
-                            "UNSAFE-A1",
-                            null));
+                            "UNSAFE-A1"));
             case "<UNSAFE-A2>" ->
                     Optional.of(new InspectionFinding(
                             segmentId,
                             InspectionFinding.Category.PROMPT_LEAKING,
-                            "UNSAFE-A2",
-                            null));
+                            "UNSAFE-A2"));
             default -> throw new InspectionException(InspectionFailureCode.INVALID_RESPONSE);
         };
     }

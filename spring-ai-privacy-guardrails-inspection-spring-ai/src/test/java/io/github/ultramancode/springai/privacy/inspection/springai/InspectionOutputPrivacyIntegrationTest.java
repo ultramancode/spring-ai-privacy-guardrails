@@ -28,6 +28,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
@@ -191,7 +193,7 @@ class InspectionOutputPrivacyIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void httpInspectionReceivesSimplifiedReferenceQuestionAfterPrivacySessionCloses(boolean streaming) {
+    void httpInspectionReceivesSimplifiedUserMessageAfterPrivacySessionCloses(boolean streaming) {
         PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
         InspectionOutputAdvisor advisor = new InspectionOutputAdvisor(
                 outputInspectionService.withPiiTokenSimplification(Set.of("http")));
@@ -202,6 +204,32 @@ class InspectionOutputPrivacyIntegrationTest {
         assertThat(invoke(client, streaming, "Tell Alice about delivery")).isEqualTo("clear");
 
         assertThat(httpInspectionUserTexts).containsExactly("Tell [PERSON_1] about delivery");
+        assertThat(privacyService.activeSessionCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void httpInspectionReceivesPrivacyProcessedUserMessageWithoutLaterAdvisorChanges(boolean streaming) {
+        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+        // Retrieval advisors replace the user message with text that includes retrieved documents.
+        BaseAdvisor augmentingAdvisor = new BaseAdvisor() {
+            public String getName() { return "augmenting-advisor"; }
+            public int getOrder() { return 0; }
+            public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
+                String userText = request.prompt().getUserMessage().getText();
+                return request.mutate().prompt(request.prompt().augmentUserMessage("retrieved document\n" + userText)).build();
+            }
+            public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
+        };
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
+                .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
+                .configure(ChatClient.builder(model("clear")))
+                .defaultAdvisors(inspectionOutputAdvisor, augmentingAdvisor).build();
+
+        assertThat(invoke(client, streaming, "Tell Alice about delivery")).isEqualTo("clear");
+
+        assertThat(httpInspectionUserTexts).singleElement().satisfies(text -> assertThat(text)
+                .startsWith("Tell ").endsWith(" about delivery").doesNotContain("Alice", "retrieved document"));
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 

@@ -10,43 +10,35 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OutputResponseContextTest {
 
     @Test
-    void recapturingUnchangedQuestionPreservesPrivacyStatusAndSimplifiedText() {
+    void privacyProcessedUserMessageReplacesTheInitialUserMessage() {
         ChatClientRequest request = OutputResponseContext.requestInspectionContext(
                 ChatClientRequest.builder().prompt(new Prompt("Alice asks")).build(), true);
+        OutputResponseContext.UserMessageContext initialUserMessage = OutputResponseContext.findUserMessage(request);
+        assertThat(initialUserMessage.text()).isEqualTo("Alice asks");
+        assertThat(initialUserMessage.privacyProcessed()).isFalse();
+        assertThat(initialUserMessage.simplifiedText()).isNull();
+        assertThat(request.context().toString()).doesNotContain("Alice");
         ChatClientRequest processed = request.mutate().prompt(new Prompt("[PII:opaque] asks")).build();
         processed = PiiTokenSimplifierContext.attach(processed, text -> text.replace("[PII:opaque]", "[PERSON]"));
 
-        OutputResponseContext.captureUserMessage(processed, true);
-        OutputResponseContext.captureUserMessage(processed, false);
+        OutputResponseContext.capturePrivacyProcessedUserMessage(processed);
 
-        OutputResponseContext.UserMessageContext question = OutputResponseContext.findUserMessage(request);
-        assertThat(question.text()).isEqualTo("[PII:opaque] asks");
-        assertThat(question.privacyProcessed()).isTrue();
-        assertThat(question.simplifiedText()).isEqualTo("[PERSON] asks");
-        assertThat(request.context().toString()).doesNotContain("Alice", "opaque");
-        assertThat(question.toString()).doesNotContain("opaque");
+        OutputResponseContext.UserMessageContext userMessage = OutputResponseContext.findUserMessage(request);
+        assertThat(userMessage.text()).isEqualTo("[PII:opaque] asks");
+        assertThat(userMessage.privacyProcessed()).isTrue();
+        assertThat(userMessage.simplifiedText()).isEqualTo("[PERSON] asks");
+        assertThat(request.context().toString()).doesNotContain("opaque");
+        assertThat(userMessage.toString()).doesNotContain("opaque");
     }
 
     @Test
-    void changedQuestionCannotReuseProcessingStatus() {
-        ChatClientRequest request = OutputResponseContext.requestInspectionContext(
-                ChatClientRequest.builder().prompt(new Prompt("processed question")).build(), false);
-        OutputResponseContext.captureUserMessage(request, true);
-
-        OutputResponseContext.captureUserMessage(request.mutate().prompt(new Prompt("replacement question")).build(), false);
-
-        OutputResponseContext.UserMessageContext question = OutputResponseContext.findUserMessage(request);
-        assertThat(question.text()).isEqualTo("replacement question");
-        assertThat(question.privacyProcessed()).isFalse();
-    }
-
-    @Test
-    void trackingIsIsolatedForEachInvocationOfTheSameRequest() {
+    void inspectionContextIsIsolatedForEachInvocationOfTheSameRequest() {
         ChatClientRequest source = ChatClientRequest.builder().prompt(new Prompt("question")).build();
         ChatClientRequest first = OutputResponseContext.requestInspectionContext(source, false);
         ChatClientRequest second = OutputResponseContext.requestInspectionContext(source, false);
 
-        OutputResponseContext.captureUserMessage(first.mutate().prompt(new Prompt("first question")).build(), true);
+        OutputResponseContext.capturePrivacyProcessedUserMessage(
+                first.mutate().prompt(new Prompt("first question")).build());
 
         assertThat(OutputResponseContext.findUserMessage(first).text()).isEqualTo("first question");
         assertThat(OutputResponseContext.findUserMessage(second).text()).isEqualTo("question");
@@ -55,7 +47,7 @@ class OutputResponseContextTest {
     }
 
     @Test
-    void systemOnlyRequestsHaveNoReferenceQuestion() {
+    void systemOnlyRequestsHaveNoUserMessage() {
         ChatClientRequest request = OutputResponseContext.requestInspectionContext(
                 ChatClientRequest.builder().prompt(new Prompt(new SystemMessage("instructions"))).build(), false);
 

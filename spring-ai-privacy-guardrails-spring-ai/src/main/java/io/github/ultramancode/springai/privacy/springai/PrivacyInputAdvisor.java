@@ -92,7 +92,7 @@ public final class PrivacyInputAdvisor implements CallAdvisor, StreamAdvisor {
         ChatClientRequest privacyContextRequest = PrivacyRequestContextSupport.attachHandle(request, handle);
         ChatClientRequest privacyProcessedRequest = this.messageTransformer.tokenize(handle, privacyContextRequest);
         // The user message is processed even when no PII was found.
-        OutputResponseContext.captureUserMessage(privacyProcessedRequest, true);
+        OutputResponseContext.capturePrivacyProcessedUserMessage(privacyProcessedRequest);
         return privacyProcessedRequest;
     }
 }

@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
- * Registers model request protection stages and optional user-message capture for output inspection.
+ * Registers privacy, authorization and inspection stages for a model request boundary.
  * Applications combine feature configurers through {@link ModelRequestBoundaryConfigurer#compose}.
  */
 public final class ModelRequestBoundarySpec {
@@ -17,7 +17,6 @@ public final class ModelRequestBoundarySpec {
     private UnaryOperator<ChatClientRequest> privacyStage;
     private UnaryOperator<ChatClientRequest> authorizationStage;
     private ModelRequestInspectionStage inspectionStage;
-    private boolean captureUserMessage;
     private boolean allowAdvisorsAfterBoundary;
 
     ModelRequestBoundarySpec() {
@@ -47,21 +46,15 @@ public final class ModelRequestBoundarySpec {
         inspectionStage = Objects.requireNonNull(stage, "inspection stage");
     }
 
-    /** Captures the latest user message after the configured stages for output inspection. */
-    public void captureUserMessage() {
-        captureUserMessage = true;
-    }
-
     void allowAdvisorsAfterBoundary(boolean allow) {
         allowAdvisorsAfterBoundary = allow;
     }
 
     ModelRequestBoundaryPlan build() {
-        if (privacyStage == null && authorizationStage == null && inspectionStage == null && !captureUserMessage) {
-            throw new IllegalStateException("At least one model request stage or user-message capture is required");
+        if (privacyStage == null && authorizationStage == null && inspectionStage == null) {
+            throw new IllegalStateException("At least one model request stage is required");
         }
-        return new ModelRequestBoundaryPlan(privacyStage, authorizationStage, inspectionStage,
-                captureUserMessage, allowAdvisorsAfterBoundary);
+        return new ModelRequestBoundaryPlan(privacyStage, authorizationStage, inspectionStage, allowAdvisorsAfterBoundary);
     }
 
     /** Supports identity validation of a feature's required model stage. */

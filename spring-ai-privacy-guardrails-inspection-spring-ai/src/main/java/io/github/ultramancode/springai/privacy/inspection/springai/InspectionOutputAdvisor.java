@@ -41,9 +41,8 @@ import java.util.function.UnaryOperator;
  * Complete {@code returnDirect} tool results are inspected separately from preceding model text.
  *
  * <p>When available, the latest user message is provided as context for output inspection.
- * A managed model request boundary captures it after its configured stages.
- * Without a managed boundary, this advisor starts with the user message available on entry.
- * Configured input privacy processing updates the captured message after transformation.
+ * When input privacy processing is configured, the message after that processing is used.
+ * Changes other advisors make to the user message are not included.
  *
  * <p>Streaming responses are collected before inspection, including intermediate text from the tool loop.
  * Collected response chunks are delivered in their original order only after inspection allows the complete output.
@@ -187,12 +186,12 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
             ContentSegment.PrivacyProcessingStatus status = userMessageContext.privacyProcessed()
                     ? ContentSegment.PrivacyProcessingStatus.PROCESSED
                     : ContentSegment.PrivacyProcessingStatus.UNKNOWN;
-            userMessage = new ContentSegment("reference-user", ContentSegment.Role.USER, status, userMessageContext.text());
+            userMessage = new ContentSegment("user-message", ContentSegment.Role.USER, status, userMessageContext.text());
         }
         UnaryOperator<String> piiTokenSimplifier = null;
         if (simplifiedTextsByOriginalText != null) {
-            // Both output text and the reference question use this simplifier.
-            // The question's simplified text is stored separately from the output mappings.
+            // Both output text and the user message use this simplifier.
+            // The user message's simplified text is stored separately from the output mappings.
             piiTokenSimplifier = text -> {
                 if (userMessageContext != null && userMessageContext.simplifiedText() != null
                         && text.equals(userMessageContext.text())) {

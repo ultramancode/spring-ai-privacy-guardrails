@@ -7,7 +7,7 @@ import java.util.function.UnaryOperator;
 
 /**
  * Holds a fixed configuration of stages for the client and executes them in
- * privacy, authorization, then inspection order. Captures the prepared user message when requested.
+ * privacy, authorization, then inspection order.
  */
 final class ModelRequestBoundaryPlan {
 
@@ -15,16 +15,14 @@ final class ModelRequestBoundaryPlan {
     private final UnaryOperator<ChatClientRequest> privacyStage;
     private final UnaryOperator<ChatClientRequest> authorizationStage;
     private final ModelRequestInspectionStage inspectionStage;
-    private final boolean captureUserMessage;
     private final boolean allowAdvisorsAfterBoundary;
 
     ModelRequestBoundaryPlan(UnaryOperator<ChatClientRequest> privacyStage,
         UnaryOperator<ChatClientRequest> authorizationStage, ModelRequestInspectionStage inspectionStage,
-        boolean captureUserMessage, boolean allowAdvisorsAfterBoundary) {
+        boolean allowAdvisorsAfterBoundary) {
         this.privacyStage = privacyStage;
         this.authorizationStage = authorizationStage;
         this.inspectionStage = inspectionStage;
-        this.captureUserMessage = captureUserMessage;
         this.allowAdvisorsAfterBoundary = allowAdvisorsAfterBoundary;
     }
 
@@ -36,10 +34,6 @@ final class ModelRequestBoundaryPlan {
     /** Tests whether a feature's model stage is present without depending on that feature. */
     boolean containsStageType(Class<?> stageType) {
         return stageType.isInstance(privacyStage) || stageType.isInstance(authorizationStage) || stageType.isInstance(inspectionStage);
-    }
-
-    boolean capturesUserMessage(ChatClientRequest request) {
-        return captureUserMessage || OutputResponseContext.isInspectionContextRequested(request);
     }
 
     boolean hasInspection() {
@@ -60,9 +54,6 @@ final class ModelRequestBoundaryPlan {
         }
         if (inspectionStage != null) {
             inspectionStage.inspect(preparedRequest, streaming);
-        }
-        if (capturesUserMessage(preparedRequest)) {
-            OutputResponseContext.captureUserMessage(preparedRequest, false);
         }
         return preparedRequest;
     }

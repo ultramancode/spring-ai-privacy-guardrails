@@ -227,19 +227,15 @@ public final class GuardrailsChatClientFactory {
             modelRequestBoundaryConfigurers.add(createPrivacyConfigurer(
                 guardrailsPolicy.privacy(), clientToolAdvisorBuilder.getAdvisorOrder()));
         }
+        InspectionOutputAdvisor inspectionOutputAdvisor = null;
         if (guardrailsPolicy.inspection() != null) {
             GuardrailsPolicy.Inspection inspectionPolicy = guardrailsPolicy.inspection();
             if (inspectionPolicy.modelRequestInspectionEnabled()) {
                 modelRequestBoundaryConfigurers.add(createInputInspectionConfigurer(inspectionPolicy));
             }
             if (inspectionPolicy.finalOutputInspectionEnabled()) {
-                InspectionOutputAdvisor inspectionOutputAdvisor = new InspectionOutputAdvisor(outputInspectionService,
-                    inspectionPolicy.limits(), inspectionObserver, inspectionPolicy.maxOutputFrames(),
-                    inspectionPolicy.outputStreamTimeout());
-                modelRequestBoundaryConfigurers.add((builder, boundary) -> {
-                    boundary.captureUserMessage();
-                    builder.defaultAdvisors(inspectionOutputAdvisor);
-                });
+                inspectionOutputAdvisor = new InspectionOutputAdvisor(outputInspectionService, inspectionPolicy.limits(),
+                    inspectionObserver, inspectionPolicy.maxOutputFrames(), inspectionPolicy.outputStreamTimeout());
             }
         }
         ChatClient.Builder chatClientBuilder = createClientBuilder(chatModel, clientToolAdvisorBuilder);
@@ -251,6 +247,9 @@ public final class GuardrailsChatClientFactory {
                 ModelRequestBoundaryConfigurer.compose(configurers);
 
             combinedConfigurer.configure(chatClientBuilder);
+        }
+        if (inspectionOutputAdvisor != null) {
+            chatClientBuilder.defaultAdvisors(inspectionOutputAdvisor);
         }
         return chatClientBuilder;
     }

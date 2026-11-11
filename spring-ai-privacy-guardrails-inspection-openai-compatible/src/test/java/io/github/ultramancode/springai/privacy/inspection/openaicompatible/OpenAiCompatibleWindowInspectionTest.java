@@ -95,7 +95,7 @@ class OpenAiCompatibleWindowInspectionTest {
     }
 
     @Test
-    void repeatsReferenceQuestionWithEachAnswerWindowWithoutInspectingItSeparately() throws Exception {
+    void repeatsUserMessageWithEachAnswerWindowWithoutInspectingItSeparately() throws Exception {
         startServer(text -> "<SAFE>");
         ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
                 ContentSegment.PrivacyProcessingStatus.PROCESSED, "complete question");

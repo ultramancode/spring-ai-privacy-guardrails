@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InspectionRequestTest {
 
     @Test
-    void referenceUserMessageSharesCharacterBudgetWithoutBecomingATarget() {
+    void userMessageSharesCharacterBudgetWithoutBecomingATarget() {
         ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
                 ContentSegment.PrivacyProcessingStatus.PROCESSED, "answer");
         ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
@@ -33,7 +33,7 @@ class InspectionRequestTest {
     }
 
     @Test
-    void privacyRequirementIncludesReferenceUserMessage() {
+    void privacyRequirementIncludesUserMessage() {
         ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
                 ContentSegment.PrivacyProcessingStatus.PROCESSED, "safe answer");
         ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,
@@ -44,7 +44,7 @@ class InspectionRequestTest {
     }
 
     @Test
-    void tokenSimplificationIncludesReferenceUserMessage() {
+    void tokenSimplificationIncludesUserMessage() {
         ContentSegment answer = new ContentSegment("answer", ContentSegment.Role.ASSISTANT,
                 ContentSegment.PrivacyProcessingStatus.PROCESSED, "Hello [PII:opaque]");
         ContentSegment question = new ContentSegment("question", ContentSegment.Role.USER,

@@ -1,7 +1,6 @@
 package io.github.ultramancode.springai.privacy.inspection.springai;
 
 import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundaryConfigurer;
-import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec;
 import io.github.ultramancode.springai.privacy.core.PiiAnalysisOptions;
 import io.github.ultramancode.springai.privacy.core.PiiAnalyzer;
 import io.github.ultramancode.springai.privacy.core.PiiSpan;
@@ -79,7 +78,7 @@ class InspectionOutputAdvisorTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void inspectsOnlyOutputAndProvidesLatestQuestionAsContext(boolean streaming) {
+    void inspectsOnlyOutputAndProvidesLatestUserMessageAsContext(boolean streaming) {
         List<InspectionRequest> received = new CopyOnWriteArrayList<>();
         ContentInspector inspector = new ContentInspector() {
             public String inspectorId() { return "record"; }
@@ -103,100 +102,51 @@ class InspectionOutputAdvisorTest {
         assertThat(answer).isEqualTo("safe answer");
         assertThat(received).singleElement().satisfies(inspection -> {
             assertThat(inspection.segments()).extracting(ContentSegment::text).containsExactly("safe answer");
-            assertThat(inspection.userMessage()).hasValueSatisfying(question -> {
-                assertThat(question.text()).isEqualTo("current question");
-                assertThat(question.privacyProcessingStatus()).isEqualTo(ContentSegment.PrivacyProcessingStatus.UNKNOWN);
+            assertThat(inspection.userMessage()).hasValueSatisfying(userMessage -> {
+                assertThat(userMessage.text()).isEqualTo("current question");
+                assertThat(userMessage.privacyProcessingStatus()).isEqualTo(ContentSegment.PrivacyProcessingStatus.UNKNOWN);
             });
         });
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void directOutputAdvisorUsesQuestionCapturedAtExistingBoundary(boolean streaming) {
-        List<String> inspectedQuestions = new CopyOnWriteArrayList<>();
+    void providesUserMessageWithoutChangesFromLaterAdvisors(boolean streaming) {
+        List<String> inspectedUserMessages = new CopyOnWriteArrayList<>();
+        List<String> modelUserMessages = new CopyOnWriteArrayList<>();
         ContentInspector inspector = new ContentInspector() {
             public String inspectorId() { return "record"; }
             public boolean requiresPrivacyProcessedContent() { return false; }
             public InspectionResult inspect(InspectionRequest request) {
-                inspectedQuestions.add(request.userMessage().orElseThrow().text());
+                inspectedUserMessages.add(request.userMessage().orElseThrow().text());
                 return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
                         .collect(Collectors.toSet()), List.of());
             }
         };
-        BaseAdvisor questionRewriteAdvisor = new BaseAdvisor() {
-            public String getName() { return "question-rewrite"; }
-            public int getOrder() { return ModelRequestBoundarySpec.DEFAULT_ORDER - 1; }
+        // Retrieval advisors replace the user message with text that includes retrieved documents.
+        BaseAdvisor augmentingAdvisor = new BaseAdvisor() {
+            public String getName() { return "augmenting-advisor"; }
+            public int getOrder() { return 0; }
             public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-                return request.mutate().prompt(new Prompt("updated question", request.prompt().getOptions())).build();
+                String userText = request.prompt().getUserMessage().getText();
+                return request.mutate().prompt(request.prompt().augmentUserMessage("retrieved document\n" + userText)).build();
             }
             public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
         };
         ChatModel model = new ChatModel() {
             public ChatResponse call(Prompt prompt) {
-                assertThat(prompt.getUserMessage().getText()).isEqualTo("updated question");
+                modelUserMessages.add(prompt.getUserMessage().getText());
                 return response("safe answer");
             }
             public Flux<ChatResponse> stream(Prompt prompt) { return Flux.defer(() -> Flux.just(call(prompt))); }
         };
         ChatClient client = new InspectionChatClientConfigurer(attackBlockingService())
-                .configure(ChatClient.builder(model))
-                .defaultAdvisors(new InspectionOutputAdvisor(new InspectionService(List.of(inspector))), questionRewriteAdvisor)
-                .build();
+                .withOutputInspection(new InspectionOutputAdvisor(new InspectionService(List.of(inspector))))
+                .configure(ChatClient.builder(model)).defaultAdvisors(augmentingAdvisor).build();
 
         assertThat(invoke(client, streaming)).isEqualTo("safe answer");
-        assertThat(inspectedQuestions).containsExactly("updated question");
-    }
-
-    @ParameterizedTest
-    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
-    void lateAdvisorsRequireOptInWithEitherOutputRegistration(boolean streaming, boolean configuredTogether) {
-        List<String> inspectedQuestions = new CopyOnWriteArrayList<>();
-        List<String> modelQuestions = new CopyOnWriteArrayList<>();
-        ContentInspector inspector = new ContentInspector() {
-            public String inspectorId() { return "record"; }
-            public boolean requiresPrivacyProcessedContent() { return false; }
-            public InspectionResult inspect(InspectionRequest request) {
-                inspectedQuestions.add(request.userMessage().orElseThrow().text());
-                return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
-                        .collect(Collectors.toSet()), List.of());
-            }
-        };
-        BaseAdvisor lateAdvisor = new BaseAdvisor() {
-            public String getName() { return "late-advisor"; }
-            public int getOrder() { return ModelRequestBoundarySpec.DEFAULT_ORDER + 1; }
-            public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-                return request.mutate().prompt(new Prompt("updated question", request.prompt().getOptions())).build();
-            }
-            public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
-        };
-        ChatModel model = new ChatModel() {
-            public ChatResponse call(Prompt prompt) {
-                modelQuestions.add(prompt.getUserMessage().getText());
-                return response("safe answer");
-            }
-            public Flux<ChatResponse> stream(Prompt prompt) { return Flux.defer(() -> Flux.just(call(prompt))); }
-        };
-        InspectionOutputAdvisor outputAdvisor = new InspectionOutputAdvisor(new InspectionService(List.of(inspector)));
-        InspectionChatClientConfigurer configurer = new InspectionChatClientConfigurer(attackBlockingService());
-        if (configuredTogether) {
-            configurer = configurer.withOutputInspection(outputAdvisor);
-        }
-        ChatClient.Builder builder = ChatClient.builder(model).defaultAdvisors(lateAdvisor);
-        if (!configuredTogether) {
-            builder.defaultAdvisors(outputAdvisor);
-        }
-        ChatClient strictClient = configurer.configure(builder.clone()).build();
-        ChatClient optedInClient = configurer.allowAdvisorsAfterBoundary(true).configure(builder.clone()).build();
-
-        assertThatThrownBy(() -> invoke(strictClient, streaming))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("explicit opt-in");
-        assertThat(modelQuestions).isEmpty();
-        assertThat(inspectedQuestions).isEmpty();
-
-        assertThat(invoke(optedInClient, streaming)).isEqualTo("safe answer");
-        assertThat(modelQuestions).containsExactly("updated question");
-        assertThat(inspectedQuestions).containsExactly("hello");
+        assertThat(modelUserMessages).containsExactly("retrieved document\nhello");
+        assertThat(inspectedUserMessages).containsExactly("hello");
     }
 
     private ChatResponse response(String text) {

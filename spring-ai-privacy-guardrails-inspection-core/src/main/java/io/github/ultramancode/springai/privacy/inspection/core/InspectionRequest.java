@@ -42,7 +42,7 @@ public final class InspectionRequest {
         this.startedNanos = startedNanos;
         this.limits = Objects.requireNonNull(limits, "limits");
         if (userMessage != null && userMessage.role() != ContentSegment.Role.USER) {
-            throw new IllegalArgumentException("Reference user message must have role USER");
+            throw new IllegalArgumentException("User message must have role USER");
         }
         this.userMessage = userMessage;
         Objects.requireNonNull(segments, "segments");

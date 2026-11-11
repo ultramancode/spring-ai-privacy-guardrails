@@ -500,6 +500,32 @@ class PrivacyChatClientIntegrationTest {
         assertThat(service.activeSessionCount()).isZero();
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void secondAdvisorOfManagedClassIsRejectedBeforeTheModelCall(boolean streaming) {
+        PrivacyService service = TestPrivacyServices.privacyService();
+        RecordingPromptModel model = new RecordingPromptModel();
+        ChatClient chatClient = PrivacyChatClientConfigurer.builder(service).build().configure(ChatClient.builder(model))
+                .build();
+        ChatClient.ChatClientRequestSpec request = chatClient.prompt().user("hello")
+                .advisors(new PrivacyToolCallValidationAdvisor(service, 1));
+        String expectedMessage = "Privacy advisor layout requires exactly one managed PrivacyToolCallValidationAdvisor";
+
+        if (streaming) {
+            StepVerifier.create(request.stream().content())
+                    .expectErrorSatisfies(error -> assertThat(error)
+                            .isInstanceOf(PrivacyGuardrailException.class)
+                            .hasMessage(expectedMessage))
+                    .verify(Duration.ofSeconds(5));
+        } else {
+            assertThatThrownBy(() -> request.call().content())
+                    .isInstanceOf(PrivacyGuardrailException.class)
+                    .hasMessage(expectedMessage);
+        }
+        assertThat(model.lastPrompt()).isNull();
+        assertThat(service.activeSessionCount()).isZero();
+    }
+
     private CallAdvisor dynamicToolsAdvisor(ToolCallback toolCallback) {
         return new CallAdvisor() {
             @Override

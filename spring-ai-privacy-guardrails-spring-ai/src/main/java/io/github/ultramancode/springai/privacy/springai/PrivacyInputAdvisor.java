@@ -17,35 +17,21 @@ import reactor.core.publisher.Flux;
 
 import java.util.Objects;
 
-/** Tokenizes prompt messages inside the request session owned by {@link PrivacyLifecycleAdvisor}. */
+/**
+ * Tokenizes prompt messages inside the request session owned by {@link PrivacyLifecycleAdvisor}.
+ * {@link PrivacyChatClientConfigurer} registers this advisor at {@link #DEFAULT_ORDER}.
+ */
 public final class PrivacyInputAdvisor implements CallAdvisor, StreamAdvisor {
 
-    /** Default request order after standard chat memory and before tool calling. */
+    /** Request order after standard chat memory and before tool calling. */
     public static final int DEFAULT_ORDER = Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER + 50;
 
     private final PrivacyService privacyService;
     private final PrivacyMessageTransformer messageTransformer;
-    private final int order;
 
-    /**
-     * Creates an input boundary at {@link #DEFAULT_ORDER}.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     */
-    public PrivacyInputAdvisor(PrivacyService privacyService) {
-        this(privacyService, DEFAULT_ORDER);
-    }
-
-    /**
-     * Creates an input boundary at an application-selected advisor order.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     * @param order Spring AI advisor order
-     */
-    public PrivacyInputAdvisor(PrivacyService privacyService, int order) {
+    PrivacyInputAdvisor(PrivacyService privacyService) {
         this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
         this.messageTransformer = new PrivacyMessageTransformer(privacyService);
-        this.order = order;
     }
 
     @Override
@@ -67,7 +53,7 @@ public final class PrivacyInputAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public int getOrder() {
-        return this.order;
+        return DEFAULT_ORDER;
     }
 
     private PrivacyContextHandle requireLifecycleHandle(ChatClientRequest request) {

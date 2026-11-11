@@ -3,8 +3,6 @@ package io.github.ultramancode.springai.privacy.security.autoconfigure;
 import io.github.ultramancode.springai.privacy.security.PrivacySecurityChatClientFactory;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.core.OpaquePiiTokenFormat;
-import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
-import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallValidationAdvisor;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyResponseInspectionLimits;
@@ -320,27 +318,6 @@ class RelativeToolOrderIntegrationTest extends ToolAuthorizationIntegrationTestS
         // With output protection enabled, PrivacyOutputAdvisor (T - 2) must have a greater order value than
         // PrivacyInputAdvisor.DEFAULT_ORDER (-2_147_483_398). This value would make the two orders equal.
         assertToolOrderRejectedBeforeCustomization(-2_147_483_396, true);
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void rejectsDuplicatePrivacyToolCallValidationAdvisor(boolean streaming) throws IOException {
-        startModelServer(finalResponse());
-        ToolIndex index = mock(ToolIndex.class);
-        privacyContextRunner().run(context -> {
-            ChatClient client = protectedBuilder(context, ToolSearchToolCallingAdvisor.builder()
-                    .toolIndex(index).systemMessageSuffix("Find tools.").advisorOrder(0))
-                    .defaultTools(context.getBean(PrivacyToolCallbackFactory.class)
-                            .wrap(tool("customerLookup", new AtomicInteger()))).build();
-            authenticate();
-            ChatClient.ChatClientRequestSpec request = client.prompt().user("Lookup").advisors(
-                    new PrivacyToolCallValidationAdvisor(context.getBean(PrivacyService.class), 1));
-            assertThatThrownBy(() -> executeRequest(request, streaming))
-                    .isInstanceOf(PrivacyGuardrailException.class)
-                    .hasMessageContaining("exactly one managed PrivacyToolCallValidationAdvisor");
-            verifyNoInteractions(index);
-            assertThat(this.modelRequests).isEmpty();
-        });
     }
 
     @Test

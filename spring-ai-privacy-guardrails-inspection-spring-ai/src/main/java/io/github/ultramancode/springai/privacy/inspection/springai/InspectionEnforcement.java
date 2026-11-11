@@ -29,11 +29,16 @@ final class InspectionEnforcement {
 
     void inspectAndEnforce(Supplier<List<ContentSegment>> contentSegmentsSupplier,
         UnaryOperator<String> piiTokenSimplifier, InspectionExecution inspectionExecution) {
+        inspectAndEnforce(contentSegmentsSupplier, null, piiTokenSimplifier, inspectionExecution);
+    }
+
+    void inspectAndEnforce(Supplier<List<ContentSegment>> contentSegmentsSupplier,
+        ContentSegment userMessage, UnaryOperator<String> piiTokenSimplifier, InspectionExecution inspectionExecution) {
         InspectionReport inspectionReport;
         try {
             InspectionRequest.checkInterrupted();
             inspectionReport = inspectionService.inspect(
-                new InspectionRequest(contentSegmentsSupplier.get(), inspectionLimits), piiTokenSimplifier);
+                new InspectionRequest(contentSegmentsSupplier.get(), userMessage, inspectionLimits), piiTokenSimplifier);
         } catch (RuntimeException ex) {
             throw failure(ex, inspectionExecution);
         }

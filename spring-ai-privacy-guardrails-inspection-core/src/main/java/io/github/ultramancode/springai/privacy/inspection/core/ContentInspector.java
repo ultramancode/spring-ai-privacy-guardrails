@@ -32,7 +32,7 @@ public interface ContentInspector {
     String inspectorId();
 
     /**
-     * Returns whether this inspector requires every segment to be marked
+     * Returns whether this inspector requires all text in the inspection request to be marked
      * {@link ContentSegment.PrivacyProcessingStatus#PROCESSED}.
      * {@link InspectionService} checks this requirement before running any inspector.
      * If the input does not meet the requirement, the service stops the request regardless

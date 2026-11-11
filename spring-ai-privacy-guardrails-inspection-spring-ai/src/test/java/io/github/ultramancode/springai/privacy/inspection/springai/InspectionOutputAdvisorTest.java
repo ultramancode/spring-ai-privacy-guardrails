@@ -33,6 +33,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.DefaultAroundAdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
@@ -40,6 +42,7 @@ import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.ToolAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -72,6 +75,79 @@ import static org.assertj.core.api.Assertions.fail;
 
 class InspectionOutputAdvisorTest {
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void inspectsOnlyOutputAndProvidesLatestUserMessageAsContext(boolean streaming) {
+        List<InspectionRequest> received = new CopyOnWriteArrayList<>();
+        ContentInspector inspector = new ContentInspector() {
+            public String inspectorId() { return "record"; }
+            public boolean requiresPrivacyProcessedContent() { return false; }
+            public InspectionResult inspect(InspectionRequest request) {
+                received.add(request);
+                return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
+                        .collect(Collectors.toSet()), List.of());
+            }
+        };
+        ChatResponse response = response("safe answer");
+        ChatClient client = ChatClient.builder(model(response, Flux.just(response)))
+                .defaultAdvisors(new InspectionOutputAdvisor(new InspectionService(List.of(inspector)))).build();
+        ChatClient.ChatClientRequestSpec request = client.prompt()
+                .messages(new UserMessage("previous question"), new AssistantMessage("previous answer"))
+                .user("current question");
+
+        String answer = streaming ? request.stream().content().collectList().block(TEST_TIMEOUT).get(0)
+                : request.call().content();
+
+        assertThat(answer).isEqualTo("safe answer");
+        assertThat(received).singleElement().satisfies(inspection -> {
+            assertThat(inspection.segments()).extracting(ContentSegment::text).containsExactly("safe answer");
+            assertThat(inspection.userMessage()).hasValueSatisfying(userMessage -> {
+                assertThat(userMessage.text()).isEqualTo("current question");
+                assertThat(userMessage.privacyProcessingStatus()).isEqualTo(ContentSegment.PrivacyProcessingStatus.UNKNOWN);
+            });
+        });
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void providesUserMessageWithoutChangesFromLaterAdvisors(boolean streaming) {
+        List<String> inspectedUserMessages = new CopyOnWriteArrayList<>();
+        List<String> modelUserMessages = new CopyOnWriteArrayList<>();
+        ContentInspector inspector = new ContentInspector() {
+            public String inspectorId() { return "record"; }
+            public boolean requiresPrivacyProcessedContent() { return false; }
+            public InspectionResult inspect(InspectionRequest request) {
+                inspectedUserMessages.add(request.userMessage().orElseThrow().text());
+                return InspectionResult.completed(request.segments().stream().map(ContentSegment::id)
+                        .collect(Collectors.toSet()), List.of());
+            }
+        };
+        // Retrieval advisors replace the user message with text that includes retrieved documents.
+        BaseAdvisor augmentingAdvisor = new BaseAdvisor() {
+            public String getName() { return "augmenting-advisor"; }
+            public int getOrder() { return 0; }
+            public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
+                String userText = request.prompt().getUserMessage().getText();
+                return request.mutate().prompt(request.prompt().augmentUserMessage("retrieved document\n" + userText)).build();
+            }
+            public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
+        };
+        ChatModel model = new ChatModel() {
+            public ChatResponse call(Prompt prompt) {
+                modelUserMessages.add(prompt.getUserMessage().getText());
+                return response("safe answer");
+            }
+            public Flux<ChatResponse> stream(Prompt prompt) { return Flux.defer(() -> Flux.just(call(prompt))); }
+        };
+        ChatClient client = new InspectionChatClientConfigurer(attackBlockingService())
+                .withOutputInspection(new InspectionOutputAdvisor(new InspectionService(List.of(inspector))))
+                .configure(ChatClient.builder(model)).defaultAdvisors(augmentingAdvisor).build();
+
+        assertThat(invoke(client, streaming)).isEqualTo("safe answer");
+        assertThat(modelUserMessages).containsExactly("retrieved document\nhello");
+        assertThat(inspectedUserMessages).containsExactly("hello");
+    }
 
     private ChatResponse response(String text) {
         return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
@@ -457,7 +533,7 @@ class InspectionOutputAdvisorTest {
                   "missing": null
                 }
                 """;
-        InspectionLimits inspectionLimits = new InspectionLimits(1, jsonBody.length(), TEST_TIMEOUT);
+        InspectionLimits inspectionLimits = new InspectionLimits(1, jsonBody.length() + "hello".length(), TEST_TIMEOUT);
         InspectionOutputAdvisor inspectionOutputAdvisor = new InspectionOutputAdvisor(
                 attackBlockingService(), inspectionLimits, InspectionObserver.noop(), 10, TEST_TIMEOUT);
         ChatResponse singleBodyResponse = response(jsonBody);
@@ -782,7 +858,8 @@ class InspectionOutputAdvisorTest {
                 ? List.of(new PiiSpan("PERSON", 0, text.length(), 0.95)) : List.of();
         PrivacyService privacyService = new PrivacyService(List.of(analyzer), PiiAnalysisOptions.defaults());
         InspectionOutputAdvisor inspectionOutputAdvisor = new InspectionOutputAdvisor(attackBlockingService(),
-                new InspectionLimits(10, maxOutputCharacters, TEST_TIMEOUT), InspectionObserver.noop(), 100, TEST_TIMEOUT);
+                new InspectionLimits(10, maxOutputCharacters + "hello".length(), TEST_TIMEOUT),
+                InspectionObserver.noop(), 100, TEST_TIMEOUT);
         ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                 .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
                 .configure(ChatClient.builder(model(response(rawOutputText), Flux.just(response(rawOutputText)))))

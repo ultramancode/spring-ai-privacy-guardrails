@@ -12,9 +12,9 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailure
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
-import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaSafeguardPromptProtocol;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.OpenAiCompatibleContentInspector;
 import io.github.ultramancode.springai.privacy.inspection.openaicompatible.OpenAiCompatibleInspectionConfig;
+import io.github.ultramancode.springai.privacy.inspection.openaicompatible.protocol.KananaSafeguardOutputProtocol;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyOutputAction;
 import io.github.ultramancode.springai.privacy.springai.PrivacyToolCallbackFactory;
@@ -28,6 +28,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
@@ -46,6 +48,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.core.PriorityOrdered;
 import reactor.core.publisher.Flux;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.net.InetSocketAddress;
@@ -56,6 +59,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -68,9 +72,11 @@ class InspectionOutputPrivacyIntegrationTest {
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration HTTP_REQUEST_TIMEOUT = Duration.ofSeconds(5);
     private final List<String> httpInspectionTexts = new CopyOnWriteArrayList<>();
+    private final List<String> httpInspectionUserTexts = new CopyOnWriteArrayList<>();
     private final List<ContentSegment> inspectedOutputSegments = new CopyOnWriteArrayList<>();
     private final AtomicInteger recordingInspectorInvocationCount = new AtomicInteger();
     private HttpServer server;
+    private InspectionService outputInspectionService;
     private InspectionOutputAdvisor inspectionOutputAdvisor;
 
     @BeforeEach
@@ -79,8 +85,9 @@ class InspectionOutputPrivacyIntegrationTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             try {
-                httpInspectionTexts.add(jsonMapper.readTree(exchange.getRequestBody().readAllBytes())
-                        .path("messages").get(0).path("content").asString());
+                JsonNode messages = jsonMapper.readTree(exchange.getRequestBody().readAllBytes()).path("messages");
+                httpInspectionTexts.add(messages.get(1).path("content").asString());
+                httpInspectionUserTexts.add(messages.get(0).path("content").asString());
                 // Always return SAFE so these tests isolate Privacy processing and the HTTP payload.
                 byte[] inspectionResponseBytes = """
                         {
@@ -107,7 +114,7 @@ class InspectionOutputPrivacyIntegrationTest {
         // It does not enable Privacy output protection on the ChatClient.
         ContentInspector httpInspector = new OpenAiCompatibleContentInspector("http",
                 new OpenAiCompatibleInspectionConfig(baseUrl, "fixture", null, HTTP_REQUEST_TIMEOUT, 4096, true),
-                new KananaSafeguardPromptProtocol());
+                new KananaSafeguardOutputProtocol());
         ContentInspector recordingInspector = new ContentInspector() {
             public String inspectorId() {
                 return "record-output";
@@ -126,7 +133,8 @@ class InspectionOutputPrivacyIntegrationTest {
             }
         };
         // InspectionService checks every inspector's Privacy requirement before running either inspector.
-        inspectionOutputAdvisor = new InspectionOutputAdvisor(new InspectionService(List.of(recordingInspector, httpInspector)));
+        outputInspectionService = new InspectionService(List.of(recordingInspector, httpInspector));
+        inspectionOutputAdvisor = new InspectionOutputAdvisor(outputInspectionService);
     }
 
     @AfterEach
@@ -169,15 +177,59 @@ class InspectionOutputPrivacyIntegrationTest {
         ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
                 .outputProtection(action, "blocked").build()
                 .configure(ChatClient.builder(model(rawOutputText))).defaultAdvisors(inspectionOutputAdvisor).build();
-        String deliveredOutputText = invoke(client, streaming);
+        String deliveredOutputText = invoke(client, streaming, "Tell Alice about delivery");
         assertThat(deliveredOutputText).doesNotContain("Alice");
         if (value.equals("clear")) {
             assertThat(deliveredOutputText).isEqualTo(rawOutputText);
         }
         assertThat(httpInspectionTexts).containsExactly(deliveredOutputText);
+        assertThat(httpInspectionUserTexts).singleElement().satisfies(text ->
+                assertThat(text).startsWith("Tell ").endsWith(" about delivery").doesNotContain("Alice"));
         assertThat(inspectedOutputSegments).extracting(ContentSegment::text).containsExactlyElementsOf(httpInspectionTexts);
         assertThat(inspectedOutputSegments).allSatisfy(segment -> assertThat(segment.privacyProcessingStatus())
                 .isEqualTo(ContentSegment.PrivacyProcessingStatus.PROCESSED));
+        assertThat(privacyService.activeSessionCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void httpInspectionReceivesSimplifiedUserMessageAfterPrivacySessionCloses(boolean streaming) {
+        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+        InspectionOutputAdvisor advisor = new InspectionOutputAdvisor(
+                outputInspectionService.withPiiTokenSimplification(Set.of("http")));
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
+                .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
+                .configure(ChatClient.builder(model("clear"))).defaultAdvisors(advisor).build();
+
+        assertThat(invoke(client, streaming, "Tell Alice about delivery")).isEqualTo("clear");
+
+        assertThat(httpInspectionUserTexts).containsExactly("Tell [PERSON_1] about delivery");
+        assertThat(privacyService.activeSessionCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void httpInspectionReceivesPrivacyProcessedUserMessageWithoutLaterAdvisorChanges(boolean streaming) {
+        PrivacyService privacyService = privacyService(new CopyOnWriteArrayList<>());
+        // Retrieval advisors replace the user message with text that includes retrieved documents.
+        BaseAdvisor augmentingAdvisor = new BaseAdvisor() {
+            public String getName() { return "augmenting-advisor"; }
+            public int getOrder() { return 0; }
+            public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
+                String userText = request.prompt().getUserMessage().getText();
+                return request.mutate().prompt(request.prompt().augmentUserMessage("retrieved document\n" + userText)).build();
+            }
+            public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
+        };
+        ChatClient client = PrivacyChatClientConfigurer.builder(privacyService)
+                .outputProtection(PrivacyOutputAction.REDACT, "blocked").build()
+                .configure(ChatClient.builder(model("clear")))
+                .defaultAdvisors(inspectionOutputAdvisor, augmentingAdvisor).build();
+
+        assertThat(invoke(client, streaming, "Tell Alice about delivery")).isEqualTo("clear");
+
+        assertThat(httpInspectionUserTexts).singleElement().satisfies(text -> assertThat(text)
+                .startsWith("Tell ").endsWith(" about delivery").doesNotContain("Alice", "retrieved document"));
         assertThat(privacyService.activeSessionCount()).isZero();
     }
 
@@ -438,16 +490,20 @@ class InspectionOutputPrivacyIntegrationTest {
     }
 
     private String invoke(ChatClient client, boolean streaming) {
+        return invoke(client, streaming, "hello");
+    }
+
+    private String invoke(ChatClient client, boolean streaming, String question) {
         // These tests add no custom context entries.
         // An empty response context confirms that internal Privacy tracking was removed.
         if (streaming) {
-            List<ChatClientResponse> responseFrames = client.prompt().user("hello").stream()
+            List<ChatClientResponse> responseFrames = client.prompt().user(question).stream()
                     .chatClientResponse().collectList().block(TEST_TIMEOUT);
             assertThat(responseFrames).allSatisfy(frame -> assertThat(frame.context()).isEmpty());
             return responseFrames.stream().map(frame -> frame.chatResponse().getResult().getOutput().getText())
                     .filter(text -> text != null).collect(Collectors.joining());
         }
-        ChatClientResponse response = client.prompt().user("hello").call().chatClientResponse();
+        ChatClientResponse response = client.prompt().user(question).call().chatClientResponse();
         assertThat(response.context()).isEmpty();
         return response.chatResponse().getResult().getOutput().getText();
     }

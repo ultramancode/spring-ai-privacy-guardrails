@@ -1,5 +1,6 @@
 package io.github.ultramancode.springai.privacy.springai;
 
+import io.github.ultramancode.springai.privacy.boundary.OutputResponseContext;
 import io.github.ultramancode.springai.privacy.core.PrivacyContextHandle;
 import io.github.ultramancode.springai.privacy.core.PrivacyFailureCode;
 import io.github.ultramancode.springai.privacy.core.PrivacyGuardrailException;
@@ -88,7 +89,10 @@ public final class PrivacyInputAdvisor implements CallAdvisor, StreamAdvisor {
     }
 
     private ChatClientRequest tokenizeRequest(ChatClientRequest request, PrivacyContextHandle handle) {
-        ChatClientRequest attached = PrivacyRequestContextSupport.attachHandle(request, handle);
-        return this.messageTransformer.tokenize(handle, attached);
+        ChatClientRequest privacyContextRequest = PrivacyRequestContextSupport.attachHandle(request, handle);
+        ChatClientRequest privacyProcessedRequest = this.messageTransformer.tokenize(handle, privacyContextRequest);
+        // The user message is processed even when no PII was found.
+        OutputResponseContext.capturePrivacyProcessedUserMessage(privacyProcessedRequest);
+        return privacyProcessedRequest;
     }
 }

@@ -20,7 +20,7 @@ class JsonVerdictProtocolTest {
 
     @Test
     void buildsJsonClassificationRequestWithDefaultGenerationOptions() {
-        ChatCompletionCreateParams request = protocol.request("test-model", "customer [PII:1]");
+        ChatCompletionCreateParams request = protocol.request("test-model", "customer [PII:1]", "unused question");
         JsonNode body = ObjectMappers.jsonMapper().valueToTree(request._body());
         JsonNode messages = body.path("messages");
 

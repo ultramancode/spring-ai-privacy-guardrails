@@ -26,7 +26,21 @@ public record InspectionFinding(String segmentId, Category category, String code
         /** Toxic language, such as insults, profanity or threats. */
         TOXICITY,
         /** An application-defined content violation not covered by the other categories. */
-        POLICY_VIOLATION
+        POLICY_VIOLATION,
+        /** Hateful or discriminatory expression targeting people based on identity. */
+        HATE_SPEECH,
+        /** Content that targets someone with insults, humiliation or threats. */
+        HARASSMENT,
+        /** Sexual descriptions, depictions or suggestive content. */
+        SEXUAL_CONTENT,
+        /** Content that plans, encourages or facilitates criminal activity. */
+        CRIMINAL_ACTIVITY,
+        /** Content depicting, encouraging or facilitating sexual exploitation of children. */
+        CHILD_SEXUAL_EXPLOITATION,
+        /** Content depicting or encouraging intentional self-injury or suicide. */
+        SELF_HARM,
+        /** Content classified as false or misleading information. */
+        MISINFORMATION
     }
 
     /** Creates a finding without a confidence score. */

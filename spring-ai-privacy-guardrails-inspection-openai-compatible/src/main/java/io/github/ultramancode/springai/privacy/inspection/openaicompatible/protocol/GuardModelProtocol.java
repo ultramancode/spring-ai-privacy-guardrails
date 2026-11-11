@@ -22,6 +22,18 @@ public interface GuardModelProtocol {
     ChatCompletionCreateParams request(String model, String text);
 
     /**
+     * The default implementation ignores {@code userMessage} and delegates to
+     * {@link #request(String, String)}. Override this method to use the user message as context.
+     *
+     * @param model deployed model name
+     * @param text text being inspected
+     * @param userMessage user text, or {@code null} when unavailable
+     */
+    default ChatCompletionCreateParams request(String model, String text, String userMessage) {
+        return request(model, text);
+    }
+
+    /**
      * Parses the model output for one text segment or window. Findings must use the supplied segment ID.
      * Implementations must validate the complete verdict from the output alone.
      * An empty optional means a safe verdict.

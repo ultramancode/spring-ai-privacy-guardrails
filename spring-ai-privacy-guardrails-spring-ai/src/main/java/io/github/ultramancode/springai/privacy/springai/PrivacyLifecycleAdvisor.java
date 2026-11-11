@@ -95,7 +95,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
                 );
             }
             boolean shouldMarkPrivacyProcessed = privacyOutputAdvisor != null
-                    && OutputResponseContext.isPrivacyTrackingRequested(chatClientRequest);
+                    && OutputResponseContext.isInspectionContextRequested(chatClientRequest);
             UnaryOperator<String> outputPiiTokenSimplifier =
                     createOutputTokenSimplifierIfRequested(chatClientRequest, privacySession);
             return prepareResponseContext(chatClientResponse, shouldMarkPrivacyProcessed, outputPiiTokenSimplifier);
@@ -123,7 +123,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
                         );
                     }
                     boolean shouldMarkPrivacyProcessed = privacyOutputAdvisor != null
-                            && OutputResponseContext.isPrivacyTrackingRequested(chatClientRequest);
+                            && OutputResponseContext.isInspectionContextRequested(chatClientRequest);
                     UnaryOperator<String> outputPiiTokenSimplifier =
                             createOutputTokenSimplifierIfRequested(chatClientRequest, privacySession);
                     return chatClientResponses.map(chatClientResponse -> prepareResponseContext(

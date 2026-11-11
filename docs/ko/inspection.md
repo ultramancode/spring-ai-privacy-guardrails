@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 16f26883b82dcb23533636bfe97746b4a6e37d47e062f185be24a72955ff1b91 -->
+<!-- i18n-source-sha256: 571d3f00602a480eb493f000969810df098bd0750195c2cf2980ffa8339d6bc8 -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -164,6 +164,9 @@ ChatClient chatClient = guardrailsChatClientFactory.builder(chatModel, policy)
 `BLOCK`이면 `InspectionBlockedException`을 던집니다.
 출력을 검사하는 시점에는 도구가 이미 실행됐을 수 있습니다.
 
+출력 검사에서는 사용하는 프로토콜에 따라 답변의 맥락을 판단하기 위해 최신 사용자 질문도
+검사 모델에 함께 전달합니다. 입력 개인정보 보호를 설정했다면 해당 처리를 거친 질문을 사용합니다.
+
 개인정보 출력 보호도 활성화했다면 개인정보 처리 후에 콘텐츠를 검사합니다.
 개인정보 처리 완료를 요구하는 검사기는 해당 출력의 처리가 끝난 경우에만 실행할 수 있습니다.
 입력 보호만 활성화하면 출력에 대한 이 조건은 충족되지 않습니다.
@@ -203,8 +206,9 @@ ContentInspector httpGuard(GuardModelProtocol guardModelProtocol) {
 `requestTimeout`은 HTTP 요청별 제한 시간이며, `maxResponseBytes`는 응답 본문의 최대 크기입니다.
 빌더의 기본값은 요청별 제한 시간 1분과 응답 본문 최대 크기 2 MiB입니다.
 
-`requirePrivacyProcessedContent`의 기본값은 `false`입니다. `true`로 설정하면 전송할 모든 구간의
-상태가 `PROCESSED`여야 합니다. `ChatClient`에서 이 조건을 적용하려면
+`requirePrivacyProcessedContent`의 기본값은 `false`입니다. `true`로 설정하면 검사 요청에 포함된
+모든 텍스트가 `PROCESSED` 상태여야 합니다.
+`ChatClient`에서 이 조건을 적용하려면
 [개인정보 보호와 검사를 함께 선택](#개인정보-보호-또는-도구-권한-검사와-조합)하고,
 출력 검사에는 [개인정보 출력 보호](privacy.md#출력-정책과-스트리밍)도 활성화합니다.
 
@@ -226,14 +230,18 @@ ContentInspector httpGuard(GuardModelProtocol guardModelProtocol) {
 
 기본으로 제공하는 프로토콜은 다음과 같습니다.
 
-| 프로토콜 | 요구하는 응답 |
-| --- | --- |
-| `KananaSafeguardPromptProtocol` | Kanana Safeguard-Prompt 레이블: `<SAFE>`, `<UNSAFE-A1>`, `<UNSAFE-A2>`. [모델 카드](https://huggingface.co/kakaocorp/kanana-safeguard-prompt-2.1b/blob/main/README.md) · [서빙 샘플](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/openai-compatible-inspection/README.md) |
-| `JsonVerdictProtocol` | 정확히 `{"verdict":"SAFE"}` 또는 `{"verdict":"UNSAFE"}` |
+| 프로토콜 | 요구하는 응답 | 기본 토큰 한도 |
+| --- | --- | --- |
+| `KananaSafeguardPromptProtocol` | `<SAFE>`, `<UNSAFE-A1>`, `<UNSAFE-A2>`. [모델 카드](https://huggingface.co/kakaocorp/kanana-safeguard-prompt-2.1b/blob/main/README.md) · [서빙 샘플](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/openai-compatible-inspection/README.md#input-inspection-with-vllm) | 1 |
+| `KananaSafeguardOutputProtocol` | `<SAFE>` 또는 `<UNSAFE-S1>`부터 `<UNSAFE-S7>`까지. [모델 카드](https://huggingface.co/kakaocorp/kanana-safeguard-8b/blob/main/README.md) · [서빙 샘플](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/main/samples/openai-compatible-inspection/README.md#output-inspection-with-llamacpp) | 1 |
+| `JsonVerdictProtocol` | 정확히 `{"verdict":"SAFE"}` 또는 `{"verdict":"UNSAFE"}` | 32 |
 
 모델에 맞는 요청 생성과 응답 해석을 직접 정의하려면 `GuardModelProtocol`을 구현하고
 Spring 빈으로 등록합니다. `request`는 SDK의 `ChatCompletionCreateParams`를
 반환하고, `parse`는 모델 출력을 해석합니다. HTTP 검사기는 통신, 제한 시간과 응답 크기 제한을 처리합니다.
+
+사용자 질문을 활용하는 프로토콜은 `request(model, text, userMessage)`를 재정의합니다.
+기본 구현은 `text`만 사용합니다.
 
 ### JSON 판정 프로토콜
 
@@ -262,8 +270,8 @@ GuardModelProtocol guardModelProtocol() {
 ### 생성 옵션
 
 기본 제공 프로토콜의 생성 옵션은 `GuardModelGenerationOptions`로 설정합니다.
-기본 토큰 한도는 `JsonVerdictProtocol`이 32, `KananaSafeguardPromptProtocol`이 1이며,
-`temperature`는 둘 다 0입니다.
+기본 토큰 한도는 프로토콜 표에 정리되어 있습니다.
+모든 기본 제공 프로토콜의 `temperature` 기본값은 0입니다.
 
 `temperature`에 `null`을 지정하면 요청에서 생략하고 모델 서버의 기본값을 사용합니다.
 `maxCompletionTokens`는 추론 토큰을 포함한 생성 토큰 한도입니다.
@@ -440,6 +448,13 @@ ID, 범주, 코드가 포함되며 검사한 원문은 담기지 않습니다.
 | `PROMPT_LEAKING` | 숨겨진 프롬프트나 지침을 추출하려는 시도 |
 | `TOXICITY` | 모욕·욕설·위협 같은 독성 표현 |
 | `POLICY_VIOLATION` | 다른 범주에 해당하지 않는 애플리케이션 정의 콘텐츠 정책 위반 |
+| `HATE_SPEECH` | 정체성을 이유로 사람을 공격하는 혐오·차별 표현 |
+| `HARASSMENT` | 특정 대상을 모욕하거나 수치심을 주거나 위협하는 콘텐츠 |
+| `SEXUAL_CONTENT` | 성적 설명·묘사나 성적 암시를 담은 콘텐츠 |
+| `CRIMINAL_ACTIVITY` | 범죄 행위를 계획·조장하거나 돕는 콘텐츠 |
+| `CHILD_SEXUAL_EXPLOITATION` | 아동 성착취를 묘사·조장하거나 돕는 콘텐츠 |
+| `SELF_HARM` | 의도적인 자해나 자살을 묘사하거나 조장하는 콘텐츠 |
+| `MISINFORMATION` | 거짓이거나 오해를 유발하는 정보로 분류된 콘텐츠 |
 
 범주 내의 구체적인 탐지 유형은 `code`로 구분합니다. 예를 들어 `TOXICITY` 범주에서
 모욕 표현을 `INSULT` 코드로 나타낼 수 있습니다.

@@ -68,8 +68,6 @@ class PrivacyInputAdvisorTest {
             .isEqualTo(PrivacyInputAdvisor.DEFAULT_ORDER)
             .isGreaterThan(Advisor.DEFAULT_CHAT_MEMORY_PRECEDENCE_ORDER)
             .isLessThan(ToolCallingAdvisor.DEFAULT_ORDER);
-        assertThat(new PrivacyInputAdvisor(TestPrivacyServices.privacyService(), 123).getOrder())
-                .isEqualTo(123);
     }
 
     @Test

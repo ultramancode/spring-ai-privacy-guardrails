@@ -19,12 +19,11 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Validates model responses that pass through this advisor before tool execution. The
- * default order places it immediately inside {@link ToolCallingAdvisor}. Applications
- * using a custom order own the placement and any response mutations performed after it.
- * When an outer {@link PrivacyOutputAdvisor} supplies response-inspection limits, the
- * default constructors adopt them. Limits explicitly supplied to this validator must
- * match the outer output limits for requests that register protected tools.
+ * Validates model responses that pass through this advisor before tool execution.
+ * {@link PrivacyChatClientConfigurer} registers it immediately after the tool advisor
+ * in request order, with the response-inspection limits configured on its builder.
+ * When an outer {@link PrivacyOutputAdvisor} also supplies response-inspection limits,
+ * both values must match for requests that register protected tools.
  * Recognized Tool Search calls have their arguments tokenized after validation,
  * without restoring original values.
  */
@@ -41,35 +40,27 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
     private final int order;
 
     /**
-     * Creates a tool-call validator with default response-inspection limits and order.
-     *
-     * @param privacyService service that owns request sessions and transformations
+     * Uses default response-inspection limits at {@link #DEFAULT_ORDER}.
+     * Limits supplied by an outer output advisor replace the defaults.
      */
-    public PrivacyToolCallValidationAdvisor(PrivacyService privacyService) {
+    PrivacyToolCallValidationAdvisor(PrivacyService privacyService) {
         this(privacyService, PrivacyResponseInspectionLimits.defaults(), false, DEFAULT_ORDER);
     }
 
     /**
-     * Creates a validator at an application-selected order. Placing it immediately after
-     * the matching {@code ToolCallingAdvisor} is the recommended standard layout.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     * @param order Spring AI advisor order
+     * Uses default response-inspection limits at the supplied order.
+     * Limits supplied by an outer output advisor replace the defaults.
      */
-    public PrivacyToolCallValidationAdvisor(PrivacyService privacyService, int order) {
+    PrivacyToolCallValidationAdvisor(PrivacyService privacyService, int order) {
         this(privacyService, PrivacyResponseInspectionLimits.defaults(), false, order);
     }
 
     /**
-     * Creates a validator with application-selected limits for responses that can
-     * reach Spring AI tool execution. Calls without registered tools are not
-     * subject to these response-inspection limits. If an outer output advisor also
-     * supplies response-inspection limits, both values must match.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     * @param responseInspectionLimits limits applied while a response can reach tool execution
+     * Uses the supplied limits for responses that can reach Spring AI tool execution.
+     * Calls without registered tools are not subject to these limits.
+     * If an outer output advisor also supplies response-inspection limits, both values must match.
      */
-    public PrivacyToolCallValidationAdvisor(
+    PrivacyToolCallValidationAdvisor(
             PrivacyService privacyService,
             PrivacyResponseInspectionLimits responseInspectionLimits
     ) {
@@ -77,14 +68,10 @@ public final class PrivacyToolCallValidationAdvisor implements CallAdvisor, Stre
     }
 
     /**
-     * Creates a validator with application-selected execution limits and order. If an
-     * outer output advisor also supplies response-inspection limits, both values must match.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     * @param responseInspectionLimits limits applied while a response can reach tool execution
-     * @param order Spring AI advisor order
+     * Uses the supplied limits and order. If an outer output advisor also supplies
+     * response-inspection limits, both values must match.
      */
-    public PrivacyToolCallValidationAdvisor(
+    PrivacyToolCallValidationAdvisor(
             PrivacyService privacyService,
             PrivacyResponseInspectionLimits responseInspectionLimits,
             int order

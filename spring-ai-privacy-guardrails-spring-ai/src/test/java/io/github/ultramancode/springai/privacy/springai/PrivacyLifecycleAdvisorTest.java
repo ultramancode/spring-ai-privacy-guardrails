@@ -40,12 +40,11 @@ import static org.mockito.Mockito.when;
 class PrivacyLifecycleAdvisorTest {
 
     @Test
-    void usesDefaultOrderUnlessCustomOrderIsProvided() {
+    void defaultOrderRunsBeforePrivacyInputAdvisor() {
         PrivacyService service = TestPrivacyServices.privacyService();
 
         assertThat(new PrivacyLifecycleAdvisor(service).getOrder())
-                .isEqualTo(PrivacyLifecycleAdvisor.DEFAULT_ORDER);
-        assertThat(new PrivacyLifecycleAdvisor(service, 123).getOrder()).isEqualTo(123);
+                .isLessThan(PrivacyInputAdvisor.DEFAULT_ORDER);
     }
 
     @Test

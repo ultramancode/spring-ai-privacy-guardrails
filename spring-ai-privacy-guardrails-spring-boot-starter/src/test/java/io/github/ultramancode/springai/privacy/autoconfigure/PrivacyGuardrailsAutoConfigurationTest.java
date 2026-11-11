@@ -169,35 +169,6 @@ class PrivacyGuardrailsAutoConfigurationTest {
     }
 
     @Test
-    void explicitConfigurerIgnoresUnrelatedUserAdvisorBeans() {
-        PrivacyService service = new PrivacyService(
-                List.of((text, options, processingLimits) -> List.of()),
-                PiiAnalysisOptions.defaults()
-        );
-        PrivacyToolContextAdvisor weakToolContext = new PrivacyToolContextAdvisor(service);
-
-        this.contextRunner
-                .withBean(PrivacyService.class, () -> service)
-                .withBean(PrivacyToolContextAdvisor.class, () -> weakToolContext)
-                .run(context -> {
-                    ChatClient.Builder builder = mock(ChatClient.Builder.class);
-                    context.getBean(PrivacyChatClientConfigurer.class).configure(builder);
-                    @SuppressWarnings("unchecked")
-                    ArgumentCaptor<List<Advisor>> advisors = ArgumentCaptor.forClass(List.class);
-                    verify(builder).defaultAdvisors(advisors.capture());
-
-                    assertThat(advisors.getValue())
-                            .filteredOn(PrivacyToolContextAdvisor.class::isInstance)
-                            .singleElement()
-                            .isNotSameAs(weakToolContext);
-                    ArgumentCaptor<Advisor[]> boundaryAdvisors = ArgumentCaptor.forClass(Advisor[].class);
-                    verify(builder).defaultAdvisors(boundaryAdvisors.capture());
-                    assertThat(boundaryAdvisors.getValue()).extracting(Advisor::getName)
-                            .containsExactly("ModelRequestBoundaryChainValidator", "ModelRequestBoundaryAdvisor");
-                });
-    }
-
-    @Test
     void configurationCollectionsRejectNullInsteadOfDeferringAmbiguousFailures() {
         PrivacyGuardrailsProperties properties = new PrivacyGuardrailsProperties();
 

@@ -39,7 +39,7 @@ class PrivacyToolContextAdvisorTest {
         );
 
         assertThat(advisor.getOrder()).isEqualTo(ToolCallingAdvisor.DEFAULT_ORDER - 1);
-        assertThat(new PrivacyToolContextAdvisor(TestPrivacyServices.privacyService(), 123).getOrder())
+        assertThat(new PrivacyToolContextAdvisor(TestPrivacyServices.privacyService(), null, 123).getOrder())
                 .isEqualTo(123);
     }
 

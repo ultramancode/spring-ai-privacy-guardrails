@@ -35,45 +35,31 @@ import java.util.function.UnaryOperator;
  * When a {@link PrivacyOutputAdvisor} is present, applies its output protection
  * before the session closes.</p>
  *
- * <p>At {@link #DEFAULT_ORDER}, the session opens before the other standard privacy
- * advisors run and remains active until their processing completes.
- * When using a custom order, place this advisor before advisors that require the session.</p>
+ * <p>{@link PrivacyChatClientConfigurer} registers this advisor at {@link #DEFAULT_ORDER}.
+ * The session opens before the other privacy advisors run and remains active
+ * until their processing completes.</p>
  */
 public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor {
 
-    /** Default outermost position for the request privacy-session lifetime. */
+    /** Outermost position for the request privacy-session lifetime. */
     public static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE;
 
     private final PrivacyService privacyService;
     private final PrivacyToolCallbackFactory autoWrappingToolCallbackFactory;
-    private final int order;
 
-    /**
-     * Creates a lifecycle boundary at {@link #DEFAULT_ORDER}.
-     *
-     * @param privacyService service that opens and closes request privacy sessions
-     */
-    public PrivacyLifecycleAdvisor(PrivacyService privacyService) {
-        this(privacyService, DEFAULT_ORDER);
+    /** Creates a lifecycle advisor without automatic tool callback wrapping. */
+    PrivacyLifecycleAdvisor(PrivacyService privacyService) {
+        this(privacyService, null);
     }
 
     /**
-     * Creates a lifecycle boundary at an application-selected advisor order.
-     *
-     * @param privacyService service that opens and closes request privacy sessions
-     * @param order Spring AI advisor order
+     * Wraps registered tool callbacks with the supplied factory.
+     * A {@code null} factory disables automatic wrapping.
      */
-    public PrivacyLifecycleAdvisor(PrivacyService privacyService, int order) {
-        this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
-        this.autoWrappingToolCallbackFactory = null;
-        this.order = order;
-    }
-
     PrivacyLifecycleAdvisor(PrivacyService privacyService,
         PrivacyToolCallbackFactory autoWrappingToolCallbackFactory) {
-        this.privacyService = Objects.requireNonNull(privacyService, "privacyService");
+        this.privacyService = Objects.requireNonNull(privacyService, "privacyService must not be null");
         this.autoWrappingToolCallbackFactory = autoWrappingToolCallbackFactory;
-        this.order = DEFAULT_ORDER;
     }
 
     @Override
@@ -143,7 +129,7 @@ public final class PrivacyLifecycleAdvisor implements CallAdvisor, StreamAdvisor
 
     @Override
     public int getOrder() {
-        return this.order;
+        return DEFAULT_ORDER;
     }
 
     /**

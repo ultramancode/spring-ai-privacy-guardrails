@@ -24,6 +24,7 @@ import java.util.Set;
 
 /**
  * Makes the current privacy session available to tools and validates registered callbacks.
+ * {@link PrivacyChatClientConfigurer} registers this advisor immediately before the tool advisor.
  * Tool callbacks must be wrapped by {@link PrivacyToolCallbackFactory}.
  * Automatic wrapping can be enabled through
  * {@link PrivacyChatClientConfigurer.Builder#autoWrapToolCallbacks(boolean)}.
@@ -49,35 +50,13 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
     private final PrivacyToolCallbackFactory.Provenance expectedFactoryProvenance;
     private final int order;
 
-    /**
-     * Creates a service-bound tool-context boundary at {@link #DEFAULT_ORDER}.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     */
-    public PrivacyToolContextAdvisor(PrivacyService privacyService) {
+    /** Accepts wrappers from any factory that uses the same service, at {@link #DEFAULT_ORDER}. */
+    PrivacyToolContextAdvisor(PrivacyService privacyService) {
         this(privacyService, null, DEFAULT_ORDER);
     }
 
-    /**
-     * Creates a tool-context boundary at an application-selected advisor order.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     * @param order Spring AI advisor order
-     */
-    public PrivacyToolContextAdvisor(PrivacyService privacyService, int order) {
-        this(privacyService, null, order);
-    }
-
-    /**
-     * Creates a boundary that additionally accepts only wrappers created by the
-     * supplied factory. Boot uses this constructor. Direct integrations may keep the
-     * service-only constructor when multiple factories are intentional.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     * @param expectedFactory factory whose wrappers are accepted, or {@code null} to
-     * accept wrappers from any factory using the same service
-     */
-    public PrivacyToolContextAdvisor(
+    /** Accepts only wrappers created by the supplied factory, at {@link #DEFAULT_ORDER}. */
+    PrivacyToolContextAdvisor(
             PrivacyService privacyService,
             PrivacyToolCallbackFactory expectedFactory
     ) {
@@ -85,14 +64,10 @@ public final class PrivacyToolContextAdvisor implements CallAdvisor, StreamAdvis
     }
 
     /**
-     * Creates a factory-bound tool-context boundary at an application-selected order.
-     *
-     * @param privacyService service that owns request sessions and transformations
-     * @param expectedFactory factory whose wrappers are accepted, or {@code null} to
-     * accept wrappers from any factory using the same service
-     * @param order Spring AI advisor order
+     * Accepts only wrappers created by the supplied factory, at the supplied order.
+     * A {@code null} factory accepts wrappers from any factory that uses the same service.
      */
-    public PrivacyToolContextAdvisor(
+    PrivacyToolContextAdvisor(
             PrivacyService privacyService,
             PrivacyToolCallbackFactory expectedFactory,
             int order

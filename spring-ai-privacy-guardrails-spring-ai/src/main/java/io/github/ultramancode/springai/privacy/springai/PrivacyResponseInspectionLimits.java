@@ -8,7 +8,8 @@ import java.util.Objects;
  *
  * @param maxStreamFrames maximum response frames inspected per streaming subscription
  * @param maxCharacters maximum cumulative text and textual metadata characters
- * @param maxMediaBytes maximum cumulative bytes from supported media payloads
+ * @param maxMediaBytes maximum cumulative bytes from supported media payloads,
+ *     counting remote media by its reference text
  * @param streamIdleTimeout maximum wait between streaming response frames
  */
 public record PrivacyResponseInspectionLimits(

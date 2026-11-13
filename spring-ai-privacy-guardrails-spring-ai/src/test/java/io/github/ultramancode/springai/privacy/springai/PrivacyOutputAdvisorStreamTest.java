@@ -803,34 +803,57 @@ class PrivacyOutputAdvisorStreamTest {
     }
 
     @Test
-    void applicationBoundaryFailsClosedForUrlMediaData() throws MalformedURLException {
+    void applicationBoundaryAccountsUrlMediaDataLikeStringReferences() throws MalformedURLException {
         PrivacyService service = privacyService();
-        Media remoteMedia = Media.builder()
-                .mimeType(MimeTypeUtils.IMAGE_PNG)
-                .data(URI.create("https://example.invalid/media").toURL())
-                .build();
-        StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
-        when(chain.nextStream(any())).thenReturn(Flux.just(response(List.of(new Generation(
-                AssistantMessage.builder().media(List.of(remoteMedia)).build()
-        )))));
-        PrivacyOutputAdvisor advisor = new PrivacyOutputAdvisor(
+        String reference = "https://example.invalid/media";
+        // Reference text is estimated at four bytes per char.
+        long referenceBytes = reference.length() * 4L;
+        List<Media> remoteMedia = List.of(
+                Media.builder()
+                        .mimeType(MimeTypeUtils.IMAGE_PNG)
+                        .data(URI.create(reference).toURL())
+                        .build(),
+                Media.builder()
+                        .mimeType(MimeTypeUtils.IMAGE_PNG)
+                        .data(reference)
+                        .build()
+        );
+        PrivacyOutputAdvisor withinLimitAdvisor = new PrivacyOutputAdvisor(
                 service,
                 PrivacyOutputAction.TOKENIZE,
                 "blocked",
-                new PrivacyResponseInspectionLimits(10, 100, 100, Duration.ofSeconds(1))
+                new PrivacyResponseInspectionLimits(10, 100, referenceBytes, Duration.ofSeconds(1))
+        );
+        PrivacyOutputAdvisor overLimitAdvisor = new PrivacyOutputAdvisor(
+                service,
+                PrivacyOutputAction.TOKENIZE,
+                "blocked",
+                new PrivacyResponseInspectionLimits(10, 100, referenceBytes - 1, Duration.ofSeconds(1))
         );
 
-        // URL-valued media data cannot be locally size-accounted without dereferencing it,
-        // so this representation fails closed without network access.
         try (PrivacySession session = service.openSession()) {
-            assertThatThrownBy(() -> protectStreamAtApplicationBoundary(
-                    advisor, session.handle(), chain
-            ).collectList().block())
-                    .isInstanceOf(PrivacyGuardrailException.class)
-                    .hasFieldOrPropertyWithValue(
-                            "code",
-                            PrivacyFailureCode.RESPONSE_INSPECTION_LIMIT_EXCEEDED
-                    );
+            for (Media media : remoteMedia) {
+                StreamAdvisorChain chain = mock(StreamAdvisorChain.class);
+                when(chain.nextStream(any())).thenReturn(Flux.just(response(List.of(new Generation(
+                        AssistantMessage.builder().media(List.of(media)).build()
+                )))));
+
+                List<ChatClientResponse> results = protectStreamAtApplicationBoundary(
+                        withinLimitAdvisor, session.handle(), chain
+                ).collectList().block();
+
+                assertThat(results.get(0).chatResponse().getResult().getOutput().getMedia())
+                        .extracting(Media::getData)
+                        .containsExactly(media.getData());
+                assertThatThrownBy(() -> protectStreamAtApplicationBoundary(
+                        overLimitAdvisor, session.handle(), chain
+                ).collectList().block())
+                        .isInstanceOf(PrivacyGuardrailException.class)
+                        .hasFieldOrPropertyWithValue(
+                                "code",
+                                PrivacyFailureCode.RESPONSE_INSPECTION_LIMIT_EXCEEDED
+                        );
+            }
         }
     }
 

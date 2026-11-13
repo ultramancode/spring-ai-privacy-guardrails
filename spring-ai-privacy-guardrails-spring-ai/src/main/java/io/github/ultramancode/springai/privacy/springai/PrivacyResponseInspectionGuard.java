@@ -9,6 +9,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.content.Media;
 
+import java.net.URL;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -118,12 +119,19 @@ final class PrivacyResponseInspectionGuard {
             return bytes.length;
         }
         if (mediaData instanceof CharSequence characters) {
-            // A Java char is one UTF-16 code unit. Estimating four bytes per char safely
-            // overestimates UTF-8 size without allocating an encoded byte array.
-            long length = characters.length();
-            return length > Long.MAX_VALUE / 4 ? Long.MAX_VALUE : length * 4;
+            return estimatedUtf8Bytes(characters);
+        }
+        if (mediaData instanceof URL url) {
+            return estimatedUtf8Bytes(url.toString());
         }
         throw limitExceeded();
+    }
+
+    private long estimatedUtf8Bytes(CharSequence characters) {
+        // A Java char is one UTF-16 code unit. Estimating four bytes per char safely
+        // overestimates UTF-8 size without allocating an encoded byte array.
+        long length = characters.length();
+        return length > Long.MAX_VALUE / 4 ? Long.MAX_VALUE : length * 4;
     }
 
     private int length(String value) {

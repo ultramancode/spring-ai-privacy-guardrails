@@ -748,7 +748,8 @@ The defaults allow 1,024 stream frames, 1,000,000 text characters, 16,777,216 me
 bytes and 60 seconds between frames. These limits apply to intermediate tool-call
 responses even when final output protection is disabled. With output protection,
 text and media limits also apply to the final response. The media limit measures
-data size. It does not detect PII in image or audio content.
+data size. It does not detect PII in image or audio content. Remote media given as a
+`URL`, `URI` or URL string counts only its address text toward this limit.
 
 `processing.*` sets limits on privacy analysis and transformation. These limits
 apply even when final output protection is disabled. All values must be positive integers.

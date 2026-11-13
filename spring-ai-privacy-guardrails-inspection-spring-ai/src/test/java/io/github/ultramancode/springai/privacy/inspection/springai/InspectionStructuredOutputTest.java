@@ -4,6 +4,8 @@ import com.openai.client.OpenAIClient;
 import com.openai.client.OpenAIClientAsync;
 import com.openai.core.JsonValue;
 import com.openai.core.RequestOptions;
+import com.openai.core.http.Headers;
+import com.openai.core.http.HttpResponseFor;
 import com.openai.models.ResponseFormatJsonSchema;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
@@ -56,6 +58,22 @@ class InspectionStructuredOutputTest {
         when(chatCompletionService.create(any(ChatCompletionCreateParams.class))).thenCallRealMethod();
         when(chatCompletionService.create(any(ChatCompletionCreateParams.class), any(RequestOptions.class)))
                 .thenReturn(completion);
+        // Spring AI 2.0.2 calls withRawResponse() to read rate-limit headers. Record the request on the
+        // plain create stub so singleOpenAiRequest() captures it for every supported version.
+        ChatCompletionService.WithRawResponse rawCompletionService = mock(ChatCompletionService.WithRawResponse.class);
+        @SuppressWarnings("unchecked")
+        HttpResponseFor<ChatCompletion> rawResponse = mock(HttpResponseFor.class);
+        when(chatCompletionService.withRawResponse()).thenReturn(rawCompletionService);
+        when(rawCompletionService.create(any(ChatCompletionCreateParams.class), any(RequestOptions.class)))
+                .thenAnswer(invocation -> {
+                    chatCompletionService.create(
+                            invocation.getArgument(0, ChatCompletionCreateParams.class),
+                            invocation.getArgument(1, RequestOptions.class)
+                    );
+                    return rawResponse;
+                });
+        when(rawResponse.parse()).thenReturn(completion);
+        when(rawResponse.headers()).thenReturn(Headers.builder().build());
         OpenAiChatModel model = OpenAiChatModel.builder()
                 .options(OpenAiChatOptions.builder().model("fixture").build())
                 .openAiClient(openAiClient).openAiClientAsync(mock(OpenAIClientAsync.class)).build();

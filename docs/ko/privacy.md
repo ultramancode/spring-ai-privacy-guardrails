@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: a1d2893f02a25d2c5f688a3274b39cf6ca490062be68ace1743a96fc3faa28ac -->
+<!-- i18n-source-sha256: a02bc8837708379d1d249348038d2055d64c5ca5cb7ed12d7d8b62798756dd82 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -479,6 +479,32 @@ Spring Boot의 상태 점검 기능을 사용하는 경우 Presidio 서비스의
 
 로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio)에
 있습니다.
+
+### Presidio 신뢰도
+
+Presidio는 약하게 일치한 결과에 낮은 신뢰도를 줍니다. 탐지된 값 앞 다섯 단어 안에
+`US_BANK_NUMBER`의 `account`처럼 해당 엔티티 유형의 문맥 단어가 있으면, 기본적으로
+신뢰도에 0.35를 더하고 그래도 0.4보다 낮으면 0.4로 올립니다. 이 값과 문맥 단어는
+이 라이브러리가 아니라 Presidio 서버에서 변경합니다.
+
+| 텍스트 | `US_BANK_NUMBER` 신뢰도 |
+| --- | --- |
+| `My order is 48213957` | 0.05 |
+| `My account is 48213957` | 0.4 |
+
+`analysis.minimum-score`의 기본값은 `0.0`이므로 두 번호 모두 보호됩니다. 신뢰도가
+낮은 Presidio 결과를 제외하려면 `PRESIDIO` 분석기의 신뢰도 하한을 설정합니다.
+
+```yaml
+spring:
+  ai:
+    privacy:
+      analysis:
+        provider-minimum-scores:
+          PRESIDIO: 0.4
+```
+
+이 하한을 적용하면 위 예시에서 계좌번호만 탐지됩니다.
 
 ## OpenNLP 분석기
 

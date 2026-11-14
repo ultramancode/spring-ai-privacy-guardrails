@@ -490,6 +490,34 @@ included in application health checks.
 The local Docker setup is in
 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio).
 
+### Presidio Confidence Scores
+
+Presidio gives weak matches a low confidence score. When a context word for the
+match's entity type, such as `account` for `US_BANK_NUMBER`, appears within the
+five words before the match, Presidio adds 0.35 to the score by default and
+raises the result to 0.4 if it is still lower. Change these values and the context words in
+the Presidio server, not in this library.
+
+| Text | `US_BANK_NUMBER` score |
+| --- | --- |
+| `My order is 48213957` | 0.05 |
+| `My account is 48213957` | 0.4 |
+
+With the default `analysis.minimum-score` of `0.0`, both numbers are protected.
+To drop low-scoring Presidio results, set a confidence floor for the `PRESIDIO`
+provider:
+
+```yaml
+spring:
+  ai:
+    privacy:
+      analysis:
+        provider-minimum-scores:
+          PRESIDIO: 0.4
+```
+
+With this floor, only the account number in the examples above is detected.
+
 ## OpenNLP Analyzer
 
 Use compatible OpenNLP NER models to analyze PII in the application JVM.

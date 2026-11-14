@@ -62,6 +62,15 @@ public final class PiiEntityTypes {
     /** Korean driver's license number. */
     public static final String KR_DRIVER_LICENSE = "KR_DRIVER_LICENSE";
 
+    /** US Social Security number. */
+    public static final String US_SSN = "US_SSN";
+
+    /** US Individual Taxpayer Identification Number. */
+    public static final String US_ITIN = "US_ITIN";
+
+    /** US Medicare Beneficiary Identifier. */
+    public static final String US_MBI = "US_MBI";
+
     private PiiEntityTypes() {
     }
 }

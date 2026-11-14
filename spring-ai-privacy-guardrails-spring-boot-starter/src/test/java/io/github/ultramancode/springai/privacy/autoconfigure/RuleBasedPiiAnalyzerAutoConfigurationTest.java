@@ -163,7 +163,7 @@ class RuleBasedPiiAnalyzerAutoConfigurationTest {
                     .hasSingleBean(PrivacyService.class).doesNotHaveBean("ruleBasedPiiAnalyzer");
                 RuleBasedPiiAnalyzer analyzer = context.getBean(RuleBasedPiiAnalyzer.class);
                 assertThat(analyzer).isSameAs(context.getBean("customRules"));
-                assertThat(analyzer.ruleIds()).containsExactly("credit-card", "email");
+                assertThat(analyzer.ruleIds()).containsExactly("credit-card", "email", "iban");
                 assertThat(analyzer.analyze("dev@example.com", PiiAnalysisOptions.defaults(),
                     PrivacyProcessingLimits.defaults()))
                     .containsExactly(new PiiSpan("EMAIL_ADDRESS", 0, 15, 0.95));

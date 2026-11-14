@@ -84,3 +84,8 @@ brn-unhyphenated	-	-	붙여 쓴 사업자번호는 1234567891입니다.
 korean-driver-license	KR_DRIVER_LICENSE	11-95-123456-78	운전면허번호는 11-95-123456-78입니다.
 driver-license-unknown-region	-	-	잘못된 면허번호는 27-95-123456-78입니다.
 driver-license-unhyphenated	-	-	붙여 쓴 면허번호는 119512345678입니다.
+iban-compact	IBAN_CODE	DE89370400440532013000	환불 계좌는 DE89370400440532013000입니다.
+iban-grouped	IBAN_CODE	GB82 WEST 1234 5698 7654 32	송금 계좌 GB82 WEST 1234 5698 7654 32로 보내주세요.
+iban-before-currency	IBAN_CODE	BE68 5390 0754 7034	Pay to BE68 5390 0754 7034 EUR.
+iban-invalid-check-digits	-	-	잘못된 IBAN은 DE89370400440532013001입니다.
+iban-lowercase	IBAN_CODE	de89370400440532013000	소문자로 쓴 계좌는 de89370400440532013000입니다.

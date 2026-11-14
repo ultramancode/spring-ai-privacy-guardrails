@@ -13,9 +13,9 @@ class KoreanDriverLicensePiiRuleTest {
     private final KoreanDriverLicensePiiRule rule = new KoreanDriverLicensePiiRule();
 
     @Test
-    void detectsHyphenatedNumbersAtOriginalUtf16Positions() {
+    void detectsSeparatedNumbersAtOriginalUtf16Positions() {
         for (String number : List.of("11-95-123456-78", "19-03-654321-09", "20-10-123456-00",
-            "26-21-000001-12", "28-99-999999-99")) {
+            "26-21-000001-12", "28-99-999999-99", "11 95 123456 78")) {
             String text = "한글😀 " + number + " 연락";
 
             assertThat(analyze(text)).as(number)
@@ -41,7 +41,7 @@ class KoreanDriverLicensePiiRuleTest {
 
     @Test
     void rejectsOtherFormsOfAKnownRegionNumber() {
-        for (String text : List.of("119512345678", "11 95 123456 78", "11.95.123456.78", "11-95 123456-78",
+        for (String text : List.of("119512345678", "11.95.123456.78", "11-95 123456-78", "11 95-123456 78",
             "1195-123456-78", "11-95-12345678", "11-95-12345-78", "11-95-1234567-78", "11-95-123456-7",
             "x11-95-123456-78", "11-95-123456-78x", "011-95-123456-78", "11-95-123456-789")) {
             assertThat(analyze(text)).as(text).isEmpty();

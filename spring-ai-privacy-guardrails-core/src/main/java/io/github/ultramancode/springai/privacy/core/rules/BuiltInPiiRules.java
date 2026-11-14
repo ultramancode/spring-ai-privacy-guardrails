@@ -22,11 +22,16 @@ public final class BuiltInPiiRules {
         return List.of(
             new CreditCardPiiRule(),
             new EmailPiiRule(),
+            new IbanPiiRule(),
             new KoreanMobilePhonePiiRule(),
             new KoreanRrnPiiRule(),
             new KoreanFrnPiiRule(),
             new KoreanBrnPiiRule(),
-            new KoreanDriverLicensePiiRule()
+            new KoreanDriverLicensePiiRule(),
+            new UsPhonePiiRule(),
+            new UsSsnPiiRule(),
+            new UsItinPiiRule(),
+            new UsMbiPiiRule()
         );
     }
 
@@ -35,7 +40,8 @@ public final class BuiltInPiiRules {
         return List.of(
             new PiiRulePreset(BuiltInPiiPresetNames.COMMON, List.of(
                 BuiltInPiiRuleIds.CREDIT_CARD,
-                BuiltInPiiRuleIds.EMAIL
+                BuiltInPiiRuleIds.EMAIL,
+                BuiltInPiiRuleIds.IBAN
             )),
             new PiiRulePreset(BuiltInPiiPresetNames.KR, List.of(
                 BuiltInPiiRuleIds.KR_MOBILE_PHONE,
@@ -43,6 +49,12 @@ public final class BuiltInPiiRules {
                 BuiltInPiiRuleIds.KR_FRN,
                 BuiltInPiiRuleIds.KR_BRN,
                 BuiltInPiiRuleIds.KR_DRIVER_LICENSE
+            )),
+            new PiiRulePreset(BuiltInPiiPresetNames.US, List.of(
+                BuiltInPiiRuleIds.US_PHONE,
+                BuiltInPiiRuleIds.US_SSN,
+                BuiltInPiiRuleIds.US_ITIN,
+                BuiltInPiiRuleIds.US_MBI
             ))
         );
     }

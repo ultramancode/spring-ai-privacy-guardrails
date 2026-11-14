@@ -241,7 +241,7 @@ span limit applies to the entire batch.
 ## Local Rules and Presets
 
 Define local detection rules in Java and select them through configuration. The core module
-includes COMMON and KR presets. Rules run only when selected by a preset or rule ID.
+includes COMMON, KR, and US presets. Rules run only when selected by a preset or rule ID.
 
 ```yaml
 spring:
@@ -301,8 +301,8 @@ Use `PiiAnalyzer` for independent remote services or model providers.
 to multiple presets or none. Use `include` to select rules directly. Registering a rule
 or preset does not activate it.
 
-`builtIns()` and `builtInsWithScores(...)` register the built-in rules and the COMMON
-and KR presets defined in `BuiltInPiiRules.presets()`.
+`builtIns()` and `builtInsWithScores(...)` register the built-in rules and the COMMON,
+KR, and US presets defined in `BuiltInPiiRules.presets()`.
 
 Use `addRule(...)` to register one application rule or `addRules(...)` to register a collection.
 Both methods retain previously registered rules. Collections are copied in iteration order.
@@ -382,12 +382,17 @@ expressions carefully: a single match can backtrack for a long time before inter
 | Preset | Rule ID | Entity type | Supported scope |
 | --- | --- | --- | --- |
 | COMMON | email | `EMAIL_ADDRESS` | ASCII email addresses with dotted DNS domains. The part before `@` supports special characters such as apostrophes and exclamation marks. Addresses with a double-quoted part before `@`, internationalized addresses, and domain literals are unsupported. |
-| COMMON | credit-card | `CREDIT_CARD` | 13–17 ASCII digits starting with 1, 3, 4, 50–55, or 6, with optional spaces or hyphens between digit groups. Excludes compact 13-digit numbers starting with 1. Checks Luhn. Does not verify issuance or account status. |
+| COMMON | credit-card | `CREDIT_CARD` | 13–17 ASCII digits starting with 1, 3, 4, 50–55, or 6, with optional spaces or hyphens between digit groups. Excludes compact 13-digit numbers starting with 1. Checks Luhn. |
+| COMMON | iban | `IBAN_CODE` | IBANs for the 89 countries in the SWIFT IBAN Registry, compact or in groups of four separated by spaces or hyphens, with one separator throughout. Letters may be in either case. Requires the country's IBAN length and checks the check digits. |
 | KR | kr-mobile-phone | `PHONE_NUMBER` | South Korean mobile phone numbers: 010 plus eight digits, compact or consistently space/hyphen separated. Supports +82 10 forms. Other 01X prefixes, landlines, and extensions are unsupported. |
-| KR | kr-rrn | `KR_RRN` | South Korean resident registration numbers: YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
-| KR | kr-frn | `KR_FRN` | South Korean foreigner registration numbers: YYMMDD, a 5–8 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
-| KR | kr-brn | `KR_BRN` | South Korean business registration numbers in the hyphenated 3-2-5 digit form. Checks the check digit. Unhyphenated numbers are unsupported. A number followed by a hyphen and a digit, such as the start of an ISBN, is not matched. Does not verify registration or business status. |
-| KR | kr-driver-license | `KR_DRIVER_LICENSE` | South Korean driver's license numbers in the hyphenated 2-2-6-2 digit form. Requires a region code of 11–26 or 28. Unhyphenated or space-separated numbers are unsupported. Does not verify the check digits or issuance. |
+| KR | kr-rrn | `KR_RRN` | South Korean resident registration numbers: YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. |
+| KR | kr-frn | `KR_FRN` | South Korean foreigner registration numbers: YYMMDD, a 5–8 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. |
+| KR | kr-brn | `KR_BRN` | South Korean business registration numbers in the hyphenated 3-2-5 digit form. Checks the check digit. Unhyphenated numbers are unsupported. A number followed by a hyphen and a digit, such as the start of an ISBN, is not matched. |
+| KR | kr-driver-license | `KR_DRIVER_LICENSE` | South Korean driver's license numbers in the 2-2-6-2 digit form, separated by hyphens or spaces throughout. Requires a region code of 11–26 or 28. Unseparated numbers are unsupported. |
+| US | us-phone | `PHONE_NUMBER` | US phone numbers such as `(212) 555-1234`, `212-555-1234`, `212.555.1234`, or `212 555 1234`, optionally starting with +1 or 1. Numbers written without separators match only after +1, as in `+12125551234`. Rejects area and exchange codes that are never assigned, such as 911. Canadian and other numbers that share the +1 country code also match. |
+| US | us-ssn | `US_SSN` | US Social Security numbers in the 3-2-4 digit form, separated by hyphens or spaces throughout. Rejects numbers the SSA never assigns: those starting with 000, 666, or 900–999, with 00 in the middle, or ending in 0000. Unseparated numbers are unsupported. |
+| US | us-itin | `US_ITIN` | US Individual Taxpayer Identification Numbers in the 3-2-4 digit form, separated by hyphens or spaces throughout. They start with 9, and the middle two digits are 50–65, 70–88, 90–92, or 94–99. Unseparated numbers are unsupported. A number followed by a hyphen and a digit, such as the start of an ISBN, is not matched. |
+| US | us-mbi | `US_MBI` | US Medicare Beneficiary Identifiers: 11 characters, compact or hyphenated 4-3-4, with the digits and letters CMS allows at each position. Letters may be in either case. |
 
 Built-in matches have a default score of 0.85. These are heuristic scores, not measured
 probabilities. Evaluate detection quality on data representative of your application.

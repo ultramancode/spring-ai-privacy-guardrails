@@ -85,9 +85,10 @@ spring:
         presets: [COMMON, KR]
 ```
 
-`COMMON` covers supported email and card-number formats. `KR` covers Korean mobile-phone,
+`COMMON` covers supported email, card-number, and IBAN formats. `KR` covers Korean mobile-phone,
 resident-registration, foreigner-registration, business-registration, and driver's-license
-number formats. See [built-in scope](privacy.md#built-in-rules).
+number formats. `US` covers US phone, Social Security, ITIN, and Medicare Beneficiary Identifier
+formats. See [built-in scope](privacy.md#built-in-rules).
 
 ### Tool Authorization
 

@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: a02bc8837708379d1d249348038d2055d64c5ca5cb7ed12d7d8b62798756dd82 -->
+<!-- i18n-source-sha256: 9f976e0c7f72d13d7376d493f227869cfe76d4c4625de2db5e822fc310240cfc -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -49,6 +49,7 @@ Spring AI 표준 메시지와 `DeepSeekAssistantMessage`를 지원합니다.
 | `analysis.language` | `en` | 대소문자를 구분하지 않는 ASCII 언어 코드입니다. 소문자 정규형으로 분석기에 전달합니다. |
 | `analysis.included-entity-types` | 비어 있음 | 탐지 허용 목록입니다. 신뢰할 수 있는 유형을 등록하는 설정은 아닙니다. |
 | `analysis.minimum-score` | `0.0` | 탐지 결과를 채택할 최소 신뢰도입니다. 모든 분석기에 적용합니다. |
+| `analysis.excluded-values` | 비어 있음 | 탐지된 글자와 정확히 같으면 탐지 결과에서 뺄 값입니다. |
 | `analysis.mode` | `UNION` | 여러 분석기를 실행하고 결과를 조합하는 방식입니다. [탐지와 해석](#탐지와-해석)을 참고하세요. |
 | `analysis.primary-provider` | 미설정 | `PRIMARY` 및 `PRIMARY_WITH_FALLBACK` 모드와 `REQUIRE_PRIMARY` 실패 정책에서 사용할 주 분석기의 ID입니다. 대소문자를 구분하지 않습니다. |
 | `analysis.supplemental-providers` | 비어 있음 | 주 분석기와 함께 실행해 탐지를 보완할 보조 분석기의 ID 목록입니다. |
@@ -118,7 +119,7 @@ spring:
 분석기는 원문에서 개인정보를 찾은 위치와 유형, 신뢰도를 반환합니다. 개인정보 유형은
 `PERSON`, `EMAIL_ADDRESS`처럼 구분하며, 설정과 API에서는 이를 엔티티 유형이라고
 부릅니다. 라이브러리는 분석 결과에 엔티티 별칭, 탐지 허용 목록, 신뢰도 하한,
-분석기 선택과 겹치는 범위의 처리 규칙을 적용합니다. 탐지 위치는 항상 원문 텍스트를
+제외 값, 분석기 선택과 겹치는 범위의 처리 규칙을 적용합니다. 탐지 위치는 항상 원문 텍스트를
 기준으로 합니다. 로컬 규칙, Presidio, OpenNLP와 Spring Bean으로 등록한 사용자 정의
 `PiiAnalyzer`를 함께 사용할 수도 있습니다.
 
@@ -126,6 +127,10 @@ spring:
 범위 중 하나가 다른 범위를 완전히 포함하면 해당 범위의 유형을 유지합니다. 일부만
 겹치는 경우 개인정보의 일부가 노출되지 않도록 범위를 하나로 합치며, 유형 충돌을
 해결할 수 없으면 범용 개인정보 유형인 `PII`로 처리합니다.
+
+분석기가 잡은 글자가 `analysis.excluded-values`의 값과 정확히 같으면 그 탐지를
+결과에서 뺍니다. 따라서 그 값은 토큰화하거나 마스킹하지 않으며, 출력 차단의 근거도
+되지 않습니다.
 
 분석기 실행 실패는 `analysis.failure-policy` 설정에 따라 처리합니다. `REQUIRE_ALL`은
 분석기 하나라도 실패하면 요청 처리도 실패합니다. `REQUIRE_PRIMARY`는 주 분석기의 성공을
@@ -673,7 +678,8 @@ GuardrailsPolicy.Privacy privacySettings = GuardrailsPolicy.Privacy.builder()
 모델이나 도구에서 애플리케이션으로 반환되는 개인정보에 이 정책을 적용합니다.
 
 - `tokenize()`는 같은 요청 안에서 동일한 개인정보를 일관된 불투명 토큰으로 치환합니다.
-- `redact()`는 개인정보를 원문으로 복원할 수 없는 유형 마커로 대체합니다.
+- `redact()`는 개인정보를 `[REDACTED_PERSON]` 같은 마커로 바꿉니다. 이 마커로는 원문을
+  복원할 수 없습니다.
 - `block()`은 개인정보가 포함된 출력을 차단하고 기본 차단 메시지로
   `PrivacyOutputBlockedException`을 발생시킵니다. 메시지를 직접 지정하려면
   `block(message)`를 사용합니다.

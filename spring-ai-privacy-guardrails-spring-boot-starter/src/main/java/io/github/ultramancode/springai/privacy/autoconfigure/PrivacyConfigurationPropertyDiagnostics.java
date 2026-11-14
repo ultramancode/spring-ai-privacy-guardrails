@@ -41,6 +41,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
             "language",
             "included-entity-types",
             "minimum-score",
+            "excluded-values",
             "mode",
             "primary-provider",
             "supplemental-providers",
@@ -55,6 +56,7 @@ final class PrivacyConfigurationPropertyDiagnostics {
     );
     static final Set<String> ANALYSIS_INDEXED_SCALAR_PROPERTIES = Set.of(
             "included-entity-types",
+            "excluded-values",
             "supplemental-providers"
     );
     static final List<String> RULES_PROPERTIES = List.of("enabled", "presets", "include", "exclude");

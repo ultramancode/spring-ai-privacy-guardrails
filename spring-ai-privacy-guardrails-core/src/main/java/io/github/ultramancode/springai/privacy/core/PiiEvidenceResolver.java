@@ -44,12 +44,14 @@ final class PiiEvidenceResolver {
     }
 
     List<ResolvedPiiSpan> resolve(
+            String text,
             List<PiiEvidence> evidence,
             PiiAnalysisOptions canonicalOptions
     ) {
         List<PiiEvidence> candidates = canonicalizeAndFilterCandidates(evidence, canonicalOptions).stream()
                 .filter(item -> item.score() >= this.policy.minimumScore(
                         item.provider(), canonicalOptions.minimumScore()))
+                .filter(item -> !this.policy.isExcludedValue(text, item.start(), item.end()))
                 .sorted(Comparator.comparingInt(PiiEvidence::start).thenComparingInt(PiiEvidence::end))
                 .toList();
         return resolveCandidates(candidates);
@@ -81,6 +83,7 @@ final class PiiEvidenceResolver {
                 .toList();
         List<PiiEvidence> candidates = canonicalizeAndFilterCandidates(evidence, options).stream()
                 .filter(item -> item.score() >= options.minimumScore())
+                .filter(item -> !this.policy.isExcludedValue(text, item.start(), item.end()))
                 .sorted(Comparator.comparingInt(PiiEvidence::start).thenComparingInt(PiiEvidence::end))
                 .toList();
         return resolveCandidates(candidates);

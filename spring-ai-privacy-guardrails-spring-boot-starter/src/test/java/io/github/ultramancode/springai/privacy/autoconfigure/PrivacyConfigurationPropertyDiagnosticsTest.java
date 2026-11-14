@@ -413,6 +413,7 @@ class PrivacyConfigurationPropertyDiagnosticsTest {
                 "spring.ai.privacy.analysis.provider-minimum-scores.custom-provider=0.75",
                 "spring.ai.privacy.analysis.entity-aliases.external-label=CUSTOMER_ID",
                 "spring.ai.privacy.analysis.included-entity-types[0]=CUSTOMER_ID",
+                "spring.ai.privacy.analysis.excluded-values[0]=support@example.com",
                 "spring.ai.privacy.analysis.supplemental-providers[0]=custom-provider",
                 "spring.ai.privacy.rules.presets[0]=COMMON",
                 "spring.ai.privacy.rules.include[0]=email",

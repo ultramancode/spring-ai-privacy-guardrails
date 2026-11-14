@@ -175,6 +175,9 @@ class PrivacyGuardrailsAutoConfigurationTest {
         assertThatThrownBy(() -> properties.getAnalysis().setIncludedEntityTypes(null))
             .isInstanceOf(NullPointerException.class)
             .hasMessage("analysis.included-entity-types must not be null");
+        assertThatThrownBy(() -> properties.getAnalysis().setExcludedValues(null))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessage("analysis.excluded-values must not be null");
         assertThatThrownBy(() -> properties.getRules().setInclude(null))
             .isInstanceOf(NullPointerException.class)
             .hasMessage("rules.include must not be null");
@@ -577,7 +580,9 @@ class PrivacyGuardrailsAutoConfigurationTest {
                 "spring.ai.privacy.analysis.mode=primary",
                 "spring.ai.privacy.analysis.primary-provider=presidio",
                 "spring.ai.privacy.analysis.failure-policy=require-primary",
-                "spring.ai.privacy.analysis.provider-minimum-scores.presidio=0.72"
+                "spring.ai.privacy.analysis.provider-minimum-scores.presidio=0.72",
+                "spring.ai.privacy.analysis.excluded-values[0]=support@example.com",
+                "spring.ai.privacy.analysis.excluded-values[1]=Support@Example.com"
             )
             .run(context -> {
                 PiiResolutionPolicy policy = context.getBean(PiiResolutionPolicy.class);
@@ -585,6 +590,8 @@ class PrivacyGuardrailsAutoConfigurationTest {
                 assertThat(policy.primaryProvider()).contains("PRESIDIO");
                 assertThat(policy.failurePolicy()).isEqualTo(PiiAnalyzerFailurePolicy.REQUIRE_PRIMARY);
                 assertThat(policy.providerMinimumScores()).containsEntry("PRESIDIO", 0.72);
+                assertThat(policy.excludedValues())
+                    .containsExactlyInAnyOrder("support@example.com", "Support@Example.com");
 
                 ToolDisclosurePolicy toolDisclosurePolicy = context.getBean(ToolDisclosurePolicy.class);
                 assertThat(toolDisclosurePolicy.getAllowedEntityTypes(tool("customerLookup")).entityTypes())

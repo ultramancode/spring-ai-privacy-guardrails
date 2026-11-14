@@ -133,6 +133,36 @@ class CoreContractTest {
     }
 
     @Test
+    void resolutionPolicyKeepsExcludedValuesAsWritten() {
+        assertThatThrownBy(() -> PiiResolutionPolicy.builder().excludedValues(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("excludedValues must not be null");
+        assertThatThrownBy(() -> PiiResolutionPolicy.builder()
+                .excludedValues(Collections.singletonList(null))
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("excluded values must not be null or blank");
+        assertThatThrownBy(() -> PiiResolutionPolicy.builder()
+                .excludedValues(List.of(" "))
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("excluded values must not be null or blank");
+        assertThatThrownBy(() -> PiiResolutionPolicy.builder()
+                .excludedValues(List.of("support@example.com", "support@example.com"))
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("excluded values contain duplicates");
+
+        PiiResolutionPolicy policy = PiiResolutionPolicy.builder()
+                .excludedValues(List.of("support@example.com", "Support@Example.com"))
+                .build();
+
+        assertThat(policy.excludedValues())
+                .containsExactlyInAnyOrder("support@example.com", "Support@Example.com");
+        assertThat(PiiResolutionPolicy.defaults().excludedValues()).isEmpty();
+    }
+
+    @Test
     void sensitiveValueObjectsRejectIncompleteOrInconsistentState() {
         assertThatThrownBy(() -> new PiiSpan("PERSON", 0, 5, Double.NaN))
                 .isInstanceOf(IllegalArgumentException.class)

@@ -136,6 +136,8 @@ public class PrivacyGuardrailsProperties {
         private List<String> includedEntityTypes = new ArrayList<>();
         /** Global minimum analyzer confidence score. */
         private double minimumScore = PiiAnalysisOptions.DEFAULT_MINIMUM_SCORE;
+        /** Values removed from detection results when a detection matches them exactly. */
+        private List<String> excludedValues = new ArrayList<>();
         /** Strategy used to combine evidence from multiple analyzers. */
         private PiiResolutionMode mode = PiiResolutionPolicy.DEFAULT_MODE;
         /** Provider ID treated as primary by the selected resolution mode. */
@@ -179,6 +181,17 @@ public class PrivacyGuardrailsProperties {
 
         public void setMinimumScore(double minimumScore) {
             this.minimumScore = minimumScore;
+        }
+
+        public List<String> getExcludedValues() {
+            return this.excludedValues;
+        }
+
+        public void setExcludedValues(List<String> excludedValues) {
+            this.excludedValues = new ArrayList<>(Objects.requireNonNull(
+                    excludedValues,
+                    "analysis.excluded-values must not be null"
+            ));
         }
 
         public PiiResolutionMode getMode() {

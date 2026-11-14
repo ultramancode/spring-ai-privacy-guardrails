@@ -45,6 +45,7 @@ configured under `spring.ai.privacy`.
 | `analysis.language` | `en` | Case-insensitive ASCII language code, canonicalized to lowercase before it is passed to analyzers. |
 | `analysis.included-entity-types` | empty | Detection allowlist. This does not register trusted types. |
 | `analysis.minimum-score` | `0.0` | Minimum confidence for accepting a detection, applied to all analyzers. |
+| `analysis.excluded-values` | empty | Values removed from detection results when a detection matches them exactly. |
 | `analysis.mode` | `UNION` | How analyzers run and their results are combined. See [Detection and Resolution](#detection-and-resolution). |
 | `analysis.primary-provider` | unset | Case-insensitive ID of the primary analyzer used by `PRIMARY` and `PRIMARY_WITH_FALLBACK` modes and the `REQUIRE_PRIMARY` failure policy. |
 | `analysis.supplemental-providers` | empty | IDs of supplemental analyzers that run with the primary analyzer to extend detection coverage. |
@@ -117,8 +118,8 @@ map keys.
 Analyzers return the positions, types, and confidence scores of detected PII.
 PII categories such as `PERSON` and `EMAIL_ADDRESS` are called entity types in
 configuration and APIs. The library applies entity aliases, detection allowlists,
-confidence floors, analyzer selection, and rules for overlapping ranges to these
-results. Positions always refer to the original source text. Local rules,
+confidence floors, excluded values, analyzer selection, and rules for overlapping
+ranges to these results. Positions always refer to the original source text. Local rules,
 Presidio, OpenNLP, and custom `PiiAnalyzer` Spring beans may be combined.
 
 `UNION` mode runs every configured analyzer and merges their detection results.
@@ -126,6 +127,10 @@ When one overlapping range fully contains another, the containing range keeps
 its type. Partial overlaps are merged so that no substring of the sensitive
 value is exposed. If a type conflict cannot be resolved, the result becomes the
 generic `PII` type.
+
+A detection whose text exactly matches a value listed in `analysis.excluded-values`
+is removed from the results. The value is therefore not tokenized or redacted,
+and it does not cause output to be blocked.
 
 Analyzer execution failures are handled according to
 `analysis.failure-policy`. With `REQUIRE_ALL`, request processing fails if any
@@ -693,8 +698,8 @@ applies to PII returned from the model or tools to the application.
 
 - `tokenize()` consistently replaces the same PII value with the same opaque token
   within one request.
-- `redact()` replaces PII with a typed marker that cannot be restored to the
-  original value.
+- `redact()` replaces PII with a marker such as `[REDACTED_PERSON]` that cannot be
+  restored to the original value.
 - `block()` blocks output that contains PII and throws `PrivacyOutputBlockedException`
   with the default block message. Use `block(message)` to supply a custom message.
 

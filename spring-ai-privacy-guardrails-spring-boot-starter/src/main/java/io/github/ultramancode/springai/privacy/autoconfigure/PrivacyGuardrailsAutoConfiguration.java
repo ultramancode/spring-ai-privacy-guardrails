@@ -60,6 +60,7 @@ public class PrivacyGuardrailsAutoConfiguration {
             .failurePolicy(analysis.getFailurePolicy())
             .providerMinimumScores(analysis.getProviderMinimumScores())
             .typeConflictFallback(analysis.getTypeConflictFallback())
+            .excludedValues(analysis.getExcludedValues())
             .build();
     }
 

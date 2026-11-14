@@ -8,6 +8,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 class PiiEvidenceResolverTest {
 
@@ -19,6 +20,7 @@ class PiiEvidenceResolverTest {
             .build();
 
         List<ResolvedPiiSpan> result = resolver.resolve(
+            "Alice alice@example.com",
             List.of(
                 evidence("PER", 0, 5, "OPENNLP", 0.90),
                 evidence("EMAIL", 6, 23, "RULES", 0.90)
@@ -38,6 +40,7 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolverWithAliases(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
+                "Alice",
                 List.of(
                         evidence("PER", 0, 5, "OPENNLP", 0.84),
                         evidence("PERSON", 0, 5, "PRESIDIO", 0.91)
@@ -58,6 +61,7 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
+                "Jordan",
                 List.of(
                         evidence("PERSON", 0, 6, "OPENNLP", 0.85),
                         evidence("ORGANIZATION", 0, 6, "PRESIDIO", 0.90)
@@ -76,6 +80,7 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
+            "jane@example.com",
             List.of(
                 evidence("PERSON", 0, 4, "OPENNLP", 0.99),
                 evidence("EMAIL_ADDRESS", 0, 16, "RULES", 0.90)
@@ -96,6 +101,7 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.defaults());
 
         List<ResolvedPiiSpan> result = resolver.resolve(
+                "Alice Smith",
                 List.of(
                         evidence("PERSON", 0, 5, "OPENNLP", 0.91),
                         evidence("ORGANIZATION", 3, 11, "PRESIDIO", 0.88)
@@ -119,6 +125,7 @@ class PiiEvidenceResolverTest {
         PiiEvidenceResolver resolver = resolver(policy);
 
         List<ResolvedPiiSpan> result = resolver.resolve(
+                "Alice Bob",
                 List.of(
                         evidence("PERSON", 0, 5, "OPENNLP", 0.80),
                         evidence("PERSON", 6, 9, "PRESIDIO", 0.70)
@@ -133,6 +140,71 @@ class PiiEvidenceResolverTest {
     }
 
     @Test
+    void resolveRemovesOnlyEvidenceMatchingExcludedValuesExactly() {
+        PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.builder()
+                .excludedValues(List.of("support@example.com", "555 0100"))
+                .build());
+
+        List<ResolvedPiiSpan> result = resolver.resolve(
+                "support@example.com, Support@Example.com, support@example.com.au, "
+                        + "asupport@example.com, 555 0100, 555-0100",
+                List.of(
+                        evidence("EMAIL_ADDRESS", 0, 19, "RULES", 1.0),
+                        evidence("EMAIL_ADDRESS", 21, 40, "RULES", 1.0),
+                        evidence("EMAIL_ADDRESS", 42, 64, "RULES", 1.0),
+                        evidence("EMAIL_ADDRESS", 66, 86, "RULES", 1.0),
+                        evidence("PHONE_NUMBER", 88, 96, "RULES", 1.0),
+                        evidence("PHONE_NUMBER", 98, 106, "RULES", 1.0)
+                ),
+                PiiAnalysisOptions.defaults()
+        );
+
+        assertThat(result).extracting(ResolvedPiiSpan::start)
+                .containsExactly(21, 42, 66, 98);
+    }
+
+    @Test
+    void resolveKeepsPartsDetectedInsideExcludedValue() {
+        PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.builder()
+                .excludedValues(List.of("support@example.com"))
+                .build());
+
+        List<ResolvedPiiSpan> result = resolver.resolve(
+                "Contact support@example.com for help.",
+                List.of(
+                        evidence("EMAIL_ADDRESS", 8, 27, "PRESIDIO", 1.0),
+                        evidence("URL", 16, 27, "PRESIDIO", 0.5)
+                ),
+                PiiAnalysisOptions.defaults()
+        );
+
+        assertThat(result)
+                .extracting(ResolvedPiiSpan::entityType, ResolvedPiiSpan::start, ResolvedPiiSpan::end)
+                .containsExactly(tuple("URL", 16, 27));
+    }
+
+    @Test
+    void resolveSuppliedSpansRemovesSpansMatchingExcludedValues() {
+        PiiEvidenceResolver resolver = resolver(PiiResolutionPolicy.builder()
+                .excludedValues(List.of("support@example.com"))
+                .build());
+
+        List<ResolvedPiiSpan> result = resolver.resolveSuppliedSpans(
+                "Contact support@example.com or alice@example.com.",
+                List.of(
+                        new PiiSpan("EMAIL_ADDRESS", 8, 27, 1.0),
+                        new PiiSpan("EMAIL_ADDRESS", 31, 48, 1.0)
+                ),
+                PiiAnalysisOptions.defaults()
+        );
+
+        assertThat(result).singleElement().satisfies(span -> {
+            assertThat(span.start()).isEqualTo(31);
+            assertThat(span.end()).isEqualTo(48);
+        });
+    }
+
+    @Test
     void resolveRejectsEvidenceWithoutAProviderEntityTypeRegistry() {
         EntityTypeRegistry registry = EntityTypeRegistry.defaults();
         PiiEvidenceResolver resolver = new PiiEvidenceResolver(
@@ -143,6 +215,7 @@ class PiiEvidenceResolverTest {
         );
 
         assertThatThrownBy(() -> resolver.resolve(
+                "Alice",
                 List.of(evidence("PERSON", 0, 5, "PRESIDIO", 0.90)),
                 PiiAnalysisOptions.defaults()
         )).isInstanceOf(IllegalArgumentException.class)

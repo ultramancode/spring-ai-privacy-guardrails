@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -134,6 +135,44 @@ class PrivacyServiceResolutionTest {
         assertThat(received).singleElement()
                 .extracting(PiiAnalysisOptions::includedEntityTypes)
                 .isEqualTo(List.of("PERSON"));
+    }
+
+    @Test
+    void excludedValuesApplyToSingleSegmentedAndSessionAnalysis() {
+        Pattern email = Pattern.compile("[a-z]+@example\\.com");
+        Pattern domain = Pattern.compile("example\\.com");
+        PiiAnalyzer analyzer = (text, options, limits) -> {
+            List<PiiSpan> spans = new ArrayList<>();
+            email.matcher(text).results().forEach(match ->
+                    spans.add(new PiiSpan("EMAIL_ADDRESS", match.start(), match.end(), 1.0)));
+            domain.matcher(text).results().forEach(match ->
+                    spans.add(new PiiSpan("URL", match.start(), match.end(), 0.5)));
+            return spans;
+        };
+        PrivacyService service = new PrivacyService(
+                List.of(analyzer),
+                PiiAnalysisOptions.defaults(),
+                EntityTypeRegistry.defaults(),
+                PiiResolutionPolicy.builder()
+                        .excludedValues(List.of("support@example.com", "example.com"))
+                        .build()
+        );
+
+        assertThat(service.analyze("Contact support@example.com")).isEmpty();
+        assertThat(service.analyzeSegments(List.of(
+                "Contact support@example.com",
+                "Ask alice@example.com, not support@example.com"
+        ))).satisfiesExactly(
+                first -> assertThat(first).isEmpty(),
+                second -> assertThat(second).singleElement()
+                        .extracting(ResolvedPiiSpan::start, ResolvedPiiSpan::end)
+                        .containsExactly(4, 21)
+        );
+        try (PrivacySession session = service.openSession()) {
+            assertThat(service.tokenize(session.handle(), "Contact support@example.com or alice@example.com"))
+                    .startsWith("Contact support@example.com or ")
+                    .doesNotContain("alice@example.com");
+        }
     }
 
     @Test

@@ -10,7 +10,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-/** Immutable policy for provider selection, failure handling, thresholds, and type conflicts. */
+/**
+ * Immutable policy for provider selection, failure handling, thresholds, type conflicts,
+ * and excluded values.
+ */
 public final class PiiResolutionPolicy {
 
     /** Default provider-selection mode. */
@@ -28,6 +31,7 @@ public final class PiiResolutionPolicy {
     private final PiiAnalyzerFailurePolicy failurePolicy;
     private final Map<String, Double> providerMinimumScores;
     private final String typeConflictFallback;
+    private final Set<String> excludedValues;
 
     private PiiResolutionPolicy(Builder builder) {
         this.mode = Objects.requireNonNull(builder.mode, "mode must not be null");
@@ -76,6 +80,16 @@ public final class PiiResolutionPolicy {
             throw new IllegalArgumentException("typeConflictFallback must not be null");
         }
         this.typeConflictFallback = EntityTypeRegistry.requireValidEntityType(builder.typeConflictFallback);
+        Set<String> uniqueExcludedValues = new LinkedHashSet<>();
+        for (String value : builder.excludedValues) {
+            if (value == null || value.isBlank()) {
+                throw new IllegalArgumentException("excluded values must not be null or blank");
+            }
+            if (!uniqueExcludedValues.add(value)) {
+                throw new IllegalArgumentException("excluded values contain duplicates");
+            }
+        }
+        this.excludedValues = Set.copyOf(uniqueExcludedValues);
     }
 
     /**
@@ -156,6 +170,19 @@ public final class PiiResolutionPolicy {
         return this.providerMinimumScores;
     }
 
+    /**
+     * Returns values whose exactly matching detections are removed from detection results.
+     *
+     * @return immutable excluded-value set
+     */
+    public Set<String> excludedValues() {
+        return this.excludedValues;
+    }
+
+    boolean isExcludedValue(String text, int start, int end) {
+        return this.excludedValues.contains(text.substring(start, end));
+    }
+
     /** Builds immutable {@link PiiResolutionPolicy} instances. */
     public static final class Builder {
 
@@ -165,6 +192,7 @@ public final class PiiResolutionPolicy {
         private PiiAnalyzerFailurePolicy failurePolicy = DEFAULT_FAILURE_POLICY;
         private Map<String, Double> providerMinimumScores = new LinkedHashMap<>();
         private String typeConflictFallback = DEFAULT_TYPE_CONFLICT_FALLBACK;
+        private List<String> excludedValues = List.of();
 
         private Builder() {
         }
@@ -241,6 +269,22 @@ public final class PiiResolutionPolicy {
          */
         public Builder typeConflictFallback(String typeConflictFallback) {
             this.typeConflictFallback = typeConflictFallback;
+            return this;
+        }
+
+        /**
+         * Sets values removed from detection results. Evidence is removed only when
+         * its text equals a listed value exactly.
+         *
+         * @param excludedValues case-sensitive values. Blank values and exact
+         * duplicates are rejected
+         * @return this builder
+         */
+        public Builder excludedValues(Collection<String> excludedValues) {
+            this.excludedValues = new ArrayList<>(Objects.requireNonNull(
+                    excludedValues,
+                    "excludedValues must not be null"
+            ));
             return this;
         }
 

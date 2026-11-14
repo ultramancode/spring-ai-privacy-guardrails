@@ -42,7 +42,7 @@ Inspector에서 확인할 시나리오를 선택하세요. `EN | 한국어`는 U
 | Security | 사용자 역할에 따른 도구 공개·실행과 허용 호출의 개인정보 보호 | [권한 설정](security.md) |
 | Inspection | 입력 차단 전 호출 0회, 출력 차단 시 호출 1회와 응답 비공개, 통과 사례 | [검사 설정](inspection.md) |
 
-고정 예제 다음에는 [사용자 입력 API](#inspect-results-through-the-api)로 자신의 합성 입력을 확인하거나
+고정 예제 다음에는 [사용자 입력 API](#inspect-results-through-the-api)로 자신의 가상 입력을 확인하거나
 [전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md)의 분석기·실제 모델 프로필을 선택하세요.
 예상과 다르면 [문제 해결](troubleshooting.md)을 참고하세요.
 

@@ -24,7 +24,8 @@ class BuiltInPiiRulesTest {
     @Test
     void registersBuiltInRules() {
         assertThat(PiiRuleCatalog.builder().builtIns().build().ruleIds())
-            .containsExactly("credit-card", "email", "kr-mobile-phone", "kr-rrn");
+            .containsExactly("credit-card", "email", "kr-mobile-phone", "kr-rrn",
+                "kr-frn", "kr-brn", "kr-driver-license");
     }
 
     @ParameterizedTest
@@ -40,7 +41,7 @@ class BuiltInPiiRulesTest {
         assertThat(catalog.analyzerBuilder().presets("COMMON").build().ruleIds())
             .containsExactly("credit-card", "email");
         assertThat(catalog.analyzerBuilder().presets("KR").build().ruleIds())
-            .containsExactly("kr-mobile-phone", "kr-rrn");
+            .containsExactly("kr-mobile-phone", "kr-rrn", "kr-frn", "kr-brn", "kr-driver-license");
     }
 
     @ParameterizedTest
@@ -48,7 +49,10 @@ class BuiltInPiiRulesTest {
         "email, EMAIL_ADDRESS, dev@example.com, 0.9",
         "credit-card, CREDIT_CARD, 4111111111111111, 1.0",
         "kr-mobile-phone, PHONE_NUMBER, 010-1234-5678, 0.0",
-        "kr-rrn, KOREAN_RRN, 900101-1234567, 0.6"
+        "kr-rrn, KR_RRN, 900101-1234567, 0.6",
+        "kr-frn, KR_FRN, 900101-5234567, 0.4",
+        "kr-brn, KR_BRN, 123-45-67891, 0.7",
+        "kr-driver-license, KR_DRIVER_LICENSE, 11-95-123456-78, 0.5"
     })
     void overridesEachBuiltInScoreAndPreservesMetadata(String ruleId, String entityType, String candidate, double score) {
         PiiRule original = BuiltInPiiRules.rules().stream()
@@ -71,10 +75,14 @@ class BuiltInPiiRulesTest {
                 BuiltInPiiRuleIds.EMAIL, 1.0,
                 BuiltInPiiRuleIds.CREDIT_CARD, 1.0,
                 BuiltInPiiRuleIds.KR_MOBILE_PHONE, 1.0,
-                BuiltInPiiRuleIds.KR_RRN, 1.0))
+                BuiltInPiiRuleIds.KR_RRN, 1.0,
+                BuiltInPiiRuleIds.KR_FRN, 1.0,
+                BuiltInPiiRuleIds.KR_BRN, 1.0,
+                BuiltInPiiRuleIds.KR_DRIVER_LICENSE, 1.0))
             .build().analyzerBuilder().presets(BuiltInPiiPresetNames.COMMON, BuiltInPiiPresetNames.KR).build();
 
-        assertThat(analyzer.analyze("a..b@example.com | 4111111111111112 | 010-123-5678 | 990230-1234567",
+        assertThat(analyzer.analyze("a..b@example.com | 4111111111111112 | 010-123-5678 | 990230-1234567"
+                + " | 990230-5234567 | 123-45-67890 | 27-95-123456-78",
             PiiAnalysisOptions.defaults(), PrivacyProcessingLimits.defaults())).isEmpty();
     }
 

@@ -23,7 +23,10 @@ public final class BuiltInPiiRules {
             new CreditCardPiiRule(),
             new EmailPiiRule(),
             new KoreanMobilePhonePiiRule(),
-            new KoreanRrnPiiRule()
+            new KoreanRrnPiiRule(),
+            new KoreanFrnPiiRule(),
+            new KoreanBrnPiiRule(),
+            new KoreanDriverLicensePiiRule()
         );
     }
 
@@ -36,7 +39,10 @@ public final class BuiltInPiiRules {
             )),
             new PiiRulePreset(BuiltInPiiPresetNames.KR, List.of(
                 BuiltInPiiRuleIds.KR_MOBILE_PHONE,
-                BuiltInPiiRuleIds.KR_RRN
+                BuiltInPiiRuleIds.KR_RRN,
+                BuiltInPiiRuleIds.KR_FRN,
+                BuiltInPiiRuleIds.KR_BRN,
+                BuiltInPiiRuleIds.KR_DRIVER_LICENSE
             ))
         );
     }

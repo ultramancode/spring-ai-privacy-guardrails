@@ -162,6 +162,7 @@ The default configuration uses COMMON/KR presets and application-owned Java rule
 - Card number candidates that pass Luhn validation.
 - Korean mobile phone numbers.
 - Synthetic Korean resident registration number format.
+- Korean foreigner registration, business registration, and driver's license number formats.
 - Employee IDs such as `EMP-1234`.
 - Customer IDs such as `CUST-123456`.
 

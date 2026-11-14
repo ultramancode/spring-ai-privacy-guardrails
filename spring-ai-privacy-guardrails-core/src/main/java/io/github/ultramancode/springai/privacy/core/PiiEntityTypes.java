@@ -51,7 +51,16 @@ public final class PiiEntityTypes {
     public static final String MEDICAL_LICENSE = "MEDICAL_LICENSE";
 
     /** Korean resident registration number. */
-    public static final String KOREAN_RRN = "KOREAN_RRN";
+    public static final String KR_RRN = "KR_RRN";
+
+    /** Korean foreigner registration number. */
+    public static final String KR_FRN = "KR_FRN";
+
+    /** Korean business registration number. */
+    public static final String KR_BRN = "KR_BRN";
+
+    /** Korean driver's license number. */
+    public static final String KR_DRIVER_LICENSE = "KR_DRIVER_LICENSE";
 
     private PiiEntityTypes() {
     }

@@ -37,7 +37,7 @@ class UsItinPiiRuleTest {
     void rejectsNumbersFollowedByAHyphenAndADigit() {
         // 978-84-9838 has an ITIN group number, but here it is the start of an ISBN.
         assertThat(analyze("978-84-9838")).hasSize(1);
-        for (String text : List.of("978-84-9838-123-4", "912-70-1234-5")) {
+        for (String text : List.of("978-84-9838-123-8", "912-70-1234-5")) {
             assertThat(analyze(text)).as(text).isEmpty();
         }
     }

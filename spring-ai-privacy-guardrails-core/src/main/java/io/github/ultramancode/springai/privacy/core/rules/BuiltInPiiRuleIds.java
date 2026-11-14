@@ -14,6 +14,15 @@ public final class BuiltInPiiRuleIds {
     /** Korean resident registration number rule. */
     public static final String KR_RRN = "kr-rrn";
 
+    /** Korean foreigner registration number rule. */
+    public static final String KR_FRN = "kr-frn";
+
+    /** Korean business registration number rule. */
+    public static final String KR_BRN = "kr-brn";
+
+    /** Korean driver's license number rule. */
+    public static final String KR_DRIVER_LICENSE = "kr-driver-license";
+
     private BuiltInPiiRuleIds() {
     }
 }

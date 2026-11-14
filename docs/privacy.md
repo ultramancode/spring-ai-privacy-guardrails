@@ -379,18 +379,22 @@ expressions carefully: a single match can backtrack for a long time before inter
 
 ### Built-in Rules
 
-| Preset | Rule ID | Supported scope |
-| --- | --- | --- |
-| COMMON | email | ASCII email addresses with dotted DNS domains. The part before `@` supports special characters such as apostrophes and exclamation marks. Addresses with a double-quoted part before `@`, internationalized addresses, and domain literals are unsupported. |
-| COMMON | credit-card | 13–17 ASCII digits starting with 1, 3, 4, 50–55, or 6, with optional spaces or hyphens between digit groups. Excludes compact 13-digit numbers starting with 1. Checks Luhn. Does not verify issuance or account status. |
-| KR | kr-mobile-phone | South Korean mobile phone numbers: 010 plus eight digits, compact or consistently space/hyphen separated. Supports +82 10 forms. Other 01X prefixes, landlines, and extensions are unsupported. |
-| KR | kr-rrn | South Korean resident registration numbers: YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
+| Preset | Rule ID | Entity type | Supported scope |
+| --- | --- | --- | --- |
+| COMMON | email | `EMAIL_ADDRESS` | ASCII email addresses with dotted DNS domains. The part before `@` supports special characters such as apostrophes and exclamation marks. Addresses with a double-quoted part before `@`, internationalized addresses, and domain literals are unsupported. |
+| COMMON | credit-card | `CREDIT_CARD` | 13–17 ASCII digits starting with 1, 3, 4, 50–55, or 6, with optional spaces or hyphens between digit groups. Excludes compact 13-digit numbers starting with 1. Checks Luhn. Does not verify issuance or account status. |
+| KR | kr-mobile-phone | `PHONE_NUMBER` | South Korean mobile phone numbers: 010 plus eight digits, compact or consistently space/hyphen separated. Supports +82 10 forms. Other 01X prefixes, landlines, and extensions are unsupported. |
+| KR | kr-rrn | `KR_RRN` | South Korean resident registration numbers: YYMMDD, a 1–4 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
+| KR | kr-frn | `KR_FRN` | South Korean foreigner registration numbers: YYMMDD, a 5–8 century/sex digit, and six digits, with an optional hyphen. Checks calendar validity for 1900–2099. Does not verify identity or issuance. |
+| KR | kr-brn | `KR_BRN` | South Korean business registration numbers in the hyphenated 3-2-5 digit form. Checks the check digit. Unhyphenated numbers are unsupported. A number followed by a hyphen and a digit, such as the start of an ISBN, is not matched. Does not verify registration or business status. |
+| KR | kr-driver-license | `KR_DRIVER_LICENSE` | South Korean driver's license numbers in the hyphenated 2-2-6-2 digit form. Requires a region code of 11–26 or 28. Unhyphenated or space-separated numbers are unsupported. Does not verify the check digits or issuance. |
 
 Built-in matches have a default score of 0.85. These are heuristic scores, not measured
 probabilities. Evaluate detection quality on data representative of your application.
 The RRN rule validates the birth date without a checksum requirement,
 because the revised issuance scheme uses randomized trailing digits
 ([Ministry of the Interior and Safety](https://mois.go.kr/plan2020/download/2020plan.pdf)).
+The FRN rule validates the birth date in the same way, also without a checksum requirement.
 
 Pass a map of built-in rule IDs to scores to `PiiRuleCatalog.Builder.builtInsWithScores(...)` to
 set a fixed score for each specified rule. For example, register a Spring bean:

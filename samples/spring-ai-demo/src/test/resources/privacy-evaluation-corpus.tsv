@@ -7,7 +7,7 @@ email-apostrophe	EMAIL_ADDRESS	o'connor@example.com	연락처는 o'connor@exampl
 email-exclamation	EMAIL_ADDRESS	a!b@example.com	다른 주소는 a!b@example.com입니다.
 phone-mobile	PHONE_NUMBER	010-1234-5678	휴대폰은 010-1234-5678입니다.
 phone-older-mobile-prefix	-	-	이전 연락처는 011-123-4567입니다.
-korean-rrn	KOREAN_RRN	900101-1234567	합성 주민번호는 900101-1234567입니다.
+korean-rrn	KR_RRN	900101-1234567	주민번호는 900101-1234567입니다.
 employee-id	EMPLOYEE_ID	EMP-1234	사번 EMP-1234가 승인했습니다.
 customer-id	CUSTOMER_ID	CUST-123456	고객번호는 CUST-123456입니다.
 email-and-phone	EMAIL_ADDRESS,PHONE_NUMBER	user@example.org,010-9876-5432	user@example.org 또는 010-9876-5432로 연락하세요.
@@ -29,16 +29,16 @@ email-short-local	EMAIL_ADDRESS	a@b.co	테스트 메일은 a@b.co입니다.
 email-uppercase	EMAIL_ADDRESS	SECURITY@EXAMPLE.ORG	보안 메일은 SECURITY@EXAMPLE.ORG입니다.
 email-trailing-period	EMAIL_ADDRESS	john@example.com	Email john@example.com.
 phone-016	-	-	예전 휴대폰은 016-321-7654입니다.
-phone-019	-	-	합성 연락처 019-987-6543을 사용합니다.
+phone-019	-	-	연락처로 019-987-6543을 사용합니다.
 phone-three-digit-middle	-	-	임시 번호는 010-123-4567입니다.
-rrn-four-prefix	KOREAN_RRN	200101-4123456	합성 주민번호는 200101-4123456입니다.
-rrn-second	KOREAN_RRN	850505-2345678	테스트 식별값 850505-2345678을 폐기합니다.
+rrn-four-prefix	KR_RRN	200101-4123456	주민번호는 200101-4123456입니다.
+rrn-second	KR_RRN	850505-2345678	테스트 식별값 850505-2345678을 폐기합니다.
 employee-boundary	EMPLOYEE_ID	EMP-0001	담당 사번은 (EMP-0001)입니다.
 customer-boundary	CUSTOMER_ID	CUST-000001	조회 키 [CUST-000001]을 전달합니다.
 repeated-email	EMAIL_ADDRESS,EMAIL_ADDRESS	repeat@example.com,repeat@example.com	repeat@example.com에서 repeat@example.com으로 전달합니다.
 repeated-customer	CUSTOMER_ID,CUSTOMER_ID	CUST-777777,CUST-777777	CUST-777777을 조회하고 CUST-777777을 다시 확인합니다.
 json-like	EMAIL_ADDRESS,PHONE_NUMBER,CUSTOMER_ID	json@example.com,010-2222-3333,CUST-222222	{"email":"json@example.com","phone":"010-2222-3333","customerId":"CUST-222222"}
-employee-and-rrn	EMPLOYEE_ID,KOREAN_RRN	EMP-9876,910101-1234567	사번 EMP-9876의 합성 식별값은 910101-1234567입니다.
+employee-and-rrn	EMPLOYEE_ID,KR_RRN	EMP-9876,910101-1234567	사번 EMP-9876의 식별값은 910101-1234567입니다.
 employee-email-customer	EMPLOYEE_ID,EMAIL_ADDRESS,CUSTOMER_ID	EMP-9090,yoon@example.net,CUST-909090	직원번호는 EMP-9090이고 이메일은 yoon@example.net이며 고객번호는 CUST-909090입니다.
 email-missing-domain	-	-	잘못된 메일은 user@입니다.
 email-double-at	-	-	잘못된 메일은 user@@example.com입니다.
@@ -50,8 +50,8 @@ phone-short-tail	-	-	짧은 번호는 010-1234-567입니다.
 phone-long-tail	-	-	긴 번호는 010-1234-56789입니다.
 phone-dotted	-	-	점 표기는 010.1234.5678입니다.
 phone-ascii-word-adjacency	-	-	A010-1234-5678B
-rrn-invalid-category	-	-	잘못된 식별값은 900101-5234567입니다.
-rrn-unhyphenated	KOREAN_RRN	9001011234567	붙여 쓴 식별값은 9001011234567입니다.
+rrn-invalid-category	-	-	잘못된 식별값은 900101-9234567입니다.
+rrn-unhyphenated	KR_RRN	9001011234567	붙여 쓴 식별값은 9001011234567입니다.
 rrn-short	-	-	짧은 식별값은 900101-123456입니다.
 rrn-long	-	-	긴 식별값은 900101-12345678입니다.
 rrn-ascii-word-adjacency	-	-	A900101-1234567B
@@ -75,4 +75,12 @@ credit-card-next-to-year	CREDIT_CARD	4111111111111111	2026 4111111111111111
 credit-card-multiple	CREDIT_CARD,CREDIT_CARD,CREDIT_CARD	4012888888881881,4012-8888-8888-1881,4012 8888 8888 1881	4012888888881881 4012-8888-8888-1881 4012 8888 8888 1881
 credit-card-invalid	-	-	Test card 4111 1111 1111 1112.
 international-mobile	PHONE_NUMBER	+82 10-1234-5678	Contact +82 10-1234-5678.
-rrn-invalid-date	-	-	Synthetic ID 000230-3123456.
+rrn-invalid-date	-	-	ID number 000230-3123456.
+korean-frn	KR_FRN	900101-5234567	외국인등록번호는 900101-5234567입니다.
+frn-invalid-date	-	-	없는 날짜가 들어간 번호는 000230-7123456입니다.
+korean-brn	KR_BRN	123-45-67891	사업자등록번호는 123-45-67891입니다.
+brn-invalid-check-digit	-	-	잘못된 사업자번호는 123-45-67890입니다.
+brn-unhyphenated	-	-	붙여 쓴 사업자번호는 1234567891입니다.
+korean-driver-license	KR_DRIVER_LICENSE	11-95-123456-78	운전면허번호는 11-95-123456-78입니다.
+driver-license-unknown-region	-	-	잘못된 면허번호는 27-95-123456-78입니다.
+driver-license-unhyphenated	-	-	붙여 쓴 면허번호는 119512345678입니다.

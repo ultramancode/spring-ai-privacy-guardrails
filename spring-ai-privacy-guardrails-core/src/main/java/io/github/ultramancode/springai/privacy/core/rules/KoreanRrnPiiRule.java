@@ -25,7 +25,7 @@ final class KoreanRrnPiiRule implements PiiRule {
 
     private final PatternPiiRule patternRule = PatternPiiRule.builder()
         .id(BuiltInPiiRuleIds.KR_RRN)
-        .entityType(PiiEntityTypes.KOREAN_RRN)
+        .entityType(PiiEntityTypes.KR_RRN)
         .addPattern(RRN_PATTERN)
         .build();
 
@@ -50,10 +50,14 @@ final class KoreanRrnPiiRule implements PiiRule {
      */
     private static boolean isValidCandidate(String candidate) {
         String digits = candidate.replace("-", "");
-        int century = digits.charAt(6) == '1' || digits.charAt(6) == '2' ? 1900 : 2000;
+        char centuryDigit = digits.charAt(6);
+        int century = centuryDigit == '1' || centuryDigit == '2' ? 1900 : 2000;
+        int year = century + Integer.parseInt(digits.substring(0, 2));
+        int month = Integer.parseInt(digits.substring(2, 4));
+        int day = Integer.parseInt(digits.substring(4, 6));
         try {
-            LocalDate.of(century + Integer.parseInt(digits.substring(0, 2)),
-                Integer.parseInt(digits.substring(2, 4)), Integer.parseInt(digits.substring(4, 6)));
+            // LocalDate.of throws for a date that does not exist, such as February 30.
+            LocalDate.of(year, month, day);
             return true;
         } catch (DateTimeException invalidDate) {
             return false;

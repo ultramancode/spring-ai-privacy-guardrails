@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 <!-- i18n-source: samples/spring-ai-demo/README.md -->
-<!-- i18n-source-sha256: 29f7afc13aec791450f177e8a4ea1a8e148c29f636cff597806a395d59b74525 -->
+<!-- i18n-source-sha256: a5a0b5db4d0a8475e980617433104da7b54f7e1d358d9b27f43fe2f45107147b -->
 
 이 실행 가능한 샘플은 모델에 전달하기 전에 개인정보를 보호하고, 도구에는 허용된
 원문만 전달하는 과정을 보여줍니다. 기본 구성은 고정된 예제와 정해진 응답을 반환하는 로컬 `ChatModel`을 사용하므로
@@ -157,6 +157,7 @@ curl "http://127.0.0.1:8080/demo/protect" \
 
 - 이메일 주소
 - Luhn 검증을 통과한 카드번호 후보
+- 검증번호를 통과한 IBAN
 - 한국 휴대전화 번호
 - 예제용 한국 주민등록번호 형식
 - 한국 외국인등록번호·사업자등록번호·운전면허번호 형식

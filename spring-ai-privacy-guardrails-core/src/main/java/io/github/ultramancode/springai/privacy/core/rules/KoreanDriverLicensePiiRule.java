@@ -11,10 +11,14 @@ import io.github.ultramancode.springai.privacy.core.PrivacyProcessingLimits;
 import java.util.List;
 import java.util.Set;
 
-/** Hyphenated Korean driver's license number candidates checked for a known region code. */
+/**
+ * Korean driver's license number candidates with hyphens or spaces between the groups, checked
+ * for a known region code.
+ */
 final class KoreanDriverLicensePiiRule implements PiiRule {
+    // \1 repeats the first separator, so all three separators are the same.
     private static final String LICENSE_NUMBER_EXPRESSION =
-            "(?<![A-Za-z0-9])[0-9]{2}-[0-9]{2}-[0-9]{6}-[0-9]{2}(?![A-Za-z0-9])";
+            "(?<![A-Za-z0-9])[0-9]{2}([- ])[0-9]{2}\\1[0-9]{6}\\1[0-9]{2}(?![A-Za-z0-9])";
     private static final PatternDefinition LICENSE_NUMBER_PATTERN = PatternDefinition.builder()
         .expression(LICENSE_NUMBER_EXPRESSION)
         .score(0.85)

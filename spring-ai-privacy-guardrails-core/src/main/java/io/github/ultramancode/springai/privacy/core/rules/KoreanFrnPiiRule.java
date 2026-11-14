@@ -50,6 +50,7 @@ final class KoreanFrnPiiRule implements PiiRule {
      */
     private static boolean isValidCandidate(String candidate) {
         String digits = candidate.replace("-", "");
+        // Index 6 is the seventh digit, right after the hyphen.
         char centuryDigit = digits.charAt(6);
         int century = centuryDigit == '5' || centuryDigit == '6' ? 1900 : 2000;
         int year = century + Integer.parseInt(digits.substring(0, 2));

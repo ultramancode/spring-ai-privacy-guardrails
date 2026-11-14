@@ -8,7 +8,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 61081b171bf1e2ebe0d11f6e7775cf4f10e203fb46dcff9bc056a78b0de886e7 -->
+<!-- i18n-source-sha256: 28e680186236b87ed886a0de888a0a3b07bbaf06d4f77459520f75cff458a58b -->
 
 `GuardrailsChatClientFactory`로 `ChatClient`를 생성하고,
 `GuardrailsPolicy`에서 애플리케이션에 필요한 기능을 선택합니다.
@@ -92,8 +92,8 @@ spring:
         presets: [COMMON, KR]
 ```
 
-`COMMON`은 이메일·카드번호, `KR`은 한국 휴대전화번호·주민등록번호·외국인등록번호·사업자등록번호·운전면허번호의
-지원 형식을 탐지합니다.
+`COMMON`은 이메일·카드번호·IBAN, `KR`은 한국 휴대전화번호·주민등록번호·외국인등록번호·사업자등록번호·운전면허번호,
+`US`는 미국 전화번호·사회보장번호·ITIN·메디케어 수혜자 식별번호의 지원 형식을 탐지합니다.
 [내장 규칙의 지원 범위](privacy.md#내장-규칙)를 확인하세요.
 
 <a id="tool-authorization"></a>

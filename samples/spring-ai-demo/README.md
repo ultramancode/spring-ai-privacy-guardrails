@@ -160,6 +160,7 @@ The default configuration uses COMMON/KR presets and application-owned Java rule
 
 - Email addresses.
 - Card number candidates that pass Luhn validation.
+- IBANs that pass the check digits.
 - Korean mobile phone numbers.
 - Synthetic Korean resident registration number format.
 - Korean foreigner registration, business registration, and driver's license number formats.

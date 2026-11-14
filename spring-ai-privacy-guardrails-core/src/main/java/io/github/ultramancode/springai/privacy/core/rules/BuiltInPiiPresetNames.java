@@ -8,6 +8,9 @@ public final class BuiltInPiiPresetNames {
     /** Korean PII rules. */
     public static final String KR = "KR";
 
+    /** US PII rules. */
+    public static final String US = "US";
+
     private BuiltInPiiPresetNames() {
     }
 }

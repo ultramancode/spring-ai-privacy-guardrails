@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.boundary.PiiTokenSimplifierContex
 import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClientRequest;
 
 import java.util.List;
@@ -18,8 +19,10 @@ final class ContentInspectionStage implements ModelRequestInspectionStage {
     private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
 
     ContentInspectionStage(InspectionService inspectionService, InspectionLimits inspectionLimits,
-        PrivacyProcessingStatusResolver privacyProcessingStatusResolver, InspectionObserver inspectionObserver) {
-        this.inspectionEnforcement = new InspectionEnforcement(inspectionService, inspectionLimits, inspectionObserver);
+        PrivacyProcessingStatusResolver privacyProcessingStatusResolver, InspectionObserver inspectionObserver,
+        ObservationRegistry observationRegistry, InspectorObservationConvention inspectorObservationConvention) {
+        this.inspectionEnforcement = new InspectionEnforcement(inspectionService, inspectionLimits, inspectionObserver,
+            observationRegistry, inspectorObservationConvention);
         this.inspectionLimits = inspectionLimits;
         this.privacyProcessingStatusResolver =
                 Objects.requireNonNull(privacyProcessingStatusResolver, "privacyProcessingStatusResolver");

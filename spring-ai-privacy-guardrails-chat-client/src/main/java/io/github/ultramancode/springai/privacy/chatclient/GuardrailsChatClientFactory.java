@@ -8,6 +8,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionService
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionOutputAdvisor;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectorObservationConvention;
 import io.github.ultramancode.springai.privacy.inspection.springai.PrivacyProcessingStatusResolver;
 import io.github.ultramancode.springai.privacy.springai.PrivacyChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
@@ -49,6 +50,7 @@ public final class GuardrailsChatClientFactory {
     private final ObservationRegistry observationRegistry;
     private final ChatClientObservationConvention chatClientObservationConvention;
     private final AdvisorObservationConvention advisorObservationConvention;
+    private final InspectorObservationConvention inspectorObservationConvention;
     private final UnaryOperator<ChatClient.Builder> clientCustomizer;
 
     // Factory construction
@@ -67,6 +69,7 @@ public final class GuardrailsChatClientFactory {
         this.observationRegistry = factoryBuilder.observationRegistry;
         this.chatClientObservationConvention = factoryBuilder.chatClientObservationConvention;
         this.advisorObservationConvention = factoryBuilder.advisorObservationConvention;
+        this.inspectorObservationConvention = factoryBuilder.inspectorObservationConvention;
         this.clientCustomizer = factoryBuilder.clientCustomizer;
     }
 
@@ -95,6 +98,7 @@ public final class GuardrailsChatClientFactory {
         private ObservationRegistry observationRegistry = ObservationRegistry.NOOP;
         private ChatClientObservationConvention chatClientObservationConvention;
         private AdvisorObservationConvention advisorObservationConvention;
+        private InspectorObservationConvention inspectorObservationConvention;
         private UnaryOperator<ChatClient.Builder> clientCustomizer = UnaryOperator.identity();
 
         private Builder() {}
@@ -159,6 +163,7 @@ public final class GuardrailsChatClientFactory {
             return this;
         }
 
+        /** Sets the registry for client, advisor and inspector observations. */
         public Builder observationRegistry(ObservationRegistry observationRegistry) {
             this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry");
             return this;
@@ -172,6 +177,12 @@ public final class GuardrailsChatClientFactory {
 
         public Builder advisorObservationConvention(AdvisorObservationConvention advisorObservationConvention) {
             this.advisorObservationConvention = advisorObservationConvention;
+            return this;
+        }
+
+        /** Sets a custom convention for inspector observations, or {@code null} for the default convention. */
+        public Builder inspectorObservationConvention(InspectorObservationConvention inspectorObservationConvention) {
+            this.inspectorObservationConvention = inspectorObservationConvention;
             return this;
         }
 
@@ -235,7 +246,8 @@ public final class GuardrailsChatClientFactory {
             }
             if (inspectionPolicy.finalOutputInspectionEnabled()) {
                 inspectionOutputAdvisor = new InspectionOutputAdvisor(outputInspectionService, inspectionPolicy.limits(),
-                    inspectionObserver, inspectionPolicy.maxOutputFrames(), inspectionPolicy.outputStreamTimeout());
+                    inspectionObserver, inspectionPolicy.maxOutputFrames(), inspectionPolicy.outputStreamTimeout(),
+                    observationRegistry, inspectorObservationConvention);
             }
         }
         ChatClient.Builder chatClientBuilder = createClientBuilder(chatModel, clientToolAdvisorBuilder);
@@ -277,8 +289,8 @@ public final class GuardrailsChatClientFactory {
             }
             return ContentSegment.PrivacyProcessingStatus.UNKNOWN;
         };
-        return new InspectionChatClientConfigurer(inputInspectionService,
-            inspectionPolicy.limits(), privacyProcessingStatusResolver, inspectionObserver);
+        return new InspectionChatClientConfigurer(inputInspectionService, inspectionPolicy.limits(),
+            privacyProcessingStatusResolver, inspectionObserver, observationRegistry, inspectorObservationConvention);
     }
 
     private ChatClient.Builder createClientBuilder(ChatModel chatModel,

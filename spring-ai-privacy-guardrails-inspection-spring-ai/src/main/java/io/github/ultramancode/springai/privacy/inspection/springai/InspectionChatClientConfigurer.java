@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.boundary.ModelRequestBoundarySpec
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionException;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.Objects;
@@ -38,6 +39,8 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
     private final InspectionLimits limits;
     private final PrivacyProcessingStatusResolver privacyProcessingStatusResolver;
     private final InspectionObserver observer;
+    private final ObservationRegistry observationRegistry;
+    private final InspectorObservationConvention inspectorObservationConvention;
     private final InspectionOutputAdvisor outputAdvisor;
 
     /**
@@ -69,17 +72,44 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
             InspectionLimits limits,
             PrivacyProcessingStatusResolver privacyProcessingStatusResolver,
             InspectionObserver observer) {
-        this(service, limits, privacyProcessingStatusResolver, observer, null);
+        this(service, limits, privacyProcessingStatusResolver, observer, ObservationRegistry.NOOP, null);
+    }
+
+    /**
+     * Creates a configurer that also reports each input inspector execution as an observation.
+     * Use the registry of the {@link ChatClient} so that inspector observations are recorded under
+     * the client's advisor observations.
+     *
+     * @param service inspectors and policies to apply before each model call
+     * @param limits limits shared by inspectors for each model request
+     * @param privacyProcessingStatusResolver trusted source of the input's privacy processing status
+     * @param observer receives inspection reports and exceptions
+     * @param observationRegistry registry for inspector observations
+     * @param inspectorObservationConvention custom convention, or {@code null} for
+     *        {@link DefaultInspectorObservationConvention}
+     */
+    public InspectionChatClientConfigurer(
+            InspectionService service,
+            InspectionLimits limits,
+            PrivacyProcessingStatusResolver privacyProcessingStatusResolver,
+            InspectionObserver observer,
+            ObservationRegistry observationRegistry,
+            InspectorObservationConvention inspectorObservationConvention) {
+        this(service, limits, privacyProcessingStatusResolver, observer, observationRegistry,
+                inspectorObservationConvention, null);
     }
 
     private InspectionChatClientConfigurer(InspectionService service, InspectionLimits limits,
             PrivacyProcessingStatusResolver privacyProcessingStatusResolver, InspectionObserver observer,
+            ObservationRegistry observationRegistry, InspectorObservationConvention inspectorObservationConvention,
             InspectionOutputAdvisor outputAdvisor) {
         this.service = Objects.requireNonNull(service, "service");
         this.limits = Objects.requireNonNull(limits, "limits");
         this.privacyProcessingStatusResolver =
                 Objects.requireNonNull(privacyProcessingStatusResolver, "privacyProcessingStatusResolver");
         this.observer = Objects.requireNonNull(observer, "observer");
+        this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry");
+        this.inspectorObservationConvention = inspectorObservationConvention;
         this.outputAdvisor = outputAdvisor;
     }
 
@@ -91,8 +121,8 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
      * @return a configurer with input and output inspection enabled
      */
     public InspectionChatClientConfigurer withOutputInspection(InspectionOutputAdvisor advisor) {
-        return new InspectionChatClientConfigurer(service, limits, privacyProcessingStatusResolver,
-                observer, Objects.requireNonNull(advisor, "advisor"));
+        return new InspectionChatClientConfigurer(service, limits, privacyProcessingStatusResolver, observer,
+                observationRegistry, inspectorObservationConvention, Objects.requireNonNull(advisor, "advisor"));
     }
 
     /**
@@ -102,7 +132,8 @@ public final class InspectionChatClientConfigurer implements ModelRequestBoundar
     public void contributeToBoundary(ChatClient.Builder builder, ModelRequestBoundarySpec boundary) {
         Objects.requireNonNull(builder, "builder");
         Objects.requireNonNull(boundary, "boundary");
-        boundary.inspection(new ContentInspectionStage(service, limits, privacyProcessingStatusResolver, observer));
+        boundary.inspection(new ContentInspectionStage(service, limits, privacyProcessingStatusResolver, observer,
+                observationRegistry, inspectorObservationConvention));
         if (outputAdvisor != null) {
             builder.defaultAdvisors(outputAdvisor);
         }

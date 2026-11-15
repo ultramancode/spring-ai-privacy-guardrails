@@ -568,6 +568,9 @@ Both callbacks receive `InspectionExecution`. Its `phase()` identifies model req
 (`MODEL_REQUEST`) or final output (`FINAL_OUTPUT`) inspection.
 Its `streaming()` indicates whether the client call is streaming.
 
+Each inspector execution is also reported as a Micrometer observation with its duration.
+See [inspector observations](observability.md#inspector-observations).
+
 ## Scope and limits
 
 Input inspection covers message bodies, tool results, tool-call arguments and

@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 571d3f00602a480eb493f000969810df098bd0750195c2cf2980ffa8339d6bc8 -->
+<!-- i18n-source-sha256: f8175c6b8d9b911a2fcdd1e4e1315e65e3fed2732c9b8dab4d69f7c9f60a2c75 -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -560,6 +560,9 @@ InspectionObserver inspectionObserver() {
 
 두 콜백 모두 `InspectionExecution`을 받습니다. `phase()`는 모델 요청 검사(`MODEL_REQUEST`)
 또는 최종 출력 검사(`FINAL_OUTPUT`)를 나타냅니다. `streaming()`은 스트리밍 호출 여부입니다.
+
+검사기 실행마다 소요 시간을 담은 Micrometer 관측도 기록됩니다.
+자세한 내용은 [검사기 관측](observability.md#검사기-관측)을 참고하세요.
 
 ## 검사 범위와 한도
 

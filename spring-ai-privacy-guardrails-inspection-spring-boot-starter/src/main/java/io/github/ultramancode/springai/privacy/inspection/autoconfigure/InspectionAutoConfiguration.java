@@ -8,7 +8,9 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionPolicy;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectorObservationConvention;
 import io.github.ultramancode.springai.privacy.inspection.springai.PrivacyProcessingStatusResolver;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -33,6 +35,8 @@ import java.util.function.Predicate;
  * blocks findings. The default failure policy is
  * {@link InspectionFailurePolicy#FAIL_CLOSED}.
  * Applications can provide policy, resolver and observer beans to customize inspection.
+ * The configurer reports inspector executions to a unique {@link ObservationRegistry} bean,
+ * using an {@link InspectorObservationConvention} bean when one is available.
  */
 @AutoConfiguration(
         afterName =
@@ -65,14 +69,18 @@ public class InspectionAutoConfiguration {
     InspectionChatClientConfigurer inspectionChatClientConfigurer(
         InspectionService inspectionService,
         ObjectProvider<PrivacyProcessingStatusResolver> privacyProcessingStatusResolverProvider,
-        ObjectProvider<InspectionObserver> inspectionObserverProvider) {
+        ObjectProvider<InspectionObserver> inspectionObserverProvider,
+        ObjectProvider<ObservationRegistry> observationRegistryProvider,
+        ObjectProvider<InspectorObservationConvention> inspectorObservationConventionProvider) {
         InspectionObserver inspectionObserver = inspectionObserverProvider.getIfAvailable(InspectionObserver::noop);
         InspectionLimits inspectionLimits = InspectionLimits.defaults();
         return new InspectionChatClientConfigurer(
             inspectionService,
             inspectionLimits,
             privacyProcessingStatusResolverProvider.getIfAvailable(PrivacyProcessingStatusResolver::unknown),
-            inspectionObserver);
+            inspectionObserver,
+            observationRegistryProvider.getIfUnique(() -> ObservationRegistry.NOOP),
+            inspectorObservationConventionProvider.getIfUnique());
     }
 
     @Configuration(proxyBeanMethods = false)

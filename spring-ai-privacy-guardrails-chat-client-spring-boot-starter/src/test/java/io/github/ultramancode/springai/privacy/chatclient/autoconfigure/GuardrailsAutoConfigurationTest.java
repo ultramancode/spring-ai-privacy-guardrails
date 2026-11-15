@@ -13,7 +13,11 @@ import io.github.ultramancode.springai.privacy.inspection.core.ContentSegment;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.github.ultramancode.springai.privacy.inspection.springai.DefaultInspectorObservationConvention;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectionExecution;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectorObservationContext;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectorObservationConvention;
 import io.github.ultramancode.springai.privacy.security.SpringSecurityToolBoundary;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
@@ -56,6 +60,7 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 class GuardrailsAutoConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -355,6 +360,40 @@ class GuardrailsAutoConfigurationTest {
                 .outputInspectionService(outputInspectionService)
                 .build();
         }
+    }
+
+    @Test
+    void reportsInputAndOutputInspectorsWithTheRegistryAndConventionBeans() {
+        List<InspectorObservationContext> inspectorObservations = new ArrayList<>();
+        ObservationRegistry observationRegistry = ObservationRegistry.create();
+        observationRegistry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+            public boolean supportsContext(Observation.Context context) { return true; }
+            public void onStop(Observation.Context context) {
+                if (context instanceof InspectorObservationContext inspectorObservation) {
+                    inspectorObservations.add(inspectorObservation);
+                }
+            }
+        });
+        runner.withBean(InspectionService.class, () -> recordingInspectionService(new ArrayList<>()))
+            .withBean(ObservationRegistry.class, () -> observationRegistry)
+            .withBean(InspectorObservationConvention.class,
+                () -> new DefaultInspectorObservationConvention("application.inspector"))
+            .withBean(GuardrailsPolicy.class, () -> GuardrailsPolicy.builder()
+                .inspection(GuardrailsPolicy.Inspection.builder().finalOutputInspectionEnabled(true).build()).build())
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                ChatClient chatClient = context.getBean(GuardrailsChatClientFactory.class)
+                    .builder(new EchoModel()).build();
+
+                invoke(chatClient, false);
+
+                assertThat(inspectorObservations)
+                    .extracting(InspectorObservationContext::getName,
+                        inspectorObservation -> inspectorObservation.getInspectionExecution().phase())
+                    .containsExactly(
+                        tuple("application.inspector", InspectionExecution.Phase.MODEL_REQUEST),
+                        tuple("application.inspector", InspectionExecution.Phase.FINAL_OUTPUT));
+            });
     }
 
     private static InspectionService recordingInspectionService(List<String> inspectedTexts) {

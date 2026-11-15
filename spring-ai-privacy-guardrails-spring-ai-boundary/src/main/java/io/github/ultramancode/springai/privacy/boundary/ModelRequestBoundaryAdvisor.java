@@ -1,5 +1,7 @@
 package io.github.ultramancode.springai.privacy.boundary;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -57,10 +59,16 @@ final class ModelRequestBoundaryAdvisor implements CallAdvisor, StreamAdvisor {
         }
         // Schedule request preparation per subscription for blocking inspection.
         // Cancellation requests interruption. Inspectors must cooperate to stop promptly.
-        return Mono.fromCallable(() -> {
-                    validateAdvisorChain(chain.getStreamAdvisors(), true);
-                    return plan.prepare(request, true);
-                })
+        // The worker thread restores this advisor's observation so that observations created
+        // during preparation are recorded under it.
+        return Mono.deferContextual(contextView -> Mono.fromCallable(() -> {
+                    Observation advisorObservation = contextView.getOrDefault(ObservationThreadLocalAccessor.KEY, null);
+                    try (Observation.Scope ignored = advisorObservation != null ? advisorObservation.openScope()
+                            : Observation.Scope.NOOP) {
+                        validateAdvisorChain(chain.getStreamAdvisors(), true);
+                        return plan.prepare(request, true);
+                    }
+                }))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMapMany(prepared -> {
                     checkInterrupted();

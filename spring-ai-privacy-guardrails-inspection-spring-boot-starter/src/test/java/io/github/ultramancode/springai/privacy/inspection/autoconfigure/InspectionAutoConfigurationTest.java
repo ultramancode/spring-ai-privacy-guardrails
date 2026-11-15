@@ -19,10 +19,16 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import io.github.ultramancode.springai.privacy.inspection.rules.InspectionRule;
 import io.github.ultramancode.springai.privacy.inspection.rules.RuleBasedContentInspector;
+import io.github.ultramancode.springai.privacy.inspection.springai.DefaultInspectorObservationConvention;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionChatClientConfigurer;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionBlockedException;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionExecution;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectorObservationContext;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectorObservationConvention;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -42,6 +48,7 @@ import reactor.core.publisher.Flux;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -121,6 +128,42 @@ class InspectionAutoConfigurationTest {
             assertThat(inspectedClient.prompt().user("hello").call().content()).isEqualTo("done");
             assertThat(modelCalls).hasValue(2);
         });
+    }
+
+    @Test
+    void reportsInspectorExecutionsWithTheRegistryAndConventionBeans() {
+        List<InspectorObservationContext> inspectorObservations = new ArrayList<>();
+        ObservationRegistry observationRegistry = ObservationRegistry.create();
+        observationRegistry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+            @Override
+            public boolean supportsContext(Observation.Context context) {
+                return true;
+            }
+
+            @Override
+            public void onStop(Observation.Context context) {
+                if (context instanceof InspectorObservationContext inspectorObservation) {
+                    inspectorObservations.add(inspectorObservation);
+                }
+            }
+        });
+        ChatModel model = prompt -> new ChatResponse(List.of(new Generation(new AssistantMessage("done"))));
+        runner.withBean(ContentInspector.class, this::ruleBasedInspector)
+                .withBean(ObservationRegistry.class, () -> observationRegistry)
+                .withBean(InspectorObservationConvention.class,
+                        () -> new DefaultInspectorObservationConvention("application.inspector"))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    ChatClient client = context.getBean(InspectionChatClientConfigurer.class)
+                            .configure(ChatClient.builder(model, observationRegistry, null, null)).build();
+
+                    client.prompt().user("hello").call().content();
+
+                    assertThat(inspectorObservations).singleElement().satisfies(inspectorObservation -> {
+                        assertThat(inspectorObservation.getName()).isEqualTo("application.inspector");
+                        assertThat(inspectorObservation.getInspectorId()).isEqualTo("application-rules");
+                    });
+                });
     }
 
     @Test

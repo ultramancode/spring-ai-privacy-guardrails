@@ -6,6 +6,9 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionExcepti
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionFailureCode;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -85,7 +88,30 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
      */
     public InspectionOutputAdvisor(InspectionService inspectionService, InspectionLimits inspectionLimits,
         InspectionObserver inspectionObserver, int maxFrames, Duration streamTimeout) {
-        this.inspectionEnforcement = new InspectionEnforcement(inspectionService, inspectionLimits, inspectionObserver);
+        this(inspectionService, inspectionLimits, inspectionObserver, maxFrames, streamTimeout,
+            ObservationRegistry.NOOP, null);
+    }
+
+    /**
+     * Sets limits for output inspection and reports each output inspector execution as an observation.
+     * Use the registry of the {@code ChatClient} so that inspector observations are recorded under
+     * this advisor's observation, including streaming calls.
+     *
+     * @param inspectionService inspectors and policies applied to the application output
+     * @param inspectionLimits text extraction and inspection limits
+     * @param inspectionObserver receives inspection reports and failures
+     * @param maxFrames maximum response frames collected for inspection, including empty frames
+     * @param streamTimeout total stream collection budget, including model calls and tool execution
+     * @param observationRegistry registry for inspector observations
+     * @param inspectorObservationConvention custom convention, or {@code null} for
+     *        {@link DefaultInspectorObservationConvention}
+     * @throws IllegalArgumentException if a stream budget is not positive or the timeout cannot fit in nanoseconds
+     */
+    public InspectionOutputAdvisor(InspectionService inspectionService, InspectionLimits inspectionLimits,
+        InspectionObserver inspectionObserver, int maxFrames, Duration streamTimeout,
+        ObservationRegistry observationRegistry, InspectorObservationConvention inspectorObservationConvention) {
+        this.inspectionEnforcement = new InspectionEnforcement(inspectionService, inspectionLimits, inspectionObserver,
+            observationRegistry, inspectorObservationConvention);
         this.inspectionLimits = inspectionLimits;
         if (maxFrames < 1) {
             throw new IllegalArgumentException("Maximum stream frame count must be positive");
@@ -168,11 +194,18 @@ public final class InspectionOutputAdvisor implements CallAdvisor, StreamAdvisor
 
     private Flux<ChatClientResponse> inspectAndEmit(InspectionOutputBuffer inspectionOutputBuffer,
             OutputResponseContext.UserMessageContext userMessageContext) {
-        Mono<List<ChatClientResponse>> inspectedFrames = Mono.fromCallable(() -> {
-            Map<String, String> simplifiedTextsByOriginalText = inspectionOutputBuffer.collectSimplifiedTextsByOriginalText();
-            inspectOutput(inspectionOutputBuffer::buildSegments, userMessageContext, simplifiedTextsByOriginalText, true);
-            return inspectionOutputBuffer.framesWithoutPrivacyTracking();
-        });
+        Mono<List<ChatClientResponse>> inspectedFrames = Mono.deferContextual(contextView -> Mono.fromCallable(() -> {
+            // Inspection runs on a worker thread. Restore this advisor's observation as the current
+            // observation so that inspector observations are recorded under it.
+            Observation advisorObservation = contextView.getOrDefault(ObservationThreadLocalAccessor.KEY, null);
+            try (Observation.Scope ignored = advisorObservation != null ? advisorObservation.openScope()
+                    : Observation.Scope.NOOP) {
+                Map<String, String> simplifiedTextsByOriginalText =
+                        inspectionOutputBuffer.collectSimplifiedTextsByOriginalText();
+                inspectOutput(inspectionOutputBuffer::buildSegments, userMessageContext, simplifiedTextsByOriginalText, true);
+                return inspectionOutputBuffer.framesWithoutPrivacyTracking();
+            }
+        }));
         return inspectedFrames
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMapMany(Flux::fromIterable);

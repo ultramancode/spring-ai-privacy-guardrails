@@ -142,7 +142,24 @@ public final class InspectionService {
      */
     public InspectionReport inspect(
             InspectionRequest inspectionRequest, UnaryOperator<String> piiTokenSimplifier) {
+        return inspect(inspectionRequest, piiTokenSimplifier, InspectorExecutionListener.noop());
+    }
+
+    /**
+     * Inspects content and notifies the listener when each inspector execution starts and ends.
+     * Inspectors not executed because inspection stopped earlier or a privacy requirement was not met
+     * are not reported.
+     *
+     * @param inspectionRequest content and execution limits
+     * @param piiTokenSimplifier token simplifier, required when inspectors are selected for PII token simplification
+     * @param executionListener receives each inspector execution
+     * @return the inspection report
+     * @throws InspectionException if inspection fails or the required simplifier is unavailable
+     */
+    public InspectionReport inspect(InspectionRequest inspectionRequest, UnaryOperator<String> piiTokenSimplifier,
+            InspectorExecutionListener executionListener) {
         Objects.requireNonNull(inspectionRequest, "inspectionRequest");
+        Objects.requireNonNull(executionListener, "executionListener");
         List<InspectionReport.Outcome> outcomes = new ArrayList<>();
         try {
             InspectionRequest.checkInterrupted();
@@ -168,21 +185,31 @@ public final class InspectionService {
                 if (piiTokenSimplificationInspectorIds.contains(registeredInspector.id())) {
                     inspectorPiiTokenSimplifier = piiTokenSimplifier;
                 }
-                InspectionReport.Outcome outcome = executeInspector(
-                        registeredInspector, inspectionRequest, expectedSegmentIds, inspectorPiiTokenSimplifier);
-                outcomes.add(outcome);
-                InspectionResult result = outcome.result();
-                InspectionRequest.checkInterrupted();
-                if (cannotFailOpen(result.failureCode())) {
-                    throw new InspectionException(result.failureCode());
-                }
-                InspectionDecision decision = Objects.requireNonNull(
-                        contentPolicy.evaluate(registeredInspector.id(), result.findings()), "policy decision");
-                InspectionRequest.checkInterrupted();
-                if (decision == InspectionDecision.BLOCK
-                        || (result.status() == InspectionResult.Status.FAILED
-                                && registeredInspector.failurePolicy() == InspectionFailurePolicy.FAIL_CLOSED)) {
-                    return new InspectionReport(InspectionDecision.BLOCK, outcomes);
+                InspectorExecutionListener.Completion completion =
+                        notifyStarted(executionListener, registeredInspector.id());
+                InspectionReport.Outcome outcome = null;
+                InspectionDecision serviceDecision = null;
+                try {
+                    outcome = executeInspector(
+                            registeredInspector, inspectionRequest, expectedSegmentIds, inspectorPiiTokenSimplifier);
+                    outcomes.add(outcome);
+                    InspectionResult result = outcome.result();
+                    InspectionRequest.checkInterrupted();
+                    if (cannotFailOpen(result.failureCode())) {
+                        throw new InspectionException(result.failureCode());
+                    }
+                    InspectionDecision decision = Objects.requireNonNull(
+                            contentPolicy.evaluate(registeredInspector.id(), result.findings()), "policy decision");
+                    InspectionRequest.checkInterrupted();
+                    if (decision == InspectionDecision.BLOCK
+                            || (result.status() == InspectionResult.Status.FAILED
+                                    && registeredInspector.failurePolicy() == InspectionFailurePolicy.FAIL_CLOSED)) {
+                        serviceDecision = InspectionDecision.BLOCK;
+                        return new InspectionReport(InspectionDecision.BLOCK, outcomes);
+                    }
+                    serviceDecision = InspectionDecision.ALLOW;
+                } finally {
+                    notifyFinished(completion, outcome, serviceDecision);
                 }
             }
             InspectionRequest.checkInterrupted();
@@ -196,6 +223,28 @@ public final class InspectionService {
                 failureCode = InspectionFailureCode.CANCELLED;
             }
             throw new InspectionException(failureCode, new InspectionReport(InspectionDecision.BLOCK, outcomes));
+        }
+    }
+
+    private static InspectorExecutionListener.Completion notifyStarted(
+            InspectorExecutionListener executionListener, String inspectorId) {
+        try {
+            return executionListener.onStart(inspectorId);
+        } catch (RuntimeException ignored) {
+            /* Observability cannot change enforcement. */
+            return null;
+        }
+    }
+
+    private static void notifyFinished(InspectorExecutionListener.Completion completion,
+            InspectionReport.Outcome outcome, InspectionDecision decision) {
+        if (completion == null) {
+            return;
+        }
+        try {
+            completion.onFinish(outcome, decision);
+        } catch (RuntimeException ignored) {
+            /* Observability cannot change enforcement. */
         }
     }
 

@@ -12,6 +12,7 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionResult;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -70,7 +71,8 @@ class InspectionEnforcementTest {
         };
         InspectionService inspectionService = new InspectionService(List.of(inspector),
                 (inspectorId, inspectedFindings) -> InspectionDecision.ALLOW, InspectionFailurePolicy.FAIL_OPEN);
-        InspectionEnforcement enforcement = new InspectionEnforcement(inspectionService, InspectionLimits.defaults(), observer);
+        InspectionEnforcement enforcement = new InspectionEnforcement(
+            inspectionService, InspectionLimits.defaults(), observer, ObservationRegistry.NOOP, null);
         List<InspectionReport.Outcome> expectedOutcomes =
                 List.of(new InspectionReport.Outcome(inspector.inspectorId(), true, inspectorResult));
 

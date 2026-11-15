@@ -8,23 +8,29 @@ import io.github.ultramancode.springai.privacy.inspection.core.InspectionLimits;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionReport;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionRequest;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
+import io.micrometer.observation.ObservationRegistry;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
-/** Shared ALLOW/BLOCK enforcement and payload-free observer notifications. */
+/** Shared ALLOW/BLOCK enforcement, inspector observations and payload-free observer notifications. */
 final class InspectionEnforcement {
     private final InspectionService inspectionService;
     private final InspectionLimits inspectionLimits;
     private final InspectionObserver inspectionObserver;
+    private final ObservationRegistry observationRegistry;
+    private final InspectorObservationConvention inspectorObservationConvention;
 
     InspectionEnforcement(InspectionService inspectionService, InspectionLimits inspectionLimits,
-        InspectionObserver inspectionObserver) {
+        InspectionObserver inspectionObserver, ObservationRegistry observationRegistry,
+        InspectorObservationConvention inspectorObservationConvention) {
         this.inspectionService = Objects.requireNonNull(inspectionService, "inspectionService");
         this.inspectionLimits = Objects.requireNonNull(inspectionLimits, "inspectionLimits");
         this.inspectionObserver = Objects.requireNonNull(inspectionObserver, "inspectionObserver");
+        this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry");
+        this.inspectorObservationConvention = inspectorObservationConvention;
     }
 
     void inspectAndEnforce(Supplier<List<ContentSegment>> contentSegmentsSupplier,
@@ -38,7 +44,8 @@ final class InspectionEnforcement {
         try {
             InspectionRequest.checkInterrupted();
             inspectionReport = inspectionService.inspect(
-                new InspectionRequest(contentSegmentsSupplier.get(), userMessage, inspectionLimits), piiTokenSimplifier);
+                new InspectionRequest(contentSegmentsSupplier.get(), userMessage, inspectionLimits), piiTokenSimplifier,
+                new InspectorObservationListener(observationRegistry, inspectorObservationConvention, inspectionExecution));
         } catch (RuntimeException ex) {
             throw failure(ex, inspectionExecution);
         }

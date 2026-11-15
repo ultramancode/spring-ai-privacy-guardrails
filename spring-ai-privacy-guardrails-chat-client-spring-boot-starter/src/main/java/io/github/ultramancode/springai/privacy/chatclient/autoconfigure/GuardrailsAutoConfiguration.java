@@ -5,6 +5,7 @@ import io.github.ultramancode.springai.privacy.chatclient.GuardrailsPolicy;
 import io.github.ultramancode.springai.privacy.core.PrivacyService;
 import io.github.ultramancode.springai.privacy.inspection.core.InspectionService;
 import io.github.ultramancode.springai.privacy.inspection.springai.InspectionObserver;
+import io.github.ultramancode.springai.privacy.inspection.springai.InspectorObservationConvention;
 import io.github.ultramancode.springai.privacy.security.ToolAuthorizationChatClientFactory;
 import io.github.ultramancode.springai.privacy.springai.PrivacyEnforcementObserver;
 import io.micrometer.observation.ObservationRegistry;
@@ -57,6 +58,7 @@ public class GuardrailsAutoConfiguration {
         ObjectProvider<ObservationRegistry> observationRegistryProvider,
         ObjectProvider<ChatClientObservationConvention> chatClientObservationConventionProvider,
         ObjectProvider<AdvisorObservationConvention> advisorObservationConventionProvider,
+        ObjectProvider<InspectorObservationConvention> inspectorObservationConventionProvider,
         ObjectProvider<ChatClientCustomizer> chatClientCustomizers,
         ObjectProvider<ChatClientBuilderCustomizer> chatClientBuilderCustomizers,
         Environment environment) {
@@ -72,6 +74,7 @@ public class GuardrailsAutoConfiguration {
             .observationRegistry(observationRegistry)
             .chatClientObservationConvention(chatClientObservationConventionProvider.getIfUnique())
             .advisorObservationConvention(advisorObservationConventionProvider.getIfUnique())
+            .inspectorObservationConvention(inspectorObservationConventionProvider.getIfUnique())
             .toolAdvisorBuilder(toolAdvisorBuilder)
             .clientCustomizer(chatClientBuilder -> {
                 if (!environment.getProperty("spring.ai.chat.client.tool-calling.enabled", Boolean.class, true)) {

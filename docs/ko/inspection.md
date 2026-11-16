@@ -8,7 +8,7 @@ description: >-
 [English](../inspection.md) | **한국어**
 
 <!-- i18n-source: docs/inspection.md -->
-<!-- i18n-source-sha256: 571d3f00602a480eb493f000969810df098bd0750195c2cf2980ffa8339d6bc8 -->
+<!-- i18n-source-sha256: 12af89847cc878a2e625c776f5f670d18a735a82364986941ba8120f4f01acaf -->
 
 콘텐츠 검사는 모델에 전달할 텍스트를 검사합니다.
 검사에서 발견한 내용을 바탕으로 정책이 요청의 허용 여부를 결정합니다.
@@ -41,8 +41,8 @@ description: >-
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.5.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.5.0"
 }
 ```
 
@@ -669,5 +669,5 @@ InspectionReport report = inspectionService.inspect(request);
 ```
 
 최초 실행 시 약 439MB의 모델 파일을 내려받고 체크섬을 검증합니다.
-이후에는 캐시를 재사용합니다. 자세한 내용은 [테스트 모델 준비](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/scripts/inspection/README.md)와
-[분류 설정](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java)을 참고하세요.
+이후에는 캐시를 재사용합니다. 자세한 내용은 [테스트 모델 준비](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/scripts/inspection/README.md)와
+[분류 설정](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java)을 참고하세요.

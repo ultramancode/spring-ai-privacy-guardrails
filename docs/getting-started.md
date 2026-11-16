@@ -27,7 +27,7 @@ repositories {
 }
 
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.5.0"
 }
 ```
 
@@ -37,7 +37,7 @@ Maven uses Central by default. Add to `dependencies` in `pom.xml`:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-chat-client-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -97,7 +97,7 @@ Add the Security starter alongside the client starter.
 For Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.5.0"
 ```
 
 For Maven:
@@ -106,7 +106,7 @@ For Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-security-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -145,7 +145,7 @@ Add the rules module alongside the client starter.
 For Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.5.0"
 ```
 
 For Maven:
@@ -154,7 +154,7 @@ For Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-inspection-rules</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -203,7 +203,7 @@ MCP `ToolCallbackProvider` instances use the selected policy.
 To allow a tool to receive original PII, configure [tool disclosure](privacy.md#per-tool-original-disclosure).
 
 For analyzer configuration, tool implementation and client registration in a complete application,
-see the [customer lookup sample](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md#reading-the-sample-code).
+see the [customer lookup sample](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.md#reading-the-sample-code).
 
 <a id="call-and-check"></a>
 

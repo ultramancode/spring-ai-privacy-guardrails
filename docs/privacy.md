@@ -437,7 +437,7 @@ Add its starter alongside the client starter.
 Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.5.0"
 ```
 
 Maven:
@@ -446,7 +446,7 @@ Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -493,7 +493,7 @@ When Spring Boot health support is available, the Presidio service can also be
 included in application health checks.
 
 The local Docker setup is in
-[samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio).
+[samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.5.0/samples/presidio).
 
 ### Presidio Confidence Scores
 
@@ -531,7 +531,7 @@ Add its starter alongside the client starter and supply model files for the targ
 Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.5.0"
 ```
 
 Maven:
@@ -540,7 +540,7 @@ Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -567,7 +567,7 @@ compatible, so validate the configuration against representative application
 data.
 
 The
-[runnable sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)
+[runnable sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.md#optional-jvm-only-opennlp-adapter)
 shows how to prepare models, configure the application, and run a live
 integration test.
 
@@ -858,7 +858,7 @@ cleaned up after the request.
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.5.0"
 }
 ```
 

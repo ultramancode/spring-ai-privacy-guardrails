@@ -38,8 +38,8 @@ For `build.gradle`, add the following with [Maven Central configured](getting-st
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.5.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.5.0"
 }
 ```
 
@@ -676,5 +676,5 @@ Run from the repository root:
 ```
 
 The first run downloads about 439 MB of model files and verifies their checksums.
-Later runs reuse the cache. See [test model preparation](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/scripts/inspection/README.md)
-and [classification settings](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java).
+Later runs reuse the cache. See [test model preparation](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/scripts/inspection/README.md)
+and [classification settings](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/spring-ai-privacy-guardrails-inspection-onnx/src/test/java/io/github/ultramancode/springai/privacy/inspection/onnx/OnnxTestModel.java).

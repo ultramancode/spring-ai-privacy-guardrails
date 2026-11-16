@@ -8,7 +8,7 @@ description: >-
 [English](../configuration.md) | **한국어**
 
 <!-- i18n-source: docs/configuration.md -->
-<!-- i18n-source-sha256: 7f997e81c3436b3a02867ed357a88fa4b24f7475b84a5c3b0a2087ce7efbf7e3 -->
+<!-- i18n-source-sha256: 9742bd28f517b6141dc82636512a2490be48f7ba375eb2787a63675e5942f922 -->
 
 `GuardrailsChatClientFactory`로 클라이언트마다 개인정보 보호, 콘텐츠 검사,
 도구 권한 검사를 선택합니다. 개인정보 보호를 선택하면 Spring AI를 통해 등록한
@@ -19,7 +19,7 @@ description: >-
 Spring AI 모델 연동 모듈과 함께 클라이언트 스타터를 추가합니다.
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.5.0"
 ```
 
 Guardrails 모듈은 같은 버전을 사용하세요. 이 스타터는 개인정보 보호와 검사 연동을

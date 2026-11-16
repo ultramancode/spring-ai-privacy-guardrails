@@ -21,7 +21,7 @@ The first run needs network access to download Gradle and dependencies.
 ```bash
 git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
 cd spring-ai-privacy-guardrails
-git checkout v0.4.0
+git checkout v0.5.0
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
@@ -38,7 +38,7 @@ Choose a scenario in the Inspector. `EN | 한국어` changes the UI and fixed ex
 | Inspection | 0 model calls on blocked input, 1 call and withheld output on blocked output, passing cases | [Inspection setup](inspection.md) |
 
 After the fixed examples, try your own synthetic input through the [input API](#inspect-results-through-the-api),
-or choose analyzer and real-model profiles in the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md).
+or choose analyzer and real-model profiles in the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.md).
 See [Troubleshooting](troubleshooting.md) if results differ.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
@@ -160,7 +160,7 @@ Use these APIs to retrieve the results shown in the Inspector as JSON:
 
 `activeSessionsAfterCall` is the service-wide active session count after the call.
 
-See the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.md)
+See the [full sample guide](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.md)
 for request and response examples, configuration for other analyzers, and
 instructions for running optional checks with a live model.
 

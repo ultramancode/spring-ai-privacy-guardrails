@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.5.0]
+
+This release expands the built-in PII rules and adds excluded values, simplified tokens in final responses and user question context for output inspection.
+
+### Added
+
+- Added a `US` preset with `us-phone`, `us-ssn`, `us-itin` and `us-mbi`, and added `kr-frn`, `kr-brn` and `kr-driver-license` to the `KR` preset.
+- Added the `iban` rule to the `COMMON` preset.
+- Added `spring.ai.privacy.analysis.excluded-values` to remove detections that exactly match a listed value.
+- Added `outputProtection().simplifyTokens(true)` to show tokens in final responses as markers such as `[PERSON_1]`.
+- Passed the latest user message to output inspection and added `KananaSafeguardOutputProtocol` for Kanana Safeguard 8B.
+
+### Changed
+
+- Updated the default Spring AI baseline to 2.0.2, the OpenAI Java SDK to 4.80.0 and Jackson to 3.1.7.
+- Removed the `PII_` prefix from simplified inspection tokens, as in `[EMAIL_ADDRESS_1]`.
+
+### Fixed
+
+- Counted `java.net.URL` media by its address text in response limits, like `String` and `URI` media.
+
+### Documentation
+
+- Added demo previews and a runtime observation guide, and explained Presidio confidence scores and the `PRESIDIO` floor.
+
+### Compatibility
+
+- Renamed the `KOREAN_RRN` entity type to `KR_RRN`. Allowlists that still use it fail at startup, but entity aliases and tool disclosure policies do not, so check them as well.
+- Changed `InspectionFinding.score()` to return `OptionalDouble` instead of a nullable `Double`. Use the three-argument constructor for findings without a score.
+- Made the `PrivacyLifecycleAdvisor`, `PrivacyInputAdvisor`, `PrivacyToolContextAdvisor` and `PrivacyToolCallValidationAdvisor` constructors package-private because they work only when `PrivacyChatClientConfigurer` registers them.
+- Applications that use the `COMMON` preset now also detect IBANs.
+
 ## [0.4.0]
 
 This release adds content inspection and unifies client configuration for privacy protection, tool authorization and inspection.

@@ -8,7 +8,7 @@ description: >-
 [English](../privacy.md) | **한국어**
 
 <!-- i18n-source: docs/privacy.md -->
-<!-- i18n-source-sha256: 9f976e0c7f72d13d7376d493f227869cfe76d4c4625de2db5e822fc310240cfc -->
+<!-- i18n-source-sha256: 5ab69b529c840364bd84a0d7184d6ed5891e9bb111a817136cad7ae9fb0931f3 -->
 
 개인정보 보호는 탐지된 개인정보를 요청별 불투명 토큰으로 바꾸어 모델에 전달합니다.
 도구에는 정책이 허용한 원문만 공개하고, 도구 결과도 모델이나 애플리케이션에
@@ -428,7 +428,7 @@ Presidio는 분석할 원문 텍스트를 설정한 Presidio 서버로 전송합
 Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-presidio-spring-boot-starter:0.5.0"
 ```
 
 Maven:
@@ -437,7 +437,7 @@ Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-presidio-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -482,7 +482,7 @@ Presidio 응답이 크기나 깊이 제한을 초과하면 `ANALYZER_RESPONSE_IN
 Spring Boot의 상태 점검 기능을 사용하는 경우 Presidio 서비스의 상태도 함께 확인할
 수 있습니다.
 
-로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.4.0/samples/presidio)에
+로컬 Docker 구성은 [samples/presidio](https://github.com/ultramancode/spring-ai-privacy-guardrails/tree/v0.5.0/samples/presidio)에
 있습니다.
 
 ### Presidio 신뢰도
@@ -519,7 +519,7 @@ spring:
 Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-opennlp-spring-boot-starter:0.5.0"
 ```
 
 Maven:
@@ -528,7 +528,7 @@ Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-opennlp-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -553,7 +553,7 @@ spring:
 사용하는 NER 모델과 토큰화 방식이 맞지 않으면 탐지 품질이 달라질 수 있으므로 실제
 데이터에 맞게 검증해야 합니다.
 
-[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md#선택적-jvm-전용-opennlp-adapter)에서
+[실행 가능한 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.ko.md#선택적-jvm-전용-opennlp-adapter)에서
 모델 준비, 설정 및 실제 연동 테스트 방법을 확인할 수 있습니다.
 
 ## 도구별 원문 공개
@@ -831,7 +831,7 @@ try 블록을 벗어나 세션이 닫히면 그 세션의 불투명 토큰을 �
 
 ```gradle
 dependencies {
-    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.4.0"
+    testImplementation "io.github.ultramancode:spring-ai-privacy-guardrails-test:0.5.0"
 }
 ```
 

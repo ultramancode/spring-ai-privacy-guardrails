@@ -8,7 +8,7 @@ description: >-
 [English](../getting-started.md) | **한국어**
 
 <!-- i18n-source: docs/getting-started.md -->
-<!-- i18n-source-sha256: 28e680186236b87ed886a0de888a0a3b07bbaf06d4f77459520f75cff458a58b -->
+<!-- i18n-source-sha256: 38ea2fe5480fbb7853b75cbb8c147b38403d962436ccf05836efa555c3b4912c -->
 
 `GuardrailsChatClientFactory`로 `ChatClient`를 생성하고,
 `GuardrailsPolicy`에서 애플리케이션에 필요한 기능을 선택합니다.
@@ -32,7 +32,7 @@ repositories {
 }
 
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.5.0"
 }
 ```
 
@@ -42,7 +42,7 @@ Maven은 기본으로 Central을 사용합니다. `pom.xml`의 `dependencies`에
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-chat-client-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -105,7 +105,7 @@ spring:
 Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-spring-security-spring-boot-starter:0.5.0"
 ```
 
 Maven:
@@ -114,7 +114,7 @@ Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-spring-security-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -155,7 +155,7 @@ AuthorizationManager<ToolAuthorizationContext> toolAuthorizationManager() {
 Gradle:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-inspection-rules:0.5.0"
 ```
 
 Maven:
@@ -164,7 +164,7 @@ Maven:
 <dependency>
     <groupId>io.github.ultramancode</groupId>
     <artifactId>spring-ai-privacy-guardrails-inspection-rules</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -212,7 +212,7 @@ public class GuardrailsConfiguration {
 도구에 개인정보 원문을 허용하려면 [원문 공개 정책](privacy.md#도구별-원문-공개)을 설정합니다.
 
 분석기 설정, 도구 구현과 클라이언트 등록을 함께 살펴보려면
-[고객 조회 샘플](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md#샘플-코드-읽기)을 참고하세요.
+[고객 조회 샘플](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.ko.md#샘플-코드-읽기)을 참고하세요.
 
 <a id="call-and-check"></a>
 

@@ -9,7 +9,7 @@ description: >-
 [English](../sample.md) | **한국어**
 
 <!-- i18n-source: docs/sample.md -->
-<!-- i18n-source-sha256: 9290a70996dd57852c407814d4f0f3cd0e9ccf83ace20d5bc2f91c6a70035311 -->
+<!-- i18n-source-sha256: 80e2067283e00e321a807515a9c471312ddc6b1af2c0e7a19ceae52f66c138d4 -->
 
 샘플은 고정된 예제로 개인정보 보호, 도구 권한과 콘텐츠 검사를 보여줍니다.
 **Privacy Boundary Inspector**에서 Local Tool, RAG, MCP, Security, Inspection 시나리오를
@@ -26,7 +26,7 @@ Git과 JDK 17 이상을 설치합니다. 외부 서비스 계정이나 API 키�
 ```bash
 git clone https://github.com/ultramancode/spring-ai-privacy-guardrails.git
 cd spring-ai-privacy-guardrails
-git checkout v0.4.0
+git checkout v0.5.0
 ./gradlew :spring-ai-privacy-guardrails-sample-demo:run
 ```
 
@@ -43,7 +43,7 @@ Inspector에서 확인할 시나리오를 선택하세요. `EN | 한국어`는 U
 | Inspection | 입력 차단 전 호출 0회, 출력 차단 시 호출 1회와 응답 비공개, 통과 사례 | [검사 설정](inspection.md) |
 
 고정 예제 다음에는 [사용자 입력 API](#inspect-results-through-the-api)로 자신의 가상 입력을 확인하거나
-[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md)의 분석기·실제 모델 프로필을 선택하세요.
+[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.ko.md)의 분석기·실제 모델 프로필을 선택하세요.
 예상과 다르면 [문제 해결](troubleshooting.md)을 참고하세요.
 
 <div style="position: relative; width: 100%; aspect-ratio: 16 / 9;">
@@ -157,7 +157,7 @@ Inspector 화면에서 확인한 결과를 JSON으로 조회하려면 다음 API
 응답의 `activeSessionsAfterCall`은 호출 후 서비스 전체의 활성 세션 수입니다.
 
 요청·응답 예제, 다른 분석기를 사용하는 설정과 실제 모델을 연결하는 검증 방법은
-[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.4.0/samples/spring-ai-demo/README.ko.md)를
+[전체 샘플 가이드](https://github.com/ultramancode/spring-ai-privacy-guardrails/blob/v0.5.0/samples/spring-ai-demo/README.ko.md)를
 참고하세요.
 
 ## 언어 선택

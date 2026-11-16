@@ -16,7 +16,7 @@ through Spring AI, including request-specific and MCP tools.
 Add the client starter alongside your Spring AI model integration:
 
 ```gradle
-implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.5.0"
 ```
 
 Use the same version for all Guardrails modules. This starter includes the privacy

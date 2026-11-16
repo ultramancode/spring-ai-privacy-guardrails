@@ -7,7 +7,7 @@
 [English](README.md) | [한국어](README.ko.md) | [문서](https://ultramancode.github.io/spring-ai-privacy-guardrails/ko/)
 
 <!-- i18n-source: README.md -->
-<!-- i18n-source-sha256: 75bc936f404d7f8c3b7c9a06aa7ff4d289f80f35dccb2ebadac4cfdeb9fd5301 -->
+<!-- i18n-source-sha256: c487882d9e66927abd2432b7278e24d51c0d69c0a72469361486a10d9b25e3bc -->
 
 **애플리케이션에 개인정보 보호, 도구 권한 제어, 콘텐츠 검사를 적용합니다.**
 
@@ -75,7 +75,7 @@ Java 17 이상, Spring AI 2.0.0 이상, Spring Boot 4.0.0 이상을 사용합니
 
 ```gradle
 dependencies {
-    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.4.0"
+    implementation "io.github.ultramancode:spring-ai-privacy-guardrails-chat-client-spring-boot-starter:0.5.0"
 }
 ```
 
